@@ -22,8 +22,7 @@ public sealed class ProjectVisibilityWebTests
         var all = (await pat.GetFromJsonAsync<List<ProjectDto>>("/api/v1/projects"))!;
         var mine = (await alex.GetFromJsonAsync<List<ProjectDto>>("/api/v1/projects"))!;
 
-        // Alex is on 5103 and 5104 (the staged lifecycle projects), so they are his too.
-        Assert.Equal(["1001", "1002", "5103", "5104", "IND"], mine.Select(p => p.Code).Order(StringComparer.Ordinal));
+        Assert.Equal(["1001", "1002", "IND"], mine.Select(p => p.Code).Order(StringComparer.Ordinal));
         Assert.Contains(all, p => p.Code == "4101");
         Assert.True(all.Count > mine.Count);
 
@@ -39,7 +38,7 @@ public sealed class ProjectVisibilityWebTests
         using var ownGet = await alex.GetAsync($"/api/v1/projects/{own.Id}");
         Assert.Equal(HttpStatusCode.OK, ownGet.StatusCode);
         var hubList = (await alex.GetFromJsonAsync<ProjectHubListDto>("/api/v1/project-hub"))!;
-        Assert.Equal(["1001", "1002", "5103", "5104", "IND"], hubList.Projects.Select(p => p.Code).Order(StringComparer.Ordinal));
+        Assert.Equal(["1001", "1002", "IND"], hubList.Projects.Select(p => p.Code).Order(StringComparer.Ordinal));
         using var patGet = await pat.GetAsync($"/api/v1/projects/{hidden.Id}");
         Assert.Equal(HttpStatusCode.OK, patGet.StatusCode);
     }

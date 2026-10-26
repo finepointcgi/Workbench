@@ -4,6 +4,7 @@ using Workbench.Domain;
 using Workbench.Domain.Identity;
 using Workbench.Domain.ProjectAccounting;
 using Workbench.Domain.Resourcing;
+using Workbench.Domain.Scheduling;
 using Workbench.Domain.Tasks;
 
 namespace Workbench.Infrastructure.Persistence;
@@ -42,8 +43,8 @@ internal static class LifecycleSeed
 
         var employees = await db.Set<Employee>().ToDictionaryAsync(e => e.Email, cancellationToken);
         var categories = await db.Set<LaborCategory>().ToDictionaryAsync(c => c.Code, cancellationToken);
-        if (!employees.TryGetValue(Sam, out var sam) || !employees.TryGetValue("analyst@example.com", out var alex)
-            || !employees.TryGetValue("dev@workbench.local", out var dana) || !categories.TryGetValue("BA2", out var ba2) || !categories.TryGetValue("SE2", out var se2))
+        if (!employees.TryGetValue(Sam, out var sam) || !employees.TryGetValue("viewer@example.com", out var val) || !categories.TryGetValue("BA2", out var ba2)
+            || !categories.TryGetValue("SE2", out var se2) || !categories.TryGetValue("PM3", out var pm3) || !categories.TryGetValue("ADM1", out var adm1))
         {
             return;
         }
@@ -76,7 +77,9 @@ internal static class LifecycleSeed
             db.AddRange(contract, clin);
             db.AddRange(
                 new ContractLaborRate { ContractId = contract.Id, LaborCategoryId = ba2.Id, EffectiveFrom = contract.PeriodStart, HourlyBillRate = 120m },
-                new ContractLaborRate { ContractId = contract.Id, LaborCategoryId = se2.Id, EffectiveFrom = contract.PeriodStart, HourlyBillRate = 135m });
+                new ContractLaborRate { ContractId = contract.Id, LaborCategoryId = se2.Id, EffectiveFrom = contract.PeriodStart, HourlyBillRate = 135m },
+                new ContractLaborRate { ContractId = contract.Id, LaborCategoryId = pm3.Id, EffectiveFrom = contract.PeriodStart, HourlyBillRate = 150m },
+                new ContractLaborRate { ContractId = contract.Id, LaborCategoryId = adm1.Id, EffectiveFrom = contract.PeriodStart, HourlyBillRate = 65m });
 
             // The plan sheet, as "start from a contract" makes it: the CLIN as the top row, and tasks under it.
             var sheet = new Sheet
@@ -102,7 +105,7 @@ internal static class LifecycleSeed
             db.AddRange(sheet, project, root);
 
             var tasks = new List<(Item Item, WbsElement Wbs)>();
-            (string Name, int From, int Days)[] shape = [("Requirements", 0, 10), ("Design", 10, 10), ("Build", 20, 30)];
+            (string Name, int From, int Days)[] shape = [("Kickoff and requirements", 0, 10), ("Documentation and training", 10, 10), ("Delivery and handover", 20, 30)];
             foreach (var (name, from, days) in shape.Take(stage.Tasks))
             {
                 var first = Weekday(start.AddDays(from));
@@ -113,18 +116,26 @@ internal static class LifecycleSeed
                 tasks.Add((row, element));
             }
 
+            // Each task follows the one before it (finish to start), so a slip flows through the plan.
+            for (var i = 1; i < tasks.Count; i++)
+            {
+                db.Add(new Dependency { SheetId = sheet.Id, PredecessorId = tasks[i - 1].Item.Id, SuccessorId = tasks[i].Item.Id, Type = DependencyType.FinishToStart });
+            }
+
             rootRow.Finish = tasks.Count > 0 ? tasks.Max(t => t.Item.Finish) : start;
             if (stage.Categories)
             {
-                db.AddRange(new[] { ba2, se2 }.Select(c => new ProjectLaborCategory { ProjectId = project.Id, LaborCategoryId = c.Id, CreatedBy = Actor, CreatedAtUtc = now }));
+                db.AddRange(new[] { pm3, adm1, ba2 }.Select(c => new ProjectLaborCategory { ProjectId = project.Id, LaborCategoryId = c.Id, CreatedBy = Actor, CreatedAtUtc = now }));
             }
 
-            // Who works what, and for how long: Alex on Requirements, Dana on Build.
+            // Who works what, and for how long: every task has someone, and the hours are small enough to sit beside the sample's other
+            // projects, so a plan awaiting approval has nothing to warn about. Sam and Val have room; Alex's and Dana's weeks are full on 1001.
             var lines = new List<(WbsElement Wbs, LaborCategory Category, Employee Person, decimal Hours)>();
             if (stage.People)
             {
-                lines.Add((tasks[0].Wbs, ba2, alex, 60m));
-                lines.Add((tasks[2].Wbs, se2, dana, 160m));
+                lines.Add((tasks[0].Wbs, pm3, sam, 16m));
+                lines.Add((tasks[1].Wbs, adm1, val, 8m));
+                lines.Add((tasks[2].Wbs, pm3, sam, 16m));
                 foreach (var (wbs, category, person, hours) in lines)
                 {
                     var task = tasks.Single(t => t.Wbs.Id == wbs.Id).Item;
