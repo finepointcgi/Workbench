@@ -16306,6 +16306,36 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.ToTable("Project");
                 });
 
+            modelBuilder.Entity("Workbench.Domain.ProjectAccounting.ProjectLaborCategory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("LaborCategoryId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LaborCategoryId");
+
+                    b.HasIndex("ProjectId", "LaborCategoryId")
+                        .IsUnique();
+
+                    b.ToTable("ProjectLaborCategory");
+                });
+
             modelBuilder.Entity("Workbench.Domain.ProjectAccounting.ProjectPlan", b =>
                 {
                     b.Property<Guid>("Id")
@@ -25794,6 +25824,21 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .WithMany()
                         .HasForeignKey("SheetId")
                         .OnDelete(DeleteBehavior.SetNull);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.ProjectAccounting.ProjectLaborCategory", b =>
+                {
+                    b.HasOne("Workbench.Domain.ProjectAccounting.LaborCategory", null)
+                        .WithMany()
+                        .HasForeignKey("LaborCategoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.ProjectAccounting.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Workbench.Domain.ProjectAccounting.ProjectPlan", b =>

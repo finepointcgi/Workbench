@@ -10,7 +10,7 @@
 
 @if (ProjectId is null)
 {
-    <SetupHeader Title="New project" Subtitle="Only a name is needed. You'll manage it unless you pick a project manager, who then gets a to-do to plan it. Finance activates a project on a contract before anyone charges it.">
+    <SetupHeader Title="New project" Subtitle="Only a name is needed. You'll manage it unless you pick a project manager, who then gets a to-do to plan it. A project on a contract starts in Planning: Finance adds its funding and labor categories, the project manager plans it, and approving the plan opens it for time.">
         <MudButton Variant="Variant.Outlined" Href="projects" StartIcon="@Icons.Material.Filled.ArrowBack">All projects</MudButton>
     </SetupHeader>
     @if (_allowed is null)

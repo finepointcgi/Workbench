@@ -44,7 +44,8 @@ public sealed record StartProjectRequest(
     DateOnly? Start = null,
     Scheduling.PlanImportRequest? Import = null,
     Guid? ProjectManagerId = null,
-    SaveProjectTermsRequest? Terms = null);
+    SaveProjectTermsRequest? Terms = null,
+    IReadOnlyList<Guid>? LaborCategoryIds = null);
 
 public interface IProjectStartService
 {

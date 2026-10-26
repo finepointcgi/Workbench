@@ -447,6 +447,29 @@ public sealed class StaffingAssignmentService(
 
     // ---- Saving ----
 
+    /// <summary>
+    /// When Finance has picked the project's labor categories, people go on it in one of them (their own, or the one chosen):
+    /// "or an equivalent person". An unchanged assignment is left alone, and a project with no list takes any category.
+    /// </summary>
+    private static async Task RequireProjectCategoryAsync(IWorkbenchDbContext db, Project project, Employee employee, Guid? category, StaffingAssignment? existing, CancellationToken ct)
+    {
+        if (category is not { } id || existing?.LaborCategoryId == id && existing.EmployeeId == employee.Id)
+        {
+            return;
+        }
+
+        var allowed = await db.Set<ProjectLaborCategory>().AsNoTracking().Where(c => c.ProjectId == project.Id).Select(c => c.LaborCategoryId).ToListAsync(ct);
+        if (allowed.Count == 0 || allowed.Contains(id))
+        {
+            return;
+        }
+
+        var names = await db.Set<LaborCategory>().AsNoTracking().Where(c => c.Id == id || allowed.Contains(c.Id)).ToDictionaryAsync(c => c.Id, ct);
+        throw new ArgumentException($"{employee.DisplayName} is a {ProjectStaffingService.Label(names[id])}, which isn't one of {project.Code}'s labor categories "
+            + $"({string.Join(", ", allowed.Select(a => ProjectStaffingService.Label(names[a])).Order(StringComparer.OrdinalIgnoreCase))}). "
+            + "Pick someone in one of those, or ask Finance to add this category.");
+    }
+
     /// <summary>A validated assignment: the resolved dates and labor category and the weekly spread, before anything is saved.</summary>
     internal sealed record AssignmentPlan(
         SaveAssignmentRequest Request,
@@ -611,6 +634,7 @@ public sealed class StaffingAssignmentService(
         }
 
         var category = request.LaborCategoryId ?? existing?.LaborCategoryId ?? employee.DefaultLaborCategoryId;
+        await RequireProjectCategoryAsync(db, project, employee, category, existing, ct);
         var total = Math.Round(request.TotalHours, 2, MidpointRounding.AwayFromZero);
         var keeps = existing is not null && existing.EmployeeId == employee.Id && existing.WbsElementId == request.WbsElementId
             && existing.From == from && existing.To == to && existing.TotalHours == total;

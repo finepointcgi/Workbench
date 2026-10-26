@@ -37,6 +37,12 @@ public sealed class PermissionCheckingProjectPlanService(IProjectPlanService inn
         return await WithFlagsAsync(await inner.SaveTermsAsync(projectId, request, cancellationToken), cancellationToken);
     }
 
+    public async Task<ProjectPlanDto> SaveCategoriesAsync(Guid projectId, IReadOnlyList<Guid> laborCategoryIds, CancellationToken cancellationToken = default)
+    {
+        await RequireFinanceAsync(projectId, "choose a project's labor categories", cancellationToken);
+        return await WithFlagsAsync(await inner.SaveCategoriesAsync(projectId, laborCategoryIds, cancellationToken), cancellationToken);
+    }
+
     public async Task<ProjectPlanDto> SubmitAsync(Guid projectId, string? note = null, CancellationToken cancellationToken = default)
     {
         await projects.RequireProjectFinancialsAsync(projectId, What, cancellationToken);
