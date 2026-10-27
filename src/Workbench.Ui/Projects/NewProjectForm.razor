@@ -242,6 +242,13 @@
         _contractId = contractId;
         _terms = null;
 
+        // Picking a contract is starting from it (its CLINs become the first WBS rows), whichever of the two pickers it was picked in:
+        // a blank plan on a contract would have no CLIN rows.
+        if (contractId is not null && _from == ProjectStartFrom.Blank)
+        {
+            _from = ProjectStartFrom.Contract;
+        }
+
         // Most projects are named for their contract: suggest it until someone types a name.
         if (string.IsNullOrWhiteSpace(_name) && _contracts.FirstOrDefault(c => c.Id == contractId) is { } picked)
         {
