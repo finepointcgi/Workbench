@@ -111,6 +111,7 @@ else
                     <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
                         <MudText Typo="Typo.h6" HtmlTag="h2">Bill rates</MudText>
                         <MudSpacer />
+                        <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.ContentCopy" OnClick="CopyRatesAsync" data-testid="copy-rates">Copy from a contract</MudButton>
                         <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="AddRateAsync">Add bill rate</MudButton>
                     </MudStack>
                     <MudSimpleTable Dense="true" Hover="true">
@@ -318,6 +319,39 @@ else
         finally
         {
             _saving = false;
+        }
+    }
+
+    private async Task CopyRatesAsync()
+    {
+        var others = (await Contracts.ListContractsAsync()).Where(c => c.Id != _contract!.Id).OrderBy(c => c.ContractNumber, StringComparer.Ordinal).ToList();
+        if (others.Count == 0)
+        {
+            Snackbar.Add("There's no other contract to copy rates from.", Severity.Info);
+            return;
+        }
+
+        var parameters = new DialogParameters<CopyBillRatesDialog> { { d => d.Contracts, others }, { d => d.ContractId, _contract!.Id }, { d => d.EffectiveFrom, _contract.PeriodStart } };
+        var dialog = await DialogService.ShowAsync<CopyBillRatesDialog>("Copy bill rates", parameters, new DialogOptions { MaxWidth = MaxWidth.ExtraSmall, FullWidth = true });
+        if (await dialog.Result is not { Canceled: false, Data: ValueTuple<Guid, DateOnly> chosen })
+        {
+            return;
+        }
+
+        try
+        {
+            var toCopy = SetupFormat.RatesToCopy(await Contracts.ListBillRatesAsync(chosen.Item1), _rates, DateOnly.FromDateTime(DateTime.Today));
+            foreach (var rate in toCopy)
+            {
+                await Contracts.AddBillRateAsync(_contract.Id, new AddBillRateRequest(rate.LaborCategoryId, chosen.Item2, rate.HourlyBillRate));
+            }
+
+            _rates = await Contracts.ListBillRatesAsync(_contract.Id);
+            Snackbar.Add(toCopy.Count == 0 ? "Nothing to copy: this contract already has a rate for each of those labor categories." : $"Copied {toCopy.Count} bill rate{(toCopy.Count == 1 ? "" : "s")}.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
         }
     }
 

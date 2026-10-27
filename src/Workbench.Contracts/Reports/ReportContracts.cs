@@ -69,6 +69,10 @@ public static class StandardReportKeys
     public const string ArAging = "ar-aging";
     public const string ApAging = "ap-aging";
 
+    // Listed in the catalog so Reports is the one place to look, but they're pages with their own screens, not reports to run: not in All.
+    public const string EstimatesAtCompletion = "estimates-at-completion";
+    public const string IncurredCost = "incurred-cost";
+
     public static readonly IReadOnlyList<string> All =
         [ProjectStatus, LaborDistribution, IndirectRateVariance, FundingStatus, TimesheetCompliance, ArAging, ApAging];
 }
@@ -107,7 +111,10 @@ public sealed record StandardReportDto(
     IReadOnlyList<ReportParameterKind> Parameters,
     bool Available,
     string? UnavailableReason,
-    string? PageLink);
+    string? PageLink,
+
+    /// <summary>A page to open, not a report to run (estimates at completion, incurred cost): no Run button.</summary>
+    bool PageOnly = false);
 
 public interface IStandardReportService
 {
