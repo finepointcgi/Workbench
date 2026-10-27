@@ -153,7 +153,8 @@ else if (_done is not null)
             }
         }
 
-        _here = _mine.Where(i => SamePage(i.Link, path)).ToList();
+        // A project plan already has its own approve/return bar on its page.
+        _here = _mine.Where(i => i.DocumentType != ApprovalDocumentTypes.ProjectPlan && SamePage(i.Link, path)).ToList();
     }
 
     private string CurrentPath() => Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].Trim('/');
