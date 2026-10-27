@@ -85,25 +85,7 @@
 @code {
     private SetupChecklistDto? _checklist;
 
-    private sealed record Step(string Group, string Title, string Hint, string Href, bool Done);
-
-    private IReadOnlyList<Step> Steps => _checklist is not { } c ? [] :
-    [
-        new("Company", "Users and sign-in", "Invite the people who'll use Workbench and give Finance and timekeepers their roles.", "admin/users", c.HasInvitedUsers),
-        new("Company", "Fiscal calendar", "At least one open accounting month.", "setup/fiscal-calendar", c.HasOpenFiscalPeriods),
-        new("Company", "Chart of accounts", "Review the general ledger accounts (a GovCon default is ready to use).", "accounting/accounts", c.HasChartOfAccounts),
-        new("Company", "Bank accounts", "The accounts you pay from and get paid into, for reconciliation.", "cash", c.HasBankAccount),
-        new("People", "Labor categories", "Job titles used for budgets and bill rates.", "setup/labor-categories", c.HasLaborCategories),
-        new("People", "Employees", "Everyone who records time, with their supervisor.", "setup/people", c.HasEmployees),
-        new("People", "Cost rates", "What an hour of each person's time costs (hours × cost rate = labor cost).", "setup/people", c.HasCostRates),
-        new("People", "Payroll provider", "Where approved hours are sent for paychecks (Paylocity and others).", "payroll", c.HasPayrollProvider),
-        new("People", "Approval workflows", "Who approves timesheets, expenses, purchases and invoices.", "setup/approval-workflows", c.HasApprovalWorkflows),
-        new("Contracts and projects", "Customer and contract", "With its ceiling, funding and bill rates.", "setup/contracts", c.HasCustomerAndContract),
-        new("Contracts and projects", "Project and tasks", "A project's lowest-level tasks (its WBS) are the charge codes people record time to.", "setup/projects", c.HasProjectWithWbs),
-        new("Contracts and projects", "Charge assignments", "Who may charge which tasks.", "setup/projects", c.HasChargeAssignments),
-        new("Contracts and projects", "Indirect rates", "Fringe, overhead and G&A rates used for burdened cost and billing.", "accounting/indirect-rates", c.HasIndirectRates),
-        new("Contracts and projects", "Billing details", "Invoice numbering and customer billing addresses for each contract.", "billing/contracts", c.HasBillingDetails),
-    ];
+    private IReadOnlyList<SetupStep> Steps => _checklist is not { } c ? [] : SetupSteps.For(c);
 
     private int Done => Steps.Count(s => s.Done);
 
