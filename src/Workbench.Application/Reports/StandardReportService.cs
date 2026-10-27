@@ -34,7 +34,7 @@ public sealed partial class StandardReportService(
     IArReportService arReports,
     IApReportService apReports) : IStandardReportService
 {
-    private sealed record Entry(string Key, string Name, string Description, string Category, ReportParameterKind[] Parameters, string? PageLink, Func<ReportAccessContext, string?> Unavailable);
+    private sealed record Entry(string Key, string Name, string Description, string Category, ReportParameterKind[] Parameters, string? PageLink, Func<ReportAccessContext, string?> Unavailable, bool PageOnly = false);
 
     private static readonly Entry[] Catalog =
     [
@@ -62,6 +62,14 @@ public sealed partial class StandardReportService(
         new(StandardReportKeys.ApAging, "AP aging summary",
             "Open payables by vendor and days past due.", "Purchasing", [AsOf], "purchasing/reports",
             a => a.Can(Permission.ApReportsView) ? null : "Payables need the \"See AP reports\" permission."),
+        new(StandardReportKeys.EstimatesAtCompletion, "Estimates at completion (EAC)",
+            "What each project is now expected to cost and earn at completion: project managers submit them, Finance approves.",
+            "Projects", [], "accounting/revenue/estimates",
+            a => a.Can(Permission.RevenueManage) ? null : "Estimates at completion are reviewed by Finance; a project manager submits theirs from the project's Revenue tab.", PageOnly: true),
+        new(StandardReportKeys.IncurredCost, "Incurred cost submission (ICE)",
+            "The annual incurred cost electronically (ICE) submission schedules, built from the general ledger.",
+            "Contracts", [], "accounting/incurred-cost",
+            a => a.Can(Permission.IncurredCostManage) ? null : "Incurred cost submissions need the \"Incurred cost\" permission.", PageOnly: true),
     ];
 
     public async Task<IReadOnlyList<StandardReportDto>> ListAsync(CancellationToken cancellationToken = default)
@@ -70,7 +78,7 @@ public sealed partial class StandardReportService(
         return Catalog.Select(e =>
         {
             var reason = e.Unavailable(context);
-            return new StandardReportDto(e.Key, e.Name, e.Description, e.Category, e.Parameters, reason is null, reason, e.PageLink);
+            return new StandardReportDto(e.Key, e.Name, e.Description, e.Category, e.Parameters, reason is null, reason, e.PageLink, e.PageOnly);
         }).ToList();
     }
 
@@ -130,6 +138,11 @@ public sealed partial class StandardReportService(
         if (entry.Unavailable(context) is { } reason)
         {
             throw new WorkbenchForbiddenException(reason);
+        }
+
+        if (entry.PageOnly)
+        {
+            throw new ArgumentException($"{entry.Name} is a page, not a report to run: open it from Reports.");
         }
 
         return (entry, context);

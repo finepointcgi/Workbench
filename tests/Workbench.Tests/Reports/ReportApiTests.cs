@@ -10,6 +10,24 @@ namespace Workbench.Tests.Reports;
 public sealed class ReportApiTests
 {
     [Fact]
+    public async Task Estimates_at_completion_and_incurred_cost_are_listed_to_open_not_to_run()
+    {
+        await using var factory = new WorkbenchWebFactory("Development", testAuth: true);
+        using var finance = factory.CreateClientAs("pm@example.com");
+        using var employee = factory.CreateClientAs("analyst@example.com");
+
+        var catalog = await new HttpStandardReportService(finance).ListAsync();
+        var eac = catalog.Single(r => r.Key == StandardReportKeys.EstimatesAtCompletion);
+        var ice = catalog.Single(r => r.Key == StandardReportKeys.IncurredCost);
+        Assert.All(new[] { eac, ice }, r => Assert.True(r.Available && r.PageOnly && r.PageLink is not null));
+        Assert.Equal(["accounting/revenue/estimates", "accounting/incurred-cost"], new[] { eac.PageLink, ice.PageLink });
+        Assert.DoesNotContain(catalog.Where(r => !r.PageOnly), r => r.Key is StandardReportKeys.EstimatesAtCompletion or StandardReportKeys.IncurredCost);
+
+        await Assert.ThrowsAsync<ArgumentException>(() => new HttpStandardReportService(finance).RunAsync(StandardReportKeys.EstimatesAtCompletion, new ReportParameters()));
+        Assert.All((await new HttpStandardReportService(employee).ListAsync()).Where(r => r.PageOnly), r => Assert.False(r.Available));
+    }
+
+    [Fact]
     public async Task Report_endpoints_round_trip_through_the_api_client_with_each_users_permissions()
     {
         await using var factory = new WorkbenchWebFactory("Development", testAuth: true);

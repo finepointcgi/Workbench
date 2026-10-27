@@ -1,0 +1,52 @@
+@* Copies another contract's current bill rates onto this one, so a contract with 10 to 40 labor categories isn't typed in rate by rate.
+   Rates for categories this contract already has are left alone. Returns the contract to copy from and the date they take effect. *@
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form">
+            <MudStack Spacing="3">
+                <MudSelect T="Guid?" @bind-Value="_sourceId" Label="Copy from" Required="true" RequiredError="Pick a contract." data-testid="copy-rates-source"
+                           HelperText="Its current rate for each labor category.">
+                    @foreach (var c in Contracts.Where(c => c.Id != ContractId))
+                    {
+                        <MudSelectItem T="Guid?" Value="c.Id">@c.ContractNumber · @c.Name</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudDatePicker @bind-Date="_from" Label="Effective from" Required="true" DateFormat="yyyy-MM-dd" Editable="true" />
+            </MudStack>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="SubmitAsync" data-testid="copy-rates-submit">Copy rates</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public IReadOnlyList<ContractDto> Contracts { get; set; } = [];
+
+    [Parameter]
+    public Guid ContractId { get; set; }
+
+    /// <summary>The date the copied rates take effect (the contract's start).</summary>
+    [Parameter]
+    public DateOnly EffectiveFrom { get; set; }
+
+    private MudForm _form = default!;
+    private Guid? _sourceId;
+    private DateTime? _from;
+
+    protected override void OnInitialized() => _from = SetupFormat.ToDateTime(EffectiveFrom);
+
+    private async Task SubmitAsync()
+    {
+        await _form.ValidateAsync();
+        if (_form.IsValid)
+        {
+            MudDialog.Close(DialogResult.Ok((_sourceId!.Value, SetupFormat.ToDateOnly(_from)!.Value)));
+        }
+    }
+}
