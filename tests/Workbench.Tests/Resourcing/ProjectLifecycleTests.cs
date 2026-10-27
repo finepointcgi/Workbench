@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Workbench.Application.Identity;
+using Workbench.Contracts.MyTodo;
 using Workbench.Contracts.ProjectAccounting;
 using Workbench.Contracts.Resourcing;
 using Workbench.Contracts.Revenue;
@@ -96,6 +97,7 @@ public sealed class ProjectLifecycleTests
         Assert.Equal((ProjectState.Active, 1), (approved.ProjectStatus, approved.Approvals));
         Assert.All(approved.Steps!, s => Assert.True(s.Done));
         Assert.Equal(ProjectState.Active, (await host.Get<IProjectService>().GetProjectAsync(project.Id))!.Status);
+        Assert.True((await host.As(Admin).Get<ISetupAdminService>().GetChecklistAsync()).HasChargeAssignments); // "First approved plan" ticks itself
     }
 
     [Fact]
@@ -196,6 +198,17 @@ public sealed class ProjectLifecycleTests
         await using var verify = await host.Db.CreateAsync();
         Assert.Contains(await verify.Set<Notification>().Where(n => n.RecipientEmail == Pm).ToListAsync(), n => n.Title.Contains("3003", StringComparison.Ordinal));
         await Assert.ThrowsAsync<ArgumentException>(() => host.As(Finance).Get<IProjectStartService>().FinishSetupAsync(shell.Id)); // once
+    }
+
+    [Fact]
+    public async Task An_administrator_of_a_company_still_being_set_up_gets_one_to_do_for_the_next_step_and_nobody_else_does()
+    {
+        await using var host = await HostAsync();
+
+        var todo = Assert.Single((await host.As(Admin).Get<IMyTodoService>().GetAsync()).Items, i => i.Key == "setup:next");
+        Assert.StartsWith("Finish setting up Workbench:", todo.Title, StringComparison.Ordinal);
+        Assert.Contains("Next:", todo.Reason, StringComparison.Ordinal);
+        Assert.DoesNotContain((await host.As(Pm).Get<IMyTodoService>().GetAsync()).Items, i => i.Key == "setup:next");
     }
 
     [Fact]
