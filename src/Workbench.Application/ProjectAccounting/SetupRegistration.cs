@@ -14,6 +14,7 @@ public static class SetupRegistration
         services.AddScoped<Approvals.IApprovalDocumentHandler, ProjectPlanApprovalHandler>();
         services.AddScoped<IProjectPlanService>(sp => sp.GetRequiredService<ProjectPlanService>());
         services.AddScoped<MyTodo.IMyTodoProvider, ProjectPlanTodoProvider>();
+        services.AddScoped<MyTodo.IMyTodoProvider, MyTodo.SetupTodoProvider>();
         services.AddScoped<ISetupAdminService, SetupAdminService>();
         return services;
     }

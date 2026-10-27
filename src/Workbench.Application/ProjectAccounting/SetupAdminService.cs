@@ -115,7 +115,8 @@ public sealed class SetupAdminService(IWorkbenchDbContextFactory dbFactory, Audi
             await db.Set<EmployeeCostRate>().AnyAsync(cancellationToken),
             await db.Set<Customer>().AnyAsync(cancellationToken) && await db.Set<Contract>().AnyAsync(cancellationToken),
             await db.Set<WbsElement>().AnyAsync(cancellationToken),
-            await db.Set<ChargeAssignment>().AnyAsync(cancellationToken),
+            // The first plan Finance approved (it opens the project for time: the people on it can charge it), or a charge assignment made by hand.
+            await db.Set<ProjectPlan>().AnyAsync(p => p.Approvals > 0, cancellationToken) || await db.Set<ChargeAssignment>().AnyAsync(cancellationToken),
             // Someone besides the first administrator can sign in (or has been invited).
             await db.Set<Domain.Identity.AppUser>().CountAsync(u => u.IsActive, cancellationToken) > 1
                 || await db.Set<Domain.Security.UserInvite>().AnyAsync(cancellationToken),
