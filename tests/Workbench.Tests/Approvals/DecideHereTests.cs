@@ -93,4 +93,16 @@ public sealed class DecideHereTests
         cut.WaitForAssertion(() => Assert.Contains("2 items on this page", cut.Find("[data-testid='decide-here-many']").TextContent));
         Assert.Empty(cut.FindAll("[data-testid='here-approve']"));
     }
+
+    [Fact]
+    public async Task A_project_plan_keeps_its_own_bar_and_gets_no_second_one()
+    {
+        var inbox = new FakeInbox([Item(Guid.NewGuid(), "projects/5103/plan", ApprovalDocumentTypes.ProjectPlan)]);
+        await using var ctx = Context(inbox);
+        ctx.Services.GetRequiredService<NavigationManager>().NavigateTo("projects/5103/plan");
+        var cut = ctx.Render<DecideHere>();
+
+        await Task.Delay(100);
+        Assert.Empty(cut.FindAll("[data-testid='decide-here']"));
+    }
 }
