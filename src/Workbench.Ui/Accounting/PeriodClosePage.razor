@@ -70,7 +70,15 @@ else
                                 }
                             </ul>
                         }
-                        @if (!check.Passed && FixFor(check.Kind) is { } fix)
+                        @if (!check.Passed && check.Kind == CloseCheckKind.NothingUnposted)
+                        {
+                            @* Posting is the fix: no page to go to. It asks first. *@
+                            <div class="mt-1">
+                                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary" OnClick="PostBacklogAsync" Disabled="_busy" EndIcon="@Icons.Material.Filled.PlaylistAddCheck"
+                                           data-testid="close-fix-NothingUnposted">Post these now</MudButton>
+                            </div>
+                        }
+                        else if (!check.Passed && FixFor(check.Kind) is { } fix)
                         {
                             <div class="mt-1">
                                 <MudButton Href="@fix.Href" Size="Size.Small" Variant="Variant.Text" Color="Color.Primary" EndIcon="@Icons.Material.Filled.ArrowForward"

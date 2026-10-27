@@ -62,6 +62,8 @@ public sealed class ApprovalInboxService(
             })
             .OrderBy(x => x.Item.WaitingSinceUtc)
             .ToList();
+        items.AddRange(await PlansWaitingAsync(db, now, cancellationToken));
+        items = items.OrderBy(x => x.Item.WaitingSinceUtc).ToList();
         var shares = await ProjectHoursAsync(db, items.Where(x => x.OnlyProjects is not null && x.Item.DocumentType == ApprovalDocumentTypes.Timesheet)
             .Select(x => (x.Item.DocumentId, (IReadOnlyList<Guid>)x.OnlyProjects!)).ToList(), cancellationToken);
         var emails = items.Select(x => x.Item.SubmitterEmail).Distinct().ToList();
@@ -71,6 +73,36 @@ public sealed class ApprovalInboxService(
                 ? x.Item with { Amount = share.Hours, Summary = $"{share.Hours:0.0} h on {share.Codes} of {share.Total:0.0} h" }
                 : x.Item) with { SubmitterName = names.GetValueOrDefault(x.Item.SubmitterEmail) })
             .ToList();
+    }
+
+    /// <summary>
+    /// Project plans submitted to Finance, listed here for people who set up projects (not their own submissions) so Finance has
+    /// one place for what's waiting. They're decided through <see cref="ProjectAccounting.ProjectPlanApprovalHandler"/>, not the workflow engine.
+    /// </summary>
+    private async Task<List<(ApprovalInboxItemDto Item, List<Guid>? OnlyProjects)>> PlansWaitingAsync(IWorkbenchDbContext db, DateTime now, CancellationToken ct)
+    {
+        if (!await access.HasAsync(Permission.SetupProjects, ct))
+        {
+            return [];
+        }
+
+        var me = ApprovalEngine.Normalize(access.Email);
+        var waiting = await (
+                from plan in db.Set<ProjectPlan>().AsNoTracking()
+                join project in db.Set<Project>().AsNoTracking() on plan.ProjectId equals project.Id
+                where plan.Status == ProjectPlanStatus.Submitted
+                select new { project.Id, project.Code, project.Name, plan.SubmittedBy, plan.SubmittedAtUtc, plan.SubmitNote })
+            .ToListAsync(ct);
+        var result = new List<(ApprovalInboxItemDto, List<Guid>?)>();
+        foreach (var w in waiting.Where(w => ApprovalEngine.Normalize(w.SubmittedBy) != me))
+        {
+            var hours = (await ProjectAccounting.ProjectPlanService.PlanLinesAsync(db, w.Id, ct)).Sum(l => l.Hours);
+            result.Add((new ApprovalInboxItemDto(w.Id, w.Id, ApprovalDocumentTypes.ProjectPlan, ApprovalDocumentTypes.Label(ApprovalDocumentTypes.ProjectPlan), w.Id,
+                $"Plan for {w.Code} {w.Name}", w.SubmitNote is { } note ? $"{hours:0.#} h planned. \"{note}\"" : $"{hours:0.#} h planned", null, w.SubmittedBy ?? "", "Finance review", null,
+                w.SubmittedAtUtc, w.SubmittedAtUtc is { } since ? BusinessDays.Between(since, now) : 0, null, $"projects/{w.Id}/plan", w.Id), null));
+        }
+
+        return result;
     }
 
     /// <summary>For timesheets a project manager decides only part of: the hours on their projects, the project codes and the sheet's total.</summary>
@@ -104,7 +136,7 @@ public sealed class ApprovalInboxService(
 
         await _backfill.RunAsync(cancellationToken);
         await using var db = await dbFactory.CreateAsync(cancellationToken);
-        return (await engine.ActionableAsync(db, null, access.Email, cancellationToken)).Count;
+        return (await engine.ActionableAsync(db, null, access.Email, cancellationToken)).Count + (await PlansWaitingAsync(db, engine.UtcNow, cancellationToken)).Count;
     }
 
     public async Task DecideAsync(string documentType, Guid documentId, ApprovalDecisionRequest request, CancellationToken cancellationToken = default)
