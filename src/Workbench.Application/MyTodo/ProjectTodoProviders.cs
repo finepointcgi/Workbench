@@ -233,7 +233,7 @@ public sealed class FundingTodoProvider : IMyTodoProvider
                     $"{ReceivingTodoProvider.Money(clin.Remaining)} left"
                         + (clin.ProjectedExhaustion is { } runOut ? $", projected to run out {runOut:MMM d}" : "")
                         + ". Ask the contracting officer for incremental funding (Limitation of Funds notice).",
-                    urgency, clin.ProjectedExhaustion, $"projects/{project.Id}/financials", "View funding", Priority: (int)clin.Level));
+                    urgency, null, $"projects/{project.Id}/financials", "View funding", Priority: (int)clin.Level)); // the run-out date is in the reason: showing it as "Due" read like a deadline
             }
         }
 

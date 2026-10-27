@@ -78,7 +78,7 @@
                                               data-testid="@TestId(field)" />
                                 break;
                             case ColumnKind.Date:
-                                <MudDatePicker Date="@AsDate(field)" DateChanged="(DateTime? d) => SetDate(field, d)" Label="@field.Label"
+                                <MudDatePicker DateFormat="yyyy-MM-dd" Date="@AsDate(field)" DateChanged="(DateTime? d) => SetDate(field, d)" Label="@field.Label"
                                                Required="field.Required" HelperText="@field.HelpText" Editable="true" />
                                 break;
                             default:
