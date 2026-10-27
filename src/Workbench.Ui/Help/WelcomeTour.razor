@@ -97,9 +97,18 @@
     }
 
     private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) =>
-        _ = InvokeAsync(() =>
+        _ = InvokeAsync(async () =>
         {
             OpenIfAtHome();
+            if (_open && _tour is { } tour && !IsHomePage())
+            {
+                // Leaving Home with the tour open (a to-do's button, a link): put it away, not finished, so it doesn't follow them onto the
+                // page they went to do something on; it opens again the next time they're on Home.
+                _open = false;
+                _pending = tour;
+                await ClearHighlightAsync();
+            }
+
             StateHasChanged();
         });
 
