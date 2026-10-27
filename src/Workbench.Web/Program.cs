@@ -37,6 +37,10 @@ var copyBlobsApply = copyBlobs && args.Contains("--apply", StringComparer.Ordina
 string[] commands = ["--migrate", "--rewrap-data-protection-keys", "--reset-demo", "--copy-blobs", "--apply"];
 args = args.Where(a => !commands.Contains(a, StringComparer.OrdinalIgnoreCase)).ToArray();
 
+// Dates, numbers and money read the US way everywhere. A container has no OS locale, so without this the server formats with the
+// invariant culture and every currency written with "C" shows "¤960,000" instead of "$960,000".
+Workbench.Web.WorkbenchCulture.Apply();
+
 var builder = WebApplication.CreateBuilder(args);
 builder.AddWorkbenchHosting();
 
@@ -101,6 +105,8 @@ app.UseWhen(
     context => !AuthenticationSetup.IsApiRequest(context.Request),
     branch => branch.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true));
 app.UseHttpsRedirection();
+app.UseRequestLocalization(new Microsoft.AspNetCore.Builder.RequestLocalizationOptions()
+    .SetDefaultCulture("en-US").AddSupportedCultures("en-US").AddSupportedUICultures("en-US")); // the request's culture, which Blazor's circuit takes
 app.UseAuthentication();
 app.UseRateLimiter();
 app.UseWorkbenchDenialLogging();
