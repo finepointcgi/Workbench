@@ -47,6 +47,33 @@ public static class SetupFormat
     public static string Label(ProjectState state) => state == ProjectState.OnHold ? "On hold" : state.ToString();
 
     /// <summary>The user-facing message for a failed save: the service's validation message, or a generic one.</summary>
+    /// <summary>What a government invoice needs that the contract's billing details don't have yet, in the words the page uses.</summary>
+    public static IReadOnlyList<string> MissingBillingDetails(Workbench.Contracts.Billing.ContractBillingSettingsDto settings)
+    {
+        var missing = new List<string>();
+        if (string.IsNullOrWhiteSpace(settings.CageCode))
+        {
+            missing.Add("the CAGE code");
+        }
+
+        if (string.IsNullOrWhiteSpace(settings.PayingOffice))
+        {
+            missing.Add("the paying office");
+        }
+
+        if (string.IsNullOrWhiteSpace(settings.AdminOffice))
+        {
+            missing.Add("the administering office");
+        }
+
+        if (string.IsNullOrWhiteSpace(settings.CustomerBillingAddress))
+        {
+            missing.Add("where to send the invoice");
+        }
+
+        return missing;
+    }
+
     /// <summary>
     /// The rates to copy from another contract: for each labor category it prices, the rate in force on <paramref name="asOf"/> (else its
     /// latest), skipping categories the contract already has a rate for.

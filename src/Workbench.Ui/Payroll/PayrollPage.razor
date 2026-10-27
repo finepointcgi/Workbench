@@ -110,7 +110,7 @@ else
                         </MudSelect>
                     </MudItem>
                     <MudItem xs="12" sm="3"><MudTextField @bind-Value="_newGroup.CompanyCode" Label="Company code" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
-                    <MudItem xs="12" sm="3"><MudDatePicker @bind-Date="_newGroup.Anchor" Label="First day of a period" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+                    <MudItem xs="12" sm="3"><MudDatePicker DateFormat="yyyy-MM-dd" @bind-Date="_newGroup.Anchor" Label="First day of a period" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
                     <MudItem xs="12" sm="2"><MudNumericField @bind-Value="_newGroup.Offset" Label="Check +days" Variant="Variant.Outlined" Margin="Margin.Dense" Min="0" Max="31" /></MudItem>
                 </MudGrid>
                 <MudButton Class="mt-3" Variant="Variant.Filled" Color="Color.Primary" OnClick="CreateGroupAsync" Disabled="_busy">Create pay group</MudButton>

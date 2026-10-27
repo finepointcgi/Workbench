@@ -47,7 +47,7 @@ else
         <MudPaper Outlined="true" Class="pa-4 mt-4" Style="max-width:900px">
             <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Propose a change</MudText>
             <MudGrid Spacing="2">
-                <MudItem xs="12" sm="4"><MudDatePicker @bind-Date="_effective" Editable="true" Label="Effective from" Variant="Variant.Outlined" Margin="Margin.Dense" data-testid="comp-effective" /></MudItem>
+                <MudItem xs="12" sm="4"><MudDatePicker DateFormat="yyyy-MM-dd" @bind-Date="_effective" Editable="true" Label="Effective from" Variant="Variant.Outlined" Margin="Margin.Dense" data-testid="comp-effective" /></MudItem>
                 <MudItem xs="12" sm="4">
                     <MudSelect T="PayTypeKind" @bind-Value="_payType" Label="Pay type" Variant="Variant.Outlined" Margin="Margin.Dense">
                         <MudSelectItem T="PayTypeKind" Value="PayTypeKind.Salaried">Salaried</MudSelectItem>

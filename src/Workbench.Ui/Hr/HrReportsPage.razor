@@ -24,8 +24,8 @@ else
         {
             <MudTabPanel Text="Headcount and turnover" data-testid="tab-headcount">
                 <MudStack Row="true" Spacing="3" AlignItems="AlignItems.End" Class="mb-3" Wrap="Wrap.Wrap">
-                    <MudDatePicker @bind-Date="_from" Editable="true" Label="From" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:180px" />
-                    <MudDatePicker @bind-Date="_to" Editable="true" Label="To (headcount as of)" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:200px" />
+                    <MudDatePicker DateFormat="yyyy-MM-dd" @bind-Date="_from" Editable="true" Label="From" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:180px" />
+                    <MudDatePicker DateFormat="yyyy-MM-dd" @bind-Date="_to" Editable="true" Label="To (headcount as of)" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:200px" />
                     <MudButton Variant="Variant.Outlined" Color="Color.Primary" Disabled="Busy" OnClick="RunHeadcountAsync">Run</MudButton>
                 </MudStack>
                 @if (_headcount is { } h && _turnover is { } t)
@@ -83,7 +83,7 @@ else
         {
             <MudTabPanel Text="Benefits enrollment" data-testid="tab-benefits">
                 <MudStack Row="true" Spacing="3" AlignItems="AlignItems.End" Class="mb-3">
-                    <MudDatePicker @bind-Date="_asOf" Editable="true" Label="As of" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:180px" />
+                    <MudDatePicker DateFormat="yyyy-MM-dd" @bind-Date="_asOf" Editable="true" Label="As of" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:180px" />
                     <MudButton Variant="Variant.Outlined" Color="Color.Primary" Disabled="Busy" OnClick="RunBenefitsAsync">Run</MudButton>
                     <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Download" Disabled="Busy" OnClick="ExportBenefitsAsync">CSV</MudButton>
                 </MudStack>
@@ -110,7 +110,7 @@ else
             <MudTabPanel Text="EEO-1" data-testid="tab-eeo1">
                 <MudAlert Severity="Severity.Info" Class="mb-3">Restricted: HR and administrators only. Exports are recorded in the security log.</MudAlert>
                 <MudStack Row="true" Spacing="3" AlignItems="AlignItems.End" Class="mb-3">
-                    <MudDatePicker @bind-Date="_snapshot" Editable="true" Label="Snapshot date (a pay period in Q4)" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:260px" />
+                    <MudDatePicker DateFormat="yyyy-MM-dd" @bind-Date="_snapshot" Editable="true" Label="Snapshot date (a pay period in Q4)" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:260px" />
                     <MudButton Variant="Variant.Outlined" Color="Color.Primary" Disabled="Busy" OnClick="RunEeo1Async" data-testid="run-eeo1">Run</MudButton>
                     <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Download" Disabled="Busy" OnClick="ExportEeo1Async">CSV</MudButton>
                 </MudStack>
@@ -131,7 +131,7 @@ else
             <MudTabPanel Text="VETS-4212" data-testid="tab-vets">
                 <MudAlert Severity="Severity.Info" Class="mb-3">Restricted: HR and administrators only. Exports are recorded in the security log.</MudAlert>
                 <MudStack Row="true" Spacing="3" AlignItems="AlignItems.End" Class="mb-3">
-                    <MudDatePicker @bind-Date="_periodEnd" Editable="true" Label="12-month period ending" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:220px" />
+                    <MudDatePicker DateFormat="yyyy-MM-dd" @bind-Date="_periodEnd" Editable="true" Label="12-month period ending" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:220px" />
                     <MudButton Variant="Variant.Outlined" Color="Color.Primary" Disabled="Busy" OnClick="RunVetsAsync">Run</MudButton>
                     <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Download" Disabled="Busy" OnClick="ExportVetsAsync">CSV</MudButton>
                 </MudStack>

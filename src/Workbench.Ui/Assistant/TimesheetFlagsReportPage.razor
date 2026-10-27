@@ -15,8 +15,8 @@
 </MudText>
 
 <MudGrid Class="mb-2">
-    <MudItem xs="6" sm="3"><MudDatePicker @bind-Date="_from" Label="From" data-testid="flags-from" /></MudItem>
-    <MudItem xs="6" sm="3"><MudDatePicker @bind-Date="_to" Label="To" data-testid="flags-to" /></MudItem>
+    <MudItem xs="6" sm="3"><MudDatePicker DateFormat="yyyy-MM-dd" @bind-Date="_from" Label="From" data-testid="flags-from" /></MudItem>
+    <MudItem xs="6" sm="3"><MudDatePicker DateFormat="yyyy-MM-dd" @bind-Date="_to" Label="To" data-testid="flags-to" /></MudItem>
     <MudItem xs="12" sm="4">
         <MudSelect T="string" @bind-Value="_rule" Label="Flag" Clearable="true" Placeholder="All flags">
             @foreach (var rule in TimesheetFlagRules.All)

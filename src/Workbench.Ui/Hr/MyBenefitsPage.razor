@@ -114,7 +114,7 @@ else
                             @foreach (var r in Enum.GetValues<DependentRelationship>()) { <MudSelectItem T="DependentRelationship" Value="r">@r</MudSelectItem> }
                         </MudSelect>
                     </MudItem>
-                    <MudItem xs="6"><MudDatePicker @bind-Date="_dep.Birth" Editable="true" Label="Birth date" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+                    <MudItem xs="6"><MudDatePicker DateFormat="yyyy-MM-dd" @bind-Date="_dep.Birth" Editable="true" Label="Birth date" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
                 </MudGrid>
                 <MudButton Class="mt-2" Variant="Variant.Outlined" Color="Color.Primary" Disabled="Busy" OnClick="AddDependentAsync">Add</MudButton>
             </MudPaper>
@@ -133,7 +133,7 @@ else
                             @foreach (var k in Enum.GetValues<LifeEventKind>()) { <MudSelectItem T="LifeEventKind" Value="k">@BenefitLabels.Label(k)</MudSelectItem> }
                         </MudSelect>
                     </MudItem>
-                    <MudItem xs="6"><MudDatePicker @bind-Date="_eventDate" Editable="true" Label="Date" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+                    <MudItem xs="6"><MudDatePicker DateFormat="yyyy-MM-dd" @bind-Date="_eventDate" Editable="true" Label="Date" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
                     <MudItem xs="12"><MudTextField @bind-Value="_eventNote" Label="Note for HR" Variant="Variant.Outlined" Margin="Margin.Dense" autocomplete="off" /></MudItem>
                 </MudGrid>
                 <MudButton Class="mt-2" Variant="Variant.Outlined" Color="Color.Primary" Disabled="Busy" OnClick="ReportAsync" data-testid="report-life-event">Send to HR</MudButton>

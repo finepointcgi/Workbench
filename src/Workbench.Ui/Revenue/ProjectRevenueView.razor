@@ -60,7 +60,7 @@ else
                     <MudSelectItem T="Guid?" Value="c.Id">CLIN @c.Number (@c.Pricing)</MudSelectItem>
                 }
             </MudSelect>
-            <MudDatePicker @bind-Date="_asOf" Label="As of" Style="max-width:160px" />
+            <MudDatePicker DateFormat="yyyy-MM-dd" @bind-Date="_asOf" Label="As of" Style="max-width:160px" />
             <MudNumericField T="decimal?" @bind-Value="_eacCost" Label="Estimated cost at completion" Format="N2" HideSpinButtons="true" Style="max-width:220px" data-testid="eac-cost" />
             <MudNumericField T="decimal?" @bind-Value="_eacRevenue" Label="Estimated revenue (price incl. fee)" Format="N2" HideSpinButtons="true" Style="max-width:240px"
                              HelperText="@(p.SuggestedTransactionPrice is { } sp ? $"Contract value {RevenueFormat.Amount(sp)}" : null)" data-testid="eac-revenue" />
@@ -82,7 +82,7 @@ else
         <MudPaper Outlined="true" Class="pa-4 mb-3">
             <MudText Typo="Typo.h6" Class="mb-2">Units delivered</MudText>
             <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" AlignItems="AlignItems.End" Class="mb-3">
-                <MudDatePicker @bind-Date="_deliveredOn" Label="Delivered on" Style="max-width:160px" />
+                <MudDatePicker DateFormat="yyyy-MM-dd" @bind-Date="_deliveredOn" Label="Delivered on" Style="max-width:160px" />
                 <MudNumericField T="decimal?" @bind-Value="_quantity" Label="Quantity" HideSpinButtons="true" Style="max-width:120px" />
                 <MudTextField @bind-Value="_deliveryNote" Label="What was delivered" Style="min-width:240px" />
                 <MudButton Variant="Variant.Outlined" Disabled="@(_busy || _quantity is null or 0 || string.IsNullOrWhiteSpace(_deliveryNote) || _deliveredOn is null)" OnClick="DeliverAsync">Record delivery</MudButton>

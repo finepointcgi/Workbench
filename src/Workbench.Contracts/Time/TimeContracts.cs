@@ -74,6 +74,9 @@ public sealed record TimeEntryRevisionDto(
 /// <summary>A code the employee is staffed or assigned on that they can't charge yet, and when or why it opens.</summary>
 public sealed record UpcomingChargeCodeDto(Guid WbsElementId, string Code, string Name, string ProjectCode, string Reason);
 
+/// <summary>How many more hours a charge code can take before an hours ceiling stops it (counting everything already entered, this timesheet's too).</summary>
+public sealed record ChargeCeilingRoomDto(Guid WbsElementId, decimal HoursLeft);
+
 public sealed record TimesheetChargeCodeDto(ChargeCodeDto ChargeCode, IReadOnlyList<DateOnly> ChargeableDates, bool RecentlyUsed);
 
 public sealed record TimesheetDayDto(
@@ -96,7 +99,10 @@ public sealed record TimesheetDetailDto(
     IReadOnlyList<AuditEventDto> Audit,
 
     /// <summary>Codes they're on but can't charge yet (the project is still being planned, or their dates start later), with when it opens.</summary>
-    IReadOnlyList<UpcomingChargeCodeDto>? NotOpenYet = null);
+    IReadOnlyList<UpcomingChargeCodeDto>? NotOpenYet = null,
+
+    /// <summary>For the charge codes under an hours ceiling: what's left, so "Fill from my staffing" stops there instead of being refused at submit.</summary>
+    IReadOnlyList<ChargeCeilingRoomDto>? CeilingRoom = null);
 
 /// <summary>
 /// One cell of the grid. <see cref="EntryId"/> identifies an existing entry (needed to move it to another charge

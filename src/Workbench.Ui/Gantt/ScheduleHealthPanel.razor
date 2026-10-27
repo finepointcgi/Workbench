@@ -18,7 +18,7 @@
             <MudChip T="string" Size="Size.Small" Color="@(h.Failed > 0 ? MudBlazor.Color.Error : MudBlazor.Color.Default)" Variant="Variant.Outlined" data-testid="health-failed">@h.Failed failed</MudChip>
         }
         <MudSpacer />
-        <MudDatePicker Label="Status date" Date="_statusDate" DateChanged="OnStatusDateChanged" Variant="Variant.Outlined" Margin="Margin.Dense"
+        <MudDatePicker DateFormat="yyyy-MM-dd" Label="Status date" Date="_statusDate" DateChanged="OnStatusDateChanged" Variant="Variant.Outlined" Margin="Margin.Dense"
                        Style="max-width:170px" data-testid="health-status-date" />
         @if (_baselines.Count > 0)
         {

@@ -27,7 +27,7 @@
     </tbody>
 </MudSimpleTable>
 <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Class="mt-3" Style="max-width:720px">
-    <MudDatePicker @bind-Date="_date" Label="Date" Variant="Variant.Outlined" Margin="Margin.Dense" />
+    <MudDatePicker DateFormat="yyyy-MM-dd" @bind-Date="_date" Label="Date" Variant="Variant.Outlined" Margin="Margin.Dense" />
     <MudTextField @bind-Value="_name" Label="Name" Variant="Variant.Outlined" Margin="Margin.Dense" />
     <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="AddAsync" Disabled="@(_busy || _date is null || string.IsNullOrWhiteSpace(_name))">Add</MudButton>
 </MudStack>
