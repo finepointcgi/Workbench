@@ -47,6 +47,33 @@ public static class SetupFormat
     public static string Label(ProjectState state) => state == ProjectState.OnHold ? "On hold" : state.ToString();
 
     /// <summary>The user-facing message for a failed save: the service's validation message, or a generic one.</summary>
+    /// <summary>
+    /// The next employee number in the pattern the company already uses ("E1005" then "E1006"): the prefix and width of the highest
+    /// numbered one, one higher. Empty when none follow a pattern, so the person types the first.
+    /// </summary>
+    public static string NextEmployeeNumber(IEnumerable<string> existing)
+    {
+        var parsed = existing
+            .Select(n => System.Text.RegularExpressions.Regex.Match(n ?? "", @"^(\D*)(\d+)$"))
+            .Where(m => m.Success && m.Groups[2].Value.Length <= 9)
+            .Select(m => (Prefix: m.Groups[1].Value, Width: m.Groups[2].Value.Length, Number: long.Parse(m.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture)))
+            .ToList();
+        if (parsed.Count == 0)
+        {
+            return "";
+        }
+
+        var top = parsed.OrderByDescending(p => p.Number).First();
+        var used = parsed.Where(p => p.Prefix == top.Prefix).Select(p => p.Number).ToHashSet();
+        var next = top.Number + 1;
+        while (used.Contains(next))
+        {
+            next++;
+        }
+
+        return top.Prefix + next.ToString(System.Globalization.CultureInfo.InvariantCulture).PadLeft(top.Width, '0');
+    }
+
     public static string Error(Exception ex) => ex switch
     {
         ArgumentException or InvalidOperationException or HttpRequestException => ex.Message,
