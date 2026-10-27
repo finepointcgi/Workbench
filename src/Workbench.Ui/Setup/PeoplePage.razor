@@ -59,6 +59,7 @@
             @if (_selected is not null)
             {
                 <CostRatePanel EmployeeId="_selected.Id" />
+                <EmployeeSignInPanel Employee="_selected" />
             }
         }
         else
@@ -129,7 +130,7 @@
             await _editor.SaveCustomFieldsAsync(saved.Id);
         }
 
-        Snackbar.Add(_selected is null ? $"Created {saved.DisplayName}. Add a cost rate next." : $"Saved {saved.DisplayName}.", Severity.Success);
+        Snackbar.Add(_selected is null ? $"Created {saved.DisplayName}. Add a cost rate and invite them to sign in next." : $"Saved {saved.DisplayName}.", Severity.Success);
         await LoadAsync();
         _selected = _employees.FirstOrDefault(e => e.Id == saved.Id) ?? saved;
 

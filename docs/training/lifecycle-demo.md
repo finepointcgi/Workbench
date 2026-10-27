@@ -57,6 +57,11 @@ vendor and the purchase order from the requisition, received, the vendor's bill 
 other than who entered it, a payment run approved by someone other than who made it, and the $1,000 on the project once, in the
 ledger and in project financials. It also walks an expense report (Alex submits with a receipt, Pat approves) to the same tie.
 
+`LeaveTests` walks a day off: Alex asks, Pat approves, and the balance (planned hours) and the team calendar agree.
+
+Adding a person (Setup › People): the next employee number is suggested from the company's pattern, the page shows the cost
+rate, and a **Sign-in** card says whether they can sign in yet and, for administrators, invites them with one click.
+
 ### What writing it found
 
 - Staffing a task that had already ended said "The end date is before the start date." It now says when the task ended and what to do (fixed).
