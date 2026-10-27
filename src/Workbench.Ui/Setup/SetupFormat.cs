@@ -47,6 +47,33 @@ public static class SetupFormat
     public static string Label(ProjectState state) => state == ProjectState.OnHold ? "On hold" : state.ToString();
 
     /// <summary>The user-facing message for a failed save: the service's validation message, or a generic one.</summary>
+    /// <summary>What a government invoice needs that the contract's billing details don't have yet, in the words the page uses.</summary>
+    public static IReadOnlyList<string> MissingBillingDetails(Workbench.Contracts.Billing.ContractBillingSettingsDto settings)
+    {
+        var missing = new List<string>();
+        if (string.IsNullOrWhiteSpace(settings.CageCode))
+        {
+            missing.Add("the CAGE code");
+        }
+
+        if (string.IsNullOrWhiteSpace(settings.PayingOffice))
+        {
+            missing.Add("the paying office");
+        }
+
+        if (string.IsNullOrWhiteSpace(settings.AdminOffice))
+        {
+            missing.Add("the administering office");
+        }
+
+        if (string.IsNullOrWhiteSpace(settings.CustomerBillingAddress))
+        {
+            missing.Add("where to send the invoice");
+        }
+
+        return missing;
+    }
+
     /// <summary>
     /// The next employee number in the pattern the company already uses ("E1005" then "E1006"): the prefix and width of the highest
     /// numbered one, one higher. Empty when none follow a pattern, so the person types the first.

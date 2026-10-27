@@ -401,9 +401,13 @@ else
             }
         }
 
+        // Stop at an hours ceiling: what's left there already counts everything entered, so adding more would be refused at submit.
+        var stopped = new List<string>();
+        hours = TimeFill.CapAtCeilings(hours, _detail.CeilingRoom ?? [], stopped, wbs => _detail.ChargeCodes.FirstOrDefault(c => c.ChargeCode.WbsElementId == wbs)?.ChargeCode.Code ?? "that code");
         var filled = await _grid.FillEmptyAsync(hours);
-        Snackbar.Add(filled == 0 ? "Nothing to fill: those days already have hours, or can't be entered yet." : $"Filled {filled} day{(filled == 1 ? "" : "s")} from your staffing.",
-            filled == 0 ? Severity.Info : Severity.Success);
+        var ceilingNote = stopped.Count == 0 ? "" : $" Stopped at the hours ceiling on {string.Join(", ", stopped)}.";
+        Snackbar.Add(filled == 0 ? $"Nothing to fill: those days already have hours, or can't be entered yet.{ceilingNote}" : $"Filled {filled} day{(filled == 1 ? "" : "s")} from your staffing.{ceilingNote}",
+            filled == 0 ? Severity.Info : stopped.Count == 0 ? Severity.Success : Severity.Warning);
     }
 
     /// <summary>Copies the previous period's hours to the same weekdays, into empty cells only (comments aren't copied).</summary>

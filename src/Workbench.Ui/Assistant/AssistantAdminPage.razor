@@ -134,8 +134,8 @@
     <MudTabPanel Text="Audit log">
         <MudText Class="mud-text-secondary mb-3">Every question, the tools it called, the records they read and the answer. Rows are never changed or deleted.</MudText>
         <MudGrid Class="mb-2">
-            <MudItem xs="6" sm="3"><MudDatePicker @bind-Date="_auditFrom" Label="From" /></MudItem>
-            <MudItem xs="6" sm="3"><MudDatePicker @bind-Date="_auditTo" Label="To" /></MudItem>
+            <MudItem xs="6" sm="3"><MudDatePicker DateFormat="yyyy-MM-dd" @bind-Date="_auditFrom" Label="From" /></MudItem>
+            <MudItem xs="6" sm="3"><MudDatePicker DateFormat="yyyy-MM-dd" @bind-Date="_auditTo" Label="To" /></MudItem>
             <MudItem xs="12" sm="4"><MudTextField @bind-Value="_auditUser" Label="Person's email" autocomplete="off" /></MudItem>
             <MudItem xs="12" sm="2" Class="d-flex align-end"><MudButton Variant="Variant.Outlined" OnClick="LoadAuditAsync">Show</MudButton></MudItem>
         </MudGrid>
