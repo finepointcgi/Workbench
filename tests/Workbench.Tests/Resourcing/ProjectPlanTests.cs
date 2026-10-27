@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Workbench.Contracts;
+using Workbench.Contracts.Approvals;
 using Workbench.Contracts.Financials;
 using Workbench.Contracts.MyTodo;
 using Workbench.Contracts.ProjectAccounting;
@@ -307,8 +308,13 @@ public sealed class ProjectPlanTests
             Assert.True(await db.Set<Notification>().AnyAsync(n => n.RecipientEmail == Finance && n.Title == "Review the plan for 1001 Modernization"));
         }
 
-        var review = Assert.Single((await host.As(Finance).Get<IMyTodoService>().GetAsync()).Items, i => i.Key == $"plan:{host.Project1}:review");
-        Assert.Equal("Pat submitted it for approval.", review.Reason);
+        // Finance finds it in the Approvals inbox with everything else (named, with the note), and once: not also as its own to-do.
+        var review = Assert.Single(await host.As(Finance).Get<IApprovalInboxService>().ListMineAsync(), i => i.DocumentType == ApprovalDocumentTypes.ProjectPlan);
+        Assert.Equal((host.Project1, "Pat", "Plan for 1001 Modernization"), (review.DocumentId, review.Submitter, review.Title));
+        Assert.Contains("Ready for review", review.Summary, StringComparison.Ordinal);
+        Assert.Equal(1, await host.As(Finance).Get<IApprovalInboxService>().CountMineAsync()); // and in the Approvals badge
+        Assert.DoesNotContain((await host.As(Finance).Get<IMyTodoService>().GetAsync()).Items, i => i.Key == $"plan:{host.Project1}:review");
+        Assert.Empty((await host.As(Pm).Get<IApprovalInboxService>().ListMineAsync()).Where(i => i.DocumentType == ApprovalDocumentTypes.ProjectPlan)); // not the person who submitted it, and not someone who can't review it
 
         // Returned with comments; the PM sees why and resubmits.
         var finance = host.As(Finance).Get<IProjectPlanService>();
@@ -350,6 +356,27 @@ public sealed class ProjectPlanTests
         Assert.Equal(2, second.Approvals);
         versions = await host.Get<IBudgetService>().ListVersionsAsync(host.Project1);
         Assert.Equal((80m, 100m), (versions.Single(v => v.Kind == BudgetVersionKind.Baseline).TotalHours, versions.Single(v => v.Kind == BudgetVersionKind.Current).TotalHours));
+    }
+
+    [Fact]
+    public async Task Finance_returns_and_approves_a_plan_from_the_approvals_inbox()
+    {
+        await using var host = await CreateAsync();
+        var build = await ItemAsync(host, "Build");
+        await host.Get<IResourcePlanService>().ApplyAsync(host.Project1, [new PlanChange(PlanChangeKind.SetPerson, ItemId: build, EmployeeId: host.DevId, Hours: 80m)]);
+        await host.As(Pm).Get<IProjectPlanService>().SubmitAsync(host.Project1, "Ready");
+
+        // Rejecting in the inbox sends it back to the PM with the reason (a plan is returned, not thrown out).
+        var inbox = host.As(Finance).Get<IApprovalInboxService>();
+        await Assert.ThrowsAsync<ArgumentException>(() => inbox.DecideAsync(ApprovalDocumentTypes.ProjectPlan, host.Project1, new ApprovalDecisionRequest(ApprovalDecisionKind.Reject, " ")));
+        await inbox.DecideAsync(ApprovalDocumentTypes.ProjectPlan, host.Project1, new ApprovalDecisionRequest(ApprovalDecisionKind.Reject, "Add QA"));
+        var returned = await host.As(Finance).Get<IProjectPlanService>().GetAsync(host.Project1);
+        Assert.Equal((PlanApprovalStatus.Returned, "Add QA"), (returned.Status, returned.ReviewComment));
+        Assert.Empty((await host.As(Finance).Get<IApprovalInboxService>().ListMineAsync()).Where(i => i.DocumentType == ApprovalDocumentTypes.ProjectPlan));
+
+        await host.As(Pm).Get<IProjectPlanService>().SubmitAsync(host.Project1);
+        await host.As(Finance).Get<IApprovalInboxService>().DecideAsync(ApprovalDocumentTypes.ProjectPlan, host.Project1, new ApprovalDecisionRequest(ApprovalDecisionKind.Approve, "Good"));
+        Assert.Equal(PlanApprovalStatus.Approved, (await host.As(Finance).Get<IProjectPlanService>().GetAsync(host.Project1)).Status);
     }
 
     [Fact]

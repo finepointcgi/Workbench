@@ -12,7 +12,7 @@ under the approval bar shows the steps and marks the next one.
 | --- | --- | --- | --- |
 | **5101** Lifecycle 1: set up | Finance has just created it | No funding, no labor categories, no manager: the strip says **Funding** is next. Use **Change the ceiling or funding** and **Labor categories**, then assign Sam as manager. | Finance |
 | **5102** Lifecycle 2: planning | Funded, two categories, Sam is manager | Sign in as **Sam Patel** (`sam.pm@example.com`): the home to-do says *Plan 5102*. Add people on the plan: the category list limits who fits. Submit is open (setup is done). | Sam |
-| **5103** Lifecycle 3: awaiting approval | Sam's plan is with Finance | Pat has the *Review the plan* to-do. Open it, see the people and hours, **Approve**: the project turns Active and the baseline is set. | Finance |
+| **5103** Lifecycle 3: awaiting approval | Sam's plan is with Finance | Pat has it in the Approvals inbox (with everything else Finance decides). Open it, see the people and hours, **Approve**: the project turns Active and the baseline is set. | Finance |
 | **5104** Lifecycle 4: executing | Plan approved | Baseline (40 h) and working budget, project Active, every step ticked. Make a change to the people: the plan shows *Changed since approval* against the baseline. | Sam, then Finance |
 
 A project handed off from a won opportunity (BD › Outcome › *Create contract and project*) starts with no plan: Finance lands on it,
