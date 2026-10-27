@@ -72,6 +72,8 @@ Each has a test that fails without the fix.
 | B7 | Post backlog asks before posting to the ledger. |
 | B5 | The welcome tour opens on Home. Someone who arrives on another page first isn't interrupted, and gets it when they reach Home. |
 | C1 (part) | The Approvals inbox shows who submitted by name (the email is the tooltip). |
+| C9 | A plan waiting for Finance's review is in the Approvals inbox (and its badge) with everything else Finance decides: approve, or reject to send it back with the reason. It is no longer a separate to-do. |
+| C-close | On the period close checklist, "Items waiting to post" has a **Post these now** button. |
 | New | Once the plan is approved, changes to people or hours are one to-do ("Send the changes to the plan"), not two staffing gaps against a budget that is the plan. |
 | A5 | Already available: Setup lets a project's manager approve time on their projects. |
 

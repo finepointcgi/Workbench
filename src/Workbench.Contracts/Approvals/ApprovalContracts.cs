@@ -24,6 +24,12 @@ public static class ApprovalDocumentTypes
     public const string VendorBankChange = "vendor-bank-change";
 
     /// <summary>
+    /// A project's plan with Finance. It has its own approval (submit, approve or return, by the project's plan) and is listed in the
+    /// inbox beside everything else Finance decides, but isn't a workflow admins configure, so it's not in <see cref="All"/>.
+    /// </summary>
+    public const string ProjectPlan = "project-plan";
+
+    /// <summary>
     /// Record approval workflows admins add (Setup › Approval workflows) for automations' "require approval" action. Their
     /// keys start with this prefix; they aren't in <see cref="All"/>, which lists the built-in document types.
     /// </summary>
@@ -51,6 +57,7 @@ public static class ApprovalDocumentTypes
         NcrDisposition => "NCR disposition (material review)",
         EngineeringChange => "Engineering change",
         VendorBankChange => "Vendor bank details change",
+        ProjectPlan => "Project plan",
         _ when IsCustom(documentType) => char.ToUpperInvariant(documentType[CustomPrefix.Length]) + documentType[(CustomPrefix.Length + 1)..].Replace('-', ' '),
         _ => documentType,
     };

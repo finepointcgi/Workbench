@@ -461,6 +461,18 @@ public sealed class ProjectPlanService(
     private static string? Clean(string? text) => string.IsNullOrWhiteSpace(text) ? null : text.Trim()[..Math.Min(text.Trim().Length, 2000)];
 }
 
+/// <summary>Lets the approvals inbox decide a submitted project plan through the plan service (rejecting sends it back to the project manager with the reason).</summary>
+public sealed class ProjectPlanApprovalHandler(IServiceProvider services) : Approvals.IApprovalDocumentHandler
+{
+    public string DocumentType => ApprovalDocumentTypes.ProjectPlan;
+
+    public Task ApproveAsync(Guid documentId, string? comment, CancellationToken cancellationToken) =>
+        Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<IProjectPlanService>(services).ApproveAsync(documentId, comment, cancellationToken);
+
+    public Task RejectAsync(Guid documentId, string reason, CancellationToken cancellationToken) =>
+        Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<IProjectPlanService>(services).ReturnAsync(documentId, reason, cancellationToken);
+}
+
 /// <summary>
 /// The plan's to-dos: for a project's manager, plan a project Finance handed over, fix and resubmit a returned plan, or
 /// resubmit changes since approval; for Finance, review submitted plans.
@@ -502,21 +514,7 @@ public sealed class ProjectPlanTodoProvider : IMyTodoProvider
             }
         }
 
-        if (context.User.Can(Permission.SetupProjects))
-        {
-            var waiting = await (
-                    from plan in db.Set<ProjectPlan>().AsNoTracking()
-                    join project in db.Set<Project>().AsNoTracking() on plan.ProjectId equals project.Id
-                    where plan.Status == ProjectPlanStatus.Submitted
-                    orderby plan.SubmittedAtUtc
-                    select new { project.Id, project.Code, project.Name, plan.SubmittedBy })
-                .ToListAsync(cancellationToken);
-            foreach (var w in waiting.Where(w => !string.Equals(w.SubmittedBy, context.User.Email, StringComparison.OrdinalIgnoreCase)))
-            {
-                items.Add(new MyTodoItem($"plan:{w.Id}:review", TodoCategories.Project, $"Review the plan for {w.Code} {w.Name}",
-                    $"{await ProjectPlanService.NameAsync(db, w.SubmittedBy, cancellationToken)} submitted it for approval.", TodoUrgency.ThisWeek, null, $"projects/{w.Id}/plan", "Review", Priority: 7));
-            }
-        }
+        // Finance's side of it, a plan waiting for review, is in the Approvals inbox with everything else Finance decides (so it's counted there once).
 
         return items;
     }

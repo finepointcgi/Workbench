@@ -1,4 +1,5 @@
 using Workbench.ApiClient;
+using Workbench.Contracts.Approvals;
 using Workbench.Contracts.Financials;
 using Workbench.Contracts.MyTodo;
 using Workbench.Contracts.ProjectAccounting;
@@ -41,8 +42,8 @@ public sealed class LifecycleDemoTests
         // 3. Sam's plan is with Finance, who has the review to-do; Sam doesn't.
         var awaiting = await PlanAsync("5103");
         Assert.Equal((ProjectState.Planning, PlanApprovalStatus.Submitted, true), (awaiting.ProjectStatus, awaiting.Status, awaiting.CanReview));
-        Assert.Contains((await new HttpMyTodoService(finance).GetAsync()).Items, i => i.Key == $"plan:{projects["5103"].Id}:review");
-        Assert.DoesNotContain((await new HttpMyTodoService(pm).GetAsync()).Items, i => i.Key == $"plan:{projects["5103"].Id}:review");
+        Assert.Contains(await new HttpApprovalInboxService(finance).ListMineAsync(), i => i.DocumentType == ApprovalDocumentTypes.ProjectPlan && i.DocumentId == projects["5103"].Id);
+        Assert.DoesNotContain(await new HttpApprovalInboxService(pm).ListMineAsync(), i => i.DocumentType == ApprovalDocumentTypes.ProjectPlan);
 
         // 4. Approved: the project is Active, every step is done, and the baseline holds the plan's hours.
         var executing = await PlanAsync("5104");
