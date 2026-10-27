@@ -34,10 +34,17 @@ else
                         }
                     </MudCardContent>
                     <MudCardActions>
-                        <MudButton Href="@($"reports/standard/{r.Key}")" Disabled="!r.Available" Variant="Variant.Text" Color="Color.Primary">Run</MudButton>
-                        @if (r.PageLink is not null && r.Available)
+                        @if (r.PageOnly)
                         {
-                            <MudButton Href="@r.PageLink" Variant="Variant.Text">Open page</MudButton>
+                            <MudButton Href="@r.PageLink" Disabled="!r.Available" Variant="Variant.Text" Color="Color.Primary">Open</MudButton>
+                        }
+                        else
+                        {
+                            <MudButton Href="@($"reports/standard/{r.Key}")" Disabled="!r.Available" Variant="Variant.Text" Color="Color.Primary">Run</MudButton>
+                            @if (r.PageLink is not null && r.Available)
+                            {
+                                <MudButton Href="@r.PageLink" Variant="Variant.Text">Open page</MudButton>
+                            }
                         }
                     </MudCardActions>
                 </MudCard>

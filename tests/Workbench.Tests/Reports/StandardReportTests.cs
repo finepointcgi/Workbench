@@ -11,7 +11,7 @@ public sealed class StandardReportTests
     {
         await using var kit = await ReportsKit.CreateAsync();
         var analyst = await kit.As(Editor).Standard.ListAsync();
-        Assert.Equal(StandardReportKeys.All.Count, analyst.Count);
+        Assert.Equal(StandardReportKeys.All.Count, analyst.Count(r => !r.PageOnly)); // plus the pages listed to open (EAC, incurred cost)
         Assert.False(analyst.Single(r => r.Key == StandardReportKeys.ProjectStatus).Available);
         Assert.False(analyst.Single(r => r.Key == StandardReportKeys.ArAging).Available);
         Assert.True(analyst.Single(r => r.Key == StandardReportKeys.LaborDistribution).Available);

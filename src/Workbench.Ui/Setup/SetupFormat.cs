@@ -48,6 +48,20 @@ public static class SetupFormat
 
     /// <summary>The user-facing message for a failed save: the service's validation message, or a generic one.</summary>
     /// <summary>
+    /// The rates to copy from another contract: for each labor category it prices, the rate in force on <paramref name="asOf"/> (else its
+    /// latest), skipping categories the contract already has a rate for.
+    /// </summary>
+    public static IReadOnlyList<BillRateDto> RatesToCopy(IEnumerable<BillRateDto> source, IEnumerable<BillRateDto> existing, DateOnly asOf)
+    {
+        var have = existing.Select(r => r.LaborCategoryId).ToHashSet();
+        return source.Where(r => !have.Contains(r.LaborCategoryId))
+            .GroupBy(r => r.LaborCategoryId)
+            .Select(g => g.Where(r => r.EffectiveFrom <= asOf).OrderByDescending(r => r.EffectiveFrom).FirstOrDefault() ?? g.OrderBy(r => r.EffectiveFrom).First())
+            .OrderBy(r => r.HourlyBillRate)
+            .ToList();
+    }
+
+    /// <summary>
     /// The next employee number in the pattern the company already uses ("E1005" then "E1006"): the prefix and width of the highest
     /// numbered one, one higher. Empty when none follow a pattern, so the person types the first.
     /// </summary>

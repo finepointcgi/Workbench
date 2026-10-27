@@ -24,6 +24,20 @@ public sealed class EmployeeOnboardingTests
     public void The_next_employee_number_follows_the_companys_pattern(string[] existing, string expected) =>
         Assert.Equal(expected, SetupFormat.NextEmployeeNumber(existing));
 
+    [Fact]
+    public void Copying_bill_rates_takes_each_categorys_current_rate_and_leaves_what_the_contract_already_has()
+    {
+        var (a, b, c) = (Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        BillRateDto Rate(Guid category, string from, decimal rate) => new(Guid.NewGuid(), Guid.NewGuid(), category, DateOnly.Parse(from), rate);
+        var source = new[] { Rate(a, "2025-01-01", 100m), Rate(a, "2026-01-01", 110m), Rate(a, "2027-01-01", 120m), Rate(b, "2026-06-01", 90m), Rate(c, "2026-01-01", 75m) };
+        var existing = new[] { Rate(c, "2026-01-01", 80m) };
+
+        var copied = SetupFormat.RatesToCopy(source, existing, new DateOnly(2026, 10, 26));
+
+        Assert.Equal([(b, 90m), (a, 110m)], copied.Select(r => (r.LaborCategoryId, r.HourlyBillRate))); // a's 2026 rate is in force; a future one isn't taken; c is already priced
+        Assert.Equal([(a, 100m)], SetupFormat.RatesToCopy([Rate(a, "2027-01-01", 100m)], [], new DateOnly(2026, 10, 26)).Select(r => (r.LaborCategoryId, r.HourlyBillRate))); // only a future rate: take it
+    }
+
     private static (BunitContext Ctx, Fake<IInviteService> Invites) Context(IReadOnlyList<UserAdminDto> users, IReadOnlyList<InviteDto> invites)
     {
         var ctx = new BunitContext();
