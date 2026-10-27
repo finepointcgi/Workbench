@@ -14,6 +14,8 @@ public sealed record SetupChecklistDto(
     bool HasCostRates,
     bool HasCustomerAndContract,
     bool HasProjectWithWbs,
+
+    /// <summary>The first project plan has been approved (its people can charge time), or someone was given a charge assignment by hand.</summary>
     bool HasChargeAssignments,
     bool HasInvitedUsers = false,
     bool HasChartOfAccounts = false,
