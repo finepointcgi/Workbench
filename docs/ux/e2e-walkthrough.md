@@ -73,12 +73,14 @@ Each has a test that fails without the fix.
 | B5 | The welcome tour opens on Home. Someone who arrives on another page first isn't interrupted, and gets it when they reach Home. |
 | C1 (part) | The Approvals inbox shows who submitted by name (the email is the tooltip). |
 | C9 | A plan waiting for Finance's review is in the Approvals inbox (and its badge) with everything else Finance decides: approve, or reject to send it back with the reason. It is no longer a separate to-do. |
+| B8 | A contract's bill rates can be copied from another contract (each labor category's current rate, from the contract's start date). |
+| C5 | Reports lists Estimates at completion and Incurred cost (ICE) as pages to open, so it's the one place to look. |
 | New | The Setup getting-started list matches the project lifecycle (fund the CLINs, start a project from the contract, first approved plan; no separate "charge assignments" step). An administrator of a company still being set up gets one to-do on Home with the next step, until every step is done. |
 | C-close | On the period close checklist, "Items waiting to post" has a **Post these now** button. |
 | New | Once the plan is approved, changes to people or hours are one to-do ("Send the changes to the plan"), not two staffing gaps against a budget that is the plan. |
 | A5 | Already available: Setup lets a project's manager approve time on their projects. |
 
-Open: A3, B6, B8, B9 and the rest of the C items below.
+Open: A3, B6, B9 and the rest of the C items below.
 
 ## Still to do, ranked
 
