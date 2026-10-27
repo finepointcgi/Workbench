@@ -34,7 +34,7 @@
             }
             @if (RateChanging)
             {
-                <MudDatePicker @bind-Date="_effective" Editable="true" Label="New rate effective from" Variant="Variant.Outlined" Margin="Margin.Dense" data-testid="rate-effective"
+                <MudDatePicker DateFormat="yyyy-MM-dd" @bind-Date="_effective" Editable="true" Label="New rate effective from" Variant="Variant.Outlined" Margin="Margin.Dense" data-testid="rate-effective"
                                HelperText="Work before this date keeps the earlier rate. A date in the past adjusts labor already posted." />
                 <MudTextField @bind-Value="_reason" Label="Reason for the change" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="500" data-testid="rate-reason" />
             }

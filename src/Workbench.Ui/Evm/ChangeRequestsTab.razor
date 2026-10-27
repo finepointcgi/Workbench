@@ -37,8 +37,8 @@
                     <MudSelectItem T="EvmBudgetSourceKind" Value="EvmBudgetSourceKind.ContractChange">Contract change</MudSelectItem>
                 </MudSelect>
                 <MudNumericField T="decimal" @bind-Value="line.Amount" Label="Budget change" Margin="Margin.Dense" Variant="Variant.Outlined" Style="max-width: 150px" />
-                <MudDatePicker Label="New start" Date="line.Start" DateChanged="d => line.Start = d" Margin="Margin.Dense" Variant="Variant.Outlined" Style="max-width: 160px" Clearable="true" />
-                <MudDatePicker Label="New finish" Date="line.Finish" DateChanged="d => line.Finish = d" Margin="Margin.Dense" Variant="Variant.Outlined" Style="max-width: 160px" Clearable="true" />
+                <MudDatePicker DateFormat="yyyy-MM-dd" Label="New start" Date="line.Start" DateChanged="d => line.Start = d" Margin="Margin.Dense" Variant="Variant.Outlined" Style="max-width: 160px" Clearable="true" />
+                <MudDatePicker DateFormat="yyyy-MM-dd" Label="New finish" Date="line.Finish" DateChanged="d => line.Finish = d" Margin="Margin.Dense" Variant="Variant.Outlined" Style="max-width: 160px" Clearable="true" />
                 <MudIconButton Icon="@Icons.Material.Filled.Delete" OnClick="() => _draft.Lines.Remove(line)" aria-label="Remove this change" Disabled="_draft.Lines.Count == 1" />
             </MudStack>
         }

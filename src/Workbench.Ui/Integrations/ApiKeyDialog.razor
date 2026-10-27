@@ -45,7 +45,7 @@
                     }
                 </tbody>
             </MudSimpleTable>
-            <MudDatePicker @bind-Date="_expires" Label="Expires (optional)" HelperText="Leave empty for no expiry. You can revoke a key at any time." Variant="Variant.Outlined"
+            <MudDatePicker DateFormat="yyyy-MM-dd" @bind-Date="_expires" Label="Expires (optional)" HelperText="Leave empty for no expiry. You can revoke a key at any time." Variant="Variant.Outlined"
                            MinDate="DateTime.Today.AddDays(1)" MaxDate="DateTime.Today.AddYears(3)" />
             @if (_error is not null)
             {

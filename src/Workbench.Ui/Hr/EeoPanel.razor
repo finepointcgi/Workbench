@@ -59,7 +59,7 @@ else
                     <MudCheckBox T="bool" @bind-Value="_form.ActiveDutyWartimeVeteran" Label="Active duty wartime or campaign badge veteran" Color="Color.Primary" />
                     <MudCheckBox T="bool" @bind-Value="_form.ArmedForcesServiceMedalVeteran" Label="Armed Forces service medal veteran" Color="Color.Primary" />
                 </MudItem>
-                <MudItem xs="12" sm="6"><MudDatePicker @bind-Date="_form.DischargeDate" Editable="true" Label="Discharge date" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+                <MudItem xs="12" sm="6"><MudDatePicker DateFormat="yyyy-MM-dd" @bind-Date="_form.DischargeDate" Editable="true" Label="Discharge date" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
             }
         </MudGrid>
         <MudButton Class="mt-3" Variant="Variant.Filled" Color="Color.Primary" Disabled="Busy" OnClick="SaveAsync" data-testid="save-eeo">Save</MudButton>

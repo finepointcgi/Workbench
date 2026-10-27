@@ -128,7 +128,35 @@ internal static class TimesheetQueries
             .ToList();
 
         return new TimesheetDetailDto(sheet.ToDto(employee), entries, revisionDtos, days, chargeCodes, auditDtos,
-            await NotOpenYetAsync(db, employee, sheet.PeriodEnd, chargeCodes, cancellationToken));
+            await NotOpenYetAsync(db, employee, sheet.PeriodEnd, chargeCodes, cancellationToken),
+            await CeilingRoomAsync(db, chargeCodes.Select(c => c.ChargeCode.WbsElementId).Concat(entries.Select(e => e.WbsElementId)).Distinct().ToList(), clock.UtcNow, cancellationToken));
+    }
+
+    /// <summary>
+    /// The room left under an hours ceiling for each charge code that has one (the tightest, with any override): what the hours ceilings
+    /// consume already counts every entry, drafts included, so this is exactly how many more hours can be saved and submitted.
+    /// </summary>
+    private static async Task<IReadOnlyList<ChargeCeilingRoomDto>> CeilingRoomAsync(IWorkbenchDbContext db, IReadOnlyCollection<Guid> wbsIds, DateTime utcNow, CancellationToken ct)
+    {
+        if (wbsIds.Count == 0)
+        {
+            return [];
+        }
+
+        var states = await Ceilings.CeilingEngine.ForWbsAsync(db, wbsIds, utcNow, ct);
+        var room = new List<ChargeCeilingRoomDto>();
+        foreach (var wbs in wbsIds)
+        {
+            var left = states.Where(s => s.Wbs.Contains(wbs) && s.Limit(Domain.Ceilings.CeilingMeasure.Hours) is not null && s.EffectiveLimit(Domain.Ceilings.CeilingMeasure.Hours) is not null)
+                .Select(s => s.EffectiveLimit(Domain.Ceilings.CeilingMeasure.Hours)!.Value - s.Consumed(Domain.Ceilings.CeilingMeasure.Hours))
+                .DefaultIfEmpty(decimal.MaxValue).Min();
+            if (left != decimal.MaxValue)
+            {
+                room.Add(new ChargeCeilingRoomDto(wbs, Math.Max(0, left)));
+            }
+        }
+
+        return room;
     }
 
     /// <summary>

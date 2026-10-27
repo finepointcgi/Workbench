@@ -11,8 +11,8 @@
             </MudSelect>
         </MudItem>
         <MudItem xs="12" sm="3"><MudTextField @bind-Value="_f.Carrier" Label="Carrier" Variant="Variant.Outlined" Margin="Margin.Dense" autocomplete="off" /></MudItem>
-        <MudItem xs="6" sm="3"><MudDatePicker @bind-Date="_f.Starts" Editable="true" Label="Plan year starts" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
-        <MudItem xs="6" sm="3"><MudDatePicker @bind-Date="_f.Ends" Editable="true" Label="Plan year ends" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+        <MudItem xs="6" sm="3"><MudDatePicker DateFormat="yyyy-MM-dd" @bind-Date="_f.Starts" Editable="true" Label="Plan year starts" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+        <MudItem xs="6" sm="3"><MudDatePicker DateFormat="yyyy-MM-dd" @bind-Date="_f.Ends" Editable="true" Label="Plan year ends" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
         <MudItem xs="6" sm="2"><MudTextField @bind-Value="_f.Deduction" Label="Deduction code" Variant="Variant.Outlined" Margin="Margin.Dense" autocomplete="off" /></MudItem>
         <MudItem xs="6" sm="4">
             <MudSelect T="Guid?" @bind-Value="_f.Account" Label="GL expense account" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true">

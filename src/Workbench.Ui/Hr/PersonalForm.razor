@@ -3,7 +3,7 @@
     <MudItem xs="12" sm="6"><MudTextField @bind-Value="Value.PreferredName" Label="Preferred name" Variant="Variant.Outlined" Margin="Margin.Dense" autocomplete="@(Self ? "nickname" : "off")" /></MudItem>
     <MudItem xs="12" sm="6"><MudTextField @bind-Value="Value.PersonalEmail" Label="Personal email" Variant="Variant.Outlined" Margin="Margin.Dense" autocomplete="@(Self ? "email" : "off")" /></MudItem>
     <MudItem xs="12" sm="6"><MudTextField @bind-Value="Value.PersonalPhone" Label="Phone" Variant="Variant.Outlined" Margin="Margin.Dense" autocomplete="@(Self ? "tel" : "off")" /></MudItem>
-    <MudItem xs="12" sm="6"><MudDatePicker @bind-Date="Value.BirthDate" Editable="true" Label="Birth date" Variant="Variant.Outlined" Margin="Margin.Dense" autocomplete="@(Self ? "bday" : "off")" /></MudItem>
+    <MudItem xs="12" sm="6"><MudDatePicker DateFormat="yyyy-MM-dd" @bind-Date="Value.BirthDate" Editable="true" Label="Birth date" Variant="Variant.Outlined" Margin="Margin.Dense" autocomplete="@(Self ? "bday" : "off")" /></MudItem>
     <MudItem xs="12" sm="6"><MudTextField @bind-Value="Value.AddressLine1" Label="Address" Variant="Variant.Outlined" Margin="Margin.Dense" autocomplete="@(Self ? "address-line1" : "off")" /></MudItem>
     <MudItem xs="12" sm="6"><MudTextField @bind-Value="Value.AddressLine2" Label="Address line 2" Variant="Variant.Outlined" Margin="Margin.Dense" autocomplete="@(Self ? "address-line2" : "off")" /></MudItem>
     <MudItem xs="12" sm="5"><MudTextField @bind-Value="Value.City" Label="City" Variant="Variant.Outlined" Margin="Margin.Dense" autocomplete="@(Self ? "address-level2" : "off")" /></MudItem>

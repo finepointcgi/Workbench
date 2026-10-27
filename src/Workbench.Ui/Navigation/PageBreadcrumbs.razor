@@ -57,7 +57,7 @@
         var section = NavCatalog.Sections.First(s => s.Key == entry.Section);
         var sectionTitle = NavCatalog.TitleFor(section, access);
         var items = new List<BreadcrumbItem> { new(sectionTitle, section.Href, disabled: section.Href is null) };
-        if (entry.Group is not null && entry.Group != entry.Title)
+        if (entry.Group is not null && entry.Group != entry.Title && entry.Group != sectionTitle)
         {
             items.Add(new BreadcrumbItem(entry.Group, null, disabled: true));
         }

@@ -8,7 +8,7 @@
         the manager approves the final timesheet, and HR records the leave payout and ends benefits.
     </MudText>
     <MudGrid Spacing="2">
-        <MudItem xs="12" sm="4"><MudDatePicker @bind-Date="_lastDay" Editable="true" Label="Last day" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+        <MudItem xs="12" sm="4"><MudDatePicker DateFormat="yyyy-MM-dd" @bind-Date="_lastDay" Editable="true" Label="Last day" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
         <MudItem xs="12" sm="4">
             <MudSelect T="TerminationReason" @bind-Value="_reason" Label="Reason" Variant="Variant.Outlined" Margin="Margin.Dense">
                 @foreach (var r in Enum.GetValues<TerminationReason>())

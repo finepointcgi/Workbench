@@ -91,9 +91,9 @@ else
                     <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Schedule open enrollment</MudText>
                     <MudGrid Spacing="2">
                         <MudItem xs="12" sm="3"><MudTextField @bind-Value="_window.Name" Label="Name" Variant="Variant.Outlined" Margin="Margin.Dense" autocomplete="off" /></MudItem>
-                        <MudItem xs="4" sm="3"><MudDatePicker @bind-Date="_window.Opens" Editable="true" Label="Opens" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
-                        <MudItem xs="4" sm="3"><MudDatePicker @bind-Date="_window.Closes" Editable="true" Label="Closes" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
-                        <MudItem xs="4" sm="3"><MudDatePicker @bind-Date="_window.Coverage" Editable="true" Label="Coverage from" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+                        <MudItem xs="4" sm="3"><MudDatePicker DateFormat="yyyy-MM-dd" @bind-Date="_window.Opens" Editable="true" Label="Opens" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+                        <MudItem xs="4" sm="3"><MudDatePicker DateFormat="yyyy-MM-dd" @bind-Date="_window.Closes" Editable="true" Label="Closes" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
+                        <MudItem xs="4" sm="3"><MudDatePicker DateFormat="yyyy-MM-dd" @bind-Date="_window.Coverage" Editable="true" Label="Coverage from" Variant="Variant.Outlined" Margin="Margin.Dense" /></MudItem>
                     </MudGrid>
                     <MudButton Class="mt-3" Variant="Variant.Filled" Color="Color.Primary" Disabled="Busy" OnClick="SaveWindowAsync">Schedule</MudButton>
                 </MudPaper>

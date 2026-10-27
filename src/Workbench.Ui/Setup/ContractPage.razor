@@ -5,6 +5,7 @@
 @inject Workbench.Contracts.Contracts.IClinService Clins
 @inject Workbench.Contracts.Contracts.IFundingService Funding
 @inject IDialogService DialogService
+@inject Workbench.Contracts.Billing.IInvoiceService Invoices
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
 
@@ -135,6 +136,13 @@ else
                         </tbody>
                     </MudSimpleTable>
                 </MudPaper>
+                @if (_missingBilling.Count > 0)
+                {
+                    <MudAlert Severity="Severity.Info" Dense="true" Class="mt-3" data-testid="billing-details-missing">
+                        Before the first invoice, add this contract's billing details: @string.Join(", ", _missingBilling).
+                        <MudLink Href="@($"billing/contracts/{_contract.Id}")">Add them now</MudLink>.
+                    </MudAlert>
+                }
                 <Workbench.Ui.Billing.BilledToDateCard ContractId="_contract.Id" />
             }
             else
@@ -200,6 +208,7 @@ else
     private IReadOnlyList<CustomerDto> _customers = [];
     private IReadOnlyList<LaborCategoryDto> _categories = [];
     private IReadOnlyList<BillRateDto> _rates = [];
+    private IReadOnlyList<string> _missingBilling = [];
     private MudForm _form = default!;
     private ConfigurableForm? _layout;
     private bool _loading = true;
@@ -227,6 +236,15 @@ else
             (_number, _name, _customerId, _type, _status) = (c.ContractNumber, c.Name, c.CustomerId, c.Type, c.Status);
             (_start, _end, _ceiling, _funded, _isPrime) = (SetupFormat.ToDateTime(c.PeriodStart), SetupFormat.ToDateTime(c.PeriodEnd), c.CeilingValue, c.FundedValue, c.IsPrime);
             _rates = await Contracts.ListBillRatesAsync(c.Id);
+            try
+            {
+                _missingBilling = SetupFormat.MissingBillingDetails(await Invoices.GetSettingsAsync(c.Id));
+            }
+            catch (Exception ex) when (ex is Workbench.Contracts.WorkbenchForbiddenException or HttpRequestException or TaskCanceledException or UnauthorizedAccessException)
+            {
+                _missingBilling = []; // Not someone who sets up billing: nothing to nag about.
+            }
+
             await LoadDetailAsync(c.Id);
             _tab = Tab switch { "clins" => 1, "modifications" => 2, "history" => 3, "funding" => 4, "ceilings" => 5, "closeout" => 6, _ => 0 };
         }

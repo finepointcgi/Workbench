@@ -234,6 +234,7 @@ public sealed class MyTodoServiceTests
         var clin = Assert.Single(pm.Items, i => i.Key.StartsWith("funding:", StringComparison.Ordinal));
         Assert.Equal("CLIN 0001 on C1 has used 80% of its funding", clin.Title);
         Assert.Contains("projected to run out Nov 30", clin.Reason);
+        Assert.Null(clin.Due); // the run-out date is in the reason, not shown as a due date
         Assert.Equal(TodoUrgency.ThisWeek, clin.Urgency);
         Assert.Equal([kit.Fx.Project1], ceilings.Asked.Distinct());
         Assert.Equal([kit.Fx.Project1], funding.Asked.Distinct());
