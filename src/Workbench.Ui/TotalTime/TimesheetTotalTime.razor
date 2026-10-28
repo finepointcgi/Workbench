@@ -24,13 +24,19 @@
                 Exempt · @LaborCostMethods.Label(s.Method)
             </MudChip>
         </MudStack>
-        <MudText Typo="Typo.body2" Class="mud-text-secondary mt-2" data-testid="tta-note">@s.PolicyNote</MudText>
+        @* The policy is there when wanted, but the numbers come first so the grid isn't pushed off the screen. *@
+        <MudButton Size="Size.Small" Variant="Variant.Text" Class="mt-1 px-0" OnClick="() => _noteOpen = !_noteOpen" aria-expanded="@(_noteOpen ? "true" : "false")"
+                   StartIcon="@(_noteOpen ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)" data-testid="tta-note-toggle">What does this mean?</MudButton>
+        <MudCollapse Expanded="_noteOpen">
+            <MudText Typo="Typo.body2" Class="mud-text-secondary" data-testid="tta-note">@s.PolicyNote</MudText>
+        </MudCollapse>
     </MudPaper>
 }
 
 @code {
     private TimesheetTotalTimeDto? _summary;
     private Guid? _loadedFor;
+    private bool _noteOpen;
 
     [Parameter, EditorRequired]
     public TimesheetDto? Timesheet { get; set; }

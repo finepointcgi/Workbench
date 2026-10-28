@@ -12,11 +12,12 @@ export function init(element, dotNet) {
     return { dispose: () => element.removeEventListener('paste', onPaste) };
 }
 
-export function scrollIntoView(id) {
+export function scrollIntoView(id, newRow) {
     const element = document.getElementById(id);
     if (element) {
         element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        const first = element.querySelector('input, select');
+        // newRow: the empty last row, ready for a name; otherwise the first cell.
+        const first = (newRow && element.querySelector('tr.wb-assign-new input')) || element.querySelector('input, select');
         if (first) {
             first.focus({ preventScroll: true });
         }

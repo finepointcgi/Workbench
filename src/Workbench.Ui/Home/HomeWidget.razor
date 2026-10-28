@@ -16,7 +16,7 @@
         <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">@Widget.Title</MudText>
         @if (Todo is not null)
         {
-            <TodoList Items="Todo.Items" Today="Todo.Today" OnChanged="OnChanged" />
+            <TodoList Items="TodoFormat.ItemsBesideApprovalsCard(Todo, ApprovalsCardShown)" Today="Todo.Today" OnChanged="OnChanged" />
         }
         break;
     case WidgetType.ThisWeek:
@@ -70,6 +70,10 @@
 @code {
     [Parameter, EditorRequired]
     public WidgetDto Widget { get; set; } = default!;
+
+    /// <summary>The home page also shows the "Waiting on you" card, so the to-do list leaves out its approvals roll-up.</summary>
+    [Parameter]
+    public bool ApprovalsCardShown { get; set; }
 
     [Parameter]
     public MyTodoDto? Todo { get; set; }

@@ -129,7 +129,7 @@ else
                 <MudText Typo="Typo.body2" Class="mud-text-secondary">No lines yet. Add airfare, lodging, meals and other trip costs.</MudText>
             </NoRecordsContent>
             <FooterContent>
-                <MudTd colspan="4" Style="text-align:right"><b>Total</b> (allowable @OdcFormat.Money(report.AllowableTotal))</MudTd>
+                <MudTd colspan="4" Style="text-align:right"><b>Total</b>@(report.AllowableTotal == report.Total ? "" : $" (allowable {OdcFormat.Money(report.AllowableTotal)})")</MudTd>
                 <MudTd Style="text-align:right"><b>@OdcFormat.Money(report.Total)</b></MudTd>
                 <MudTd colspan="2"></MudTd>
             </FooterContent>
