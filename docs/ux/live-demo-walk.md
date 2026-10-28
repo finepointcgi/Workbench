@@ -32,3 +32,16 @@ screens at about 800 px wide. Looking, not clicking through every flow: what rea
 ## Still confusing (not fixed yet)
 - Someone other than me has not done contract-to-invoice cold; that is the next real test.
 - The people grid's Task column still defaults to "Whole project".
+
+## Finance month-end walk (round 13)
+Fixed:
+- **A wrong or old link showed a blank white page** on the live demo (and locally): the not-found screen existed but never rendered.
+  Page loads now go to "We can't find that page"; API calls still get a bare 404.
+- **Period close**: "Unposted items = 0" read like a failing number; it now reads "Everything approved is posted". The 14 unposted
+  items were listed twice (checklist and table); they're in the table only. A "not approved" line now says how many are waiting in
+  Approvals and how many were never submitted (the owner has to submit them), since "Open approvals" can't help with those.
+- The new-person row on the plan says "Whole project (or pick a task)".
+Still open:
+- Finance Home has four KPI tiles plus a long to-do (staffing gaps on a project Finance doesn't run); "Utilization 26%, target 100%" has no
+  context.
+- Finance's menu lists about ten pages under Finance before any is explained.
