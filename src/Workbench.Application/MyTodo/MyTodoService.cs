@@ -139,6 +139,10 @@ public sealed class MyTodoService(
             }
         }
 
+        // A gate decision is also in the approval inbox, which has its own to-do and card: one place for it, not two.
+        var inboxIds = (await TryAsync("Approvals", async () => (await context.InboxAsync(cancellationToken)).Select(i => i.DocumentId).ToHashSet(), unavailable, user.Email, cancellationToken)) ?? [];
+        items.RemoveAll(i => i.Key.StartsWith("bd:gate:", StringComparison.Ordinal) && Guid.TryParse(i.Key["bd:gate:".Length..], out var gateId) && inboxIds.Contains(gateId));
+
         var week = await TryAsync("This week", () => MyWeek.BuildAsync(context, cancellationToken), unavailable, user.Email, cancellationToken);
         var approvals = await TryAsync("Approvals", async () =>
         {

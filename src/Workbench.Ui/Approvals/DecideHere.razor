@@ -1,0 +1,210 @@
+@* Shown at the top of any page for a document that is waiting on you: approve, return or reject it right where you're looking at it, then
+   jump to the next one waiting. The inbox links to these pages, so reading a timesheet, bill or invoice and deciding it is one stop. Matches the
+   page by the link the approval was filed with; fails soft for people and places that have no approvals. *@
+@implements IDisposable
+@inject IServiceProvider Services
+@inject NavigationManager Navigation
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+@if (_here.Count == 1)
+{
+    var item = _here[0];
+    <MudPaper Outlined="true" Class="pa-3 mb-4 wb-decide-here" data-testid="decide-here" role="region" aria-label="@($"{item.DocumentLabel} waiting on you")">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
+            <MudIcon Icon="@Icons.Material.Filled.HowToReg" Color="Color.Primary" aria-hidden="true" />
+            <div style="flex: 1; min-width: 220px">
+                <MudText Typo="Typo.subtitle2">
+                    @item.DocumentLabel waiting on you@(item.OnBehalfOf is null ? "" : $" (for {item.OnBehalfOf})")
+                </MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                    @item.Title@(item.Amount is { } amount ? $" · {(ApprovalDocumentTypes.AmountIsHours(item.DocumentType) ? $"{amount:0.0} h" : amount.ToString("C"))}" : "") · from @item.Submitter
+                </MudText>
+            </div>
+            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="() => DecideAsync(item, ApprovalDecisionKind.Approve)" data-testid="here-approve">Approve</MudButton>
+            <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="_busy" OnClick="() => DecideAsync(item, ApprovalDecisionKind.Return)" data-testid="here-return"
+                       title="Send it back so the submitter can fix it">Return</MudButton>
+            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error" Disabled="_busy" OnClick="() => DecideAsync(item, ApprovalDecisionKind.Reject)" data-testid="here-reject">Reject</MudButton>
+        </MudStack>
+    </MudPaper>
+}
+else if (_here.Count > 1)
+{
+    <MudAlert Severity="Severity.Info" Dense="true" Class="mb-4" data-testid="decide-here-many">
+        @_here.Count items on this page are waiting on you. <MudLink Href="approvals">Decide them in Approvals</MudLink>.
+    </MudAlert>
+}
+else if (_done is not null)
+{
+    <MudPaper Outlined="true" Class="pa-3 mb-4" data-testid="decide-here-done" role="status">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
+            <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" aria-hidden="true" />
+            <MudText Typo="Typo.subtitle2" Style="flex: 1">@_done</MudText>
+            @if (_next is { } next)
+            {
+                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" Href="@next.Link" data-testid="here-next">
+                    Next: @next.DocumentLabel (@_left waiting)
+                </MudButton>
+            }
+            else
+            {
+                <MudButton Size="Size.Small" Variant="Variant.Text" Href="approvals">Back to approvals</MudButton>
+            }
+        </MudStack>
+    </MudPaper>
+}
+
+@code {
+    private static readonly TimeSpan Fresh = TimeSpan.FromSeconds(10);
+
+    private IReadOnlyList<ApprovalInboxItemDto> _mine = [];
+    private DateTime _loadedAtUtc = DateTime.MinValue;
+    private List<ApprovalInboxItemDto> _here = [];
+    private ApprovalInboxItemDto? _next;
+    private int _left;
+    private string? _done;
+    private string? _donePath;
+    private const string OutcomeKey = "decided";
+    private bool _busy;
+
+    private IApprovalInboxService? Inbox => Services.GetService(typeof(IApprovalInboxService)) as IApprovalInboxService;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Navigation.LocationChanged += OnLocationChanged;
+        await RefreshAsync(force: false);
+        await ShowOutcomeFromReloadAsync();
+    }
+
+    private async void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        try
+        {
+            await InvokeAsync(async () =>
+            {
+                if (_done is not null && CurrentPath() != _donePath)
+                {
+                    _done = null;
+                }
+
+                await RefreshAsync(force: false);
+                StateHasChanged();
+            });
+        }
+        catch (ObjectDisposedException)
+        {
+            // The circuit ended while we were loading.
+        }
+    }
+
+    /// <summary>After the reload that follows a decision: say what happened and offer the next item waiting.</summary>
+    private async Task ShowOutcomeFromReloadAsync()
+    {
+        var outcome = new Uri(Navigation.Uri).Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries)
+            .Select(pair => pair.Split('=', 2)).Where(parts => parts[0] == OutcomeKey && parts.Length == 2).Select(parts => parts[1]).FirstOrDefault();
+        var verb = outcome switch { "approved" => "Approved", "returned" => "Returned for changes", "rejected" => "Rejected", _ => null };
+        if (verb is null)
+        {
+            return;
+        }
+
+        await RefreshAsync(force: true);
+        var others = _mine.Where(i => !SamePage(i.Link, CurrentPath())).ToList();
+        _left = others.Count;
+        _next = others.FirstOrDefault();
+        _done = $"{verb}.";
+        _donePath = CurrentPath();
+        _tidy = true;
+    }
+
+    private bool _tidy;
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        // Only once the page is interactive (not while it's being prerendered): say it, and drop it from the address so a refresh doesn't say it again.
+        if (_tidy && RendererInfo.IsInteractive)
+        {
+            _tidy = false;
+            Snackbar.Add(_done!, Severity.Success);
+            Navigation.NavigateTo(Navigation.GetUriWithQueryParameter(OutcomeKey, (string?)null), replace: true);
+        }
+    }
+
+    /// <summary>Which of my waiting items is the page I'm on. The inbox list is kept for a few seconds so moving around doesn't ask the server each time.</summary>
+    private async Task RefreshAsync(bool force)
+    {
+        var path = CurrentPath();
+        if (Inbox is not { } inbox || path.Equals("approvals", StringComparison.OrdinalIgnoreCase) || path.StartsWith("m/", StringComparison.OrdinalIgnoreCase))
+        {
+            _here = [];
+            return;
+        }
+
+        if (force || DateTime.UtcNow - _loadedAtUtc > Fresh)
+        {
+            try
+            {
+                _mine = await inbox.ListMineAsync();
+                _loadedAtUtc = DateTime.UtcNow;
+            }
+            catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or InvalidOperationException or TaskCanceledException)
+            {
+                _mine = [];
+            }
+        }
+
+        // A project plan already has its own approve/return bar on its page.
+        _here = _mine.Where(i => i.DocumentType != ApprovalDocumentTypes.ProjectPlan && SamePage(i.Link, path)).ToList();
+    }
+
+    private string CurrentPath() => Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].Trim('/');
+
+    private static bool SamePage(string link, string path) =>
+        !string.IsNullOrWhiteSpace(link) && link.Split('?', '#')[0].Trim('/').Equals(path, StringComparison.OrdinalIgnoreCase);
+
+    private async Task DecideAsync(ApprovalInboxItemDto item, ApprovalDecisionKind kind)
+    {
+        if (Inbox is not { } inbox)
+        {
+            return;
+        }
+
+        string? comment = null;
+        if (kind != ApprovalDecisionKind.Approve)
+        {
+            var parameters = new DialogParameters<ApprovalReasonDialog>
+            {
+                { d => d.Message, $"{item.DocumentLabel}: {item.Title}" },
+                { d => d.Label, kind == ApprovalDecisionKind.Return ? "What needs to change?" : "Reason" },
+                { d => d.ConfirmText, kind == ApprovalDecisionKind.Return ? "Return" : "Reject" },
+            };
+            var dialog = await DialogService.ShowAsync<ApprovalReasonDialog>(kind == ApprovalDecisionKind.Return ? "Return for changes" : "Reject", parameters);
+            var result = await dialog.Result;
+            if (result is not { Canceled: false, Data: string reason })
+            {
+                return;
+            }
+
+            comment = reason;
+        }
+
+        _busy = true;
+        try
+        {
+            await inbox.DecideAsync(item.DocumentType, item.DocumentId, new ApprovalDecisionRequest(kind, comment));
+            // A full reload so the page under the bar shows the new state; the outcome rides along in the address.
+            var outcome = kind switch { ApprovalDecisionKind.Approve => "approved", ApprovalDecisionKind.Return => "returned", _ => "rejected" };
+            Navigation.NavigateTo(Navigation.GetUriWithQueryParameter(OutcomeKey, outcome), forceLoad: true);
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or UnauthorizedAccessException or WorkbenchNotFoundException or HttpRequestException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    public void Dispose() => Navigation.LocationChanged -= OnLocationChanged;
+}

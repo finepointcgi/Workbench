@@ -140,7 +140,7 @@ public sealed class BenefitsTodoProvider : IMyTodoProvider
             if (pending.Count > 0)
             {
                 var due = DateOnly.FromDateTime(pending.Min(e => e.ReportedAtUtc)).AddDays(3);
-                items.Add(new MyTodoItem("hr-le-verify", HrTodoCategories.Hr, $"Verify {pending.Count} life event(s)", "Employees can change benefits once you verify them",
+                items.Add(new MyTodoItem("hr-le-verify", HrTodoCategories.Hr, pending.Count == 1 ? "Verify 1 life event" : $"Verify {pending.Count} life events", "Employees can change benefits once you verify them",
                     context.UrgencyFor(due), due, "hr/benefits?tab=life-events", "Review"));
             }
         }

@@ -20,15 +20,15 @@ screens at about 800 px wide. Looking, not clicking through every flow: what rea
 - A plan waiting for Finance is in the Approvals inbox, named, with Approve, Return and Reject.
 - Leave: one screen, says approved days fill the timesheet.
 
-## Still confusing (not fixed yet), roughly in order of how much it matters
-1. **Approvals show up three times on an approver's Home**: the "Review 3 approvals" to-do, the "Waiting on you" card listing the same
-   three, and a separate "Gate decision" to-do for one of them.
-2. **Adding people to a plan** is at the very bottom of a long page, below the schedule grid, in a seven-column row
-   (Person, Task, Labor category, Hours, From, To) whose Task defaults to "Whole project". The Assignees column in the grid above
-   is a second way in.
-3. **My time** opens with a paragraph about exempt staff, uncompensated hours and "Hybrid" before the grid; the grid starts below
-   the fold.
-4. **Employees see an "Allowable" column** on their expense reports (a contract-cost term).
-5. **Old wording on Sam's Home**: "Assign people to 1002 — Nobody is assigned yet… until there's a budget, they're the plan" (a
-   project with no plan row, from the older seed) beside "Plan 5102" for the new flow.
-6. Small: "Verify 1 life event(s)"; a plan page header with a dozen controls (Import/export, Automate, Share, Try changes, By labor category…).
+## Fixed in round 12 (was "still confusing")
+1. Approvals on Home: the "Review N approvals" to-do is left out while the "Waiting on you" card is on the page, and a gate decision that is
+   in the inbox no longer has a to-do of its own.
+2. Adding people to a plan: an "Add a person" button in the plan's toolbar jumps to the People grid with the cursor in its empty row.
+3. My time: the exempt-staff policy note is folded behind "What does this mean?"; the three numbers stay.
+4. Expense reports: "Allowable" is off by default in the list, and the report footer only mentions it when it differs from the total.
+5. The old "Assign people" to-do no longer says "until there's a budget, they're the plan".
+6. "Verify 1 life event"; on a project's Plan tab, Share, Automate and the import/export items are one "More" menu.
+
+## Still confusing (not fixed yet)
+- Someone other than me has not done contract-to-invoice cold; that is the next real test.
+- The people grid's Task column still defaults to "Whole project".
