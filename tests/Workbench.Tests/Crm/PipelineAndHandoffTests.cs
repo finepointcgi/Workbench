@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Workbench.Contracts.Approvals;
 using Workbench.Contracts.Crm;
 using Workbench.Contracts.MyTodo;
 using Workbench.Domain.ProjectAccounting;
@@ -162,7 +163,10 @@ public sealed class PipelineAndHandoffTests
 
         var theirs = (await kit.As(CrmKit.Bd2).Get<IMyTodoService>().GetAsync()).Items.Where(i => i.Key.StartsWith("bd:", StringComparison.Ordinal)).ToList();
         Assert.Contains(theirs, i => i.Title == "Call the CO" && i.Urgency == TodoUrgency.Overdue);
-        Assert.Contains(theirs, i => i.Key.StartsWith("bd:gate:", StringComparison.Ordinal) && i.Link.EndsWith("?tab=gates", StringComparison.Ordinal));
+        // A gate waiting on them is in the approval inbox (the card and its roll-up), so it isn't a second to-do.
+        Assert.DoesNotContain(theirs, i => i.Key.StartsWith("bd:gate:", StringComparison.Ordinal));
+        var waiting = await kit.Get<IApprovalInboxService>().ListMineAsync();
+        Assert.Contains(waiting, i => i.DocumentType == ApprovalDocumentTypes.OpportunityGate && i.Link.EndsWith("?tab=gates", StringComparison.Ordinal));
 
         Assert.DoesNotContain((await kit.As(Viewer).Get<IMyTodoService>().GetAsync()).Items, i => i.Key.StartsWith("bd:", StringComparison.Ordinal));
     }
