@@ -42,6 +42,31 @@ public sealed class SetupComponentTests
         }
     }
 
+    [Fact]
+    public async Task Setup_names_the_one_step_to_do_next_and_says_when_everything_is_done()
+    {
+        await using var ctx = NewContext();
+        var checklist = new SetupChecklistDto(true, true, true, true, false, false, false,
+            HasInvitedUsers: true, HasChartOfAccounts: true, HasBankAccount: false, HasPayrollProvider: true, HasApprovalWorkflows: false,
+            HasIndirectRates: false, HasBillingDetails: false);
+        ctx.Services.AddSingleton(Workbench.Tests.Identity.Fake<ISetupAdminService>.Create(("GetChecklistAsync", _ => checklist)));
+
+        var page = ctx.Render<SetupHome>();
+
+        page.WaitForAssertion(() => Assert.Contains("Bank accounts", page.Find("[data-testid=setup-next]").TextContent));
+        Assert.Equal("cash", page.Find("[data-testid=setup-next-go]").GetAttribute("href"));
+
+        var allDone = new SetupChecklistDto(true, true, true, true, true, true, true,
+            HasInvitedUsers: true, HasChartOfAccounts: true, HasBankAccount: true, HasPayrollProvider: true, HasApprovalWorkflows: true,
+            HasIndirectRates: true, HasBillingDetails: true);
+        await using var done = NewContext();
+        done.Services.AddSingleton(Workbench.Tests.Identity.Fake<ISetupAdminService>.Create(("GetChecklistAsync", _ => allDone)));
+        var finished = done.Render<SetupHome>();
+
+        finished.WaitForAssertion(() => Assert.NotNull(finished.Find("[data-testid=setup-all-done]")));
+        Assert.Empty(finished.FindAll("[data-testid=setup-next]"));
+    }
+
     private static void Type(IRenderedComponent<EmployeeEditor> editor, string testId, string value) =>
         editor.Find($"input[data-testid='{testId}'], [data-testid='{testId}'] input").Input(value);
 

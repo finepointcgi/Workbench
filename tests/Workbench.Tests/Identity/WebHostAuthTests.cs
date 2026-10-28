@@ -76,8 +76,8 @@ public sealed class WebHostAuthTests
         using var get = await client.GetAsync(DevSignIn.Path);
         using var post = await client.PostAsync(DevSignIn.Path, new FormUrlEncodedContent(new Dictionary<string, string> { ["email"] = "dev@workbench.local" }));
 
-        Assert.Equal(HttpStatusCode.NotFound, get.StatusCode);
-        Assert.True(post.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.MethodNotAllowed, $"POST returned {post.StatusCode}");
+        Assert.True(IsNotFound(get), $"GET returned {get.StatusCode}");
+        Assert.True(post.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.MethodNotAllowed || IsNotFound(post), $"POST returned {post.StatusCode}");
     }
 
     [Fact]
@@ -92,8 +92,13 @@ public sealed class WebHostAuthTests
         await using var factory = new WorkbenchWebFactory("Development", testAuth: true, oidcAuthority: "https://login.example.test/tenant/v2.0");
         using var client = factory.CreateClientAs("dev@workbench.local");
         using var response = await client.GetAsync(DevSignIn.Path);
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.True(IsNotFound(response), $"GET returned {response.StatusCode}");
     }
+
+    /// <summary>A page that doesn't exist answers 404 or, for someone loading a page, sends them to the not-found screen.</summary>
+    private static bool IsNotFound(HttpResponseMessage response) =>
+        response.StatusCode == HttpStatusCode.NotFound
+        || (response.StatusCode is HttpStatusCode.Redirect or HttpStatusCode.Found && response.Headers.Location?.OriginalString.EndsWith("/not-found", StringComparison.Ordinal) == true);
 
     [Fact]
     public async Task Production_without_an_authority_signs_in_with_built_in_accounts()
