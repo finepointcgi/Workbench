@@ -30,6 +30,24 @@
             else
             {
                 <MudProgressLinear Value="100.0 * Done / Steps.Count" Color="Color.Success" Class="mb-3" Rounded="true" aria-label="Setup steps done" />
+                @* One thing to do: the first step not done yet, with a button, so nobody has to read the whole list to know where they are. *@
+                @if (Steps.FirstOrDefault(step => !step.Done) is { } next)
+                {
+                    <MudPaper Outlined="true" Class="pa-3 mb-3" Style="border-color: var(--mud-palette-primary)" data-testid="setup-next">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="3">
+                            <div style="flex:1; min-width:220px">
+                                <MudText Typo="Typo.overline" Color="Color.Primary">Next</MudText>
+                                <MudText Typo="Typo.subtitle1"><b>@next.Title</b></MudText>
+                                <MudText Typo="Typo.body2" Class="mud-text-secondary">@next.Hint</MudText>
+                            </div>
+                            <MudButton Href="@next.Href" Variant="Variant.Filled" Color="Color.Primary" data-testid="setup-next-go">Do this now</MudButton>
+                        </MudStack>
+                    </MudPaper>
+                }
+                else
+                {
+                    <MudAlert Severity="Severity.Success" Dense="true" Class="mb-3" data-testid="setup-all-done">Everything is set up. People can record time, and Finance can bill.</MudAlert>
+                }
                 <MudList T="string" Dense="true" aria-label="Setup checklist">
                     @foreach (var group in Steps.GroupBy(s => s.Group))
                     {
