@@ -43,23 +43,34 @@ else
         {
             <MudChip T="string" Size="Size.Small" Icon="@Icons.Material.Outlined.Visibility">@(_access.CanComment ? "Can comment" : "View only")</MudChip>
         }
-        @if (_planService is not null && _sheet.Summary.SchedulingEnabled)
+        @if (Embedded)
         {
-            @* Excel and MS Project (XML) round trips for PMs who plan in either. *@
-            <MudMenu Label="Import / export" StartIcon="@Icons.Material.Filled.TableView" EndIcon="@Icons.Material.Filled.ArrowDropDown" Variant="Variant.Outlined"
-                     Size="Size.Small" AriaLabel="Import and export the plan (Excel, MS Project)" data-testid="plan-excel-menu">
-                <MudMenuItem Icon="@Icons.Material.Filled.Download" OnClick="ExportPlanAsync" data-testid="plan-export">Export plan to Excel</MudMenuItem>
-                <MudMenuItem Icon="@Icons.Material.Filled.Download" OnClick="ExportMsProjectAsync" data-testid="plan-export-msproject">Export plan to MS Project (.xml)</MudMenuItem>
-                @if (_access.CanEdit)
+            @* On a project's Plan tab the page already has plenty to read: sharing, automating and the file round trips live in one menu. *@
+            <MudMenu Label="More" StartIcon="@Icons.Material.Filled.MoreHoriz" EndIcon="@Icons.Material.Filled.ArrowDropDown" Variant="Variant.Outlined"
+                     Size="Size.Small" AriaLabel="More: share, automate, import and export the plan" data-testid="plan-more-menu">
+                <MudMenuItem Icon="@Icons.Material.Filled.PersonAdd" OnClick="ShareAsync" data-testid="plan-share">Share…</MudMenuItem>
+                <MudMenuItem Icon="@Icons.Material.Filled.Bolt" OnClick="AutomateAsync" data-testid="sheet-automate">Automate…</MudMenuItem>
+                @if (_planService is not null && _sheet.Summary.SchedulingEnabled)
                 {
-                    <MudMenuItem Icon="@Icons.Material.Filled.Upload" OnClick="ImportPlanAsync" data-testid="plan-import">Import plan from Excel or MS Project…</MudMenuItem>
+                    <MudDivider />
+                    @PlanFileItems
                 }
-                <MudMenuItem Icon="@Icons.Material.Filled.Description" OnClick="DownloadTemplateAsync" data-testid="plan-template">Download blank Excel template</MudMenuItem>
             </MudMenu>
         }
-        @* One automation builder: recipes and the sheet's automations (Workbench.Ui.Automation). *@
-        <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.Bolt" OnClick="AutomateAsync" data-testid="sheet-automate">Automate</MudButton>
-        <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.PersonAdd" OnClick="ShareAsync">Share</MudButton>
+        else
+        {
+            @if (_planService is not null && _sheet.Summary.SchedulingEnabled)
+            {
+                @* Excel and MS Project (XML) round trips for PMs who plan in either. *@
+                <MudMenu Label="Import / export" StartIcon="@Icons.Material.Filled.TableView" EndIcon="@Icons.Material.Filled.ArrowDropDown" Variant="Variant.Outlined"
+                         Size="Size.Small" AriaLabel="Import and export the plan (Excel, MS Project)" data-testid="plan-excel-menu">
+                    @PlanFileItems
+                </MudMenu>
+            }
+            @* One automation builder: recipes and the sheet's automations (Workbench.Ui.Automation). *@
+            <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.Bolt" OnClick="AutomateAsync" data-testid="sheet-automate">Automate</MudButton>
+            <MudButton Variant="Variant.Outlined" Size="Size.Small" StartIcon="@Icons.Material.Filled.PersonAdd" OnClick="ShareAsync">Share</MudButton>
+        }
         @if (!Embedded)
         {
             @* Wave E: forms, copies and templates. *@
@@ -216,6 +227,16 @@ else
             Snackbar.Add($"Couldn't download the file: {ex.Message}", Severity.Error);
         }
     }
+
+    private RenderFragment PlanFileItems => @<text>
+        <MudMenuItem Icon="@Icons.Material.Filled.Download" OnClick="ExportPlanAsync" data-testid="plan-export">Export plan to Excel</MudMenuItem>
+        <MudMenuItem Icon="@Icons.Material.Filled.Download" OnClick="ExportMsProjectAsync" data-testid="plan-export-msproject">Export plan to MS Project (.xml)</MudMenuItem>
+        @if (_access.CanEdit)
+        {
+            <MudMenuItem Icon="@Icons.Material.Filled.Upload" OnClick="ImportPlanAsync" data-testid="plan-import">Import plan from Excel or MS Project…</MudMenuItem>
+        }
+        <MudMenuItem Icon="@Icons.Material.Filled.Description" OnClick="DownloadTemplateAsync" data-testid="plan-template">Download blank Excel template</MudMenuItem>
+    </text>;
 
     private async Task ImportPlanAsync()
     {
