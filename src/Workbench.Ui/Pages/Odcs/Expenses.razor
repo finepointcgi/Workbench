@@ -70,7 +70,7 @@
             new() { Key = "purpose", Title = "Purpose", Value = r => r.Purpose, Standard = false, Groupable = false },
             new() { Key = "lines", Title = "Lines", Value = r => r.LineCount, Kind = ListColumnKind.Number, Groupable = false },
             new() { Key = "total", Title = "Total", Value = r => r.Total, Kind = ListColumnKind.Money, Groupable = false, Cell = r => @<text>@OdcFormat.Money(r.Total)</text> },
-            new() { Key = "allowable", Title = "Allowable", Value = r => r.AllowableTotal, Kind = ListColumnKind.Money, Groupable = false, Cell = r => @<text>@OdcFormat.Money(r.AllowableTotal)</text> },
+            new() { Key = "allowable", Title = "Allowable", Standard = false, Value = r => r.AllowableTotal, Kind = ListColumnKind.Money, Groupable = false, Cell = r => @<text>@OdcFormat.Money(r.AllowableTotal)</text> },
             new() { Key = "status", Title = "Status", Value = r => r.Status, Cell = r => @<OdcStatusChip Status="r.Status" /> },
         ],
     };

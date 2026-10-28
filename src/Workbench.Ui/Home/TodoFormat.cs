@@ -70,4 +70,11 @@ public static class TodoFormat
     public static bool IsExpected(Exception ex) =>
         ex is ArgumentException or InvalidOperationException or UnauthorizedAccessException or HttpRequestException
             or TaskCanceledException or WorkbenchNotFoundException;
+
+    /// <summary>
+    /// The to-do list without its "Review N approvals" roll-up when the "Waiting on you" card is on the page: the card lists
+    /// those same approvals, with Approve buttons, so the page doesn't say it twice. Without the card the roll-up stays.
+    /// </summary>
+    public static IReadOnlyList<Workbench.Contracts.MyTodo.MyTodoItem> ItemsBesideApprovalsCard(Workbench.Contracts.MyTodo.MyTodoDto todo, bool cardShown) =>
+        cardShown && todo.Approvals is { Count: > 0 } ? todo.Items.Where(i => i.Key != "approvals:inbox").ToList() : todo.Items;
 }

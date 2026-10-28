@@ -74,7 +74,7 @@ public sealed class StaffingTodoProvider : IMyTodoProvider
             yield return new MyTodoItem(
                 $"staffing:{plan.ProjectId}:assign", TodoCategories.Project,
                 $"Assign people to {plan.ProjectCode}",
-                "Nobody is assigned yet. Give each person their hours on a task and the dates; until there's a budget, they're the plan.",
+                "Nobody is on it yet. Give each person their hours on a task and the dates; that becomes the plan.",
                 TodoUrgency.ThisWeek, null, link, "Assign people", Priority: 5);
         }
 

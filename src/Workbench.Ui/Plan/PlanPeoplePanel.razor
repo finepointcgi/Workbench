@@ -111,6 +111,11 @@
                 <MudSwitch T="bool" Value="_showColumns" ValueChanged="ShowColumns" Color="Color.Primary" Label="People and cost on the plan" data-testid="plan-people-toggle" />
                 <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@(_categoriesOpen ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)"
                            OnClick="() => _categoriesOpen = !_categoriesOpen" aria-expanded="@(_categoriesOpen ? "true" : "false")" data-testid="plan-categories-toggle">By labor category</MudButton>
+                @if (plan.CanChange)
+                {
+                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd" OnClick="AddPersonAsync"
+                               data-testid="plan-add-person" title="Jump to the People grid below, ready to type a name">Add a person</MudButton>
+                }
                 @if (plan.CanChange && _try is null && _changes.Count == 0)
                 {
                     <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Science" OnClick="StartTrying" data-testid="plan-try">Try changes</MudButton>
@@ -424,6 +429,17 @@ else if (_error is not null)
     private static string First(string name) => name.Split(' ')[0];
 
     // ---- A task's people ----
+
+    /// <summary>The people grid is below the schedule: take the user there with the cursor in its empty row.</summary>
+    private async Task AddPersonAsync()
+    {
+        _filter = null;
+        StateHasChanged();
+        if (_grid is not null)
+        {
+            await _grid.FocusAsync(newRow: true);
+        }
+    }
 
     private async Task ShowPeopleAsync(PlanTaskRowDto row)
     {
