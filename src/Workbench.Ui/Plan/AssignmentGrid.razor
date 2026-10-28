@@ -116,7 +116,7 @@
                                 else
                                 {
                                     <select class="wb-assign-input" aria-label="Task" value="@(r.WbsElementId?.ToString() ?? "")" @onchange="e => SetTaskAsync(r, e.Value as string)" data-testid="assign-task-cell">
-                                        <option value="">Whole project</option>
+                                        <option value="">@(r.IsNew && Tasks.Any() ? "Whole project (or pick a task)" : "Whole project")</option>
                                         @if (r.WbsElementId is { } on && Tasks.All(t => t.WbsElementId != on) && AllTasks.FirstOrDefault(t => t.WbsElementId == on) is { } summary)
                                         {
                                             <option value="@on" disabled>@summary.WbsCode @summary.Title (a summary row)</option>

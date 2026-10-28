@@ -100,10 +100,11 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-// API and hub callers get bare status codes (401, 403, 404), not the not-found page.
+// API and hub callers, and scripts or images, get bare status codes (401, 403, 404); a person loading a page is sent to the not-found page.
+// A redirect, not a re-execute: re-executing left the 404 on the response and Blazor then rendered nothing, a blank white page.
 app.UseWhen(
-    context => !AuthenticationSetup.IsApiRequest(context.Request),
-    branch => branch.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true));
+    context => !AuthenticationSetup.IsApiRequest(context.Request) && AuthenticationSetup.IsPageNavigation(context.Request),
+    branch => branch.UseStatusCodePagesWithRedirects("/not-found"));
 app.UseHttpsRedirection();
 app.UseRequestLocalization(new Microsoft.AspNetCore.Builder.RequestLocalizationOptions()
     .SetDefaultCulture("en-US").AddSupportedCultures("en-US").AddSupportedUICultures("en-US")); // the request's culture, which Blazor's circuit takes
