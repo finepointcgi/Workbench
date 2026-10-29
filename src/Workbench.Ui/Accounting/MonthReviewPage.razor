@@ -1,0 +1,133 @@
+@page "/accounting/month-review"
+@inject IAccountingReportService Reports
+@inject IFiscalCalendarService Calendar
+
+<PageTitle>Month in review · Accounting · Workbench</PageTitle>
+
+<AccountingHeader Title="Month in review" Subtitle="What changed since last month, in plain words: the totals side by side and the projects that moved most. The numbers come from posted entries, so close the month first for a final answer." />
+
+@if (_error is not null)
+{
+    <LoadError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_periods.Count == 0)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudSelect T="Guid?" Value="_periodId" ValueChanged="SelectAsync" Label="Fiscal period" Dense="true" Style="max-width:220px" Class="mb-3" data-testid="review-period">
+        @foreach (var p in _periods.OrderByDescending(p => p.Start))
+        {
+            <MudSelectItem T="Guid?" Value="p.Id">@p.Name</MudSelectItem>
+        }
+    </MudSelect>
+
+    @if (_review is { } review)
+    {
+        <MudPaper Outlined="true" Class="pa-4 mb-4" data-testid="review-highlights">
+            <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">@review.PeriodName@(review.PreviousPeriodName is null ? "" : $" compared with {review.PreviousPeriodName}")</MudText>
+            <ul class="mb-0" style="padding-left:20px">
+                @foreach (var line in review.Highlights)
+                {
+                    <li><MudText Typo="Typo.body1">@line</MudText></li>
+                }
+            </ul>
+        </MudPaper>
+
+        <MudPaper Outlined="true" Class="mb-4" Style="overflow-x:auto">
+            <MudSimpleTable Dense="true" data-testid="review-metrics">
+                <thead>
+                    <tr>
+                        <th></th>
+                        <th style="text-align:right">@review.PeriodName</th>
+                        @if (review.PreviousPeriodName is not null)
+                        {
+                            <th style="text-align:right">@review.PreviousPeriodName</th>
+                            <th style="text-align:right">Change</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var m in review.Metrics)
+                    {
+                        <tr>
+                            <td>@Capitalized(m.Label.Replace("Total ", ""))</td>
+                            <td style="text-align:right">@AccountingFormat.Amount(m.Current)</td>
+                            @if (review.PreviousPeriodName is not null)
+                            {
+                                <td style="text-align:right">@(m.Previous is { } prior ? AccountingFormat.Amount(prior) : "")</td>
+                                <td style="text-align:right">@(m.Change is { } change ? $"{AccountingFormat.Amount(change)}{(m.ChangePercent is { } pct ? $" ({pct:+0.#;-0.#;0}%)" : "")}" : "")</td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </MudPaper>
+
+        @if (review.Movers.Count > 0)
+        {
+            <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Projects that moved most</MudText>
+            <MudPaper Outlined="true" Style="overflow-x:auto">
+                <MudSimpleTable Dense="true" data-testid="review-movers">
+                    <thead><tr><th>Project</th><th style="text-align:right">This month</th><th style="text-align:right">Last month</th><th style="text-align:right">Change</th></tr></thead>
+                    <tbody>
+                        @foreach (var m in review.Movers)
+                        {
+                            <tr>
+                                <td><MudLink Href="@($"projects/{m.ProjectId}")">@m.ProjectCode</MudLink></td>
+                                <td style="text-align:right">@AccountingFormat.Amount(m.Current)</td>
+                                <td style="text-align:right">@AccountingFormat.Amount(m.Previous)</td>
+                                <td style="text-align:right">@AccountingFormat.Amount(m.Change)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            </MudPaper>
+        }
+    }
+}
+
+@code {
+    private static string Capitalized(string text) => text.Length == 0 ? text : char.ToUpperInvariant(text[0]) + text[1..];
+
+    private IReadOnlyList<FiscalPeriodDto> _periods = [];
+    private Guid? _periodId;
+    private MonthReviewDto? _review;
+    private string? _error;
+    private bool _forbidden;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _periods = await Calendar.ListPeriodsAsync();
+            await SelectAsync(AccountingFormat.DefaultPeriod(_periods)?.Id);
+        }
+        catch (Exception ex) when (ex is WorkbenchForbiddenException or UnauthorizedAccessException or HttpRequestException or WorkbenchNotFoundException)
+        {
+            _error = ex.Message;
+            _forbidden = ex is WorkbenchForbiddenException or UnauthorizedAccessException;
+        }
+    }
+
+    private async Task SelectAsync(Guid? periodId)
+    {
+        _periodId = periodId;
+        _review = null;
+        if (periodId is not { } id)
+        {
+            return;
+        }
+
+        try
+        {
+            _review = await Reports.GetMonthReviewAsync(id);
+        }
+        catch (Exception ex) when (ex is WorkbenchForbiddenException or UnauthorizedAccessException or HttpRequestException or WorkbenchNotFoundException)
+        {
+            _error = ex.Message;
+            _forbidden = ex is WorkbenchForbiddenException or UnauthorizedAccessException;
+        }
+    }
+}

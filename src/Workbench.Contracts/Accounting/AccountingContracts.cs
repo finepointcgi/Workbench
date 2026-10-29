@@ -411,8 +411,29 @@ public sealed record AccountingExportRequest(AccountingReport Report, Guid? Fisc
 
 public sealed record AccountingExportFile(string FileName, string ContentType, string Content);
 
+/// <summary>One number on the month in review: this month, last month, and the change.</summary>
+public sealed record MonthReviewMetricDto(string Label, decimal Current, decimal? Previous, decimal? Change, decimal? ChangePercent);
+
+/// <summary>A project's GL cost this month against last month.</summary>
+public sealed record MonthReviewProjectDto(Guid ProjectId, string ProjectCode, decimal Current, decimal Previous, decimal Change);
+
+/// <summary>
+/// What changed since last month, for the controller who has to explain it: the income statement's totals side by side, the
+/// projects whose cost moved most, and a few plain sentences saying so. <see cref="PreviousPeriodName"/> is null in the first month.
+/// </summary>
+public sealed record MonthReviewDto(
+    Guid FiscalPeriodId,
+    string PeriodName,
+    string? PreviousPeriodName,
+    IReadOnlyList<MonthReviewMetricDto> Metrics,
+    IReadOnlyList<MonthReviewProjectDto> Movers,
+    IReadOnlyList<string> Highlights);
+
 public interface IAccountingReportService
 {
+    /// <summary>The period against the one before it: totals, biggest project movers and the sentences that say so.</summary>
+    Task<MonthReviewDto> GetMonthReviewAsync(Guid fiscalPeriodId, CancellationToken cancellationToken = default);
+
     Task<TrialBalanceDto> GetTrialBalanceAsync(Guid fiscalPeriodId, CancellationToken cancellationToken = default);
 
     Task<LedgerDetailDto> GetLedgerDetailAsync(LedgerQuery query, CancellationToken cancellationToken = default);
