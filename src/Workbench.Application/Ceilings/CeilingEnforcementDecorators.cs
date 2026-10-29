@@ -362,6 +362,8 @@ public sealed class CeilingCheckingInvoiceService(IInvoiceService inner, IWorkbe
 
     public Task<IReadOnlyList<BillingContractDto>> ListBillingContractsAsync(CancellationToken cancellationToken = default) => inner.ListBillingContractsAsync(cancellationToken);
 
+    public Task<ReadyToBillDto> GetReadyToBillAsync(CancellationToken cancellationToken = default) => inner.GetReadyToBillAsync(cancellationToken);
+
     public async Task<InvoicePreviewDto> PreviewAsync(GenerateInvoiceRequest request, CancellationToken cancellationToken = default)
     {
         var preview = await inner.PreviewAsync(request, cancellationToken);

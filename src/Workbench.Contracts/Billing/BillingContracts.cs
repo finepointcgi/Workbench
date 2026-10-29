@@ -263,8 +263,40 @@ public sealed record UnbilledAccrualDto(
     DateTime? PostedAtUtc,
     IReadOnlyList<string> Notes);
 
+// ---- Ready to bill ----
+
+/// <summary>Something that stops a contract's draft invoice, in plain words, and where to fix it (an app-relative link).</summary>
+public sealed record ReadyToBillBlockerDto(string Text, string? Link = null, string? LinkLabel = null);
+
+/// <summary>One draft the row's button creates: the invoice type, the period that holds all the unbilled work, and what it will bill.</summary>
+public sealed record ReadyToBillDraftDto(InvoiceKind Type, DateOnly PeriodFrom, DateOnly PeriodTo, decimal Amount);
+
+public sealed record ReadyToBillRowDto(
+    Guid ContractId,
+    string ContractNumber,
+    string ContractName,
+    Guid CustomerId,
+    string CustomerName,
+    decimal Amount,
+    DateOnly? OldestWorkDate,
+    string Covers,
+    IReadOnlyList<ReadyToBillBlockerDto> Blockers,
+    IReadOnlyList<ReadyToBillDraftDto> Drafts);
+
+/// <summary>Every contract with approved, unbilled work, oldest first. Amounts are what the draft invoice will contain.</summary>
+public sealed record ReadyToBillDto(DateOnly AsOf, IReadOnlyList<ReadyToBillRowDto> Rows)
+{
+    public decimal Total => Rows.Sum(r => r.Amount);
+
+    /// <summary>Contracts whose draft can be created now.</summary>
+    public int DraftableCount => Rows.Count(r => r.Blockers.Count == 0 && r.Drafts.Count > 0);
+}
+
 public interface IInvoiceService
 {
+    /// <summary>Contracts with approved time, expenses or completed milestones not yet billed, with what blocks each draft.</summary>
+    Task<ReadyToBillDto> GetReadyToBillAsync(CancellationToken cancellationToken = default);
+
     /// <summary>Invoices, newest first. Project managers see only their contracts' invoices.</summary>
     Task<IReadOnlyList<InvoiceSummaryDto>> ListAsync(InvoiceQuery query, CancellationToken cancellationToken = default);
 

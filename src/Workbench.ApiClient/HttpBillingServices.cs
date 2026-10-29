@@ -67,6 +67,9 @@ public sealed class HttpInvoiceService(HttpClient http) : IInvoiceService
     public async Task<ContractBillingSettingsDto> SaveSettingsAsync(Guid contractId, SaveContractBillingSettingsRequest request, CancellationToken cancellationToken = default) =>
         await (await http.PutAsJsonAsync($"{Base}/contracts/{contractId}/settings", request, cancellationToken)).ReadLedgerAsync<ContractBillingSettingsDto>(cancellationToken);
 
+    public async Task<ReadyToBillDto> GetReadyToBillAsync(CancellationToken cancellationToken = default) =>
+        await (await http.GetAsync($"{Base}/ready-to-bill", cancellationToken)).ReadLedgerAsync<ReadyToBillDto>(cancellationToken);
+
     public async Task<UnbilledAccrualDto> GetUnbilledAccrualAsync(Guid fiscalPeriodId, CancellationToken cancellationToken = default) =>
         await (await http.GetAsync($"{Base}/accruals/{fiscalPeriodId}", cancellationToken)).ReadLedgerAsync<UnbilledAccrualDto>(cancellationToken);
 
