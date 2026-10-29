@@ -196,7 +196,6 @@ public sealed class JiraProjectSyncService(
     JiraSecrets secrets,
     AccountLinks links,
     ProjectAccess projectAccess,
-    IOptions<IntegrationOptions> integrationOptions,
     ICurrentUser currentUser,
     TimeProvider clock) : IJiraProjectSyncService
 {
