@@ -25,7 +25,8 @@ public sealed class Notifier(
     NotificationOptions options,
     TimeProvider clock,
     ILogger<Notifier>? logger = null,
-    INotificationEmailExtras? extras = null) : INotificationPublisher
+    INotificationEmailExtras? extras = null,
+    IServiceProvider? services = null) : INotificationPublisher
 {
     private readonly ILogger _log = (ILogger?)logger ?? NullLogger.Instance;
 
@@ -88,12 +89,32 @@ public sealed class Notifier(
             }
         }
 
+        // Also to the Teams channel for the people who chose it; posts in the background and never fails the caller.
+        if (ChatSender() is { } chat)
+        {
+            await chat.NotifyAsync(created);
+        }
+
         foreach (var notification in created)
         {
             await hub.PublishAsync(notification.RecipientEmail, notification.ToDto());
         }
 
         return emails;
+    }
+
+    /// <summary>Resolved on use, so a host without the integrations (or their configuration) still sends notifications.</summary>
+    private ChatNotificationSender? ChatSender()
+    {
+        try
+        {
+            return (ChatNotificationSender?)services?.GetService(typeof(ChatNotificationSender));
+        }
+        catch (Exception ex) when (ex is InvalidOperationException)
+        {
+            _log.LogDebug(ex, "Chat notifications aren't available on this host.");
+            return null;
+        }
     }
 
     public async Task<bool> PublishAsync(

@@ -73,6 +73,10 @@ else
                     </Actions>
                 </RequestTable>
             }
+            @if (_myError is null)
+            {
+                <Workbench.Ui.Calendar.CalendarSubscribeCard />
+            }
         </MudTabPanel>
 
         @if (_isApprover)

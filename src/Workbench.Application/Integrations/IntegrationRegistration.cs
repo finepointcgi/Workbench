@@ -34,6 +34,10 @@ public static class IntegrationRegistration
         services.AddScoped<IWebhookService, WebhookService>();
         services.AddScoped<IApiKeyService, ApiKeyService>();
         services.AddScoped<IConnectorService, ConnectorService>();
+        services.TryAddSingleton<Notifications.ChatRateLimiter>();
+        services.AddSingleton<Notifications.IChatChannelFormat, Notifications.TeamsChannelFormat>(); // Notifications also posted to Teams; Slack is one more IChatChannelFormat.
+        services.TryAddSingleton<Notifications.ChatNotificationSender>();
+        services.AddScoped<Workbench.Contracts.Notifications.ITeamsNotificationService, Notifications.TeamsNotificationService>();
         GitLab.GitLabRegistration.AddWorkbenchGitLab(services); // GitLab sync of project plans (issues, epics, milestones).
         return services;
     }
