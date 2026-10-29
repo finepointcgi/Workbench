@@ -39,6 +39,7 @@ public static class IntegrationRegistration
         services.TryAddSingleton<Notifications.ChatNotificationSender>();
         services.AddScoped<Workbench.Contracts.Notifications.ITeamsNotificationService, Notifications.TeamsNotificationService>();
         GitLab.GitLabRegistration.AddWorkbenchGitLab(services); // GitLab sync of project plans (issues, epics, milestones).
+        Jira.JiraRegistration.AddWorkbenchJira(services); // Jira sync of project plans (issues <-> tasks).
         return services;
     }
 
@@ -47,6 +48,7 @@ public static class IntegrationRegistration
     {
         services.AddHostedService<IntegrationDispatcherBackgroundService>();
         GitLab.GitLabRegistration.AddWorkbenchGitLabHosting(services);
+        Jira.JiraRegistration.AddWorkbenchJiraHosting(services);
         return services;
     }
 }

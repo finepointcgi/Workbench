@@ -1,0 +1,10 @@
+@* Who wins when both sides changed a date: said in plain words. *@
+<MudRadioGroup T="JiraDateWinnerChoice" Value="Value" ValueChanged="ValueChanged" data-testid="jira-winner">
+    <MudRadio Value="JiraDateWinnerChoice.Workbench" Color="Color.Primary">Dates: Workbench wins when both changed (recommended)</MudRadio>
+    <MudRadio Value="JiraDateWinnerChoice.Jira" Color="Color.Primary">Dates: Jira wins when both changed</MudRadio>
+</MudRadioGroup>
+
+@code {
+    [Parameter] public JiraDateWinnerChoice Value { get; set; }
+    [Parameter] public EventCallback<JiraDateWinnerChoice> ValueChanged { get; set; }
+}

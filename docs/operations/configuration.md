@@ -235,6 +235,19 @@ GitLab webhooks reach `POST /webhooks/gitlab/{linkId}` on the tenant's address; 
 Maintainer role, using `Notifications:PublicBaseUrl` (or the address the web host was last reached on). A private certificate
 authority for a self-managed server is pasted on Admin › Integrations › GitLab; nothing to configure on the host.
 
+## Jira sync (docs/integrations/jira.md)
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `Jira:ReconcileEnabled` | `true` | Runs the poll on this host (the fallback for missed webhooks). Safe on several hosts: each project's poll is claimed first. |
+| `Jira:ReconcileMinutes` | `10` | Minutes between polls of each linked project. |
+| `Jira:RequestTimeoutSeconds` | `30` | Per Jira call. |
+| `Jira:MaxPagesPerReconcile` | `20` | Pages of 100 issues one poll reads at most. |
+| `Jira:ReceiptRetentionDays` | `14` | Webhook receipts (the replay ledger) are kept this long. |
+
+Jira Cloud sites are public addresses, so the usual outbound address guard applies (`Integrations:*`); nothing to configure on the host.
+Jira webhooks reach `POST /webhooks/jira/{linkId}` on the tenant's address.
+
 ## Automation (Admin › Automation)
 
 | Key | Default | Notes |

@@ -40,6 +40,12 @@ else
                 <Workbench.Ui.Integrations.GitLab.GitLabProjectPanel ProjectId="_project.Id" />
             }
         </MudExpansionPanel>
+        <MudExpansionPanel Text="Jira" Expanded="@_open.Contains("jira")" ExpandedChanged="@(e => Toggle("jira", e))" data-testid="setup-jira">
+            @if (_open.Contains("jira"))
+            {
+                <Workbench.Ui.Integrations.Jira.JiraProjectPanel ProjectId="_project.Id" />
+            }
+        </MudExpansionPanel>
         <MudExpansionPanel Text="More: ceilings and closeout" Expanded="@_open.Contains("more")" ExpandedChanged="@(e => Toggle("more", e))" data-testid="setup-more">
             @if (_open.Contains("more"))
             {
@@ -64,7 +70,7 @@ else
     [Parameter, EditorRequired]
     public ProjectHubDto Hub { get; set; } = default!;
 
-    /// <summary>The section to open: details, charge-codes, sync, gitlab or more. Details when none is given.</summary>
+    /// <summary>The section to open: details, charge-codes, sync, gitlab, jira or more. Details when none is given.</summary>
     [Parameter]
     public string? Section { get; set; }
 

@@ -1,0 +1,355 @@
+@* A project's Jira link and sync panel (the project's Setup tab, section "jira"): link the plan to a Jira project, see how the
+   sync stands (who wins what, when it last ran, any error), change the rules and read what the sync couldn't settle alone. *@
+@implements IAsyncDisposable
+@inject IJiraProjectSyncService Sync
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+
+@if (_dto is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else if (_dto.Link is not { } link)
+{
+    @if (!_dto.ConnectionReady)
+    {
+        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" data-testid="jira-not-connected">@_dto.ConnectionProblem</MudAlert>
+    }
+    else if (!_dto.CanManage)
+    {
+        <MudText Class="mud-text-secondary">This project isn't linked to Jira. Finance, administrators and the project's manager can link it.</MudText>
+    }
+    else
+    {
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+            Link the plan to a Jira project. Its issues become tasks here (title, assignee matched by email, due date, Done, estimate), changes
+            in Jira arrive within minutes, and marking a task Done or changing its due date here updates the issue. Time is never imported.
+        </MudText>
+        <MudGrid Spacing="2" data-testid="jira-link-form">
+            <MudItem xs="12" md="6">
+                <MudAutocomplete T="JiraProjectOptionDto" @bind-Value="_choice" Label="Jira project" SearchFunc="SearchProjectsAsync"
+                                 ToStringFunc="@(p => p is null ? "" : $"{p.Key} · {p.Name}")" CoerceText="false" CoerceValue="false" DebounceInterval="300"
+                                 Variant="Variant.Outlined" AdornmentAriaLabel="Show matching projects" HelperText="Search by name, or type its key (such as RAD)" TextChanged="t => _typed = t"
+                                 data-testid="jira-project-picker" />
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudTextField @bind-Value="_epic" Label="Only this epic (optional)" Placeholder="RAD-12" Variant="Variant.Outlined" HelperText="Leave blank for the whole project" data-testid="jira-epic" />
+            </MudItem>
+            <MudItem xs="12">
+                <MudTextField @bind-Value="_jql" Label="Only issues matching this JQL (optional)" Placeholder='labels = "workbench"' Variant="Variant.Outlined"
+                              HelperText="An extra filter on top of the project" data-testid="jira-jql" />
+            </MudItem>
+            <MudItem xs="12">
+                <WinnerPicker @bind-Value="_winner" />
+                <MudSwitch @bind-Value="_creates" Color="Color.Primary" Label="Create a Jira issue for each task added here from now on" data-testid="jira-creates" />
+            </MudItem>
+        </MudGrid>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Link" Class="mt-2" OnClick="LinkAsync"
+                   Disabled="@(_busy || string.IsNullOrWhiteSpace(ProjectText))" data-testid="jira-link">Link and bring in the issues</MudButton>
+    }
+}
+else
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2" Class="mb-2" data-testid="jira-linked">
+        <MudText Typo="Typo.subtitle1">
+            Linked to Jira project <MudLink Href="@link.JiraProjectUrl" Target="_blank" rel="noopener">@link.JiraProjectKey · @link.JiraProjectName</MudLink>
+        </MudText>
+        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@StateColor(link.State)" Icon="@StateIcon(link.State)" data-testid="jira-state">@link.State</MudChip>
+    </MudStack>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-1" data-testid="jira-last-synced">
+        Last synced @Ago(link.LastSyncedAtUtc).
+        @if (link.EpicKey is { } epic) { <span> Only epic @epic.</span> }
+        @if (link.Jql is { } jql) { <span> Filter: <code>@jql</code>.</span> }
+        @if (_dto.ChangesWaiting > 0) { <span> @_dto.ChangesWaiting change@(_dto.ChangesWaiting == 1 ? "" : "s") on the way.</span> }
+        @if (_dto.ChangesFailed > 0) { <span> @_dto.ChangesFailed couldn't be sent (Admin › Integrations › Deliveries has the details).</span> }
+    </MudText>
+    <MudText Typo="Typo.body2" Class="mb-3" data-testid="jira-rules">@link.Rules</MudText>
+
+    @if (link.LastError is { } error)
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="mb-3" data-testid="jira-error">
+            <div>@error</div>
+            @if (link.LastErrorHint is { } hint)
+            {
+                <div class="mt-1"><b>What to do:</b> @hint</div>
+            }
+            <div class="mt-1">Nobody is blocked: plans work as normal, and Workbench keeps trying.</div>
+        </MudAlert>
+    }
+
+    @if (_dto.CanManage)
+    {
+        <MudPaper Outlined="true" Class="pa-3 mb-3" data-testid="jira-rules-form">
+            <MudText Typo="Typo.subtitle2" Class="mb-1">Rules</MudText>
+            <WinnerPicker @bind-Value="_winner" />
+            <MudSwitch @bind-Value="_creates" Color="Color.Primary" Label="Create a Jira issue for each task added here from now on" data-testid="jira-creates" />
+            <div><MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="SaveRulesAsync" Disabled="_busy" data-testid="jira-save-rules">Save rules</MudButton></div>
+        </MudPaper>
+        <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" Class="mb-3">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Sync" OnClick="SyncNowAsync" Disabled="_busy" data-testid="jira-sync-now">Sync now</MudButton>
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Webhook" OnClick="ToggleWebhookAsync" data-testid="jira-webhook-setup">Set up the webhook</MudButton>
+            <MudButton Variant="Variant.Text" Color="Color.Error" StartIcon="@Icons.Material.Filled.LinkOff" OnClick="UnlinkAsync" Disabled="_busy" data-testid="jira-unlink">Unlink</MudButton>
+        </MudStack>
+    }
+
+    @if (_webhook is { } hook)
+    {
+        <MudPaper Outlined="true" Class="pa-3 mb-3" data-testid="jira-webhook-box">
+            <MudText Typo="Typo.body2" Class="mb-2">
+                Without a webhook, Jira's changes come in every few minutes. To get them within seconds, add one in Jira:
+            </MudText>
+            <MudText Typo="Typo.body2"><b>URL:</b> <code>@hook.Url</code> <MudIconButton Icon="@Icons.Material.Filled.ContentCopy" Size="Size.Small" aria-label="Copy the URL" OnClick="() => CopyAsync(hook.Url)" /></MudText>
+            <MudText Typo="Typo.body2"><b>Secret:</b> <code>@hook.Secret</code> <MudIconButton Icon="@Icons.Material.Filled.ContentCopy" Size="Size.Small" aria-label="Copy the secret" OnClick="() => CopyAsync(hook.Secret)" /></MudText>
+            <MudText Typo="Typo.body2"><b>Events:</b> @string.Join(", ", hook.Events)</MudText>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-1">@hook.Note</MudText>
+        </MudPaper>
+    }
+
+    @if (_dto.Notes.Count > 0)
+    {
+        <MudText Typo="Typo.subtitle1" HtmlTag="h3" Class="mt-2 mb-1">Worth a look (@_dto.Notes.Count)</MudText>
+        <MudStack Spacing="2" Class="mb-3" data-testid="jira-notes">
+            @foreach (var n in _dto.Notes)
+            {
+                <MudPaper Outlined="true" Class="pa-3">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="1">
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@(n.IsError ? Color.Error : Color.Warning)">@(n.IsError ? "Couldn't sync" : "Settled")</MudChip>
+                        <MudText Typo="Typo.body2"><b>@(n.TaskTitle ?? "The project")</b>@(n.IssueKey is { } k ? $" · Jira {k}" : "")</MudText>
+                    </MudStack>
+                    <MudText Typo="Typo.body2" Class="mt-1">@n.Message</MudText>
+                    @if (n.Hint is { } h)
+                    {
+                        <MudText Typo="Typo.caption" Class="d-block mt-1"><b>What to do:</b> @h</MudText>
+                    }
+                    @if (_dto.CanManage)
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Text" Class="mt-1" OnClick="() => DismissAsync(n)">OK, dismiss</MudButton>
+                    }
+                </MudPaper>
+            }
+        </MudStack>
+    }
+
+    <MudText Typo="Typo.subtitle1" HtmlTag="h3" Class="mt-2 mb-1">Linked tasks (@_dto.Tasks.Count(t => !t.IsRemoved))</MudText>
+    <MudSimpleTable Dense="true" Hover="true" Class="mb-3" data-testid="jira-tasks">
+        <caption class="wb-sr-only">Tasks linked to Jira</caption>
+        <thead><tr><th>Task</th><th>In Jira</th><th>Estimate</th><th>Last synced</th></tr></thead>
+        <tbody>
+            @foreach (var t in _dto.Tasks)
+            {
+                <tr>
+                    <td>@(t.WbsCode is { } code ? $"{code} " : "")@t.Title</td>
+                    <td>
+                        <MudLink Href="@t.WebUrl" Target="_blank" rel="noopener">@t.IssueKey</MudLink>@(t.JiraStatus is { } st ? $" · {st}" : "")
+                        @if (t.IsRemoved)
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary"> (deleted in Jira)</MudText>
+                        }
+                        @if (t.LastError is { } e)
+                        {
+                            <MudText Typo="Typo.caption" Color="Color.Error" Class="d-block">@e</MudText>
+                        }
+                    </td>
+                    <td>@(t.EstimateHours is { } hrs ? $"{hrs:0.##} h" : "—")</td>
+                    <td>@Ago(t.LastSyncedAtUtc)</td>
+                </tr>
+            }
+            @if (_dto.Tasks.Count == 0)
+            {
+                <tr><td colspan="4" class="mud-text-secondary">Nothing linked yet. The first sync is on its way.</td></tr>
+            }
+        </tbody>
+    </MudSimpleTable>
+
+    @if (_dto.Recent.Count > 0)
+    {
+        <MudExpansionPanels Outlined="true" Elevation="0">
+            <MudExpansionPanel Text="Recent sync activity">
+                <MudList T="string" Dense="true" data-testid="jira-recent">
+                    @foreach (var a in _dto.Recent.Take(15))
+                    {
+                        <MudListItem T="string"><MudText Typo="Typo.body2">@a.Summary <span class="mud-text-secondary">· @Ago(a.OccurredAtUtc)</span></MudText></MudListItem>
+                    }
+                </MudList>
+            </MudExpansionPanel>
+        </MudExpansionPanels>
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid ProjectId { get; set; }
+
+    private JiraProjectSyncDto? _dto;
+    private JiraWebhookSetupDto? _webhook;
+    private JiraProjectOptionDto? _choice;
+    private string? _typed;
+    private string? _epic;
+    private string? _jql;
+    private JiraDateWinnerChoice _winner = JiraDateWinnerChoice.Workbench;
+    private bool _creates;
+    private bool _busy;
+    private readonly CancellationTokenSource _stop = new();
+
+    private string? ProjectText => _choice?.Key ?? _typed;
+
+    protected override void OnInitialized() => _ = RefreshWhileSendingAsync();
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _dto = await Sync.GetAsync(ProjectId);
+            if (_dto.Link is { } l)
+            {
+                _winner = l.DateWinner;
+                _creates = l.CreateIssuesForNewTasks;
+            }
+        }
+        catch (Exception ex) when (IntegrationFormat.IsExpected(ex) || ex is WorkbenchForbiddenException)
+        {
+            Snackbar.Add($"Couldn't load the Jira sync: {ex.Message}", Severity.Error);
+        }
+    }
+
+    // While changes are on their way, refresh every few seconds so the panel shows them land.
+    private async Task RefreshWhileSendingAsync()
+    {
+        try
+        {
+            using var timer = new PeriodicTimer(TimeSpan.FromSeconds(4));
+            while (await timer.WaitForNextTickAsync(_stop.Token))
+            {
+                if (_dto?.Link is null || _dto.ChangesWaiting == 0)
+                {
+                    continue;
+                }
+
+                await InvokeAsync(async () =>
+                {
+                    await LoadAsync();
+                    StateHasChanged();
+                });
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private async Task<IEnumerable<JiraProjectOptionDto>> SearchProjectsAsync(string? text, CancellationToken ct)
+    {
+        try
+        {
+            return await Sync.SearchJiraProjectsAsync(ProjectId, text, ct);
+        }
+        catch (Exception ex) when (IntegrationFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+            return [];
+        }
+    }
+
+    private Task LinkAsync() => RunAsync(async () =>
+    {
+        _dto = await Sync.LinkAsync(ProjectId, new LinkJiraProjectRequest(ProjectText!, _epic, _jql, _winner, _creates));
+        Snackbar.Add($"Linked to {_dto.Link?.JiraProjectKey}. The issues are on their way into the plan.", Severity.Success);
+    });
+
+    private Task SaveRulesAsync() => RunAsync(async () =>
+    {
+        _dto = await Sync.UpdateLinkAsync(ProjectId, new UpdateJiraLinkRequest(_winner, _creates));
+        Snackbar.Add("Rules saved.", Severity.Success);
+    });
+
+    private Task SyncNowAsync() => RunAsync(async () =>
+    {
+        var result = await Sync.SyncNowAsync(ProjectId);
+        _dto = await Sync.GetAsync(ProjectId);
+        Snackbar.Add(result.Message, Severity.Info);
+    });
+
+    private async Task UnlinkAsync()
+    {
+        if (await Dialogs.ShowMessageBoxAsync("Unlink from Jira?", "Nothing syncs any more. The issues stay in Jira and the tasks stay in the plan; you can link again later.",
+                yesText: "Unlink", cancelText: "Cancel") != true)
+        {
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            await Sync.UnlinkAsync(ProjectId);
+            _webhook = null;
+            _dto = await Sync.GetAsync(ProjectId);
+            Snackbar.Add("Unlinked from Jira.", Severity.Success);
+        });
+    }
+
+    private Task ToggleWebhookAsync() => RunAsync(async () => _webhook = _webhook is null ? await Sync.GetWebhookSetupAsync(ProjectId) : null);
+
+    private Task DismissAsync(JiraNoteDto note) => RunAsync(async () => _dto = await Sync.DismissNoteAsync(ProjectId, note.Id));
+
+    private async Task CopyAsync(string text)
+    {
+        if (await IntegrationFormat.CopyAsync(JS, text))
+        {
+            Snackbar.Add("Copied.", Severity.Success);
+        }
+    }
+
+    private async Task RunAsync(Func<Task> work)
+    {
+        _busy = true;
+        try
+        {
+            await work();
+        }
+        catch (Exception ex) when (IntegrationFormat.IsExpected(ex) || ex is WorkbenchForbiddenException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static Color StateColor(string state) => state switch
+    {
+        "Up to date" => Color.Success,
+        "Needs attention" or "Some changes failed" or "Jira isn't answering" => Color.Error,
+        _ => Color.Info,
+    };
+
+    private static string StateIcon(string state) => state switch
+    {
+        "Up to date" => Icons.Material.Filled.CheckCircle,
+        "Needs attention" or "Some changes failed" or "Jira isn't answering" => Icons.Material.Filled.Error,
+        _ => Icons.Material.Filled.Sync,
+    };
+
+    internal static string Ago(DateTime? utc)
+    {
+        if (utc is not { } t)
+        {
+            return "not yet";
+        }
+
+        var span = DateTime.UtcNow - DateTime.SpecifyKind(t, DateTimeKind.Utc);
+        return span.TotalSeconds < 0 ? IntegrationFormat.When(t) + " UTC"
+            : span.TotalMinutes < 1 ? "just now"
+            : span.TotalHours < 1 ? $"{(int)span.TotalMinutes} min ago"
+            : span.TotalDays < 1 ? $"{(int)span.TotalHours} h ago"
+            : IntegrationFormat.When(t) + " UTC";
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        _stop.Cancel();
+        _stop.Dispose();
+        return ValueTask.CompletedTask;
+    }
+}
