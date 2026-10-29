@@ -23,6 +23,8 @@ public sealed partial class InvoiceService(
 {
     public const string AuditEntityType = nameof(Invoice);
 
+    private readonly ReadyToBill _readyToBill = new(generator);
+
     private DateOnly Today => DateOnly.FromDateTime(clock.GetLocalNow().DateTime);
 
     private DateTime UtcNow => clock.GetUtcNow().UtcDateTime;
@@ -98,6 +100,12 @@ public sealed partial class InvoiceService(
                     BillingMapping.Label(c.Type), c.PeriodStart, c.PeriodEnd, dtos, types);
             })
             .ToList();
+    }
+
+    public async Task<ReadyToBillDto> GetReadyToBillAsync(CancellationToken cancellationToken = default)
+    {
+        await using var db = await dbFactory.CreateAsync(cancellationToken);
+        return await _readyToBill.GetAsync(db, Today, cancellationToken);
     }
 
     public async Task<InvoicePreviewDto> PreviewAsync(GenerateInvoiceRequest request, CancellationToken cancellationToken = default)
