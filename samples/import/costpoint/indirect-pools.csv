@@ -1,0 +1,10 @@
+POOL_NO,ACCT_ID,ALLOC_BASE,ORDER_NO
+FRINGE BENEFITS,6010,Direct labor,1
+FRINGE BENEFITS,6020,Direct labor,1
+FRINGE BENEFITS,6030,Direct labor,1
+OVHD,6110,Direct labor + fringe,2
+OVHD,6120,Direct labor + fringe,2
+OVHD,6130,Direct labor + fringe,2
+G & A,6210,Total cost input,3
+G & A,6220,Total cost input,3
+G & A,6230,Total cost input,3

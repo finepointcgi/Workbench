@@ -40,6 +40,9 @@ public static class ImportRegistration
         services.AddScoped<IImporter, OpeningBalanceImporter>();
         services.AddScoped<IImporter, OpenArInvoiceImporter>();
         services.AddScoped<IImporter, OpenApBillImporter>();
+        services.AddScoped<IImporter, FiscalCalendarImporter>();
+        services.AddScoped<IImporter, IndirectRateImporter>();
+        services.AddScoped<IImporter, IndirectPoolImporter>();
         services.AddScoped<OpenItemConversion>();
         services.AddScoped<ImportRollback>();
         services.AddScoped<IImportService, ImportService>();
