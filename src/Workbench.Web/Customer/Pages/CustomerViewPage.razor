@@ -1,0 +1,70 @@
+@using System.Globalization
+<CustomerLayout Title="@View.ContractName" Footer="@($"Prepared by {View.CompanyName} through Workbench. Figures are as of {View.AsOfUtc:MMMM d, yyyy}.")">
+    <p class="lead">Contract <b>@View.ContractNumber</b> · @View.CustomerName · @View.PeriodStart.ToString("MMM d, yyyy", Us) to @View.PeriodEnd.ToString("MMM d, yyyy", Us)</p>
+
+    <section class="card" aria-labelledby="funding">
+        <h2 id="funding">Funding and billing</h2>
+        <dl class="facts">
+            <div><dt>Contract value</dt><dd>@Money(View.Ceiling)</dd></div>
+            <div><dt>Funded</dt><dd>@Money(View.Funded)</dd></div>
+            <div><dt>Billed to date</dt><dd>@Money(View.Billed)</dd></div>
+            <div><dt>Paid</dt><dd>@Money(View.Paid)</dd></div>
+            <div><dt>Outstanding</dt><dd>@Money(View.Outstanding)</dd></div>
+        </dl>
+    </section>
+
+    @if (View.Clins.Count > 0)
+    {
+        <section class="card" aria-labelledby="clins">
+            <h2 id="clins">Line items</h2>
+            <div class="scroll">
+                <table>
+                    <thead><tr><th scope="col">CLIN</th><th scope="col">Description</th><th scope="col" class="num">Value</th><th scope="col" class="num">Funded</th></tr></thead>
+                    <tbody>
+                        @foreach (var c in View.Clins)
+                        {
+                            <tr><td>@c.Number</td><td>@c.Description</td><td class="num">@Money(c.Ceiling)</td><td class="num">@Money(c.Funded)</td></tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    }
+
+    <section class="card" aria-labelledby="invoices">
+        <h2 id="invoices">Invoices</h2>
+        @if (View.Invoices.Count == 0)
+        {
+            <p class="hint">No invoices have been sent yet.</p>
+        }
+        else
+        {
+            <div class="scroll">
+                <table>
+                    <thead><tr><th scope="col">Invoice</th><th scope="col">Period</th><th scope="col">Due</th><th scope="col" class="num">Amount</th><th scope="col" class="num">Paid</th><th scope="col">Status</th></tr></thead>
+                    <tbody>
+                        @foreach (var i in View.Invoices)
+                        {
+                            <tr>
+                                <td>@i.Number</td>
+                                <td>@i.PeriodFrom.ToString("MMM d", Us) – @i.PeriodTo.ToString("MMM d, yyyy", Us)</td>
+                                <td>@i.DueDate.ToString("MMM d, yyyy", Us)</td>
+                                <td class="num">@Money(i.Total)</td>
+                                <td class="num">@Money(i.Paid)</td>
+                                <td>@(i.IsOverdue ? "Past due" : i.Status)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+</CustomerLayout>
+
+@code {
+    private static readonly CultureInfo Us = CultureInfo.GetCultureInfo("en-US");
+
+    [Parameter, EditorRequired] public CustomerViewDto View { get; set; } = default!;
+
+    private static string Money(decimal value) => value.ToString("C2", Us);
+}

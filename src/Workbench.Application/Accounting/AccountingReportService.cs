@@ -84,6 +84,100 @@ public sealed class AccountingReportService(IWorkbenchDbContextFactory dbFactory
     private static FiscalPeriod RequirePeriod(Ledger ledger, Guid id) =>
         ledger.Lookups.Periods.TryGetValue(id, out var p) ? p : throw WorkbenchNotFoundException.For("Fiscal period", id);
 
+    // ---- Month in review ----
+
+    public async Task<MonthReviewDto> GetMonthReviewAsync(Guid fiscalPeriodId, CancellationToken cancellationToken = default)
+    {
+        await using var db = await dbFactory.CreateAsync(cancellationToken);
+        // The full ledger, not the per-account sums: the project movers need each line's project.
+        return MonthReview(await LoadAsync(db, await CompanyFilterAsync(cancellationToken), cancellationToken), fiscalPeriodId);
+    }
+
+    /// <summary>This period against the one before it. The first period has nothing to compare to, so it just states its own totals.</summary>
+    internal static MonthReviewDto MonthReview(Ledger ledger, Guid periodId)
+    {
+        var period = RequirePeriod(ledger, periodId);
+        var previous = ledger.Lookups.Periods.Values.Where(p => p.Start < period.Start).OrderByDescending(p => p.Start).FirstOrDefault();
+
+        // The income statement's period column; the previous month's comes from its own statement, so a new fiscal year doesn't skew it.
+        static Dictionary<string, decimal> Totals(FinancialStatementDto statement) =>
+            statement.Lines.Where(l => l.IsTotal).ToDictionary(l => l.Label, l => l.Period);
+        var now = Totals(IncomeStatement(ledger, period.Id));
+        var before = previous is null ? null : Totals(IncomeStatement(ledger, previous.Id));
+
+        var metrics = new List<MonthReviewMetricDto>();
+        foreach (var label in new[] { "Total revenue", "Total direct costs", "Total indirect costs", "Total unallowable costs", "Total expenses", "Net income" })
+        {
+            var current = now.GetValueOrDefault(label);
+            decimal? prior = before?.GetValueOrDefault(label);
+            var change = prior is null ? (decimal?)null : current - prior.Value;
+            metrics.Add(new MonthReviewMetricDto(label, current, prior, change, prior is { } p && p != 0 ? Math.Round((current - p) / Math.Abs(p) * 100m, 1) : null));
+        }
+
+        // Projects whose GL cost moved most. A project that cost nothing last month counts from zero.
+        var currentCost = ProjectCost(ledger, null, period.Id).GroupBy(r => (r.ProjectId, r.ProjectCode)).ToDictionary(g => g.Key, g => g.Sum(r => r.Total));
+        var priorCost = previous is null
+            ? new Dictionary<(Guid ProjectId, string ProjectCode), decimal>()
+            : ProjectCost(ledger, null, previous.Id).GroupBy(r => (r.ProjectId, r.ProjectCode)).ToDictionary(g => g.Key, g => g.Sum(r => r.Total));
+        var movers = previous is null
+            ? []
+            : currentCost.Keys.Union(priorCost.Keys)
+                .Select(k => new MonthReviewProjectDto(k.ProjectId, k.ProjectCode, currentCost.GetValueOrDefault(k), priorCost.GetValueOrDefault(k), currentCost.GetValueOrDefault(k) - priorCost.GetValueOrDefault(k)))
+                .Where(m => m.Change != 0)
+                .OrderByDescending(m => Math.Abs(m.Change)).ThenBy(m => m.ProjectCode, StringComparer.Ordinal)
+                .Take(5).ToList();
+
+        return new MonthReviewDto(period.Id, period.Name, previous?.Name, metrics, movers, Sentences(period.Name, previous?.Name, metrics, movers));
+    }
+
+    private static List<string> Sentences(string period, string? previous, IReadOnlyList<MonthReviewMetricDto> metrics, IReadOnlyList<MonthReviewProjectDto> movers)
+    {
+        static string Money(decimal value) => value.ToString("C0", CultureInfo.GetCultureInfo("en-US"));
+        var lines = new List<string>();
+        var revenue = metrics.First(m => m.Label == "Total revenue");
+        var net = metrics.First(m => m.Label == "Net income");
+        if (previous is null)
+        {
+            lines.Add($"{period} is the first month with postings, so there is nothing to compare it with yet. Revenue was {Money(revenue.Current)} and net income {Money(net.Current)}.");
+            return lines;
+        }
+
+        string Move(MonthReviewMetricDto m, string what)
+        {
+            if (m.Change is not { } change || change == 0)
+            {
+                return $"{what} was unchanged at {Money(m.Current)}.";
+            }
+
+            if ((m.Previous ?? 0) == 0)
+            {
+                return $"{what} is {Money(m.Current)}; nothing was posted for it in {previous}.";
+            }
+
+            var pct = m.ChangePercent is { } p ? $" ({(p > 0 ? "+" : "")}{p:0.#}%)" : "";
+            return $"{what} {(change > 0 ? "rose" : "fell")} {Money(Math.Abs(change))}{pct}, from {Money(m.Previous ?? 0)} in {previous} to {Money(m.Current)}.";
+        }
+
+        lines.Add(Move(revenue, "Revenue"));
+        foreach (var label in new[] { ("Total direct costs", "Direct costs"), ("Total indirect costs", "Indirect costs"), ("Total unallowable costs", "Unallowable costs") })
+        {
+            var m = metrics.First(x => x.Label == label.Item1);
+            if (m.Change is { } c && c != 0)
+            {
+                lines.Add(Move(m, label.Item2));
+            }
+        }
+
+        lines.Add(Move(net, "Net income"));
+        if (movers.Count > 0)
+        {
+            var top = movers[0];
+            lines.Add($"Project {top.ProjectCode} moved most: its cost {(top.Change > 0 ? "rose" : "fell")} {Money(Math.Abs(top.Change))} ({Money(top.Previous)} to {Money(top.Current)}).");
+        }
+
+        return lines;
+    }
+
     // ---- Trial balance ----
 
     public async Task<TrialBalanceDto> GetTrialBalanceAsync(Guid fiscalPeriodId, CancellationToken cancellationToken = default)
