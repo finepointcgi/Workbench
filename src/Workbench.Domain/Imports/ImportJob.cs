@@ -35,6 +35,11 @@ public enum ImportKind
     OpeningBalances,
     OpenArInvoices,
     OpenApBills,
+
+    // Costpoint integration: fiscal calendar and indirect rate structure.
+    FiscalCalendar,
+    IndirectRates,
+    IndirectPools,
 }
 
 public enum ImportJobStatus

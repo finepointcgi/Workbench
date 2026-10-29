@@ -24,6 +24,12 @@ Imports are repeatable: rows match on natural keys (employee id, org id, PLC, cu
 CLIN, project/WBS code, contract + PLC + date, project + budget version name, sheet name and Smartsheet row id), so
 importing a file again updates changed records and skips unchanged ones. Finance and administrators only.
 
+## Costpoint conversion extras
+
+`fiscal-calendar.csv` (Fiscal years and periods), `indirect-pools.csv` (pool accounts and bases) and `indirect-rates.csv`
+(provisional and forward-pricing rates). Import the calendar before the opening balances, the chart of accounts before the
+pools. Details: `docs/integrations/costpoint.md`.
+
 ## Costpoint order
 
 Import in dependency order: `organizations.csv`, `labor-categories.csv`, `employees.csv`, `cost-rates.csv`,

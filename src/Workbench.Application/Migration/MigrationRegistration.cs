@@ -15,6 +15,8 @@ public static class MigrationRegistration
         services.AddScoped<ReconciliationSources>();
         services.AddScoped<IReconciliationService, ReconciliationService>();
         services.AddScoped<IMigrationService, MigrationService>();
+        services.AddScoped<ParallelRunExplainer>();
+        services.AddScoped<IParallelRunService, ParallelRunService>();
         return services;
     }
 }
