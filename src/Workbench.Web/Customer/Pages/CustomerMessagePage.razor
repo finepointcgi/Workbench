@@ -1,0 +1,8 @@
+<CustomerLayout Title="@Title">
+    <p class="notice" role="status">@Text</p>
+</CustomerLayout>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter, EditorRequired] public string Text { get; set; } = "";
+}

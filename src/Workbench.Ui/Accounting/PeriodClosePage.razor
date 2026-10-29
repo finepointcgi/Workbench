@@ -64,7 +64,8 @@ else
                         @if (check.Details.Count > 0)
                         {
                             <ul class="mt-1 mb-0" style="padding-left:20px">
-                                @foreach (var d in check.Details)
+                                @* The unposted items are listed in full in the table below; here only what the table doesn't have. *@
+                                @foreach (var d in check.Kind == CloseCheckKind.NothingUnposted ? check.Details.Where(d => d.StartsWith("Draft entry:", StringComparison.Ordinal)) : check.Details)
                                 {
                                     <li><MudText Typo="Typo.body2">@d</MudText></li>
                                 }

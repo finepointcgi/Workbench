@@ -11,6 +11,11 @@ internal static class BillingEndpoints
     {
         var b = v1.MapGroup("/billing").WithTags("Billing").AddEndpointFilter(MapConflicts);
 
+        // Links a customer opens without signing in (Finance makes them; the public page is /c/{token}).
+        b.MapGet("/contracts/{contractId:guid}/customer-links", (Guid contractId, ICustomerShareLinkService s, CancellationToken ct) => s.ListAsync(contractId, ct));
+        b.MapPost("/contracts/{contractId:guid}/customer-links", (Guid contractId, CreateCustomerShareLinkRequest r, ICustomerShareLinkService s, CancellationToken ct) => s.CreateAsync(contractId, r, ct));
+        b.MapPost("/contracts/{contractId:guid}/customer-links/{linkId:guid}/revoke", (Guid contractId, Guid linkId, ICustomerShareLinkService s, CancellationToken ct) => s.RevokeAsync(contractId, linkId, ct));
+
         b.MapGet("/invoices", (Guid? contractId, Guid? customerId, InvoiceState? status, InvoiceKind? type, string? search, bool? openOnly, int? take,
             IInvoiceService s, CancellationToken ct) => s.ListAsync(new InvoiceQuery(contractId, customerId, status, type, search, openOnly ?? false, take ?? 500), ct));
         b.MapGet("/invoices/{id:guid}", (Guid id, IInvoiceService s, CancellationToken ct) => s.GetAsync(id, ct));

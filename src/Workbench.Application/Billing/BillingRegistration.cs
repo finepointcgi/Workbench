@@ -23,6 +23,8 @@ public static class BillingRegistration
         services.AddScoped<IPeriodCloseCheck, UnbilledAccrualCloseCheck>();
         services.AddScoped<OverdueInvoiceCheck>();
         services.AddScoped<IInvoiceService, InvoiceService>();
+        services.AddScoped<ICustomerShareLinkService, CustomerShareLinkService>();
+        services.AddScoped<ICustomerViewService, CustomerViewService>();
         services.AddScoped<IBillingMilestoneService, BillingMilestoneService>();
         services.AddScoped<IPaymentService, PaymentService>();
         services.AddScoped<IArReportService, ArReportService>();

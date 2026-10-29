@@ -143,6 +143,7 @@ public static class NavCatalog
         // Finance (Finance and administrators): in each group the everyday pages first, the setup pages last.
         new(Finance, "Accounting", "Journal entries", "accounting/journal", Icons.Material.Filled.MenuBook, NavRule.Need(P.GlJournalsPost), Detail: "Journal entry", Keywords: "gl general ledger je"),
         new(Finance, "Accounting", "Period close", "accounting/close", Icons.Material.Filled.EventAvailable, NavRule.Need(P.GlClose), Keywords: "fiscal month end"),
+        new(Finance, "Accounting", "Month in review", "accounting/month-review", Icons.Material.Filled.CompareArrows, NavRule.Need(P.GlReportsView), Keywords: "what changed since last month variance controller revenue net income"),
         new(Finance, "Accounting", "Recurring journals", "accounting/recurring", Icons.Material.Filled.EventRepeat, NavRule.Need(P.GlRecurringManage), Keywords: "recurring journal entries rent accrual amortization auto reverse"),
         new(Finance, "Accounting", "Currency revaluation", "accounting/revaluation", Icons.Material.Filled.CurrencyExchange, NavRule.Need(P.GlRevaluation), Keywords: "foreign exchange fx unrealized gain loss month end period close multicurrency"),
         new(Finance, "Accounting", "Foreign currency report", "accounting/foreign-currency", Icons.Material.Filled.Language, NavRule.Need(P.GlRevaluation), Keywords: "fx exposure realized unrealized gain loss multicurrency"),

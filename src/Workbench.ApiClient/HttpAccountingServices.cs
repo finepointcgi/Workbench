@@ -96,6 +96,9 @@ public sealed class HttpPeriodCloseService(HttpClient http) : IPeriodCloseServic
 
 public sealed class HttpAccountingReportService(HttpClient http) : IAccountingReportService
 {
+    public async Task<MonthReviewDto> GetMonthReviewAsync(Guid fiscalPeriodId, CancellationToken cancellationToken = default) =>
+        await (await http.GetAsync($"api/v1/accounting/reports/month-review/{fiscalPeriodId}", cancellationToken)).ReadLedgerAsync<MonthReviewDto>(cancellationToken);
+
     public async Task<TrialBalanceDto> GetTrialBalanceAsync(Guid fiscalPeriodId, CancellationToken cancellationToken = default) =>
         await (await http.GetAsync($"api/v1/accounting/reports/trial-balance/{fiscalPeriodId}", cancellationToken)).ReadLedgerAsync<TrialBalanceDto>(cancellationToken);
 

@@ -1,0 +1,29 @@
+@* The customer's page shell: plain server-rendered HTML, no scripts, one h1. The link is the secret, so the page asks not to be indexed or cached. *@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="referrer" content="no-referrer" />
+    <title>@Title</title>
+    <link rel="stylesheet" href="/css/customer-view.css" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+</head>
+<body>
+    <a class="skip" href="#main">Skip to main content</a>
+    <main id="main" tabindex="-1">
+        <h1>@Title</h1>
+        @ChildContent
+    </main>
+    <footer class="foot">
+        <p>@(Footer ?? "Powered by Workbench.")</p>
+    </footer>
+</body>
+</html>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public string? Footer { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}
