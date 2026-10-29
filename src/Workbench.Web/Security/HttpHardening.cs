@@ -48,6 +48,12 @@ public static class RateLimiting
                     return Window($"signin:{ip}", settings.SignInPerMinute);
                 }
 
+                // The customer's link: generous for a person reloading, tight for anyone trying addresses.
+                if (path.StartsWithSegments("/c"))
+                {
+                    return Window($"customer:{ip}", settings.SignInPerMinute);
+                }
+
                 if (path.StartsWithSegments(ScimEndpoints.BasePath))
                 {
                     return Window($"scim:{ip}", settings.ScimPerMinute);

@@ -1,0 +1,151 @@
+@* "Share with customer" on a contract: a link a contracting officer opens without an account, showing funding and invoice status only.
+   Finance makes and ends the links; the address is shown once, when it's made. Others see a plain "ask Finance". *@
+@using Microsoft.JSInterop
+@using Workbench.Contracts.Billing
+@inject ICustomerShareLinkService Links
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+
+<MudText Class="mud-text-secondary mb-3">
+    Give a contracting officer a link to this contract's funding and invoices. They don't need an account. They see the contract's value,
+    funding, what's been billed and paid, and the sent invoices: no costs, rates or people. A link works until it expires or you end it.
+</MudText>
+
+@if (_forbidden)
+{
+    <MudAlert Severity="Severity.Info" Dense="true" data-testid="customer-links-forbidden">Customer links are made by Finance. Ask them if a customer needs one.</MudAlert>
+}
+else
+{
+    <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Start" Wrap="Wrap.Wrap" Class="mb-3">
+        <MudTextField @bind-Value="_label" Label="Who is it for?" Placeholder="Army CO, J. Rivera" Immediate="true" Style="min-width:260px" MaxLength="200" data-testid="customer-link-label" />
+        <MudNumericField T="int" @bind-Value="_days" Label="Works for (days)" Min="1" Max="365" Style="max-width:160px" data-testid="customer-link-days" />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" Disabled="_busy || string.IsNullOrWhiteSpace(_label)" OnClick="CreateAsync" data-testid="customer-link-create">Create link</MudButton>
+    </MudStack>
+
+    @if (_created is not null)
+    {
+        <MudAlert Severity="Severity.Success" Class="mb-3" data-testid="customer-link-created">
+            <div>Link made for <b>@_created.Link.Label</b>. Copy it now: it isn't shown again.</div>
+            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Class="mt-2">
+                <MudTextField T="string" Value="@_createdUrl" ReadOnly="true" Variant="Variant.Outlined" Margin="Margin.Dense" Style="flex:1" aria-label="The customer's link" data-testid="customer-link-url" />
+                <MudButton Variant="Variant.Outlined" OnClick="CopyAsync" data-testid="customer-link-copy">Copy</MudButton>
+            </MudStack>
+        </MudAlert>
+    }
+
+    @if (_links is null)
+    {
+        <MudProgressLinear Indeterminate="true" Color="Color.Primary" aria-label="Loading" />
+    }
+    else if (_links.Count == 0)
+    {
+        <MudText Class="mud-text-secondary" data-testid="customer-links-empty">No links yet.</MudText>
+    }
+    else
+    {
+        <MudSimpleTable Dense="true" data-testid="customer-links">
+            <thead><tr><th>For</th><th>Made</th><th>Works until</th><th>Looked at</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var link in _links)
+                {
+                    <tr>
+                        <td>@link.Label</td>
+                        <td>@link.CreatedAtUtc.ToLocalTime().ToString("MMM d, yyyy")</td>
+                        <td>@(link.RevokedAtUtc is not null ? "Ended" : link.ExpiresAtUtc <= DateTime.UtcNow ? "Expired" : link.ExpiresAtUtc.ToLocalTime().ToString("MMM d, yyyy"))</td>
+                        <td>@(link.ViewCount == 0 ? "Not yet" : $"{link.ViewCount} time{(link.ViewCount == 1 ? "" : "s")}, last {link.LastViewedAtUtc?.ToLocalTime().ToString("MMM d")}")</td>
+                        <td>
+                            @if (link.IsActive)
+                            {
+                                <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Text" Disabled="_busy" OnClick="() => RevokeAsync(link)" aria-label="@($"End the link for {link.Label}")" data-testid="customer-link-revoke">End link</MudButton>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid ContractId { get; set; }
+
+    private IReadOnlyList<CustomerShareLinkDto>? _links;
+    private CreatedCustomerShareLinkDto? _created;
+    private string? _createdUrl;
+    private string? _label;
+    private int _days = 90;
+    private bool _busy;
+    private bool _forbidden;
+
+    protected override async Task OnParametersSetAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _links = await Links.ListAsync(ContractId);
+        }
+        catch (Exception ex) when (ex is Workbench.Contracts.WorkbenchForbiddenException or UnauthorizedAccessException)
+        {
+            _forbidden = true;
+        }
+        catch (Exception ex) when (ex is Workbench.Contracts.WorkbenchNotFoundException or HttpRequestException)
+        {
+            _links = [];
+        }
+    }
+
+    private async Task CreateAsync()
+    {
+        _busy = true;
+        try
+        {
+            _created = await Links.CreateAsync(ContractId, new CreateCustomerShareLinkRequest(_label ?? "", _days));
+            _createdUrl = Navigation.ToAbsoluteUri(_created.Path).ToString();
+            _label = null;
+            await LoadAsync();
+        }
+        catch (Exception ex) when (ex is ArgumentException or Workbench.Contracts.WorkbenchForbiddenException or UnauthorizedAccessException or HttpRequestException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task RevokeAsync(CustomerShareLinkDto link)
+    {
+        _busy = true;
+        try
+        {
+            await Links.RevokeAsync(ContractId, link.Id);
+            Snackbar.Add($"Ended the link for {link.Label}", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex) when (ex is Workbench.Contracts.WorkbenchNotFoundException or Workbench.Contracts.WorkbenchForbiddenException or UnauthorizedAccessException or HttpRequestException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task CopyAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", _createdUrl);
+            Snackbar.Add("Link copied", Severity.Success);
+        }
+        catch (Exception ex) when (ex is JSException or InvalidOperationException)
+        {
+            Snackbar.Add("Couldn't copy: select the link and copy it by hand.", Severity.Warning);
+        }
+    }
+}

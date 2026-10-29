@@ -13,6 +13,7 @@ using Workbench.Web.Notifications;
 using Workbench.Web.Security;
 using Workbench.Web.Supplier;
 using Workbench.Web.Forms;
+using Workbench.Web.Customer;
 using Workbench.Web.Tenancy;
 using Workbench.Web.Storage;
 
@@ -124,6 +125,7 @@ app.MapWorkbenchScim();
 app.MapWorkbenchApi();
 app.MapWorkbenchSupplierPortal();
 app.MapWorkbenchPublicForms(); // Public form links /f/{token} (wave E).
+app.MapWorkbenchCustomerView(); // Customer links /c/{token}: one contract's funding and invoice status, read only.
 app.MapWorkbenchLiveUpdatesHub();
 app.MapWorkbenchNotificationsHub();
 app.MapWorkbenchEmailEvents(); // Bounce and complaint webhooks from SendGrid and SES (docs/operations/email.md).

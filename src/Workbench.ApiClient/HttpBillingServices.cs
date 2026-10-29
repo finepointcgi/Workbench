@@ -136,11 +136,24 @@ public sealed class HttpArReportService(HttpClient http) : IArReportService
         await (await http.PostAsync($"{Base}/overdue-reminders", null, cancellationToken)).ReadLedgerAsync<int>(cancellationToken);
 }
 
+public sealed class HttpCustomerShareLinkService(HttpClient http) : ICustomerShareLinkService
+{
+    public async Task<IReadOnlyList<CustomerShareLinkDto>> ListAsync(Guid contractId, CancellationToken cancellationToken = default) =>
+        await (await http.GetAsync($"api/v1/billing/contracts/{contractId}/customer-links", cancellationToken)).ReadLedgerAsync<List<CustomerShareLinkDto>>(cancellationToken);
+
+    public async Task<CreatedCustomerShareLinkDto> CreateAsync(Guid contractId, CreateCustomerShareLinkRequest request, CancellationToken cancellationToken = default) =>
+        await (await http.PostAsJsonAsync($"api/v1/billing/contracts/{contractId}/customer-links", request, cancellationToken)).ReadLedgerAsync<CreatedCustomerShareLinkDto>(cancellationToken);
+
+    public async Task<CustomerShareLinkDto> RevokeAsync(Guid contractId, Guid linkId, CancellationToken cancellationToken = default) =>
+        await (await http.PostAsync($"api/v1/billing/contracts/{contractId}/customer-links/{linkId}/revoke", null, cancellationToken)).ReadLedgerAsync<CustomerShareLinkDto>(cancellationToken);
+}
+
 public static class BillingClientRegistration
 {
     public static IServiceCollection AddBillingClients(this IServiceCollection services, Uri serverBaseAddress)
     {
         services.AddHttpClient<IInvoiceService, HttpInvoiceService>(c => c.BaseAddress = serverBaseAddress);
+        services.AddHttpClient<ICustomerShareLinkService, HttpCustomerShareLinkService>(c => c.BaseAddress = serverBaseAddress);
         services.AddHttpClient<IBillingMilestoneService, HttpBillingMilestoneService>(c => c.BaseAddress = serverBaseAddress);
         services.AddHttpClient<IPaymentService, HttpPaymentService>(c => c.BaseAddress = serverBaseAddress);
         services.AddHttpClient<IArReportService, HttpArReportService>(c => c.BaseAddress = serverBaseAddress);
