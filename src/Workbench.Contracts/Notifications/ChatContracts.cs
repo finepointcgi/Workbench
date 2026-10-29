@@ -28,7 +28,7 @@ public static class NotificationGroups
     public static string For(string kind)
     {
         var k = kind.ToLowerInvariant();
-        if (k.StartsWith("timesheet.missing", StringComparison.Ordinal) || k.StartsWith("timesheet.reopened", StringComparison.Ordinal))
+        if (k.StartsWith("reminder.timesheet", StringComparison.Ordinal) || k.StartsWith("timesheet.missing", StringComparison.Ordinal) || k.StartsWith("timesheet.reopened", StringComparison.Ordinal))
         {
             return Timesheets;
         }

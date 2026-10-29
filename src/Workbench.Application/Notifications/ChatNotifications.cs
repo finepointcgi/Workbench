@@ -115,14 +115,14 @@ public sealed class ChatNotificationSender(
 
     public IChatChannelFormat? FormatFor(string kind) => formats.FirstOrDefault(f => f.Kind == kind);
 
-    /// <summary>Finds the recipients who chose a group these notifications belong to and posts for them. Never throws.</summary>
-    public async Task NotifyAsync(IReadOnlyList<Notification> notifications)
+    /// <summary>Finds the recipients who chose a group these notifications belong to and posts for them (everyone, when the sender already knows they want it). Never throws.</summary>
+    public async Task NotifyAsync(IReadOnlyList<Notification> notifications, bool postToAll = false)
     {
         try
         {
             foreach (var format in formats)
             {
-                await NotifyAsync(format, notifications);
+                await NotifyAsync(format, notifications, postToAll);
             }
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
@@ -131,7 +131,7 @@ public sealed class ChatNotificationSender(
         }
     }
 
-    private async Task NotifyAsync(IChatChannelFormat format, IReadOnlyList<Notification> notifications)
+    private async Task NotifyAsync(IChatChannelFormat format, IReadOnlyList<Notification> notifications, bool postToAll)
     {
         var emails = notifications.Select(n => n.RecipientEmail).Distinct().ToList();
         List<Post> posts = [];
@@ -147,7 +147,7 @@ public sealed class ChatNotificationSender(
             var choices = (await db.Set<ChatNotificationChoice>().AsNoTracking()
                     .Where(c => c.ChannelKind == format.Kind && emails.Contains(c.UserEmail)).ToListAsync())
                 .ToLookup(c => c.UserEmail, c => c.Group);
-            var wanted = notifications.Where(n => choices[n.RecipientEmail].Contains(NotificationGroups.For(n.Kind))).ToList();
+            var wanted = postToAll ? notifications.ToList() : notifications.Where(n => choices[n.RecipientEmail].Contains(NotificationGroups.For(n.Kind))).ToList();
             if (wanted.Count == 0)
             {
                 return;
