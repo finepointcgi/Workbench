@@ -190,6 +190,12 @@ public sealed class PermissionCheckingAccountingReportService(IAccountingReportS
 {
     private const string What = "see accounting reports";
 
+    public async Task<MonthReviewDto> GetMonthReviewAsync(Guid fiscalPeriodId, CancellationToken cancellationToken = default)
+    {
+        await access.RequireAsync(Permission.GlReportsView, What, cancellationToken);
+        return await inner.GetMonthReviewAsync(fiscalPeriodId, cancellationToken);
+    }
+
     public async Task<TrialBalanceDto> GetTrialBalanceAsync(Guid fiscalPeriodId, CancellationToken cancellationToken = default)
     {
         await access.RequireAsync(Permission.GlReportsView, What, cancellationToken);

@@ -57,6 +57,8 @@ public sealed class AllocationCloseCheck(AllocationEngine engine) : IPeriodClose
 /// <summary>Adds the expected burden (provisional rates on the financials actuals) to the GL reconciliation report.</summary>
 public sealed class BurdenedReconciliationReportService(IAccountingReportService inner, IWorkbenchDbContextFactory dbFactory) : IAccountingReportService
 {
+    public Task<MonthReviewDto> GetMonthReviewAsync(Guid fiscalPeriodId, CancellationToken cancellationToken = default) => inner.GetMonthReviewAsync(fiscalPeriodId, cancellationToken);
+
     public Task<TrialBalanceDto> GetTrialBalanceAsync(Guid fiscalPeriodId, CancellationToken cancellationToken = default) => inner.GetTrialBalanceAsync(fiscalPeriodId, cancellationToken);
 
     public Task<LedgerDetailDto> GetLedgerDetailAsync(LedgerQuery query, CancellationToken cancellationToken = default) => inner.GetLedgerDetailAsync(query, cancellationToken);
