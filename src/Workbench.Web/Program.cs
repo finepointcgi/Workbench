@@ -4,6 +4,7 @@ using Workbench.Application;
 using Workbench.Costpoint;
 using Workbench.Infrastructure;
 using Workbench.Infrastructure.Persistence;
+using Workbench.Web.Calendar;
 using Workbench.Web.Components;
 using Workbench.Web.Diagnostics;
 using Workbench.Web.Hubs;
@@ -130,6 +131,7 @@ app.MapWorkbenchLiveUpdatesHub();
 app.MapWorkbenchNotificationsHub();
 app.MapWorkbenchEmailEvents(); // Bounce and complaint webhooks from SendGrid and SES (docs/operations/email.md).
 app.MapWorkbenchGitLabWebhooks(); // GitLab issue, epic and milestone webhooks for linked projects (docs/integrations/gitlab.md).
+app.MapWorkbenchCalendarFeed(); // Read-only per-person .ics feeds behind a private token.
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode()
     .AddAdditionalAssemblies(typeof(Workbench.Ui.Routes).Assembly);

@@ -100,6 +100,7 @@ public static class DependencyInjection
         SalesTax.SalesTaxRegistration.AddWorkbenchSalesTax(services); // Sales and use tax: rates, codes, exemptions, invoice tax at approval, use tax on posted bills, the return; above AddWorkbenchIdentity.
         Integrations.IntegrationRegistration.AddWorkbenchIntegrations(services); // Webhooks (outbox + dispatcher), API keys and connectors (Teams, Slack, GL export, report export); Admin-only; above AddWorkbenchIdentity.
         Compliance.ComplianceRegistration.AddWorkbenchCompliance(services); // CPSR procurement files and readiness, CAS disclosure statements (DS-1) and the 401/402 check; above AddWorkbenchIdentity.
+        Calendar.CalendarRegistration.AddWorkbenchCalendarFeed(services); // Read-only per-person .ics calendar feed (leave, holidays, due tasks, milestones, timesheet due dates).
 
         services.AddWorkbenchSourcing(); // RFQs and quotes, the supplier portal and EDI; decorates IPurchaseOrderService (850 on issue); above AddWorkbenchIdentity.
         Receipts.ReceiptRegistration.AddWorkbenchReceipts(services); // Receipt library ("My receipts"), reading receipts and folios (PDF text, assistant when on), per diem lodging check; above AddWorkbenchIdentity.

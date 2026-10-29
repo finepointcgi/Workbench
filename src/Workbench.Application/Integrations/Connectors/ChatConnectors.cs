@@ -104,7 +104,10 @@ public sealed class TeamsConnector(IOutboundTransport transport, OutboundUrlGuar
     public override string Description => "Posts the events you choose (approvals, payments, period close) to a Teams channel.";
     protected override string UrlHelp => "In Teams, add the Workflows app's \"Post to a channel when a webhook request is received\" to the channel and paste its URL.";
 
-    protected override JsonObject Format(ChatMessage message)
+    protected override JsonObject Format(ChatMessage message) => Card(message);
+
+    /// <summary>The Teams message for <paramref name="message"/>: an adaptive card with its facts and an "Open in Workbench" button.</summary>
+    public static JsonObject Card(ChatMessage message)
     {
         var body = new JsonArray
         {
