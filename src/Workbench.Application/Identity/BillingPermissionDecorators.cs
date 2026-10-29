@@ -17,6 +17,7 @@ public static class BillingPermissionRegistration
     public static IServiceCollection AddWorkbenchBillingPermissions(this IServiceCollection services)
     {
         services.Decorate<IInvoiceService, PermissionCheckingInvoiceService>();
+        services.Decorate<ICustomerShareLinkService, PermissionCheckingCustomerShareLinkService>();
         services.Decorate<IBillingMilestoneService, PermissionCheckingBillingMilestoneService>();
         services.Decorate<IPaymentService, PermissionCheckingPaymentService>();
         services.Decorate<IArReportService, PermissionCheckingArReportService>();
@@ -312,5 +313,27 @@ public sealed class PermissionCheckingArReportService(IArReportService inner, Bi
     {
         await access.RequireAsync(Permission.BillingReportsView, cancellationToken);
         return await inner.SendOverdueRemindersAsync(cancellationToken);
+    }
+}
+
+/// <summary>Customer links are Finance's (billing managers): they decide what a customer may see and for how long.</summary>
+public sealed class PermissionCheckingCustomerShareLinkService(ICustomerShareLinkService inner, BillingAccess access) : ICustomerShareLinkService
+{
+    public async Task<IReadOnlyList<CustomerShareLinkDto>> ListAsync(Guid contractId, CancellationToken cancellationToken = default)
+    {
+        await access.RequireAsync(Permission.BillingInvoicesManage, cancellationToken);
+        return await inner.ListAsync(contractId, cancellationToken);
+    }
+
+    public async Task<CreatedCustomerShareLinkDto> CreateAsync(Guid contractId, CreateCustomerShareLinkRequest request, CancellationToken cancellationToken = default)
+    {
+        await access.RequireAsync(Permission.BillingInvoicesManage, cancellationToken);
+        return await inner.CreateAsync(contractId, request, cancellationToken);
+    }
+
+    public async Task<CustomerShareLinkDto> RevokeAsync(Guid contractId, Guid linkId, CancellationToken cancellationToken = default)
+    {
+        await access.RequireAsync(Permission.BillingInvoicesManage, cancellationToken);
+        return await inner.RevokeAsync(contractId, linkId, cancellationToken);
     }
 }

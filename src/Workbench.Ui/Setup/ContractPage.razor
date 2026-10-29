@@ -177,6 +177,9 @@ else
         <MudTabPanel Text="Ceilings" data-testid="tab-ceilings">
             <Workbench.Ui.Ceilings.CeilingsPanel ContractId="detail.Id" />
         </MudTabPanel>
+        <MudTabPanel Text="Customer link" data-testid="tab-customer-link">
+            <Workbench.Ui.Setup.CustomerLinksPanel ContractId="detail.Id" />
+        </MudTabPanel>
         <MudTabPanel Text="Closeout" data-testid="tab-closeout">
             <Workbench.Ui.Ceilings.CloseoutPanel Scope="Workbench.Contracts.Closeout.CloseoutScope.Contract" TargetId="detail.Id" Changed="ReloadDetailAsync" />
         </MudTabPanel>

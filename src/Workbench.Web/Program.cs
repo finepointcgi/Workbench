@@ -13,6 +13,7 @@ using Workbench.Web.Notifications;
 using Workbench.Web.Security;
 using Workbench.Web.Supplier;
 using Workbench.Web.Forms;
+using Workbench.Web.Customer;
 using Workbench.Web.Tenancy;
 using Workbench.Web.Storage;
 
@@ -100,10 +101,11 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-// API and hub callers get bare status codes (401, 403, 404), not the not-found page.
+// API and hub callers, and scripts or images, get bare status codes (401, 403, 404); a person loading a page is sent to the not-found page.
+// A redirect, not a re-execute: re-executing left the 404 on the response and Blazor then rendered nothing, a blank white page.
 app.UseWhen(
-    context => !AuthenticationSetup.IsApiRequest(context.Request),
-    branch => branch.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true));
+    context => !AuthenticationSetup.IsApiRequest(context.Request) && AuthenticationSetup.IsPageNavigation(context.Request),
+    branch => branch.UseStatusCodePagesWithRedirects("/not-found"));
 app.UseHttpsRedirection();
 app.UseRequestLocalization(new Microsoft.AspNetCore.Builder.RequestLocalizationOptions()
     .SetDefaultCulture("en-US").AddSupportedCultures("en-US").AddSupportedUICultures("en-US")); // the request's culture, which Blazor's circuit takes
@@ -123,6 +125,7 @@ app.MapWorkbenchScim();
 app.MapWorkbenchApi();
 app.MapWorkbenchSupplierPortal();
 app.MapWorkbenchPublicForms(); // Public form links /f/{token} (wave E).
+app.MapWorkbenchCustomerView(); // Customer links /c/{token}: one contract's funding and invoice status, read only.
 app.MapWorkbenchLiveUpdatesHub();
 app.MapWorkbenchNotificationsHub();
 app.MapWorkbenchEmailEvents(); // Bounce and complaint webhooks from SendGrid and SES (docs/operations/email.md).

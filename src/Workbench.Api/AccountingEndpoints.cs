@@ -47,6 +47,7 @@ internal static class AccountingEndpoints
         gl.MapGet("/reports/trial-balance/{periodId:guid}", (Guid periodId, IAccountingReportService s, CancellationToken ct) => s.GetTrialBalanceAsync(periodId, ct));
         gl.MapGet("/reports/ledger", (Guid? accountId, DateOnly? from, DateOnly? to, Guid? orgUnitId, Guid? projectId, Guid? wbsElementId, int? take,
             IAccountingReportService s, CancellationToken ct) => s.GetLedgerDetailAsync(new LedgerQuery(accountId, from, to, orgUnitId, projectId, wbsElementId, take ?? 2000), ct));
+        gl.MapGet("/reports/month-review/{periodId:guid}", (Guid periodId, IAccountingReportService s, CancellationToken ct) => s.GetMonthReviewAsync(periodId, ct));
         gl.MapGet("/reports/income-statement/{periodId:guid}", (Guid periodId, IAccountingReportService s, CancellationToken ct) => s.GetIncomeStatementAsync(periodId, ct));
         gl.MapGet("/reports/balance-sheet/{periodId:guid}", (Guid periodId, IAccountingReportService s, CancellationToken ct) => s.GetBalanceSheetAsync(periodId, ct));
         gl.MapGet("/reports/project-cost", (Guid? projectId, Guid? periodId, IAccountingReportService s, CancellationToken ct) => s.GetProjectCostLedgerAsync(projectId, periodId, ct));

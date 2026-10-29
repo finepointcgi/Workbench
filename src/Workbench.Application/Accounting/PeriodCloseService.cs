@@ -151,7 +151,7 @@ public sealed class PeriodCloseService(
 
         var openSheets = sheetsInPeriod.Where(t => t.Status != TimesheetStatus.Approved).OrderBy(t => t.PeriodStart).ToList();
         var timesheets = Check(CloseCheckKind.TimesheetsApproved, "All timesheets approved", openSheets.Count,
-            openSheets.Count == 0 ? $"All {sheetsInPeriod.Count} timesheets with hours in {period.Name} are approved" : $"{openSheets.Count} timesheet(s) not approved",
+            openSheets.Count == 0 ? $"All {sheetsInPeriod.Count} timesheets with hours in {period.Name} are approved" : NotApprovedSummary(openSheets.Count, openSheets.Count(t => t.Status == TimesheetStatus.Submitted), "timesheet", "timesheets"),
             openSheets.Select(t => $"{employees.GetValueOrDefault(t.EmployeeId, "Unknown")}, week of {t.PeriodStart:yyyy-MM-dd}: {t.Status}"));
 
         // 2. ODCs and expenses: every one dated in the period is approved or rejected.
@@ -164,7 +164,7 @@ public sealed class PeriodCloseService(
         }
 
         var odcs = Check(CloseCheckKind.OdcsDecided, "All ODCs and expenses approved or rejected", undecided.Count,
-            undecided.Count == 0 ? "No ODCs or expenses are waiting" : $"{undecided.Count} ODC(s) or expense line(s) still draft or submitted",
+            undecided.Count == 0 ? "No ODCs or expenses are waiting" : NotApprovedSummary(undecided.Count, undecided.Count(o => o.Status == OdcStatus.Submitted), "ODC or expense line", "ODC or expense lines"),
             undecided.Select(o => $"{o.IncurredOn:yyyy-MM-dd} {o.Description} ({o.Amount:C}): {o.Status}"));
 
         // 3. Nothing unposted: approved items all have entries, no stale entries, no draft journal entries.
@@ -183,7 +183,7 @@ public sealed class PeriodCloseService(
 
         var drafts = await draftQuery.ToListAsync(ct);
         var unpostedCount = unposted.Count + drafts.Count;
-        var posting = Check(CloseCheckKind.NothingUnposted, "Unposted items = 0", unpostedCount,
+        var posting = Check(CloseCheckKind.NothingUnposted, "Everything approved is posted", unpostedCount,
             unpostedCount == 0 ? "Every approved item is posted" : $"{unposted.Count} unposted item(s), {drafts.Count} draft journal entr{(drafts.Count == 1 ? "y" : "ies")}",
             unposted.Select(u => (u.IsStale ? "Needs reversal: " : "Not posted: ") + u.Description + (u.Problem is null ? "" : $" ({u.Problem})"))
                 .Concat(drafts.Select(d => $"Draft entry: {d.Description}")));
@@ -217,10 +217,24 @@ public sealed class PeriodCloseService(
 
     private static string RequireReason(string? reason) =>
         string.IsNullOrWhiteSpace(reason) ? throw new ArgumentException("A reason is required.") : reason.Trim();
+
+    /// <summary>Says which part an approver can fix (submitted, waiting in Approvals) and which part its owner must submit first.</summary>
+    private static string NotApprovedSummary(int total, int submitted, string one, string many)
+    {
+        var drafts = total - submitted;
+        var noun = total == 1 ? one : many;
+        return (submitted, drafts) switch
+        {
+            (_, 0) => $"{total} {noun} waiting for approval: decide {(total == 1 ? "it" : "them")} in Approvals",
+            (0, _) => $"{total} {noun} not submitted yet: the person who entered {(total == 1 ? "it" : "them")} has to submit or delete {(total == 1 ? "it" : "them")}",
+            _ => $"{total} {noun} not approved: {submitted} waiting in Approvals, {drafts} not submitted yet (their owners have to submit them)",
+        };
+    }
 }
 
 /// <summary>An extra period-close check contributed by another accounting module (registered as a scoped service).</summary>
 public interface IPeriodCloseCheck
 {
     Task<CloseCheckDto> CheckAsync(IWorkbenchDbContext db, FiscalPeriod period, CancellationToken cancellationToken);
+
 }

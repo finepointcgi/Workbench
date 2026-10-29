@@ -274,7 +274,7 @@ public sealed class NavMenuTests
 
         var finance = nav.FindAll("[data-testid='nav-finance'] a[href]").Select(a => a.TextContent.Trim()).ToList();
         Assert.Equal(["Accounting", "Billing & AR", "Payables & purchasing", "Cash", "Assets", "Payroll", "Revenue & compliance", "Planning"], finance);
-        Assert.StartsWith("accounting/journal accounting/close accounting/recurring", nav.Find("[data-testid='nav-group-Accounting']").GetAttribute("data-pages"));
+        Assert.StartsWith("accounting/journal accounting/close accounting/month-review accounting/recurring", nav.Find("[data-testid='nav-group-Accounting']").GetAttribute("data-pages"));
         Assert.EndsWith("accounting/accounts accounting/posting-rules", nav.Find("[data-testid='nav-group-Accounting']").GetAttribute("data-pages"));
         Assert.StartsWith("purchasing/bills purchasing/payments purchasing/orders", nav.Find("[data-testid='nav-group-Payables & purchasing']").GetAttribute("data-pages"));
         Assert.Equal("Setup", nav.FindAll("[data-testid='nav-admin'] a[href]")[0].TextContent.Trim());
