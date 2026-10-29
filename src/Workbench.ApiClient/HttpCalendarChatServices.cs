@@ -21,26 +21,35 @@ public sealed class HttpCalendarFeedService(HttpClient http) : ICalendarFeedServ
         await (await http.DeleteAsync(Base, cancellationToken)).EnsureOkAsync(cancellationToken);
 }
 
-public sealed class HttpTeamsNotificationService(HttpClient http) : ITeamsNotificationService
+public abstract class HttpChatNotificationService(HttpClient http, string kind) : IChatNotificationService
 {
+    private readonly string _admin = $"api/v1/integrations/{kind}";
+    private readonly string _mine = $"api/v1/me/{kind}";
+
+    public string Kind => kind;
+
     public async Task<ChatChannelDto> GetChannelAsync(CancellationToken cancellationToken = default) =>
-        await (await http.GetAsync("api/v1/integrations/teams", cancellationToken)).ReadAsync<ChatChannelDto>(cancellationToken);
+        await (await http.GetAsync(_admin, cancellationToken)).ReadAsync<ChatChannelDto>(cancellationToken);
 
     public async Task<ChatChannelDto> ConnectAsync(ConnectChatChannelRequest request, CancellationToken cancellationToken = default) =>
-        await (await http.PutAsJsonAsync("api/v1/integrations/teams", request, cancellationToken)).ReadAsync<ChatChannelDto>(cancellationToken);
+        await (await http.PutAsJsonAsync(_admin, request, cancellationToken)).ReadAsync<ChatChannelDto>(cancellationToken);
 
     public async Task DisconnectAsync(CancellationToken cancellationToken = default) =>
-        await (await http.DeleteAsync("api/v1/integrations/teams", cancellationToken)).EnsureOkAsync(cancellationToken);
+        await (await http.DeleteAsync(_admin, cancellationToken)).EnsureOkAsync(cancellationToken);
 
     public async Task<ChatChannelDto> SendTestAsync(CancellationToken cancellationToken = default) =>
-        await (await http.PostAsync("api/v1/integrations/teams/test", null, cancellationToken)).ReadAsync<ChatChannelDto>(cancellationToken);
+        await (await http.PostAsync($"{_admin}/test", null, cancellationToken)).ReadAsync<ChatChannelDto>(cancellationToken);
 
     public async Task<ChatChoicesDto> GetMineAsync(CancellationToken cancellationToken = default) =>
-        await (await http.GetAsync("api/v1/me/teams", cancellationToken)).ReadAsync<ChatChoicesDto>(cancellationToken);
+        await (await http.GetAsync(_mine, cancellationToken)).ReadAsync<ChatChoicesDto>(cancellationToken);
 
     public async Task<ChatChoicesDto> SetMineAsync(SaveChatChoicesRequest request, CancellationToken cancellationToken = default) =>
-        await (await http.PutAsJsonAsync("api/v1/me/teams", request, cancellationToken)).ReadAsync<ChatChoicesDto>(cancellationToken);
+        await (await http.PutAsJsonAsync(_mine, request, cancellationToken)).ReadAsync<ChatChoicesDto>(cancellationToken);
 }
+
+public sealed class HttpTeamsNotificationService(HttpClient http) : HttpChatNotificationService(http, ChatChannelKinds.Teams), ITeamsNotificationService;
+
+public sealed class HttpSlackNotificationService(HttpClient http) : HttpChatNotificationService(http, ChatChannelKinds.Slack), ISlackNotificationService;
 
 public sealed class HttpReminderSettingsService(HttpClient http) : IReminderSettingsService
 {

@@ -14,7 +14,16 @@ namespace Workbench.Application.Notifications;
 public sealed record NotificationRequest(string Kind, string Title, string Body, Guid? SheetId, Guid? ItemId, string? Link = null, DeliveryChoice? Delivery = null);
 
 /// <summary>Where one notification goes, chosen by the sender instead of the recipient's general settings (reminders carry their own choices).</summary>
-public sealed record DeliveryChoice(bool Email, bool Teams);
+public sealed record DeliveryChoice(bool Email, bool Teams, bool Slack = false)
+{
+    /// <summary>True when the sender chose the chat product of <paramref name="chatKind"/> (a <see cref="ChatChannelKinds"/> value).</summary>
+    public bool Wants(string chatKind) => chatKind switch
+    {
+        ChatChannelKinds.Teams => Teams,
+        ChatChannelKinds.Slack => Slack,
+        _ => false,
+    };
+}
 
 /// <summary>
 /// Creates notifications: saves one per recipient, pushes it to the live feed and emails people who chose
@@ -105,10 +114,10 @@ public sealed class Notifier(
             }
         }
 
-        // Also to the Teams channel for the people who chose it; posts in the background and never fails the caller.
-        if (request.Delivery is not { Teams: false } && ChatSender() is { } chat)
+        // Also to the connected chat channels (Teams, Slack) for the people who chose them; posts in the background and never fails the caller.
+        if (request.Delivery is not { Teams: false, Slack: false } && ChatSender() is { } chat)
         {
-            await chat.NotifyAsync(created, postToAll: request.Delivery is { Teams: true });
+            await (request.Delivery is { } delivery ? chat.NotifyAsync(created, delivery) : chat.NotifyAsync(created));
         }
 
         foreach (var notification in created)
