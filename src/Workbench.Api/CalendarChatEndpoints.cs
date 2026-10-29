@@ -6,7 +6,7 @@ using Workbench.Contracts.Notifications;
 
 namespace Workbench.Api;
 
-/// <summary>The person's calendar feed (<c>/api/v1/me/calendar-feed</c>) Teams notifications and reminder choices (<c>/api/v1/me/teams</c>, <c>/api/v1/me/reminders</c>, <c>/api/v1/integrations/teams</c>).</summary>
+/// <summary>The person's calendar feed (<c>/api/v1/me/calendar-feed</c>) Teams and Slack notifications and reminder choices (<c>/api/v1/me/teams</c>, <c>/api/v1/me/slack</c>, <c>/api/v1/me/reminders</c>, <c>/api/v1/integrations/teams</c>, <c>/api/v1/integrations/slack</c>).</summary>
 internal static class CalendarChatEndpoints
 {
     public static void MapCalendarChatEndpoints(this RouteGroupBuilder v1)
@@ -34,6 +34,20 @@ internal static class CalendarChatEndpoints
         admin.MapPut("/", (ConnectChatChannelRequest r, ITeamsNotificationService s, CancellationToken ct) => s.ConnectAsync(r, ct));
         admin.MapPost("/test", (ITeamsNotificationService s, CancellationToken ct) => s.SendTestAsync(ct));
         admin.MapDelete("/", async (ITeamsNotificationService s, CancellationToken ct) =>
+        {
+            await s.DisconnectAsync(ct);
+            return Results.NoContent();
+        });
+
+        var mineSlack = v1.MapGroup("/me/slack").WithTags("Notifications");
+        mineSlack.MapGet("/", (ISlackNotificationService s, CancellationToken ct) => s.GetMineAsync(ct));
+        mineSlack.MapPut("/", (SaveChatChoicesRequest r, ISlackNotificationService s, CancellationToken ct) => s.SetMineAsync(r, ct));
+
+        var adminSlack = v1.MapGroup("/integrations/slack").WithTags("Integrations");
+        adminSlack.MapGet("/", (ISlackNotificationService s, CancellationToken ct) => s.GetChannelAsync(ct));
+        adminSlack.MapPut("/", (ConnectChatChannelRequest r, ISlackNotificationService s, CancellationToken ct) => s.ConnectAsync(r, ct));
+        adminSlack.MapPost("/test", (ISlackNotificationService s, CancellationToken ct) => s.SendTestAsync(ct));
+        adminSlack.MapDelete("/", async (ISlackNotificationService s, CancellationToken ct) =>
         {
             await s.DisconnectAsync(ct);
             return Results.NoContent();

@@ -14557,6 +14557,9 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                     b.Property<bool>("ViaEmail")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("ViaSlack")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("ViaTeams")
                         .HasColumnType("boolean");
 

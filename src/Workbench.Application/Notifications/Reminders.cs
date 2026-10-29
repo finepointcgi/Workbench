@@ -90,12 +90,12 @@ public sealed class ReminderGate(IWorkbenchDbContextFactory dbFactory, Notifier 
         }
     }
 
-    /// <summary>Delivers a claimed reminder: the bell always, then email and Teams as the person chose. Never throws.</summary>
+    /// <summary>Delivers a claimed reminder: the bell always, then email, Teams and Slack as the person chose. Never throws.</summary>
     public async Task SendAsync(string email, ReminderPreference preference, string kind, string title, string body, string link)
     {
         try
         {
-            await notifier.NotifyAsync([email], new NotificationRequest(kind, title, body, null, null, link, new DeliveryChoice(preference.ViaEmail, preference.ViaTeams)));
+            await notifier.NotifyAsync([email], new NotificationRequest(kind, title, body, null, null, link, new DeliveryChoice(preference.ViaEmail, preference.ViaTeams, preference.ViaSlack)));
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -115,8 +115,9 @@ public sealed class ReminderSettingsService(IWorkbenchDbContextFactory dbFactory
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var row = await db.Set<ReminderPreference>().AsNoTracking().FirstOrDefaultAsync(p => p.UserEmail == me, cancellationToken)
             ?? new ReminderPreference { UserEmail = me };
-        var teams = await db.Set<ChatChannel>().AsNoTracking().AnyAsync(c => c.Kind == ChatChannelKinds.Teams && c.IsActive, cancellationToken);
-        return new ReminderSettingsDto(row.TimesheetEnabled, row.ApprovalsEnabled, row.ViaEmail, row.ViaTeams, row.QuietStartHour, row.QuietEndHour, teams);
+        var connected = await db.Set<ChatChannel>().AsNoTracking().Where(c => c.IsActive).Select(c => c.Kind).ToListAsync(cancellationToken);
+        return new ReminderSettingsDto(row.TimesheetEnabled, row.ApprovalsEnabled, row.ViaEmail, row.ViaTeams, row.QuietStartHour, row.QuietEndHour,
+            connected.Contains(ChatChannelKinds.Teams), row.ViaSlack, connected.Contains(ChatChannelKinds.Slack));
     }
 
     public async Task<ReminderSettingsDto> SetMineAsync(SaveReminderSettingsRequest request, CancellationToken cancellationToken = default)
@@ -146,6 +147,7 @@ public sealed class ReminderSettingsService(IWorkbenchDbContextFactory dbFactory
             row.ApprovalsEnabled = request.ApprovalsEnabled;
             row.ViaEmail = request.ViaEmail;
             row.ViaTeams = request.ViaTeams;
+            row.ViaSlack = request.ViaSlack;
             row.QuietStartHour = request.QuietStartHour;
             row.QuietEndHour = request.QuietEndHour;
             await db.SaveChangesAsync(cancellationToken);
