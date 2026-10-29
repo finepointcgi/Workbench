@@ -35,6 +35,8 @@ public sealed class ReconciliationSources(IServiceProvider services, IWorkbenchD
         ReconReportKind.TrialBalance => TrialBalanceAsync(scope, ct),
         ReconReportKind.ProjectCost => ProjectCostAsync(scope, ct),
         ReconReportKind.LaborHours => LaborHoursAsync(scope, ct),
+        ReconReportKind.UnanetTimesheets => LaborHoursAsync(scope with { ProjectLevel = true }, ct),
+        ReconReportKind.UnanetProjectCost => UnanetProjectCostAsync(scope, ct),
         ReconReportKind.ArAging => ArAgingAsync(scope, ct),
         ReconReportKind.ApAging => ApAgingAsync(scope, ct),
         ReconReportKind.RevenueByProject => RevenueAsync(scope, ct),
@@ -46,7 +48,8 @@ public sealed class ReconciliationSources(IServiceProvider services, IWorkbenchD
     {
         ReconReportKind.TrialBalance => TrialBalanceDetailAsync(scope, matches, ct),
         ReconReportKind.ProjectCost => ProjectCostDetailAsync(scope, matches, ct),
-        ReconReportKind.LaborHours => LaborDetailAsync(scope, matches, ct),
+        ReconReportKind.LaborHours or ReconReportKind.UnanetTimesheets => LaborDetailAsync(scope, matches, ct),
+        ReconReportKind.UnanetProjectCost => UnanetProjectCostDetailAsync(scope, matches, ct),
         ReconReportKind.ArAging => ArDetailAsync(scope, matches, ct),
         ReconReportKind.ApAging => ApDetailAsync(scope, matches, ct),
         ReconReportKind.RevenueByProject => RevenueDetailAsync(scope, matches, ct),
@@ -239,6 +242,21 @@ public sealed class ReconciliationSources(IServiceProvider services, IWorkbenchD
         return new ReconDetail(["Date", "Employee", "WBS", "PLC", "Hours", "Cost rate", "Labor cost"],
             entries.Take(MaxDetailRows).Select(e => (IReadOnlyList<string>)[Day(e.Date), $"{e.EmployeeNumber} {e.EmployeeName}", e.WbsCode, e.LaborCategory, Money(e.Hours),
                 e.Rate.ToString("0.0000", CultureInfo.InvariantCulture), Money(e.Cost)]).ToList(),
+            $"Approved time entries {Day(scope.From)} to {Day(scope.To)}; cost at the rate in force on each day.");
+    }
+
+    // ---- Unanet parallel run: compared at project level ----
+
+    private async Task<IReadOnlyList<WorkbenchFigure>> UnanetProjectCostAsync(ReconScope scope, CancellationToken ct) =>
+        (await LaborEntriesAsync(scope, ct)).GroupBy(e => e.ProjectCode, StringComparer.OrdinalIgnoreCase)
+            .Select(g => new WorkbenchFigure([g.Key], null, new Dictionary<string, decimal> { ["Hours"] = g.Sum(e => e.Hours), ["LaborCost"] = g.Sum(e => e.Cost) })).ToList();
+
+    private async Task<ReconDetail> UnanetProjectCostDetailAsync(ReconScope scope, Func<IReadOnlyList<string>, bool> matches, CancellationToken ct)
+    {
+        var entries = (await LaborEntriesAsync(scope, ct)).Where(e => matches([e.ProjectCode])).OrderBy(e => e.Date).ThenBy(e => e.EmployeeNumber, StringComparer.Ordinal).ToList();
+        return new ReconDetail(["Date", "Employee", "WBS", "PLC", "Hours", "Cost rate", "Labor cost"],
+            entries.Take(MaxDetailRows).Select(e => (IReadOnlyList<string>)[Day(e.Date), $"{e.EmployeeNumber} {e.EmployeeName}", e.WbsCode, e.LaborCategory, Money(e.Hours),
+                Money(e.Rate), Money(e.Cost)]).ToList(),
             $"Approved time entries {Day(scope.From)} to {Day(scope.To)}; cost at the rate in force on each day.");
     }
 
