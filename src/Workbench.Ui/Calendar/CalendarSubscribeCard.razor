@@ -1,0 +1,123 @@
+@* "Add to my calendar": a private link that puts leave, holidays, due tasks, milestones and timesheet due dates in Outlook, Google or Apple Calendar. *@
+@using Microsoft.JSInterop
+@using Workbench.Contracts.Calendar
+@inject ICalendarFeedService Feed
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<MudPaper Outlined="true" Class="pa-4 mt-4 mb-4" Style="max-width:900px" data-testid="calendar-card">
+    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">Add to my calendar</MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+        See your approved leave, company holidays, tasks due, milestones and timesheet due dates in Outlook, Google Calendar or Apple Calendar.
+        It stays up to date by itself and is read-only: nothing you do in your calendar changes Workbench.
+    </MudText>
+
+    @if (_loading)
+    {
+        <MudProgressLinear aria-label="Loading" Indeterminate="true" />
+    }
+    else if (_feed is not { Enabled: true })
+    {
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.CalendarMonth" Disabled="_busy" OnClick="TurnOnAsync" data-testid="calendar-on">
+            Get my calendar link
+        </MudButton>
+    }
+    else
+    {
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap" Class="mb-2">
+            <MudTextField T="string" Value="@AbsoluteUrl" ReadOnly="true" Variant="Variant.Outlined" Margin="Margin.Dense" Label="Your private calendar link"
+                          Style="flex:1; min-width:260px" data-testid="calendar-url" />
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.ContentCopy" OnClick="CopyAsync" data-testid="calendar-copy">Copy link</MudButton>
+        </MudStack>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-2">
+            Anyone with this link can see your calendar, so keep it to yourself. If it gets shared, get a new link: the old one stops working.
+        </MudText>
+        <MudStack Row="true" Spacing="2" Class="mb-3">
+            <MudButton Size="Size.Small" Variant="Variant.Outlined" Disabled="_busy" OnClick="NewLinkAsync" data-testid="calendar-rotate">Get a new link</MudButton>
+            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" Disabled="_busy" OnClick="TurnOffAsync" data-testid="calendar-off">Turn off</MudButton>
+        </MudStack>
+
+        <MudExpansionPanels Dense="true" Elevation="0" Class="wb-calendar-howto">
+            <MudExpansionPanel Text="How to add it to Outlook" data-testid="howto-outlook">
+                <ol class="mb-0">
+                    <li>In Outlook (web or new Outlook), open <strong>Calendar</strong> and choose <strong>Add calendar</strong>.</li>
+                    <li>Choose <strong>Subscribe from web</strong>, paste your link and give it a name like "Workbench".</li>
+                    <li>Choose <strong>Import</strong>. In classic Outlook: File, Account Settings, Internet Calendars, New, paste the link.</li>
+                </ol>
+            </MudExpansionPanel>
+            <MudExpansionPanel Text="How to add it to Google Calendar" data-testid="howto-google">
+                <ol class="mb-0">
+                    <li>On a computer, open Google Calendar. Next to <strong>Other calendars</strong> on the left, click <strong>+</strong> and choose <strong>From URL</strong>.</li>
+                    <li>Paste your link and click <strong>Add calendar</strong>.</li>
+                    <li>Google checks for changes every few hours, so new items can take a while to appear. (This doesn't work from the Google Calendar phone app: add it on a computer and it shows up on your phone.)</li>
+                </ol>
+            </MudExpansionPanel>
+            <MudExpansionPanel Text="How to add it to Apple Calendar" data-testid="howto-apple">
+                <ol class="mb-0">
+                    <li>On a Mac, open Calendar and choose <strong>File, New Calendar Subscription</strong>. Paste your link and click <strong>Subscribe</strong>.</li>
+                    <li>On an iPhone or iPad: Settings, Calendar, Accounts, Add Account, Other, <strong>Add Subscribed Calendar</strong>, paste your link and tap Next.</li>
+                </ol>
+            </MudExpansionPanel>
+        </MudExpansionPanels>
+    }
+</MudPaper>
+
+@code {
+    private CalendarFeedDto? _feed;
+    private bool _loading = true;
+    private bool _busy;
+
+    private string AbsoluteUrl => _feed?.Url is { } url ? Navigation.ToAbsoluteUri(url).ToString() : "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RunAsync(async () => _feed = await Feed.GetMineAsync());
+        _loading = false;
+    }
+
+    private Task TurnOnAsync() => RunAsync(async () => _feed = await Feed.EnableAsync());
+
+    private Task NewLinkAsync() => RunAsync(async () =>
+    {
+        _feed = await Feed.RotateAsync();
+        Snackbar.Add("New link ready. Add it to your calendar again; the old one no longer works.", Severity.Success);
+    });
+
+    private Task TurnOffAsync() => RunAsync(async () =>
+    {
+        await Feed.RevokeAsync();
+        _feed = new CalendarFeedDto(false, null);
+        Snackbar.Add("Calendar link turned off.", Severity.Info);
+    });
+
+    private async Task CopyAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", AbsoluteUrl);
+            Snackbar.Add("Link copied", Severity.Success);
+        }
+        catch (Exception ex) when (ex is JSException or InvalidOperationException)
+        {
+            Snackbar.Add("Couldn't copy. Select the link and copy it by hand.", Severity.Warning);
+        }
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        try
+        {
+            await action();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or ArgumentException or UnauthorizedAccessException)
+        {
+            Snackbar.Add($"Couldn't do that: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

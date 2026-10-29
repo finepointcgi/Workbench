@@ -20,6 +20,7 @@ public static class ApprovalRegistration
         services.AddScoped<IApprovalInboxService, ApprovalInboxService>();
         services.AddScoped<IApprovalDelegationService, ApprovalDelegationService>();
         services.AddSingleton<ApprovalEmailTokens>();
+        services.AddSingleton<Notifications.INotificationChatLinks, ApprovalChatLinks>(); // Teams messages about approvals link to the document.
         services.AddScoped<IApprovalEmailLinkService, ApprovalEmailLinkService>();
         services.AddSingleton<Notifications.INotificationEmailExtras, ApprovalEmailActions>();
         services.AddScoped<ApprovalReminderCheck>();

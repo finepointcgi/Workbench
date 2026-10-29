@@ -11,6 +11,8 @@ public static class AutomationClients
     {
         services.AddHttpClient<IRuleService, HttpRuleService>(client => client.BaseAddress = serverBaseAddress);
         services.AddHttpClient<INotificationService, HttpNotificationService>(client => client.BaseAddress = serverBaseAddress);
+        services.AddHttpClient<Contracts.Calendar.ICalendarFeedService, HttpCalendarFeedService>(client => client.BaseAddress = serverBaseAddress);
+        services.AddHttpClient<ITeamsNotificationService, HttpTeamsNotificationService>(client => client.BaseAddress = serverBaseAddress);
         services.AddSingleton<INotificationFeed>(_ => new SignalRNotificationFeed(serverBaseAddress));
         return services;
     }
