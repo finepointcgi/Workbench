@@ -6,7 +6,7 @@ using Workbench.Contracts.Notifications;
 
 namespace Workbench.Api;
 
-/// <summary>The person's calendar feed (<c>/api/v1/me/calendar-feed</c>) and Teams notifications (<c>/api/v1/me/teams</c>, <c>/api/v1/integrations/teams</c>).</summary>
+/// <summary>The person's calendar feed (<c>/api/v1/me/calendar-feed</c>) Teams notifications and reminder choices (<c>/api/v1/me/teams</c>, <c>/api/v1/me/reminders</c>, <c>/api/v1/integrations/teams</c>).</summary>
 internal static class CalendarChatEndpoints
 {
     public static void MapCalendarChatEndpoints(this RouteGroupBuilder v1)
@@ -24,6 +24,10 @@ internal static class CalendarChatEndpoints
         var mine = v1.MapGroup("/me/teams").WithTags("Notifications");
         mine.MapGet("/", (ITeamsNotificationService s, CancellationToken ct) => s.GetMineAsync(ct));
         mine.MapPut("/", (SaveChatChoicesRequest r, ITeamsNotificationService s, CancellationToken ct) => s.SetMineAsync(r, ct));
+
+        var reminders = v1.MapGroup("/me/reminders").WithTags("Notifications");
+        reminders.MapGet("/", (IReminderSettingsService s, CancellationToken ct) => s.GetMineAsync(ct));
+        reminders.MapPut("/", (SaveReminderSettingsRequest r, IReminderSettingsService s, CancellationToken ct) => s.SetMineAsync(r, ct));
 
         var admin = v1.MapGroup("/integrations/teams").WithTags("Integrations");
         admin.MapGet("/", (ITeamsNotificationService s, CancellationToken ct) => s.GetChannelAsync(ct));

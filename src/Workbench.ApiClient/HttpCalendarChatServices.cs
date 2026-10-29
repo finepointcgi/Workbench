@@ -41,3 +41,14 @@ public sealed class HttpTeamsNotificationService(HttpClient http) : ITeamsNotifi
     public async Task<ChatChoicesDto> SetMineAsync(SaveChatChoicesRequest request, CancellationToken cancellationToken = default) =>
         await (await http.PutAsJsonAsync("api/v1/me/teams", request, cancellationToken)).ReadAsync<ChatChoicesDto>(cancellationToken);
 }
+
+public sealed class HttpReminderSettingsService(HttpClient http) : IReminderSettingsService
+{
+    private const string Base = "api/v1/me/reminders";
+
+    public async Task<ReminderSettingsDto> GetMineAsync(CancellationToken cancellationToken = default) =>
+        await (await http.GetAsync(Base, cancellationToken)).ReadAsync<ReminderSettingsDto>(cancellationToken);
+
+    public async Task<ReminderSettingsDto> SetMineAsync(SaveReminderSettingsRequest request, CancellationToken cancellationToken = default) =>
+        await (await http.PutAsJsonAsync(Base, request, cancellationToken)).ReadAsync<ReminderSettingsDto>(cancellationToken);
+}

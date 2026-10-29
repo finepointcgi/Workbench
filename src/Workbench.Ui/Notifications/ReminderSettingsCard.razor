@@ -1,0 +1,94 @@
+@* On the Notifications page: which reminders the person gets, where, and when not to be disturbed. Saves on every change. *@
+@using Workbench.Contracts.Notifications
+@inject IReminderSettingsService Reminders
+@inject ISnackbar Snackbar
+
+@if (_settings is not null)
+{
+    <MudPaper Outlined="true" Class="pa-4 mt-4" data-testid="reminder-settings">
+        <MudText Typo="Typo.h6" HtmlTag="h2" id="reminders-heading">Reminders</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
+            A nudge when something is waiting on you, so you don't have to open Workbench to check. Never on weekends, holidays or days you're on leave.
+        </MudText>
+        <MudSwitch T="bool" Value="_settings.TimesheetEnabled" ValueChanged="v => SaveAsync(_settings with { TimesheetEnabled = v })" Color="Color.Primary" Disabled="_busy"
+                   Label="My timesheet isn't in" data-testid="reminder-timesheet" />
+        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-1">The day before it's due, the day it's due, and once when it's overdue.</MudText>
+        <MudSwitch T="bool" Value="_settings.ApprovalsEnabled" ValueChanged="v => SaveAsync(_settings with { ApprovalsEnabled = v })" Color="Color.Primary" Disabled="_busy"
+                   Label="Approvals are waiting on me" data-testid="reminder-approvals" />
+        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-2">One short message a day, only when something is waiting.</MudText>
+
+        <MudText Typo="Typo.subtitle2" HtmlTag="h3" Class="mt-2">Send reminders by</MudText>
+        <MudSwitch T="bool" Value="_settings.ViaEmail" ValueChanged="v => SaveAsync(_settings with { ViaEmail = v })" Color="Color.Primary" Disabled="_busy"
+                   Label="Email" data-testid="reminder-email" />
+        @if (_settings.TeamsAvailable)
+        {
+            <MudSwitch T="bool" Value="_settings.ViaTeams" ValueChanged="v => SaveAsync(_settings with { ViaTeams = v })" Color="Color.Primary" Disabled="_busy"
+                       Label="Teams" data-testid="reminder-teams" />
+        }
+
+        <MudSwitch T="bool" Value="_quiet" ValueChanged="SetQuietAsync" Color="Color.Primary" Disabled="_busy"
+                   Label="Quiet hours: don't send reminders between" data-testid="reminder-quiet" />
+        @if (_quiet)
+        {
+            <MudStack Spacing="2" Class="ml-10">
+                <MudSelect T="int" Value="_settings.QuietStartHour ?? 18" ValueChanged="v => SaveAsync(_settings with { QuietStartHour = v })" Dense="true" Variant="Variant.Outlined"
+                           Label="From" Disabled="_busy" data-testid="reminder-quiet-start">
+                    @foreach (var hour in Enumerable.Range(0, 24))
+                    {
+                        <MudSelectItem T="int" Value="hour">@HourLabel(hour)</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudSelect T="int" Value="_settings.QuietEndHour ?? 9" ValueChanged="v => SaveAsync(_settings with { QuietEndHour = v })" Dense="true" Variant="Variant.Outlined"
+                           Label="Until" Disabled="_busy" data-testid="reminder-quiet-end">
+                    @foreach (var hour in Enumerable.Range(0, 24))
+                    {
+                        <MudSelectItem T="int" Value="hour">@HourLabel(hour)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudStack>
+        }
+    </MudPaper>
+}
+
+@code {
+    private ReminderSettingsDto? _settings;
+    private bool _busy;
+
+    private bool _quiet => _settings is { QuietStartHour: not null, QuietEndHour: not null };
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _settings = await Reminders.GetMineAsync();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException)
+        {
+            _settings = null; // Reminders are optional: the page works without them.
+        }
+    }
+
+    private Task SetQuietAsync(bool on) =>
+        SaveAsync(_settings! with { QuietStartHour = on ? 18 : null, QuietEndHour = on ? 9 : null });
+
+    private async Task SaveAsync(ReminderSettingsDto next)
+    {
+        _busy = true;
+        try
+        {
+            _settings = await Reminders.SetMineAsync(new SaveReminderSettingsRequest(
+                next.TimesheetEnabled, next.ApprovalsEnabled, next.ViaEmail, next.ViaTeams, next.QuietStartHour, next.QuietEndHour));
+            Snackbar.Add("Saved", Severity.Success);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or ArgumentException or UnauthorizedAccessException)
+        {
+            Snackbar.Add($"Couldn't save: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string HourLabel(int hour) => DateTime.Today.AddHours(hour).ToString("h tt");
+}
