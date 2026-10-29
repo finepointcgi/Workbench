@@ -11,7 +11,10 @@ namespace Workbench.Application.Notifications;
 /// A notification to create. <see cref="Link"/> is app-relative (e.g. <c>time/2026-10-12</c>); when null and
 /// <see cref="SheetId"/> is set, it links to the sheet (and item).
 /// </summary>
-public sealed record NotificationRequest(string Kind, string Title, string Body, Guid? SheetId, Guid? ItemId, string? Link = null);
+public sealed record NotificationRequest(string Kind, string Title, string Body, Guid? SheetId, Guid? ItemId, string? Link = null, DeliveryChoice? Delivery = null);
+
+/// <summary>Where one notification goes, chosen by the sender instead of the recipient's general settings (reminders carry their own choices).</summary>
+public sealed record DeliveryChoice(bool Email, bool Teams);
 
 /// <summary>
 /// Creates notifications: saves one per recipient, pushes it to the live feed and emails people who chose
@@ -63,10 +66,23 @@ public sealed class Notifier(
             db.Set<Notification>().AddRange(created);
             await db.SaveChangesAsync(CancellationToken.None);
 
-            var immediate = await db.Set<NotificationPreference>()
-                .Where(p => emails.Contains(p.UserEmail) && p.Delivery == DomainDelivery.ImmediateEmail)
-                .Select(p => p.UserEmail)
-                .ToListAsync();
+            // A sender-chosen delivery overrides the recipient's general email setting; no email also keeps it out of the daily digest.
+            var immediate = request.Delivery is { } choice
+                ? choice.Email ? emails : []
+                : await db.Set<NotificationPreference>()
+                    .Where(p => emails.Contains(p.UserEmail) && p.Delivery == DomainDelivery.ImmediateEmail)
+                    .Select(p => p.UserEmail)
+                    .ToListAsync();
+            if (request.Delivery is { Email: false })
+            {
+                foreach (var notification in created)
+                {
+                    notification.EmailedAtUtc = now;
+                }
+
+                await db.SaveChangesAsync(CancellationToken.None);
+            }
+
             var sent = false;
             foreach (var notification in created.Where(n => immediate.Contains(n.RecipientEmail)))
             {
@@ -90,9 +106,9 @@ public sealed class Notifier(
         }
 
         // Also to the Teams channel for the people who chose it; posts in the background and never fails the caller.
-        if (ChatSender() is { } chat)
+        if (request.Delivery is not { Teams: false } && ChatSender() is { } chat)
         {
-            await chat.NotifyAsync(created);
+            await chat.NotifyAsync(created, postToAll: request.Delivery is { Teams: true });
         }
 
         foreach (var notification in created)

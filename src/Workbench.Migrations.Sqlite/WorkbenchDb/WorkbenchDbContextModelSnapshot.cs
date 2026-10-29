@@ -13594,6 +13594,80 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.ToTable("NotificationPreference");
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Notifications.ReminderLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("SentAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("SentOn")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserEmail")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserEmail", "Kind", "Key")
+                        .IsUnique();
+
+                    b.HasIndex("UserEmail", "Kind", "SentOn");
+
+                    b.ToTable("ReminderLog");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Notifications.ReminderPreference", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("ApprovalsEnabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("QuietEndHour")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("QuietStartHour")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("TimesheetEnabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("UserEmail")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("ViaEmail")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("ViaTeams")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserEmail")
+                        .IsUnique();
+
+                    b.ToTable("ReminderPreference");
+                });
+
             modelBuilder.Entity("Workbench.Domain.Payroll.EmployeePayProfile", b =>
                 {
                     b.Property<Guid>("Id")
