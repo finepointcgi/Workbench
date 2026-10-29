@@ -153,6 +153,7 @@ public static class NavCatalog
 
 
         new(Finance, "Billing & AR", "Invoices", "billing", Icons.Material.Filled.Receipt, NavRule.Need(P.BillingInvoicesManage), MatchAll: true, Keywords: "billing receivables"),
+        new(Finance, "Billing & AR", "Ready to bill", "billing/ready", Icons.Material.Filled.PlaylistAddCheck, NavRule.Need(P.BillingInvoicesManage), Keywords: "invoice unbilled draft start"),
         new(Finance, "Billing & AR", "New invoice", "billing/new", Icons.Material.Filled.NoteAdd, NavRule.Need(P.BillingInvoicesManage), InMenu: false),
         new(Finance, "Billing & AR", "Customer payments", "billing/payments", Icons.Material.Filled.Payments, NavRule.Need(P.BillingPaymentsRecord), Keywords: "cash receipts"),
         new(Finance, "Billing & AR", "AR aging", "billing/aging", Icons.Material.Filled.HourglassBottom, NavRule.Need(P.BillingReportsView), Keywords: "receivables overdue"),

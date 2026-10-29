@@ -62,6 +62,9 @@ internal sealed record BillingContext(
 /// </summary>
 public sealed class InvoiceGenerator(BillingCostSource costs, IEnumerable<IBillingLimits>? limits = null)
 {
+    /// <summary>How the warning for hours with no contract bill rate begins; Ready to bill reads it as a blocker.</summary>
+    internal const string NoBillRate = "No bill rate for";
+
     private static readonly InvoiceLineKind[] CostKinds = [InvoiceLineKind.Labor, InvoiceLineKind.Burden, InvoiceLineKind.Odc];
 
     public static bool IsTimeAndMaterials(ClinPricing p) => p is ClinPricing.TimeAndMaterials or ClinPricing.LaborHour;
@@ -174,7 +177,7 @@ public sealed class InvoiceGenerator(BillingCostSource costs, IEnumerable<IBilli
         var priced = unbilled.Select(e => (Entry: e, Rate: rates.Find(e.LaborCategoryId, e.WorkDate))).ToList();
         foreach (var missing in priced.Where(p => p.Rate is null).GroupBy(p => p.Entry.LaborCategoryId))
         {
-            warnings.Add($"No bill rate for {CategoryLabel(missing.Key)} on {missing.Min(m => m.Entry.WorkDate):yyyy-MM-dd}: " +
+            warnings.Add($"{NoBillRate} {CategoryLabel(missing.Key)} on {missing.Min(m => m.Entry.WorkDate):yyyy-MM-dd}: " +
                 $"{missing.Sum(m => m.Entry.Hours):0.##} h not billed. Add the rate on the contract.");
         }
 
