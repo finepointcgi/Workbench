@@ -205,13 +205,13 @@ public sealed class ImportPermissionTests
     {
         await using var host = await ImportHost.CreateAsync();
         var kinds = await host.Imports.ListKindsAsync();
-        Assert.Equal(18, kinds.Count);
+        Assert.Equal(18, kinds.Count(k => k.Source != ImportSource.Unanet));
         foreach (var kind in kinds.Where(k => k.SampleFile is not null))
         {
             Assert.True(File.Exists(Samples.PathOf(kind.SampleFile!)), kind.SampleFile);
         }
 
-        var employees = kinds.Single(k => k.Kind == ImportKind.Employees);
+        var employees = kinds.Single(k => k.Kind == ImportKind.Employees && k.Source == ImportSource.Costpoint);
         Assert.Contains(employees.Fields, f => f.Name == "EmployeeNumber" && f.Required && f.Aliases.Contains("EMPL_ID"));
     }
 }

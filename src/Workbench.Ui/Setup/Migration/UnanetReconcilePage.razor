@@ -1,0 +1,313 @@
+@page "/setup/migration/unanet/reconcile"
+@page "/setup/migration/unanet/reconcile/{RunId:guid}"
+@inject IReconciliationService Reconciliation
+@inject IFiscalCalendarService Calendar
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<PageTitle>Unanet reconcile · Go-live migration · Workbench</PageTitle>
+
+<SetupHeader Title="Unanet parallel-run reconcile" Subtitle="Upload Unanet's time or project cost report for a closed month and compare it with Workbench by project and person. Each difference comes with the likely cause in plain words; every run is kept, and signing it off is the go-live evidence.">
+    <MudButton Href="setup/migration/unanet" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Checklist">Unanet checklist</MudButton>
+</SetupHeader>
+
+<MudAlert Severity="Severity.Info" Dense="true" Class="mb-3">
+    Pick the <b>closed month</b> you ran in both systems, export the same month from Unanet, and upload it. Only <b>approved</b> time is counted in Workbench.
+</MudAlert>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-3">
+    <MudSelect T="Guid?" Label="Month" Value="_periodId" ValueChanged="PeriodChanged" Style="max-width:320px" data-testid="unanet-recon-period">
+        @foreach (var p in _periods)
+        {
+            <MudSelectItem T="Guid?" Value="p.Id">@p.Name (@p.Start.ToString("MMM d") – @p.End.ToString("MMM d, yyyy"))</MudSelectItem>
+        }
+    </MudSelect>
+</MudStack>
+
+@if (_run is not null && _runReport is not null)
+{
+    <ReconRunView Run="_run" Report="_runReport" Changed="ReloadRunAsync" />
+    <MudButton Class="mt-2 mb-4" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Add" OnClick="StartNew">New comparison</MudButton>
+}
+
+@if (_run is null || _composing)
+{
+    <MudPaper Outlined="true" Class="pa-4 mb-4" data-testid="unanet-recon-new">
+        <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">New comparison</MudText>
+        @if (_busy)
+        {
+            <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-2" />
+        }
+        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Wrap="Wrap.Wrap">
+            <MudSelect T="ReconReportKind?" Label="Unanet report" Value="_kind" ValueChanged="KindChanged" Style="min-width:340px" data-testid="unanet-recon-kind">
+                @foreach (var r in _reports)
+                {
+                    <MudSelectItem T="ReconReportKind?" Value="r.Kind">@r.Title</MudSelectItem>
+                }
+            </MudSelect>
+            @if (_report is not null)
+            {
+                <label class="mud-button-root mud-button mud-button-outlined mud-button-outlined-primary mud-button-outlined-size-medium mud-ripple" style="cursor:pointer">
+                    <MudIcon Icon="@Icons.Material.Filled.UploadFile" Class="mr-2" /> @(_fileName is null ? "Choose the Unanet report" : "Choose another file")
+                    <InputFile OnChange="UploadAsync" accept=".csv,.xlsx,.xlsm,.txt" style="display:none" data-testid="unanet-recon-file" />
+                </label>
+            }
+        </MudStack>
+        @if (_report is not null)
+        {
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mt-2">
+                @_report.Description Export <i>@_report.CostpointReport</i> from Unanet as .csv or .xlsx.
+                @if (_report.SampleFile is { } sample)
+                {
+                    <span>Example: <code>@sample</code>.</span>
+                }
+            </MudText>
+        }
+
+        @if (_preview is not null && _report is not null && _mapping is not null)
+        {
+            <MudDivider Class="my-3" />
+            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Wrap="Wrap.Wrap" Class="mb-2">
+                <MudText Typo="Typo.subtitle1"><b>@_preview.FileName</b></MudText>
+                <MudSpacer />
+                <MudSelect T="Guid?" Label="Saved mapping" Value="_mapping.Id" ValueChanged="UseMapping" Clearable="true" Style="min-width:240px" Dense="true">
+                    @foreach (var m in _mappings)
+                    {
+                        <MudSelectItem T="Guid?" Value="m.Id">@m.Name</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudTextField T="string" Label="Mapping name" @bind-Value="_mappingName" Margin="Margin.Dense" Style="min-width:240px" />
+                <MudCheckBox T="bool" @bind-Value="_saveMapping" Label="Save mapping" Dense="true" />
+            </MudStack>
+            <ReconMappingEditor Report="_report" Mapping="_mapping" Headers="_preview.Headers" MappingChanged="m => _mapping = m with { Id = null }" />
+            <MudExpansionPanels Elevation="0" Class="mt-2">
+                <MudExpansionPanel Text="@($"File preview ({_preview.SampleRows.Count} rows)")">
+                    <Grid Columns="_preview.Headers" Rows="_preview.SampleRows" />
+                </MudExpansionPanel>
+            </MudExpansionPanels>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="RunAsync" Disabled="@(_busy || _periodId is null)"
+                       StartIcon="@Icons.Material.Filled.CompareArrows" data-testid="unanet-run-recon">Compare</MudButton>
+        }
+    </MudPaper>
+}
+
+<MudPaper Outlined="true" Class="pa-4" data-testid="unanet-recon-history">
+    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Runs this month</MudText>
+    @if (_runs.Count == 0)
+    {
+        <MudText Class="mud-text-secondary">No comparisons yet.</MudText>
+    }
+    else
+    {
+        <MudSimpleTable Dense="true" Elevation="0">
+            <thead><tr><th>When</th><th>Report</th><th>File</th><th>Result</th><th>Signed off</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var r in _runs)
+                {
+                    <tr>
+                        <td>@MigrationFormat.When(r.RunAtUtc) · @r.RunBy</td>
+                        <td>@(_reports.FirstOrDefault(x => x.Kind == r.Kind)?.Title)</td>
+                        <td>@r.FileName</td>
+                        <td>@(r.Outcome == ReconRunOutcome.Matched ? "Matched" : "Differences") (@r.Matched/@r.Keys)</td>
+                        <td>@(r.IsSignedOff ? $"{r.SignedOffBy}, {MigrationFormat.When(r.SignedOffAtUtc!.Value)}" : "")</td>
+                        <td><MudButton Size="Size.Small" Variant="Variant.Text" Href="@($"setup/migration/unanet/reconcile/{r.Id}")">Open</MudButton></td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    }
+</MudPaper>
+
+@code {
+    [Parameter]
+    public Guid? RunId { get; set; }
+
+    private IReadOnlyList<FiscalPeriodDto> _periods = [];
+    private IReadOnlyList<ReconReportDto> _reports = [];
+    private IReadOnlyList<ReconRunSummaryDto> _runs = [];
+    private IReadOnlyList<ReconMappingDto> _mappings = [];
+    private Guid? _periodId;
+    private ReconReportKind? _kind;
+    private ReconReportDto? _report;
+    private ReconFilePreviewDto? _preview;
+    private ReconMappingDto? _mapping;
+    private string? _mappingName;
+    private bool _saveMapping = true;
+    private string? _fileName;
+    private byte[]? _content;
+    private ReconRunDetailDto? _run;
+    private ReconReportDto? _runReport;
+    private bool _composing;
+    private bool _busy;
+    private Guid? _loadedRun;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _periods = await Calendar.ListPeriodsAsync();
+            _reports = (await Reconciliation.ListReportsAsync()).Where(r => r.Source == "Unanet").ToList();
+            _kind = _reports.FirstOrDefault()?.Kind;
+            _report = _reports.FirstOrDefault();
+            _mappings = _kind is { } k ? await Reconciliation.ListMappingsAsync(k) : [];
+
+            // The month to compare is normally the last one that has ended.
+            var today = DateOnly.FromDateTime(DateTime.Today);
+            _periodId = _periods.Where(p => p.End < today).MaxBy(p => p.End)?.Id ?? _periods.LastOrDefault()?.Id;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (RunId is { } id && id != _loadedRun)
+        {
+            _loadedRun = id;
+            _composing = false;
+            try
+            {
+                ShowRun(await Reconciliation.GetRunAsync(id));
+                _periodId = _run!.Run.FiscalPeriodId;
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+            }
+        }
+        else if (RunId is null)
+        {
+            _run = null;
+            _loadedRun = null;
+        }
+
+        await LoadPeriodAsync();
+    }
+
+    private void ShowRun(ReconRunDetailDto run)
+    {
+        _run = run;
+        _runReport = _reports.FirstOrDefault(r => r.Kind == run.Run.Kind);
+    }
+
+    private async Task LoadPeriodAsync()
+    {
+        if (_periodId is not { } period)
+        {
+            return;
+        }
+
+        try
+        {
+            _runs = (await Reconciliation.ListRunsAsync(period)).Where(r => _reports.Any(x => x.Kind == r.Kind)).ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task PeriodChanged(Guid? period)
+    {
+        _periodId = period;
+        await LoadPeriodAsync();
+    }
+
+    private async Task ReloadRunAsync()
+    {
+        if (_run is not null)
+        {
+            ShowRun(await Reconciliation.GetRunAsync(_run.Run.Id));
+        }
+
+        await LoadPeriodAsync();
+    }
+
+    private void StartNew() => _composing = true;
+
+    private async Task KindChanged(ReconReportKind? kind)
+    {
+        _kind = kind;
+        _report = _reports.FirstOrDefault(r => r.Kind == kind);
+        _preview = null;
+        _mapping = null;
+        _fileName = null;
+        _content = null;
+        _mappings = kind is { } k ? await Reconciliation.ListMappingsAsync(k) : [];
+    }
+
+    private async Task UploadAsync(InputFileChangeEventArgs e)
+    {
+        if (_kind is not { } kind)
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            await using var stream = e.File.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024);
+            using var buffer = new MemoryStream();
+            await stream.CopyToAsync(buffer);
+            _fileName = e.File.Name;
+            _content = buffer.ToArray();
+            _preview = await Reconciliation.PreviewFileAsync(new PreviewReconFileRequest(kind, _fileName, _content));
+            _mapping = _preview.SuggestedMapping;
+            _mappingName = _mapping.Name;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void UseMapping(Guid? id)
+    {
+        if (_mappings.FirstOrDefault(m => m.Id == id) is { } saved)
+        {
+            _mapping = saved;
+            _mappingName = saved.Name;
+        }
+        else if (_preview is not null)
+        {
+            _mapping = _preview.SuggestedMapping with { Id = null };
+        }
+    }
+
+    private async Task RunAsync()
+    {
+        if (_kind is not { } kind || _periodId is not { } period || _mapping is null || _content is null || _fileName is null)
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var name = string.IsNullOrWhiteSpace(_mappingName) ? _mapping.Name : _mappingName.Trim();
+            var mapping = _mapping with { Name = name };
+            var run = await Reconciliation.RunAsync(new RunReconciliationRequest(kind, period, _fileName, _content,
+                MappingId: mapping.Id, Mapping: mapping.Id is null ? mapping : null,
+                SaveMappingAs: _saveMapping && mapping.Id is null ? name : null));
+            _composing = false;
+            _loadedRun = run.Run.Id;
+            ShowRun(run);
+            Navigation.NavigateTo($"setup/migration/unanet/reconcile/{run.Run.Id}");
+            await LoadPeriodAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

@@ -13,7 +13,7 @@ namespace Workbench.Application.Imports.Costpoint;
 /// project; every deeper id (<c>2001.01</c>, <c>2001.01.02</c>) is a WBS element under the element of its dotted
 /// prefix. Matched on project code and WBS code.
 /// </summary>
-public sealed class ProjectImporter : CostpointImporter
+public class ProjectImporter : CostpointImporter
 {
     public override ImportKind Kind => ImportKind.Projects;
     public override string Title => "Projects and WBS";
@@ -284,7 +284,7 @@ public sealed class ProjectImporter : CostpointImporter
 /// version per project, matched on project + version name. Rows with a PLC are labor hours (priced at Workbench's
 /// planning rates); rows without one are ODC dollars.
 /// </summary>
-public sealed class BudgetImporter : CostpointImporter
+public class BudgetImporter : CostpointImporter
 {
     public const string DefaultVersionName = "Costpoint budget";
 
@@ -456,7 +456,7 @@ public sealed class BudgetImporter : CostpointImporter
         {
             await context.Run.CreateAsync(first.FileName, first.Number, typeof(BudgetVersion), "Budget version", key, $"{kind} · {summary}", async () =>
             {
-                var created = await budgets.CreateVersionAsync(project.Id, new CreateBudgetVersionRequest(name, kind, Description: $"Imported from Costpoint (import job {context.Job.Id.ToString()[..8]})"), cancellationToken);
+                var created = await budgets.CreateVersionAsync(project.Id, new CreateBudgetVersionRequest(name, kind, Description: $"Imported from {SourceName(context)} (import job {context.Job.Id.ToString()[..8]})"), cancellationToken);
                 var saved = await budgets.SaveLinesAsync(created.Version.Id, requests, cancellationToken);
                 foreach (var line in saved.Lines)
                 {

@@ -1,0 +1,7 @@
+Employee ID,Username,Last Name,First Name,Email,Organization,Labor Category,Hire Date,Supervisor,Hours Per Week,FLSA Status,Labor Cost Rate,Cost Rate Effective Date
+H1001,mlindqvist,Lindqvist,Mara,mara.lindqvist@example.com,ENG,PM,03/04/2019,,40,Exempt,78.50,01/01/2026
+H1002,dokafor,Okafor,Daniel,daniel.okafor@example.com,ENG-CY,SE3,06/15/2020,H1001,40,Exempt,69.25,01/01/2026
+H1003,pnair,Nair,Priya,priya.nair@example.com,ENG,SE2,01/10/2022,H1001,40,Exempt,54.00,01/01/2026
+H1004,tbrandt,Brandt,Tomas,tomas.brandt@example.com,OPS,AN,08/22/2023,H1001,40,Non-exempt,41.75,01/01/2026
+H1005,iferreira,Ferreira,Ines,ines.ferreira@example.com,ENG-CY,SE3,11/02/2021,H1001,40,Exempt,71.00,01/01/2026
+H1006,wzhang,Zhang,Wei,wei.zhang@example.com,ADM,ADM,05/16/2018,,40,Non-exempt,36.20,01/01/2026

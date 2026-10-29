@@ -2,7 +2,7 @@
 <MudStack Spacing="2" data-testid="recon-mapping">
     <MudSimpleTable Dense="true" Elevation="0" Bordered="true">
         <thead>
-            <tr><th>Field</th><th>Costpoint column</th><th>Minus column</th><th>Negate</th><th>Scale</th><th>Tolerance ±</th><th>or %</th></tr>
+            <tr><th>Field</th><th>@Report.Source column</th><th>Minus column</th><th>Negate</th><th>Scale</th><th>Tolerance ±</th><th>or %</th></tr>
         </thead>
         <tbody>
             @foreach (var field in Report.Fields)
@@ -78,7 +78,7 @@
                           HelperText="Comma-separated, e.g. Total, Grand Total." />
         </MudItem>
         <MudItem xs="12" md="6">
-            <MudTextField T="string" Label="Key rewrites (Costpoint => Workbench, one per line)" Lines="3" Value="Rewrites" ValueChanged="SetRewrites"
+            <MudTextField T="string" Label="@($"Key rewrites ({Report.Source} => Workbench, one per line)")" Lines="3" Value="Rewrites" ValueChanged="SetRewrites"
                           HelperText="For example FRINGE BENEFITS => Fringe." />
         </MudItem>
     </MudGrid>

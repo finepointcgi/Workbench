@@ -11,6 +11,9 @@ public enum ImportSource
 
     /// <summary>A Smartsheet sheet exported to .xlsx.</summary>
     SmartsheetExcel,
+
+    /// <summary>CSV or Excel exports of Unanet reports and lists.</summary>
+    Unanet,
 }
 
 /// <summary>What an import creates or updates.</summary>
@@ -35,6 +38,10 @@ public enum ImportKind
     OpeningBalances,
     OpenArInvoices,
     OpenApBills,
+
+    // Unanet migration: who may charge what, and approved time carried over as history.
+    Assignments,
+    Timesheets,
 }
 
 public enum ImportJobStatus
