@@ -3198,6 +3198,47 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                     b.ToTable("UnbilledAccrual");
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Calendar.CalendarFeedToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("LastFetchedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
+
+                    b.Property<string>("TokenProtected")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .UseCollation("C");
+
+                    b.Property<string>("UserEmail")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .UseCollation("C");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("UserEmail")
+                        .IsUnique();
+
+                    b.ToTable("CalendarFeedToken");
+                });
+
             modelBuilder.Entity("Workbench.Domain.Cash.BankAccount", b =>
                 {
                     b.Property<Guid>("Id")
@@ -14166,6 +14207,90 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                     b.HasIndex("FiscalPeriodId", "Report", "RunAtUtc");
 
                     b.ToTable("ReconciliationRun");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Notifications.ChatChannel", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Host")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .UseCollation("C");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .UseCollation("C");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .UseCollation("C");
+
+                    b.Property<DateTime?>("LastPostedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .UseCollation("C");
+
+                    b.Property<string>("WebhookUrlProtected")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)")
+                        .UseCollation("C");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Kind")
+                        .IsUnique();
+
+                    b.ToTable("ChatChannel");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Notifications.ChatNotificationChoice", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ChannelKind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .UseCollation("C");
+
+                    b.Property<string>("Group")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .UseCollation("C");
+
+                    b.Property<string>("UserEmail")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .UseCollation("C");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserEmail", "ChannelKind", "Group")
+                        .IsUnique();
+
+                    b.ToTable("ChatNotificationChoice");
                 });
 
             modelBuilder.Entity("Workbench.Domain.Notifications.EmailAddressIssue", b =>

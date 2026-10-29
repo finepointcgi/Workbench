@@ -232,7 +232,8 @@ public static class AuthenticationSetup
 
     internal static bool IsApiRequest(HttpRequest request) =>
         request.Path.StartsWithSegments("/api") || request.Path.StartsWithSegments("/hubs")
-        || request.Path.StartsWithSegments(ScimEndpoints.BasePath) || request.Path.StartsWithSegments("/health");
+        || request.Path.StartsWithSegments(ScimEndpoints.BasePath) || request.Path.StartsWithSegments("/health")
+        || (request.Path.StartsWithSegments("/calendar") && request.Path.Value!.EndsWith(".ics", StringComparison.OrdinalIgnoreCase)); // a calendar app gets a plain 404, not the not-found page
 
     private static bool HasBearerToken(HttpRequest request) =>
         request.Headers.Authorization.ToString().StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)

@@ -21,6 +21,8 @@ SFTP passwords and keys) are encrypted at rest and never shown again; leave them
 - The URLs are checked like webhook endpoints: `https://`, public addresses only. The delivery and run logs show the URL's host,
   never its secret path.
 
+(Posting people's own notifications to a channel is separate: see [calendar-and-teams.md](calendar-and-teams.md).)
+
 ## File exports
 
 - **Destination:** Workbench always keeps a copy, downloadable from the run log for 30 days (`Integrations:RetentionDays`).

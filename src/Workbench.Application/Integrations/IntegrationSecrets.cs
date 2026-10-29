@@ -15,6 +15,8 @@ public sealed class IntegrationSecrets(IDataProtectionProvider provider)
     private readonly IDataProtector _webhook = provider.CreateProtector("Workbench.Integrations.WebhookSecret.v1");
     private readonly IDataProtector _connector = provider.CreateProtector("Workbench.Integrations.ConnectorSecrets.v1");
 
+    private readonly IDataProtector _chat = provider.CreateProtector("Workbench.Integrations.ChatChannelUrl.v1");
+
     public const string ApiKeyPrefix = "wbk_";
 
     public static string NewSigningSecret() => WebhookSignature.SecretPrefix + Base64Url(RandomNumberGenerator.GetBytes(32));
@@ -29,6 +31,11 @@ public sealed class IntegrationSecrets(IDataProtectionProvider provider)
     public string ProtectSigningSecret(string secret) => _webhook.Protect(secret);
 
     public string UnprotectSigningSecret(string protectedSecret) => _webhook.Unprotect(protectedSecret);
+
+    /// <summary>A chat channel's incoming-webhook address (its path is the credential).</summary>
+    public string ProtectChatUrl(string url) => _chat.Protect(url);
+
+    public string UnprotectChatUrl(string protectedUrl) => _chat.Unprotect(protectedUrl);
 
     public string? ProtectConnectorSecrets(IReadOnlyDictionary<string, string> secrets) =>
         secrets.Count == 0 ? null : _connector.Protect(JsonSerializer.Serialize(secrets));
