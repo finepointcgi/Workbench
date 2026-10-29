@@ -24,6 +24,7 @@ public static class ApprovalRegistration
         services.AddScoped<IApprovalEmailLinkService, ApprovalEmailLinkService>();
         services.AddSingleton<Notifications.INotificationEmailExtras, ApprovalEmailActions>();
         services.AddScoped<ApprovalReminderCheck>();
+        services.AddScoped<ApprovalDigestCheck>();
         services.AddSingleton<ApprovalBackfillGate>();
         services.AddScoped<ApprovalBackfill>();
         services.AddScoped<IApprovalDocumentHandler, TimesheetApprovalHandler>();
@@ -42,6 +43,7 @@ public static class ApprovalRegistration
     {
         services.AddHostedService<ApprovalBackfillBackgroundService>();
         services.AddHostedService<ApprovalReminderBackgroundService>();
+        services.AddHostedService<Notifications.ReminderBackgroundService<ApprovalDigestCheck>>(); // The daily "waiting on you" digest.
         return services;
     }
 }

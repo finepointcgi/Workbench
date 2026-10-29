@@ -14490,6 +14490,84 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                     b.ToTable("NotificationPreference");
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Notifications.ReminderLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .UseCollation("C");
+
+                    b.Property<DateTime>("SentAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateOnly>("SentOn")
+                        .HasColumnType("date");
+
+                    b.Property<string>("UserEmail")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .UseCollation("C");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserEmail", "Kind", "Key")
+                        .IsUnique();
+
+                    b.HasIndex("UserEmail", "Kind", "SentOn");
+
+                    b.ToTable("ReminderLog");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Notifications.ReminderPreference", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("ApprovalsEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<int?>("QuietEndHour")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("QuietStartHour")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("TimesheetEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("UserEmail")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .UseCollation("C");
+
+                    b.Property<bool>("ViaEmail")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("ViaTeams")
+                        .HasColumnType("boolean");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserEmail")
+                        .IsUnique();
+
+                    b.ToTable("ReminderPreference");
+                });
+
             modelBuilder.Entity("Workbench.Domain.Payroll.EmployeePayProfile", b =>
                 {
                     b.Property<Guid>("Id")
