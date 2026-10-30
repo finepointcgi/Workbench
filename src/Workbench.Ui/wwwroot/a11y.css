@@ -19,6 +19,11 @@
     top: 8px;
 }
 
+/* The page title takes focus after a navigation (FocusOnNavigate) for screen readers; it isn't operable, so no ring. */
+html body h1[tabindex="-1"]:focus-visible {
+    outline: none;
+}
+
 /* The main landmark takes focus from the skip link; it needs no ring of its own. */
 .wb-main:focus {
     outline: none;
