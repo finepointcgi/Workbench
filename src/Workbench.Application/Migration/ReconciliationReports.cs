@@ -28,7 +28,11 @@ public static class ReconciliationReports
     private static readonly string[] AccountAliases = ["ACCT_ID", "Account", "Account ID", "Account Number", "Acct", "Acct ID", "Account No"];
     private static readonly string[] ProjectAliases = ["PROJ_ID", "Project", "Project ID", "Project Code", "Project Number", "WBS", "Project/WBS"];
 
-    public static IReadOnlyList<ReconReportDto> All { get; } =
+    private static IReadOnlyList<ReconReportDto>? _all;
+
+    public static IReadOnlyList<ReconReportDto> All => _all ??= [.. Costpoint, .. UnanetReconciliationReports.All];
+
+    private static IReadOnlyList<ReconReportDto> Costpoint { get; } =
     [
         new(ReconReportKind.TrialBalance, "Trial balance",
             "Ending balance by account for the period (debit positive), optionally its opening balance and period activity.",

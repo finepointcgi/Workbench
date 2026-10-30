@@ -19,6 +19,8 @@ public sealed class ReminderPreference : Entity
 
     public bool ViaTeams { get; set; }
 
+    public bool ViaSlack { get; set; }
+
     public int? QuietStartHour { get; set; }
 
     public int? QuietEndHour { get; set; }

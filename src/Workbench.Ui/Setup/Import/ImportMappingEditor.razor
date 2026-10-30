@@ -5,7 +5,7 @@
 <MudGrid Spacing="3">
     <MudItem xs="12" md="@(IsSheets ? 5 : 7)">
         <MudText Typo="Typo.subtitle2" Class="mb-1">Fields</MudText>
-        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">Columns were matched by name; Costpoint's own headers (EMPL_ID, PROJ_ID...) and common variants map automatically. Pick another column if a match is wrong.</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">Columns were matched by name; @(Definition.Source == ImportSource.Unanet ? "Unanet's usual headings (Employee ID, Project Code, Task Code...)" : "Costpoint's own headers (EMPL_ID, PROJ_ID...)") and common variants map automatically. Pick another column if a match is wrong.</MudText>
         <MudSimpleTable Dense="true" data-testid="mapping-fields">
             <thead><tr><th>Field</th><th>Source column</th></tr></thead>
             <tbody>

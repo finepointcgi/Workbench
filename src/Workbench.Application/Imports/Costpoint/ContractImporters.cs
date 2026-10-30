@@ -9,7 +9,7 @@ using ModificationChangeKind = Workbench.Contracts.Contracts.ModificationChangeK
 namespace Workbench.Application.Imports.Costpoint;
 
 /// <summary>Costpoint customers → customers, matched on the customer id.</summary>
-public sealed class CustomerImporter : CostpointImporter
+public class CustomerImporter : CostpointImporter
 {
     public override ImportKind Kind => ImportKind.Customers;
     public override string Title => "Customers";
@@ -66,7 +66,7 @@ public sealed class CustomerImporter : CostpointImporter
 }
 
 /// <summary>Costpoint contracts (Contract Management or the prime contract on Project Setup) → contracts, matched on the contract number.</summary>
-public sealed class ContractImporter : CostpointImporter
+public class ContractImporter : CostpointImporter
 {
     public override ImportKind Kind => ImportKind.Contracts;
     public override string Title => "Contracts";
@@ -201,7 +201,7 @@ public sealed class ContractImporter : CostpointImporter
 /// column is the cumulative funded amount: the difference from Workbench's funded value is obligated (or de-obligated)
 /// through one executed modification per contract, so funding history stays immutable.
 /// </summary>
-public sealed class ClinImporter : CostpointImporter
+public class ClinImporter : CostpointImporter
 {
     public override ImportKind Kind => ImportKind.Clins;
     public override string Title => "CLINs and funding";
@@ -368,17 +368,17 @@ public sealed class ClinImporter : CostpointImporter
         {
             if (p.Exercise)
             {
-                changes.Add(new ModificationChangeDto(ModificationChangeKind.ExerciseOption, p.Number, Note: "Exercised in Costpoint"));
+                changes.Add(new ModificationChangeDto(ModificationChangeKind.ExerciseOption, p.Number, Note: $"Exercised in {SourceName(context)}"));
             }
 
             if (p.CeilingByMod)
             {
-                changes.Add(new ModificationChangeDto(ModificationChangeKind.ChangeClinValue, p.Number, p.Ceiling - p.CurrentCeiling, Note: "Value from Costpoint"));
+                changes.Add(new ModificationChangeDto(ModificationChangeKind.ChangeClinValue, p.Number, p.Ceiling - p.CurrentCeiling, Note: $"Value from {SourceName(context)}"));
             }
 
             if (p.Funded != p.CurrentFunded)
             {
-                changes.Add(new ModificationChangeDto(ModificationChangeKind.Fund, p.Number, p.Funded - p.CurrentFunded, Note: "Funding from Costpoint"));
+                changes.Add(new ModificationChangeDto(ModificationChangeKind.Fund, p.Number, p.Funded - p.CurrentFunded, Note: $"Funding from {SourceName(context)}"));
             }
         }
 
@@ -412,7 +412,7 @@ public sealed class ClinImporter : CostpointImporter
             await context.Run.TrackAsync(tracked, async () =>
             {
                 var draft = await modifications.CreateDraftAsync(contract.Id,
-                    new SaveModificationRequest(number, effective, $"Funding and values imported from Costpoint (import job {context.Job.Id.ToString()[..8]})", changes),
+                    new SaveModificationRequest(number, effective, $"Funding and values imported from {SourceName(context)} (import job {context.Job.Id.ToString()[..8]})", changes),
                     cancellationToken);
                 try
                 {
@@ -454,7 +454,7 @@ public sealed class ClinImporter : CostpointImporter
 /// Costpoint project labor category bill rates (Project Labor Categories / PLC rates) → contract bill rates, matched on
 /// contract + PLC + start date. A project id resolves to its project's contract.
 /// </summary>
-public sealed class BillRateImporter : CostpointImporter
+public class BillRateImporter : CostpointImporter
 {
     public override ImportKind Kind => ImportKind.BillRates;
     public override string Title => "Bill rates (project PLC rates)";
