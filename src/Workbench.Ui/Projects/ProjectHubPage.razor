@@ -173,9 +173,15 @@ else
             <Workbench.Ui.Ceilings.CloseoutPanel Scope="Workbench.Contracts.Closeout.CloseoutScope.Project" TargetId="ProjectId" Changed="ReloadAsync" />
         </div>,
         "costs" => @<Workbench.Ui.Pages.Odcs.ProjectOdcs ProjectId="ProjectId" Embedded="true" />,
-        // Assign people first (who, which task, how many hours, when); then Finance's budget and who charges to the project.
+        // People are staffed on the Plan tab, next to the tasks and dates; this tab is the budget and who has charged. (Without the Plan tab, the assign panel stays here.)
         "staffing" => @<div>
-            @if (_hub!.Tabs.Team)
+            @if (_hub!.Tabs.Plan)
+            {
+                <MudAlert Severity="Severity.Normal" Dense="true" Class="mb-4" data-testid="staff-on-plan">
+                    To put people on this project, use the <MudLink Href="@($"projects/{ProjectId}/plan")">Plan</MudLink> tab.
+                </MudAlert>
+            }
+            else if (_hub!.Tabs.Team)
             {
                 <div data-testid="staffing-section">
                     <Workbench.Ui.Resourcing.AssignPeoplePanel ProjectId="ProjectId" Changed="ReloadAsync" />
@@ -183,7 +189,6 @@ else
             }
             @if (_hub!.Tabs.Budgets)
             {
-                <MudDivider Class="my-6" />
                 <section aria-labelledby="budget-heading" data-testid="budget-section">
                     <MudText Typo="Typo.h6" HtmlTag="h2" id="budget-heading" Class="mb-2">Budget</MudText>
                     <Workbench.Ui.Pages.Projects.ProjectBudgetsPage ProjectId="ProjectId" Embedded="true" />

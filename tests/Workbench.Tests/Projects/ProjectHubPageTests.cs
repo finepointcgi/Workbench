@@ -65,7 +65,7 @@ public sealed class ProjectHubPageTests
         var page = ctx.Render<ProjectHubPage>(p => p.Add(c => c.ProjectId, ProjectId));
 
         // The everyday tabs; the occasional ones wait under More.
-        page.WaitForAssertion(() => Assert.Equal(["Overview", "Budget & staffing", "Financials"], TabLabels(page)));
+        page.WaitForAssertion(() => Assert.Equal(["Overview", "Budget", "Financials"], TabLabels(page)));
         Assert.NotEmpty(page.FindAll("[data-testid=project-more]"));
         foreach (var label in new[] { "Spent so far", "Budget", "Forecast at completion", "Funding left" })
         {
@@ -157,7 +157,7 @@ public sealed class ProjectHubPageTests
 
         var page = ctx.Render<ProjectHubPage>(p => p.Add(c => c.ProjectId, ProjectId).Add(c => c.Tab, "ceilings"));
 
-        page.WaitForAssertion(() => Assert.Equal(["Overview", "Budget & staffing", "Financials", "Ceilings & closeout"], TabLabels(page)));
+        page.WaitForAssertion(() => Assert.Equal(["Overview", "Budget", "Financials", "Ceilings & closeout"], TabLabels(page)));
     }
 
     [Theory]
