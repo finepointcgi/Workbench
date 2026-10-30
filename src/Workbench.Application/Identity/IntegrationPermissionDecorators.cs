@@ -19,6 +19,7 @@ public static class IntegrationPermissionRegistration
         services.Decorate<IApiKeyService, PermissionCheckingApiKeyService>();
         services.Decorate<IConnectorService, PermissionCheckingConnectorService>();
         Integrations.GitLab.GitLabRegistration.AddWorkbenchGitLabPermissions(services);
+        Integrations.Jira.JiraRegistration.AddWorkbenchJiraPermissions(services);
         return services;
     }
 
