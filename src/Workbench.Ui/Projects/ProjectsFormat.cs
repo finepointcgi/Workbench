@@ -16,7 +16,7 @@ public static class ProjectsFormat
     [
         ("overview", "Overview"),
         ("plan", "Plan"),
-        ("staffing", "Budget & staffing"),
+        ("staffing", "Budget"),
         ("financials", "Financials"),
         ("costs", "Costs"),
         ("revenue", "Revenue"),

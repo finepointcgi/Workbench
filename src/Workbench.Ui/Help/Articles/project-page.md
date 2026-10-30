@@ -32,7 +32,7 @@ On a contract, a project manager's new project waits for Finance to activate it 
 | --- | --- |
 | Overview | Health (on track, at risk or over), spend against budget, funding used, what needs your attention, and the setup steps with a button for each. |
 | Plan | The project's WBS and plan in one grid: rows, dates, predecessors, people, hours and cost, the money against the ceiling, approval, and the Gantt chart. It works like MS Project (Tab indents) and imports and exports Excel. |
-| Budget & staffing | The budget by labor category and your [EAC](term:eac) (estimate at completion), then the people staffed into each category and who charged hours. |
+| Budget | The budget by labor category and your [EAC](term:eac) (estimate at completion), and who has charged hours. People are staffed on the Plan tab. |
 | Financials | Cost, revenue and margin by task, direct and [burdened](term:burdened). |
 | Costs | Other direct costs ([ODCs](term:odc)) such as vendor invoices and travel. |
 | Setup | For those who set the project up: its details, charge codes and who can charge them, syncing with the plan, and (under More) ceilings and closeout. |
