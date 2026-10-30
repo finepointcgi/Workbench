@@ -10,7 +10,7 @@ using ImportKind = Workbench.Domain.Imports.ImportKind;
 namespace Workbench.Application.Imports.Costpoint;
 
 /// <summary>Costpoint vendors (Manage Vendors / VEND export) → vendors, matched on the vendor id.</summary>
-public sealed class VendorImporter : CostpointImporter
+public class VendorImporter : CostpointImporter
 {
     public override ImportKind Kind => ImportKind.Vendors;
     public override string Title => "Vendors";
@@ -132,7 +132,7 @@ public sealed class VendorImporter : CostpointImporter
 /// Open Costpoint AP vouchers at cut-over → AP bills for their open balance, posted without a journal entry (the AP
 /// balance comes in with the GL opening balances). Several rows with one voucher (or vendor and invoice) are its lines.
 /// </summary>
-public sealed class OpenApBillImporter : CostpointImporter
+public class OpenApBillImporter : CostpointImporter
 {
     public override ImportKind Kind => ImportKind.OpenApBills;
     public override string Title => "Open AP bills";
@@ -284,8 +284,8 @@ public sealed class OpenApBillImporter : CostpointImporter
             vouchers.Add(voucher);
             vendorInvoices.Add((first.Vendor.Id, first.Invoice.ToUpperInvariant()));
             var bill = new ConvertedBill(voucher, first.Vendor.Id, first.Invoice, first.Date, first.Due ?? first.Date.AddDays(first.Vendor.PaymentTermsDays), retainage,
-                $"Open balance carried over from Costpoint (import job {context.Job.Id.ToString()[..8]})",
-                group.Select(g => new ConvertedBillLine(g.Description ?? $"Costpoint invoice {g.Invoice}", g.Open, g.Account, g.Org)).ToList());
+                $"Open balance carried over from {SourceName(context)} (import job {context.Job.Id.ToString()[..8]})",
+                group.Select(g => new ConvertedBillLine(g.Description ?? $"{SourceName(context)} invoice {g.Invoice}", g.Open, g.Account, g.Org)).ToList());
             IReadOnlyList<Guid> lineIds = [];
             var id = await context.Run.CreateAsync(first.Row.FileName, first.Row.Number, typeof(ApBill), "AP bill", key, $"Voucher {voucher}, open {open:N2}, due {bill.DueDate:yyyy-MM-dd}",
                 async () =>
@@ -311,7 +311,7 @@ public sealed class OpenApBillImporter : CostpointImporter
 /// Open Costpoint receivables at cut-over → customer invoices (sent, not posted: the AR balance comes in with the GL
 /// opening balances). Several rows with one invoice number are its lines (by CLIN or project).
 /// </summary>
-public sealed class OpenArInvoiceImporter : CostpointImporter
+public class OpenArInvoiceImporter : CostpointImporter
 {
     public override ImportKind Kind => ImportKind.OpenArInvoices;
     public override string Title => "Open AR invoices";
@@ -488,8 +488,8 @@ public sealed class OpenArInvoiceImporter : CostpointImporter
             var contractType = Enum.Parse<ContractType>(first.Contract.Type.ToString());
             var invoice = new ConvertedInvoice(first.Number, first.Contract.Id, first.Contract.CustomerId, first.Type ?? OpenItemConversion.DefaultType(contractType),
                 first.Date, first.Due ?? first.Date.AddDays(30), paid,
-                $"Carried over from Costpoint at cut-over (import job {context.Job.Id.ToString()[..8]}). Not posted: the receivable is in the GL opening balances.",
-                group.Select(g => new ConvertedInvoiceLine(g.Description ?? $"Costpoint invoice {g.Number}", g.Amount, g.ClinId, g.ProjectId)).ToList());
+                $"Carried over from {SourceName(context)} at cut-over (import job {context.Job.Id.ToString()[..8]}). Not posted: the receivable is in the GL opening balances.",
+                group.Select(g => new ConvertedInvoiceLine(g.Description ?? $"{SourceName(context)} invoice {g.Number}", g.Amount, g.ClinId, g.ProjectId)).ToList());
             IReadOnlyList<Guid> lineIds = [];
             var id = await context.Run.CreateAsync(first.Row.FileName, first.Row.Number, typeof(Invoice), "Invoice", first.Number,
                 $"{first.Contract.ContractNumber}: {total:N2} invoiced, {open:N2} open, due {invoice.DueDate:yyyy-MM-dd}",
