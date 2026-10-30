@@ -1,0 +1,162 @@
+@* Admin › Integrations › Jira: the organization's Jira site, the account email and API token, and a connection test.
+   Each project is linked on its own Setup tab. *@
+@inject IJiraConnectionService Jira
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+
+<MudText Class="mud-text-secondary mb-3">
+    Keep a project's Jira issues and its plan in step, so engineers who live in Jira don't retype anything: issues become plan tasks,
+    Done and due dates flow both ways, and Jira's title and assignee win. Time stays in Workbench: timesheets are the cost record,
+    so Jira worklogs are never imported. After connecting, link a project on its Setup tab.
+</MudText>
+
+@if (_loading)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    @if (_connection?.IsConfigured == true)
+    {
+        <MudAlert Severity="@(_connection.LastTestOk == false ? Severity.Error : Severity.Success)" Variant="Variant.Outlined" Class="mb-4" data-testid="jira-status">
+            @if (_connection.LastTestOk == false)
+            {
+                <b>Not working:</b> @_connection.LastTestMessage
+            }
+            else
+            {
+                <span>Connected to <b>@_connection.SiteUrl</b> as <b>@_connection.ConnectedAsName</b>.</span>
+                <span> @Projects(_connection.LinkedProjects) linked. Last checked @IntegrationFormat.When(_connection.LastTestedAtUtc) UTC.</span>
+            }
+        </MudAlert>
+    }
+
+    <MudPaper Outlined="true" Class="pa-4 mb-4" data-testid="jira-connection-form">
+        <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">@(_connection?.IsConfigured == true ? "Connection" : "Connect Jira")</MudText>
+        <MudGrid Spacing="2">
+            <MudItem xs="12" md="6">
+                <MudTextField @bind-Value="_siteUrl" Label="Jira address" Placeholder="https://yourcompany.atlassian.net" Variant="Variant.Outlined" Required="true"
+                              HelperText="Jira Cloud. Jira Data Center support follows." data-testid="jira-url" />
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudTextField @bind-Value="_email" Label="Account email" Variant="Variant.Outlined" Required="true" autocomplete="off"
+                              HelperText="The Atlassian account the API token belongs to. Give it access to the projects you will link." data-testid="jira-email" />
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudTextField @bind-Value="_token" Label="API token" InputType="InputType.Password" Variant="Variant.Outlined" autocomplete="off"
+                              HelperText="@TokenHelp" data-testid="jira-token" />
+            </MudItem>
+            <MudItem xs="12" md="6" Class="d-flex align-center">
+                <MudSwitch @bind-Value="_active" Color="Color.Primary" Label="Sync is on" />
+            </MudItem>
+        </MudGrid>
+
+        @if (_test is not null)
+        {
+            <MudAlert Severity="@(_test.Ok ? Severity.Success : Severity.Error)" Variant="Variant.Text" Class="mt-3" data-testid="jira-test-result">
+                <div>@_test.Message</div>
+                @if (_test.Hint is { } hint)
+                {
+                    <div class="mt-1"><b>What to do:</b> @hint</div>
+                }
+            </MudAlert>
+        }
+
+        <MudStack Row="true" Class="mt-3" Wrap="Wrap.Wrap" Spacing="2">
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.NetworkCheck" OnClick="TestAsync" Disabled="_busy" data-testid="jira-test">Test connection</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save" OnClick="SaveAsync" Disabled="_busy" data-testid="jira-save">Save</MudButton>
+            @if (_connection?.IsConfigured == true)
+            {
+                <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="DisconnectAsync" Disabled="_busy" data-testid="jira-disconnect">Disconnect</MudButton>
+            }
+        </MudStack>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2 d-block">
+            Create the token at id.atlassian.com › Security › API tokens. It is stored encrypted and never shown again.
+            If an issue's Done step needs a field filled in, Jira refuses the move and the project's Jira panel says so.
+        </MudText>
+    </MudPaper>
+}
+
+@code {
+    private JiraConnectionDto? _connection;
+    private JiraTestResult? _test;
+    private bool _loading = true;
+    private bool _busy;
+    private string? _siteUrl;
+    private string? _email;
+    private string? _token;
+    private bool _active = true;
+
+    private string TokenHelp => _connection?.TokenHint is { } hint ? $"Saved token ends in …{hint}. Leave blank to keep it." : "A Jira API token.";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _connection = await Jira.GetAsync();
+            if (_connection.IsConfigured)
+            {
+                _siteUrl = _connection.SiteUrl;
+                _email = _connection.AccountEmail;
+                _active = _connection.IsActive;
+            }
+        }
+        catch (Exception ex) when (IntegrationFormat.IsExpected(ex))
+        {
+            Snackbar.Add($"Couldn't load the Jira connection: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private SaveJiraConnectionRequest Request() => new(_siteUrl ?? "", _email ?? "", _token, _active);
+
+    private Task TestAsync() => RunAsync(async () => _test = await Jira.TestAsync(Request()));
+
+    private Task SaveAsync() => RunAsync(async () =>
+    {
+        _connection = await Jira.SaveAsync(Request());
+        _token = null;
+        _test = new JiraTestResult(_connection.LastTestOk == true, _connection.LastTestMessage ?? "Saved.", null, null);
+        Snackbar.Add(_connection.LastTestOk == true ? "Jira connected." : "Saved, but the connection test failed. See the message above.", _connection.LastTestOk == true ? Severity.Success : Severity.Warning);
+    });
+
+    private async Task DisconnectAsync()
+    {
+        if (await Dialogs.ShowMessageBoxAsync("Disconnect Jira?", "The token is deleted and nothing syncs any more. Issues in Jira and tasks in Workbench stay as they are.",
+                yesText: "Disconnect", cancelText: "Cancel") != true)
+        {
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            await Jira.DeleteAsync();
+            _connection = await Jira.GetAsync();
+            _test = null;
+            _token = null;
+            Snackbar.Add("Jira disconnected.", Severity.Success);
+        });
+    }
+
+    private async Task RunAsync(Func<Task> work)
+    {
+        _busy = true;
+        try
+        {
+            await work();
+        }
+        catch (Exception ex) when (IntegrationFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string Projects(int n) => n == 1 ? "1 project" : $"{n} projects";
+}
