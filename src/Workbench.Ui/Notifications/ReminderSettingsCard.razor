@@ -25,6 +25,11 @@
             <MudSwitch T="bool" Value="_settings.ViaTeams" ValueChanged="v => SaveAsync(_settings with { ViaTeams = v })" Color="Color.Primary" Disabled="_busy"
                        Label="Teams" data-testid="reminder-teams" />
         }
+        @if (_settings.SlackAvailable)
+        {
+            <MudSwitch T="bool" Value="_settings.ViaSlack" ValueChanged="v => SaveAsync(_settings with { ViaSlack = v })" Color="Color.Primary" Disabled="_busy"
+                       Label="Slack" data-testid="reminder-slack" />
+        }
 
         <MudSwitch T="bool" Value="_quiet" ValueChanged="SetQuietAsync" Color="Color.Primary" Disabled="_busy"
                    Label="Quiet hours: don't send reminders between" data-testid="reminder-quiet" />
@@ -77,7 +82,7 @@
         try
         {
             _settings = await Reminders.SetMineAsync(new SaveReminderSettingsRequest(
-                next.TimesheetEnabled, next.ApprovalsEnabled, next.ViaEmail, next.ViaTeams, next.QuietStartHour, next.QuietEndHour));
+                next.TimesheetEnabled, next.ApprovalsEnabled, next.ViaEmail, next.ViaTeams, next.QuietStartHour, next.QuietEndHour, next.ViaSlack));
             Snackbar.Add("Saved", Severity.Success);
         }
         catch (Exception ex) when (ex is HttpRequestException or ArgumentException or UnauthorizedAccessException)

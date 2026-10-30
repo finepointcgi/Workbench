@@ -19,6 +19,7 @@ internal static class BillingEndpoints
         b.MapGet("/invoices", (Guid? contractId, Guid? customerId, InvoiceState? status, InvoiceKind? type, string? search, bool? openOnly, int? take,
             IInvoiceService s, CancellationToken ct) => s.ListAsync(new InvoiceQuery(contractId, customerId, status, type, search, openOnly ?? false, take ?? 500), ct));
         b.MapGet("/invoices/{id:guid}", (Guid id, IInvoiceService s, CancellationToken ct) => s.GetAsync(id, ct));
+        b.MapGet("/ready-to-bill", (IInvoiceService s, CancellationToken ct) => s.GetReadyToBillAsync(ct));
         b.MapGet("/contracts", (IInvoiceService s, CancellationToken ct) => s.ListBillingContractsAsync(ct));
         b.MapPost("/invoices/preview", (GenerateInvoiceRequest r, IInvoiceService s, CancellationToken ct) => s.PreviewAsync(r, ct));
         b.MapPost("/invoices", (GenerateInvoiceRequest r, IInvoiceService s, CancellationToken ct) => s.GenerateDraftAsync(r, ct));

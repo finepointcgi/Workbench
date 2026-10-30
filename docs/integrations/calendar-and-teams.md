@@ -19,22 +19,4 @@ Entries cover the last 30 days and the next year. They are all-day entries, so t
 
 ## Teams notifications
 
-An administrator (**Manage integrations**) connects one Teams channel under **Admin › Integrations › Teams alerts** by pasting the address of a Workflows "Post to a channel when a webhook request is received" (or an older connector address). Each person then chooses, on **Notifications › Also post to Teams**, which groups of notification also go there (all off by default):
-
-| Group | Kinds (by wording) |
-| --- | --- |
-| Waiting for my approval | `approval.*`, `*approval`, `*.requested`, `*.submitted` |
-| Decisions on my requests | `*approved`, `*rejected`, `*returned`, `*decided`, `*cancelled` |
-| Assigned to me and @mentions | `mention`, `*assign*`, `*.task` |
-| Timesheet reminders | `timesheet.missing`, `timesheet.reopened` |
-| Everything else | the rest |
-
-The post is an adaptive card with the title, who it is for, the details and an **Open in Workbench** button. Approval-waiting posts link to the document page itself (where the approve / return / reject bar is) when the approval can be identified, otherwise to the inbox. Everyone in the channel sees the post, which says so next to the switches.
-
-- **Secrets:** the address is encrypted at rest (Data Protection, its own purpose string), shown back only as its host, and never logged: logs and errors name the host only.
-- **Allowed hosts:** `*.webhook.office.com`, `*.logic.azure.com`, `*.powerplatform.com`, `outlook.office.com`/`outlook.office365.com` and other `*.office.com` / `*.office365.com` / `*.microsoft.com` hosts. Anything else is refused when saving and again when posting. The usual SSRF guard applies on top (https, public addresses only, checked again when connecting).
-- **Fails soft:** `Notifier` hands the saved notifications to `ChatNotificationSender`, which never throws and posts in the background, so a slow or down Teams never delays or fails the action. The channel records the last error, shown on the admin tab.
-- **Rate limit:** at most 20 posts per minute per channel (per tenant); more are skipped (they are still in the bell and email).
-- **Not retried:** unlike the event connector under Connectors, notification posts are fire-and-forget. A missed post is still in the bell.
-- **Adding Slack:** implement `IChatChannelFormat` (kind, allowed hosts, card format) and register it in `IntegrationRegistration`. The `ChatChannel` and `ChatNotificationChoice` tables are keyed by kind already; add a connect screen for it.
-- Code: `Application/Notifications/ChatNotifications.cs`, `TeamsNotificationService.cs`, `Approvals/ApprovalChatLinks.cs`; UI `Ui/Integrations/TeamsTab.razor`, `Ui/Notifications/TeamsChoicesCard.razor`.
+Teams (and Slack) chat notifications now live in [chat.md](chat.md), which covers both products, setup steps, security and limits.
