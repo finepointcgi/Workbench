@@ -7,6 +7,9 @@ Workbench under **Setup › Go-live migration** (`/setup/migration`, Finance and
 - **Checklist**: the steps below, each linked to the import wizard, with its status from the import history,
   prerequisites, and data checks (record counts, open AR/AP tied to the GL).
 - **Import wizard** (`/setup/import`): upload → map → validate → dry run → import, every import reversible.
+- **Costpoint parallel run** (`/setup/migration/parallel-run`): upload Costpoint's trial balance and project cost report for the
+  parallel month; every difference comes with its likely cause (timing, unposted, rate difference...). See
+  `docs/integrations/costpoint.md`.
 - **Reconciliation** (`/setup/migration/reconcile`): upload a Costpoint report for a period, compare it with
   Workbench row by row, drill into differences, export the differences to .xlsx, and sign each report off.
 - **Payroll › Providers**: Paylocity hours export and payroll register layouts, tested against the customer's own files.
@@ -59,6 +62,8 @@ Follow the checklist; each step names its prerequisites and is blocked until the
 that changes nothing and lists what will be created, updated or skipped, and a rollback that refuses when something has
 started using what it created.
 
+0. **Fiscal calendar** (`fiscal-calendar.csv`) and, when you bring Costpoint's indirect structure with you, **indirect pools
+   and rates** (`indirect-pools.csv`, `indirect-rates.csv`): the checklist step *Fiscal calendar and indirect rates*.
 1. **Chart of accounts** (`accounts.csv`): account, name, type (A/L/C/R/E or words), parent, cost class. Summary
    accounts are the ones named as parents and take no postings. Check every expense account's cost class: indirect rates
    use it to build the pools and bases.

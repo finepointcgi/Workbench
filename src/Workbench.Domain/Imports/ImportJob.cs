@@ -42,6 +42,10 @@ public enum ImportKind
     // Unanet migration: who may charge what, and approved time carried over as history.
     Assignments,
     Timesheets,
+    // Costpoint integration: fiscal calendar and indirect rate structure.
+    FiscalCalendar,
+    IndirectRates,
+    IndirectPools,
 }
 
 public enum ImportJobStatus

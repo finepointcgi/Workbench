@@ -33,6 +33,11 @@ internal static class MigrationEndpoints
         recon.MapGet("/runs/{id:guid}/export", (Guid id, IReconciliationService s, CancellationToken ct) => s.ExportAsync(id, ct));
         recon.MapGet("/status/{periodId:guid}", (Guid periodId, IReconciliationService s, CancellationToken ct) => s.GetStatusAsync(periodId, ct));
 
+        var parallel = migration.MapGroup("/parallel-run");
+        parallel.MapGet("", (Guid? periodId, IParallelRunService s, CancellationToken ct) => s.GetAsync(periodId, ct));
+        parallel.MapPost("/upload", (UploadParallelReportRequest r, IParallelRunService s, CancellationToken ct) => s.UploadAsync(r, ct));
+        parallel.MapGet("/runs/{id:guid}/causes", (Guid id, IParallelRunService s, CancellationToken ct) => s.ExplainAsync(id, ct));
+
         var layouts = v1.MapGroup("/payroll/layouts").WithTags("Payroll");
         layouts.MapGet("/{provider}", (string provider, IPayrollLayoutService s, CancellationToken ct) => s.GetAsync(provider, ct));
         layouts.MapGet("/{provider}/default", (string provider, IPayrollLayoutService s, CancellationToken ct) => s.GetDefaultAsync(provider, ct));

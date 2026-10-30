@@ -17,6 +17,20 @@ public sealed class HttpMigrationService(HttpClient http) : IMigrationService
         await (await http.PutAsJsonAsync($"api/v1/migration/steps/{Uri.EscapeDataString(stepKey)}", request, cancellationToken)).ReadAsync<MigrationChecklistDto>(cancellationToken);
 }
 
+public sealed class HttpParallelRunService(HttpClient http) : IParallelRunService
+{
+    private const string Base = "api/v1/migration/parallel-run";
+
+    public async Task<ParallelRunDto> GetAsync(Guid? fiscalPeriodId = null, CancellationToken cancellationToken = default) =>
+        await (await http.GetAsync($"{Base}{(fiscalPeriodId is { } id ? $"?periodId={id}" : "")}", cancellationToken)).ReadAsync<ParallelRunDto>(cancellationToken);
+
+    public async Task<ParallelRunDto> UploadAsync(UploadParallelReportRequest request, CancellationToken cancellationToken = default) =>
+        await (await http.PostAsJsonAsync($"{Base}/upload", request, cancellationToken)).ReadAsync<ParallelRunDto>(cancellationToken);
+
+    public async Task<IReadOnlyList<ParallelCauseDto>> ExplainAsync(Guid runId, CancellationToken cancellationToken = default) =>
+        await http.GetAsync($"{Base}/runs/{runId}/causes", cancellationToken).ReadListAsync<ParallelCauseDto>(cancellationToken);
+}
+
 public sealed class HttpReconciliationService(HttpClient http) : IReconciliationService
 {
     private const string Base = "api/v1/migration/reconciliation";
@@ -87,6 +101,11 @@ public static class MigrationClientRegistration
     {
         services.AddHttpClient<IMigrationService, HttpMigrationService>(c => c.BaseAddress = serverBaseAddress);
         services.AddHttpClient<IReconciliationService, HttpReconciliationService>(c =>
+        {
+            c.BaseAddress = serverBaseAddress;
+            c.Timeout = TimeSpan.FromMinutes(10);
+        });
+        services.AddHttpClient<IParallelRunService, HttpParallelRunService>(c =>
         {
             c.BaseAddress = serverBaseAddress;
             c.Timeout = TimeSpan.FromMinutes(10);
