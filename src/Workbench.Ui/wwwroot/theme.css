@@ -1,29 +1,69 @@
-/* Workbench after Material 3, on top of MudBlazor (Material 2). The color roles, type scale and elevation levels are in
-   Theme/WorkbenchTheme.cs; this file adds the M3 shapes and tonal surfaces MudBlazor can't express. Loaded after
-   MudBlazor.min.css and before a11y.css, so the accessibility rules (focus rings, underlined links, contrast fixes) win.
+/* Workbench after Material 3, on top of MudBlazor (Material 2). See docs/ux/design-system.md.
 
-   M3's surface-container levels are the surface tinted with the primary color. They're mixed from MudBlazor's own CSS
-   variables here, so they follow light and dark mode with no extra switch. */
+   Where things live:
+     Theme/M3Tokens.cs      the color roles (--md-sys-color-*), emitted per light/dark mode by Layout/ThemeTokens.razor,
+                            and mapped into MudBlazor's palette (--mud-palette-*) by Theme/WorkbenchTheme.cs
+     this file              shape, elevation, motion and state-layer tokens, and the component styles built on all of them
+     a11y.css               loaded after this file so focus rings, underlined links and contrast fixes win
+
+   A component takes its colors from the roles (var(--md-sys-color-...)), never from a hex value, so dark mode and any
+   future re-seeding follow with no further edits. */
 
 :root {
-    --wb-surface-container-lowest: color-mix(in srgb, var(--mud-palette-primary) 0%, var(--mud-palette-surface));
-    --wb-surface-container-low: color-mix(in srgb, var(--mud-palette-primary) 4%, var(--mud-palette-surface));
-    --wb-surface-container: color-mix(in srgb, var(--mud-palette-primary) 7%, var(--mud-palette-surface));
-    --wb-surface-container-high: color-mix(in srgb, var(--mud-palette-primary) 10%, var(--mud-palette-surface));
-    --wb-surface-container-highest: color-mix(in srgb, var(--mud-palette-primary) 14%, var(--mud-palette-surface));
-    /* Secondary container: the navigation indicator and tonal buttons. Text on it is on-surface (over 7:1 both modes). */
-    --wb-secondary-container: color-mix(in srgb, var(--mud-palette-primary) 20%, var(--mud-palette-surface));
-    --wb-on-secondary-container: var(--mud-palette-text-primary);
-    --wb-outline: var(--mud-palette-lines-inputs);
-    --wb-outline-variant: var(--mud-palette-lines-default);
-    /* State layers: M3 overlays the content color at 8% (hover), 10% (focus) and 10% (pressed). */
-    --wb-state-hover: color-mix(in srgb, var(--mud-palette-text-primary) 8%, transparent);
-    --wb-shape-xs: 4px;
-    --wb-shape-s: 8px;
-    --wb-shape-m: 12px;
-    --wb-shape-l: 16px;
-    --wb-shape-xl: 28px;
-    --wb-shape-full: 999px;
+    /* Shape scale */
+    --md-sys-shape-corner-none: 0;
+    --md-sys-shape-corner-extra-small: 4px;
+    --md-sys-shape-corner-small: 8px;
+    --md-sys-shape-corner-medium: 12px;
+    --md-sys-shape-corner-large: 16px;
+    --md-sys-shape-corner-extra-large: 28px;
+    --md-sys-shape-corner-full: 999px;
+
+    /* Elevation: M3 key + ambient shadow per level. Surfaces also get lighter/tinted with the container roles, so most
+       things rest at level 0 or 1 and use a surface-container role instead of a shadow. */
+    --md-sys-elevation-level0: none;
+    --md-sys-elevation-level1: 0 1px 2px 0 rgba(0, 0, 0, 0.30), 0 1px 3px 1px rgba(0, 0, 0, 0.15);
+    --md-sys-elevation-level2: 0 1px 2px 0 rgba(0, 0, 0, 0.30), 0 2px 6px 2px rgba(0, 0, 0, 0.15);
+    --md-sys-elevation-level3: 0 1px 3px 0 rgba(0, 0, 0, 0.30), 0 4px 8px 3px rgba(0, 0, 0, 0.15);
+    --md-sys-elevation-level4: 0 2px 3px 0 rgba(0, 0, 0, 0.30), 0 6px 10px 4px rgba(0, 0, 0, 0.15);
+    --md-sys-elevation-level5: 0 4px 4px 0 rgba(0, 0, 0, 0.30), 0 8px 12px 6px rgba(0, 0, 0, 0.15);
+
+    /* State layers: the content color laid over a surface at these opacities (a11y.css adds the focus ring). */
+    --md-sys-state-hover-opacity: 8%;
+    --md-sys-state-focus-opacity: 10%;
+    --md-sys-state-pressed-opacity: 10%;
+    --md-sys-state-dragged-opacity: 16%;
+
+    /* Motion: M3 easing and durations. prefers-reduced-motion (a11y.css) collapses all of it. */
+    --md-sys-motion-easing-standard: cubic-bezier(0.2, 0, 0, 1);
+    --md-sys-motion-easing-emphasized-decelerate: cubic-bezier(0.05, 0.7, 0.1, 1);
+    --md-sys-motion-easing-emphasized-accelerate: cubic-bezier(0.3, 0, 0.8, 0.15);
+    --md-sys-motion-duration-short2: 100ms;
+    --md-sys-motion-duration-short4: 200ms;
+    --md-sys-motion-duration-medium2: 300ms;
+
+    /* Shorthands used below. */
+    --wb-state-hover: color-mix(in srgb, currentColor var(--md-sys-state-hover-opacity), transparent);
+    --wb-state-focus: color-mix(in srgb, currentColor var(--md-sys-state-focus-opacity), transparent);
+    --wb-state-pressed: color-mix(in srgb, currentColor var(--md-sys-state-pressed-opacity), transparent);
+    --wb-transition: var(--md-sys-motion-duration-short4) var(--md-sys-motion-easing-standard);
+
+    /* Earlier names, kept so existing rules keep working. */
+    --wb-shape-xs: var(--md-sys-shape-corner-extra-small);
+    --wb-shape-s: var(--md-sys-shape-corner-small);
+    --wb-shape-m: var(--md-sys-shape-corner-medium);
+    --wb-shape-l: var(--md-sys-shape-corner-large);
+    --wb-shape-xl: var(--md-sys-shape-corner-extra-large);
+    --wb-shape-full: var(--md-sys-shape-corner-full);
+    --wb-surface-container-lowest: var(--md-sys-color-surface-container-lowest);
+    --wb-surface-container-low: var(--md-sys-color-surface-container-low);
+    --wb-surface-container: var(--md-sys-color-surface-container);
+    --wb-surface-container-high: var(--md-sys-color-surface-container-high);
+    --wb-surface-container-highest: var(--md-sys-color-surface-container-highest);
+    --wb-secondary-container: var(--md-sys-color-secondary-container);
+    --wb-on-secondary-container: var(--md-sys-color-on-secondary-container);
+    --wb-outline: var(--md-sys-color-outline);
+    --wb-outline-variant: var(--md-sys-color-outline-variant);
 }
 
 html, body {
@@ -32,9 +72,26 @@ html, body {
     text-rendering: optimizeLegibility;
 }
 
-/* ---- Top app bar: the surface color, flat ---- */
+/* ---- Type roles as classes, for markup outside MudText (MudText's Typo maps to the same roles; see the doc) ---- */
+.md-display-small { font-size: 2.25rem; font-weight: 400; line-height: 1.22; letter-spacing: 0; }
+.md-headline-large { font-size: 2rem; font-weight: 400; line-height: 1.25; letter-spacing: 0; }
+.md-headline-medium { font-size: 1.75rem; font-weight: 400; line-height: 1.29; letter-spacing: 0; }
+.md-headline-small { font-size: 1.5rem; font-weight: 400; line-height: 1.33; letter-spacing: 0; }
+.md-title-large { font-size: 1.375rem; font-weight: 400; line-height: 1.27; letter-spacing: 0; }
+.md-title-medium { font-size: 1rem; font-weight: 500; line-height: 1.5; letter-spacing: 0.009em; }
+.md-title-small { font-size: 0.875rem; font-weight: 500; line-height: 1.43; letter-spacing: 0.007em; }
+.md-body-large { font-size: 1rem; font-weight: 400; line-height: 1.5; letter-spacing: 0.03em; }
+.md-body-medium { font-size: 0.875rem; font-weight: 400; line-height: 1.43; letter-spacing: 0.018em; }
+.md-body-small { font-size: 0.75rem; font-weight: 400; line-height: 1.33; letter-spacing: 0.033em; }
+.md-label-large { font-size: 0.875rem; font-weight: 500; line-height: 1.43; letter-spacing: 0.007em; }
+.md-label-medium { font-size: 0.75rem; font-weight: 500; line-height: 1.33; letter-spacing: 0.04em; }
+.md-label-small { font-size: 0.6875rem; font-weight: 500; line-height: 1.45; letter-spacing: 0.045em; }
+
+/* ---- Top app bar: the surface color, flat; it picks up the container color once the page scrolls under it ---- */
 .mud-appbar.mud-appbar-fixed-top {
     box-shadow: none;
+    background-color: var(--md-sys-color-surface);
+    color: var(--md-sys-color-on-surface);
 }
 
 .wb-brand {
@@ -42,9 +99,9 @@ html, body {
     align-items: center;
     gap: 12px;
     margin-left: 4px;
-    font-size: 1.375rem;              /* M3 title large */
+    font-size: 1.375rem;              /* title large */
     font-weight: 400;
-    color: var(--mud-palette-appbar-text);
+    color: var(--md-sys-color-on-surface);
 }
 
 .wb-brand-mark {
@@ -52,18 +109,19 @@ html, body {
     place-items: center;
     width: 32px;
     height: 32px;
-    border-radius: var(--wb-shape-s);
-    background: var(--mud-palette-primary-lighten);   /* primary container */
-    color: var(--mud-palette-primary);
+    border-radius: var(--md-sys-shape-corner-small);
+    background: var(--md-sys-color-primary-container);
+    color: var(--md-sys-color-on-primary-container);
     font-size: 1rem;
     font-weight: 700;
 }
 
-/* ---- Navigation drawer: surface container low, 56px items, a full pill indicator on secondary container ---- */
+/* ---- Navigation drawer: surface container low, 48px items, a full pill indicator on the secondary container ---- */
 .mud-drawer.mud-drawer-pos-left,
 .mud-drawer.mud-drawer-pos-start {
     box-shadow: none;
     border-right: none;
+    background-color: var(--md-sys-color-surface-container-low);
 }
 
 .mud-drawer .mud-navmenu {
@@ -72,54 +130,93 @@ html, body {
 
 .mud-drawer .mud-nav-link {
     min-height: 48px;
-    border-radius: var(--wb-shape-full);
+    border-radius: var(--md-sys-shape-corner-full);
     margin: 0;
     padding: 0 16px;
-    font-size: 0.875rem;              /* M3 label large */
+    font-size: 0.875rem;              /* label large */
     font-weight: 500;
     letter-spacing: 0.007em;
-    color: var(--mud-palette-drawer-text);
+    color: var(--md-sys-color-on-surface-variant);
+    transition: background-color var(--wb-transition);
 }
 
 .mud-drawer .mud-nav-link:hover:not(.mud-nav-link-disabled) {
     background-color: var(--wb-state-hover);
 }
 
+.mud-drawer .mud-nav-link:focus-visible:not(.mud-nav-link-disabled),
+.mud-drawer .mud-nav-link:active:not(.mud-nav-link-disabled) {
+    background-color: var(--wb-state-focus);
+}
+
 .mud-drawer .mud-nav-link.active:not(.mud-nav-link-disabled) {
-    background-color: var(--wb-secondary-container);
-    color: var(--wb-on-secondary-container);
+    background-color: var(--md-sys-color-secondary-container);
+    color: var(--md-sys-color-on-secondary-container);
     font-weight: 700;
 }
 
+.mud-drawer .mud-nav-link.active:not(.mud-nav-link-disabled):hover {
+    background-image: linear-gradient(var(--wb-state-hover), var(--wb-state-hover));
+}
+
 .mud-drawer .mud-nav-link.active:not(.mud-nav-link-disabled) .mud-nav-link-icon {
-    color: var(--wb-on-secondary-container);
+    color: var(--md-sys-color-on-secondary-container);
 }
 
 .mud-drawer .mud-nav-group > .mud-nav-link {
     font-weight: 500;
 }
 
-/* ---- Surfaces: the page is the surface; cards sit on surface container low ---- */
+/* ---- Surfaces: the page is the surface; cards sit on a container role ---- */
 .mud-main-content {
-    background: var(--mud-palette-background);
+    background: var(--md-sys-color-surface);
 }
 
-/* Elevated cards (MudBlazor's default papers and cards): a tonal container with level 1. */
+/* Elevated card (MudBlazor's default papers and cards): surface container low, level 1. */
 .mud-card,
 .mud-paper.mud-elevation-1,
 .mud-paper.mud-elevation-2 {
-    background-color: var(--wb-surface-container-low);
-    border-radius: var(--wb-shape-m);
+    background-color: var(--md-sys-color-surface-container-low);
+    color: var(--md-sys-color-on-surface);
+    border-radius: var(--md-sys-shape-corner-medium);
     border: none;
     box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.10), 0 1px 3px 1px rgba(0, 0, 0, 0.06);
 }
 
-/* Outlined cards: the surface with an outline-variant edge. */
+/* Outlined card: the surface with an outline-variant edge, no shadow. */
 .mud-paper.mud-paper-outlined {
-    background-color: var(--mud-palette-surface);
-    border-radius: var(--wb-shape-m);
-    border: 1px solid var(--wb-outline-variant);
+    background-color: var(--md-sys-color-surface);
+    border-radius: var(--md-sys-shape-corner-medium);
+    border: 1px solid var(--md-sys-color-outline-variant);
     box-shadow: none;
+}
+
+/* Filled card: add class "wb-card-filled" (surface container highest, no shadow). */
+.mud-paper.wb-card-filled,
+.mud-card.wb-card-filled {
+    background-color: var(--md-sys-color-surface-container-highest);
+    box-shadow: none;
+}
+
+/* Tonal card: add class "wb-card-tonal" (secondary container) for one highlighted card on a page. */
+.mud-paper.wb-card-tonal,
+.mud-card.wb-card-tonal {
+    background-color: var(--md-sys-color-secondary-container);
+    color: var(--md-sys-color-on-secondary-container);
+    box-shadow: none;
+}
+
+/* A clickable card gets the state layer. */
+.mud-card.wb-card-clickable,
+.mud-paper.wb-card-clickable {
+    cursor: pointer;
+    transition: box-shadow var(--wb-transition), background-image var(--wb-transition);
+}
+
+.mud-card.wb-card-clickable:hover,
+.mud-paper.wb-card-clickable:hover {
+    background-image: linear-gradient(var(--wb-state-hover), var(--wb-state-hover));
+    box-shadow: var(--md-sys-elevation-level1);
 }
 
 /* Tables and lists inside a card take the card's color. */
@@ -129,30 +226,64 @@ html, body {
     background-color: transparent;
 }
 
-/* Dialogs: surface container high, extra-large corners. */
+/* Dialogs: surface container high, extra-large corners, level 3; the content fades and rises in. */
 .mud-dialog {
-    background-color: var(--wb-surface-container-high);
-    border-radius: var(--wb-shape-xl);
+    background-color: var(--md-sys-color-surface-container-high);
+    color: var(--md-sys-color-on-surface);
+    border-radius: var(--md-sys-shape-corner-extra-large);
+    box-shadow: var(--md-sys-elevation-level3);
 }
 
 .mud-dialog .mud-dialog-title {
-    font-size: 1.5rem;                /* M3 headline small */
+    font-size: 1.5rem;                /* headline small */
     font-weight: 400;
+}
+
+.mud-dialog .mud-dialog-actions {
+    gap: 8px;
+    padding: 8px 24px 24px;
+}
+
+.mud-overlay.mud-overlay-dialog .mud-overlay-scrim {
+    background-color: color-mix(in srgb, var(--md-sys-color-scrim) 32%, transparent);
 }
 
 /* Menus and popovers: surface container, extra-small corners, level 2. */
 .mud-popover.mud-paper {
-    background-color: var(--wb-surface-container);
-    border-radius: var(--wb-shape-xs);
+    background-color: var(--md-sys-color-surface-container);
+    border-radius: var(--md-sys-shape-corner-extra-small);
     border: none;
+    box-shadow: var(--md-sys-elevation-level2);
 }
 
-/* ---- Buttons: full pills, 40px tall ---- */
+.mud-list-item,
+.mud-menu-item {
+    transition: background-color var(--wb-transition);
+}
+
+.mud-list-item.mud-list-item-clickable:hover:not(.mud-disabled),
+.mud-menu-item:hover:not(.mud-disabled) {
+    background-color: var(--wb-state-hover);
+}
+
+.mud-list-item.mud-list-item-clickable:focus-visible,
+.mud-menu-item:focus-visible {
+    background-color: var(--wb-state-focus);
+}
+
+.mud-list-item.mud-selected-item {
+    background-color: var(--md-sys-color-secondary-container);
+    color: var(--md-sys-color-on-secondary-container);
+}
+
+/* ---- Buttons: full pills, 40px tall, flat. State layers: the button's own text color laid over it at 8% (hover),
+       10% (focus, pressed), so the same rule serves every color and both modes. ---- */
 .mud-button-root.mud-button {
-    border-radius: var(--wb-shape-full);
+    border-radius: var(--md-sys-shape-corner-full);
     min-height: 40px;
     padding-left: 24px;
     padding-right: 24px;
+    transition: background-color var(--wb-transition), box-shadow var(--wb-transition), border-color var(--wb-transition);
 }
 
 .mud-button-root.mud-button.mud-button-text {
@@ -166,60 +297,157 @@ html, body {
     padding-right: 16px;
 }
 
-/* Filled buttons rest flat (M3 level 0) and lift to level 1 on hover. */
+/* Filled: level 0 at rest, level 1 on hover. The base color is pinned so Mud's own "darken on hover" doesn't stack with
+   the state layer. */
 .mud-button-filled {
     box-shadow: none;
 }
 
-.mud-button-filled:hover {
-    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.30), 0 1px 3px 1px rgba(0, 0, 0, 0.15);
+.mud-button-filled:hover:not(.mud-disabled) {
+    box-shadow: var(--md-sys-elevation-level1);
+}
+
+.mud-button-filled.mud-button-filled-primary:is(:hover, :focus-visible, :active):not(.mud-disabled) { background-color: var(--mud-palette-primary); }
+.mud-button-filled.mud-button-filled-secondary:is(:hover, :focus-visible, :active):not(.mud-disabled) { background-color: var(--mud-palette-secondary); }
+.mud-button-filled.mud-button-filled-tertiary:is(:hover, :focus-visible, :active):not(.mud-disabled) { background-color: var(--mud-palette-tertiary); }
+.mud-button-filled.mud-button-filled-info:is(:hover, :focus-visible, :active):not(.mud-disabled) { background-color: var(--mud-palette-info); }
+.mud-button-filled.mud-button-filled-success:is(:hover, :focus-visible, :active):not(.mud-disabled) { background-color: var(--mud-palette-success); }
+.mud-button-filled.mud-button-filled-warning:is(:hover, :focus-visible, :active):not(.mud-disabled) { background-color: var(--mud-palette-warning); }
+.mud-button-filled.mud-button-filled-error:is(:hover, :focus-visible, :active):not(.mud-disabled) { background-color: var(--mud-palette-error); }
+.mud-button-filled.mud-button-filled-dark:is(:hover, :focus-visible, :active):not(.mud-disabled) { background-color: var(--mud-palette-dark); }
+
+.mud-button-filled:not(:is(.mud-button-filled-primary, .mud-button-filled-secondary, .mud-button-filled-tertiary, .mud-button-filled-info, .mud-button-filled-success, .mud-button-filled-warning, .mud-button-filled-error, .mud-button-filled-dark)) {
+    /* Default-colored filled button = M3 tonal button. */
+    background-color: var(--md-sys-color-secondary-container);
+    color: var(--md-sys-color-on-secondary-container);
+}
+
+.mud-button-filled:is(:hover, :focus-visible):not(.mud-disabled) {
+    background-image: linear-gradient(var(--wb-state-hover), var(--wb-state-hover));
+}
+
+.mud-button-filled:is(:focus-visible, :active):not(.mud-disabled) {
+    background-image: linear-gradient(var(--wb-state-pressed), var(--wb-state-pressed));
+}
+
+/* Text and outlined: transparent at rest, the state layer replaces Mud's 4% tint. */
+.mud-button-text:hover:not(.mud-disabled),
+.mud-button-outlined:hover:not(.mud-disabled) {
+    background-color: var(--wb-state-hover);
+}
+
+.mud-button-text:is(:focus-visible, :active):not(.mud-disabled),
+.mud-button-outlined:is(:focus-visible, :active):not(.mud-disabled) {
+    background-color: var(--wb-state-pressed);
 }
 
 /* Outlined buttons use the outline role. */
 .mud-button-outlined {
-    border-color: var(--wb-outline);
+    border-color: var(--md-sys-color-outline);
 }
 
-/* Filled default-colored buttons become M3 tonal buttons. */
-.mud-button-filled.mud-button-filled-default {
-    background-color: var(--wb-secondary-container);
-    color: var(--wb-on-secondary-container);
+/* Icon buttons: a 40px circle with the same state layers. */
+.mud-icon-button:hover:not(.mud-disabled) {
+    background-color: var(--wb-state-hover);
+}
+
+.mud-icon-button:is(:focus-visible, :active):not(.mud-disabled) {
+    background-color: var(--wb-state-pressed);
+}
+
+/* Floating action buttons: large corners (16px) on the primary container; extended FABs keep the label. */
+.mud-fab {
+    border-radius: var(--md-sys-shape-corner-large);
+    box-shadow: var(--md-sys-elevation-level3);
+    transition: box-shadow var(--wb-transition), background-color var(--wb-transition);
+}
+
+.mud-fab.mud-fab-extended {
+    border-radius: var(--md-sys-shape-corner-large);
+    min-height: 56px;
+}
+
+.mud-fab-filled-default,
+.mud-fab:not([class*="mud-fab-filled-"]):not([class*="mud-fab-color-"]) {
+    background-color: var(--md-sys-color-primary-container);
+    color: var(--md-sys-color-on-primary-container);
+}
+
+.mud-fab:hover:not(:disabled) {
+    box-shadow: var(--md-sys-elevation-level4);
+    background-image: linear-gradient(var(--wb-state-hover), var(--wb-state-hover));
 }
 
 /* Toggle groups (Mine/All and the like): pill segmented buttons. */
 .mud-toggle-group {
-    border-radius: var(--wb-shape-full);
+    border-radius: var(--md-sys-shape-corner-full);
     overflow: hidden;
 }
 
-/* ---- Text fields: extra-small corners ---- */
+/* ---- Text fields: outlined (extra-small corners, outline role, 2px primary when focused) and filled ---- */
 .mud-input.mud-input-outlined .mud-input-outlined-border {
-    border-radius: var(--wb-shape-xs);
-    border-color: var(--wb-outline);
+    border-radius: var(--md-sys-shape-corner-extra-small);
+    border-color: var(--md-sys-color-outline);
+    transition: border-color var(--wb-transition);
+}
+
+.mud-input.mud-input-outlined:hover:not(.mud-disabled):not(.mud-focused) .mud-input-outlined-border {
+    border-color: var(--md-sys-color-on-surface);
+}
+
+.mud-input.mud-input-outlined.mud-focused .mud-input-outlined-border {
+    border-color: var(--md-sys-color-primary);
 }
 
 .mud-input.mud-input-filled {
-    border-radius: var(--wb-shape-xs) var(--wb-shape-xs) 0 0;
-    background-color: var(--wb-surface-container-highest);
+    border-radius: var(--md-sys-shape-corner-extra-small) var(--md-sys-shape-corner-extra-small) 0 0;
+    background-color: var(--md-sys-color-surface-container-highest);
+    transition: background-color var(--wb-transition);
 }
 
-/* ---- Chips: small corners (M3 assist and filter chips) ---- */
+.mud-input.mud-input-filled:hover:not(.mud-disabled):not(.mud-focused) {
+    background-image: linear-gradient(var(--wb-state-hover), var(--wb-state-hover));
+}
+
+.mud-input-control .mud-input-helper-text {
+    color: var(--md-sys-color-on-surface-variant);
+}
+
+/* ---- Chips: assist, filter and input chips with 8px corners; a selected one is a secondary container ---- */
 .mud-chip {
-    border-radius: var(--wb-shape-s);
+    border-radius: var(--md-sys-shape-corner-small);
     font-weight: 500;
+    transition: background-color var(--wb-transition), box-shadow var(--wb-transition);
+}
+
+.mud-chip.mud-chip-outlined {
+    border-color: var(--md-sys-color-outline-variant);
+}
+
+.mud-chip.mud-clickable:hover:not(.mud-disabled) {
+    background-image: linear-gradient(var(--wb-state-hover), var(--wb-state-hover));
+}
+
+.mud-chip.mud-clickable:is(:focus-visible, :active):not(.mud-disabled) {
+    background-image: linear-gradient(var(--wb-state-pressed), var(--wb-state-pressed));
+}
+
+.mud-chip.mud-chip-selected {
+    background-color: var(--md-sys-color-secondary-container);
+    color: var(--md-sys-color-on-secondary-container);
 }
 
 /* ---- Tables ---- */
 .mud-table {
-    border-radius: var(--wb-shape-m);
+    border-radius: var(--md-sys-shape-corner-medium);
 }
 
 .mud-table-head .mud-table-cell {
-    color: var(--mud-palette-text-secondary);
-    font-size: 0.875rem;              /* M3 title small */
+    color: var(--md-sys-color-on-surface-variant);
+    font-size: 0.875rem;              /* title small */
     font-weight: 500;
     letter-spacing: 0.007em;
-    border-bottom: 1px solid var(--wb-outline-variant);
+    border-bottom: 1px solid var(--md-sys-color-outline-variant);
 }
 
 .mud-table-body .mud-table-cell {
@@ -230,26 +458,61 @@ html, body {
     border-radius: inherit;
 }
 
-/* ---- Tabs: sentence case, a 3px indicator with rounded top corners ---- */
+.mud-table-hover .mud-table-body .mud-table-row {
+    transition: background-color var(--wb-transition);
+}
+
+/* ---- Tabs: sentence case, a 3px indicator with rounded top corners, state layer on hover ---- */
 .mud-tab {
     text-transform: none;
     font-weight: 500;
     letter-spacing: 0.007em;
     min-height: 48px;
+    transition: background-color var(--wb-transition), color var(--wb-transition);
+}
+
+.mud-tab:hover:not(.mud-disabled) {
+    background-color: var(--wb-state-hover);
+}
+
+.mud-tab.mud-tab-active {
+    color: var(--md-sys-color-primary);
 }
 
 .mud-tab-slider {
     height: 3px !important;
     border-radius: 3px 3px 0 0;
+    background: var(--md-sys-color-primary);
 }
 
-/* ---- Alerts and snackbars ---- */
+.mud-tabs-tabbar {
+    border-bottom: 1px solid var(--md-sys-color-outline-variant);
+}
+
+/* ---- Alerts, snackbars and tooltips ---- */
 .mud-alert {
-    border-radius: var(--wb-shape-m);
+    border-radius: var(--md-sys-shape-corner-medium);
 }
 
+/* A snackbar is the inverse surface (the default, no-severity ones); severity ones keep their status color. */
 .mud-snackbar {
-    border-radius: var(--wb-shape-xs);
+    border-radius: var(--md-sys-shape-corner-extra-small);
+    box-shadow: var(--md-sys-elevation-level3);
+}
+
+.mud-snackbar.mud-alert-filled-normal {
+    background-color: var(--md-sys-color-inverse-surface);
+    color: var(--md-sys-color-inverse-on-surface);
+}
+
+.mud-snackbar .mud-snackbar-content-action > button {
+    border-radius: var(--md-sys-shape-corner-full);
+}
+
+.mud-tooltip {
+    border-radius: var(--md-sys-shape-corner-extra-small);
+    background-color: var(--md-sys-color-inverse-surface);
+    color: var(--md-sys-color-inverse-on-surface);
 }
 
 /* ---- Links: still underlined (WCAG 1.4.1, a11y.css), but a lighter, offset underline that darkens on hover. "html body"
@@ -286,13 +549,14 @@ html body .mud-typography a:not(.mud-button-root):not(.mud-chip):hover {
     align-items: center;
     min-height: 32px;
     padding: 0 16px;
-    border-radius: var(--wb-shape-s);
-    border: 1px solid var(--wb-outline-variant);
-    color: var(--mud-palette-text-primary);
+    border-radius: var(--md-sys-shape-corner-small);
+    border: 1px solid var(--md-sys-color-outline-variant);
+    color: var(--md-sys-color-on-surface-variant);
     font-size: 0.875rem;
     font-weight: 500;
     text-decoration: none;
     white-space: nowrap;
+    transition: background-color var(--wb-transition);
 }
 
 .wb-group-tabs .wb-group-tab:hover {
@@ -300,9 +564,9 @@ html body .mud-typography a:not(.mud-button-root):not(.mud-chip):hover {
 }
 
 .wb-group-tabs .wb-group-tab.wb-group-tab-current {
-    background-color: var(--wb-secondary-container);
+    background-color: var(--md-sys-color-secondary-container);
     border-color: transparent;
-    color: var(--wb-on-secondary-container);
+    color: var(--md-sys-color-on-secondary-container);
     font-weight: 700;
 }
 
@@ -315,4 +579,15 @@ html body .mud-typography a:not(.mud-button-root):not(.mud-chip):hover {
 .mud-breadcrumbs {
     padding: 0 0 8px;
     font-size: 0.8125rem;
+}
+
+/* ---- Phones: the dialog and snackbar use the width they have ---- */
+@media (max-width: 600px) {
+    .mud-dialog {
+        border-radius: var(--md-sys-shape-corner-large);
+    }
+
+    .mud-snackbar {
+        min-width: 0;
+    }
 }

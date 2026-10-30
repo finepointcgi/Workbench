@@ -2,6 +2,7 @@
 @using Workbench.Ui.Navigation
 @inject NavigationManager Navigation
 
+<ThemeTokens Dark="_darkMode" />
 <MudThemeProvider Theme="WorkbenchTheme.Default" @bind-IsDarkMode="_darkMode" />
 <MudPopoverProvider />
 <MudDialogProvider CloseOnEscapeKey="true" DefaultFocus="DefaultFocus.FirstChild" />
