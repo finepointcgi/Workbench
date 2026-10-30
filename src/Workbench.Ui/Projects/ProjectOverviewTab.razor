@@ -1,6 +1,8 @@
 @* The project page's Overview: key numbers in plain language, alerts, schedule health and milestones from the plan sheet, recent activity. *@
 @using Workbench.Contracts.Collaboration
 @inject IActivityService Activity
+@inject IServiceProvider Services
+@using Workbench.Contracts.Contracts
 
 <ProjectSetupSteps Hub="Hub" />
 
@@ -18,6 +20,17 @@
             </MudAlert>
         }
     </MudStack>
+}
+
+@if (_runway is { } run)
+{
+    <MudAlert Severity="@(run.IsLow ? (run.Level == FundingLevel.Warning ? Severity.Warning : Severity.Error) : Severity.Normal)" Dense="true" Class="mb-4" data-testid="funding-line">
+        Funded @FinancialFormat.Money(run.Funded), spent/billed @FinancialFormat.Money(run.Spent)@(run.WeeksText is { } w ? $", about {w} of funding left at the current pace" : ", no spending pace to project yet").
+        @if (run.IsLow)
+        {
+            <text> Slow spending or ask Finance to request incremental funding.</text>
+        }
+    </MudAlert>
 }
 
 @if (Hub.Project.Money is { } m)
@@ -157,10 +170,25 @@
     public ProjectHubDto Hub { get; set; } = default!;
 
     private IReadOnlyList<ActivityDto>? _activity;
+    private FundingRunway? _runway;
 
     protected override async Task OnParametersSetAsync()
     {
         _activity = null;
+        _runway = null;
+        // Funding is shown to Finance and the project's manager; anyone else just doesn't get the line.
+        if (Hub.Project.ContractNumber is not null && Services.GetService(typeof(IFundingService)) is IFundingService funding)
+        {
+            try
+            {
+                _runway = await funding.GetProjectFundingStatusAsync(Hub.Project.Id) is { } status ? FundingRunway.From(status) : null;
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UnauthorizedAccessException or WorkbenchNotFoundException or WorkbenchForbiddenException)
+            {
+                _runway = null;
+            }
+        }
+
         if (Hub.Schedule is { } schedule)
         {
             try

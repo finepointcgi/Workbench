@@ -194,7 +194,10 @@ public sealed class CeilingTodoProvider : IMyTodoProvider
     }
 }
 
-/// <summary>CLINs on a PM's projects whose funding is running low (the Limitation of Funds thresholds).</summary>
+/// <summary>
+/// A project manager's funding warning: one to-do per contract whose funding is running low, using the same CLIN levels
+/// and projection Finance's Limitation of Funds notices use.
+/// </summary>
 public sealed class FundingTodoProvider : IMyTodoProvider
 {
     public string Name => "Funding";
@@ -207,34 +210,33 @@ public sealed class FundingTodoProvider : IMyTodoProvider
         }
 
         var items = new List<MyTodoItem>();
+        var seen = new HashSet<Guid>(); // two projects on one contract share one warning
         foreach (var project in await context.ManagedProjectsAsync(cancellationToken))
         {
-            if (project.ContractId is null || await funding.GetProjectFundingStatusAsync(project.Id, cancellationToken) is not { } status)
+            if (project.ContractId is not { } contractId || await funding.GetProjectFundingStatusAsync(project.Id, cancellationToken) is not { } status
+                || FundingRunway.From(status) is not { IsLow: true } run || !seen.Add(contractId))
             {
                 continue;
             }
 
-            foreach (var clin in status.Clins.Where(c => c.Level is FundingLevel.Warning or FundingLevel.Critical or FundingLevel.Exhausted))
+            var money = ReceivingTodoProvider.Money(run.Remaining);
+            var clins = run.LowClins.Count == 1 ? $"CLIN {run.LowClins[0]}" : $"CLINs {string.Join(", ", run.LowClins)}";
+            var byDate = context.UrgencyFor(run.RunsOutOn, TodoUrgency.ThisWeek);
+            var urgency = run.Level switch
             {
-                var used = (clin.PercentIncurred ?? 0m).ToString("P0", CultureInfo.GetCultureInfo("en-US"));
-                // A warning is this week's job (send the notice), sooner if the money runs out sooner.
-                var byDate = context.UrgencyFor(clin.ProjectedExhaustion, TodoUrgency.ThisWeek);
-                var urgency = clin.Level switch
-                {
-                    FundingLevel.Exhausted => TodoUrgency.Overdue,
-                    FundingLevel.Critical => byDate == TodoUrgency.Overdue ? TodoUrgency.Overdue : TodoUrgency.Today,
-                    _ => byDate == TodoUrgency.Later ? TodoUrgency.ThisWeek : byDate,
-                };
-                items.Add(new MyTodoItem(
-                    $"funding:{clin.ClinId}:{clin.Level}", TodoCategories.Project,
-                    clin.Level == FundingLevel.Exhausted
-                        ? $"CLIN {clin.Number} on {status.ContractNumber} is out of funding"
-                        : $"CLIN {clin.Number} on {status.ContractNumber} has used {used} of its funding",
-                    $"{ReceivingTodoProvider.Money(clin.Remaining)} left"
-                        + (clin.ProjectedExhaustion is { } runOut ? $", projected to run out {runOut:MMM d}" : "")
-                        + ". Ask the contracting officer for incremental funding (Limitation of Funds notice).",
-                    urgency, null, $"projects/{project.Id}/financials", "View funding", Priority: (int)clin.Level)); // the run-out date is in the reason: showing it as "Due" read like a deadline
-            }
+                FundingLevel.Exhausted => TodoUrgency.Overdue,
+                FundingLevel.Critical => byDate == TodoUrgency.Overdue ? TodoUrgency.Overdue : TodoUrgency.Today,
+                _ => byDate == TodoUrgency.Later ? TodoUrgency.ThisWeek : byDate,
+            };
+            items.Add(new MyTodoItem(
+                $"funding:{contractId}:{run.Level}", TodoCategories.Project,
+                run.Level == FundingLevel.Exhausted
+                    ? $"{project.Code} has run out of funding on {run.ContractNumber}"
+                    : $"{project.Code} is running low on funding" + (run.WeeksText is { } weeks ? $": about {weeks} left" : ""),
+                $"{clins} on {run.ContractNumber} {(run.Level == FundingLevel.Exhausted ? "has" : "have")} {money} of funding left"
+                    + (run.RunsOutOn is { } runOut && run.Level != FundingLevel.Exhausted ? $" and will run out around {runOut:MMM d} at the current pace" : "")
+                    + ". Slow spending or ask Finance to request incremental funding.",
+                urgency, null, $"projects/{project.Id}", "See funding", Priority: (int)run.Level)); // the run-out date is in the reason: showing it as "Due" read like a deadline
         }
 
         return items;
