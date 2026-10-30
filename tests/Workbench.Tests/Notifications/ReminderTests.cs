@@ -355,6 +355,40 @@ public sealed class ReminderTests
         Assert.Equal(4, host.Emails.Sent.Count);
     }
 
+    [Fact]
+    public async Task Slack_gets_the_reminder_only_for_people_who_chose_it_and_Teams_stays_quiet_for_them()
+    {
+        await using var host = new Host(Thursday);
+        var chosen = await host.EmployeeAsync(Dev);
+        var emailOnly = await host.EmployeeAsync("email@example.com");
+        await host.SetAsync(chosen.Email, p => p.ViaSlack = true);
+        await using (var db = await host.Db.CreateAsync())
+        {
+            var secrets = host.Get<Workbench.Application.Integrations.IntegrationSecrets>();
+            db.Set<ChatChannel>().Add(new ChatChannel
+            {
+                Kind = ChatChannelKinds.Slack, Host = "hooks.slack.com", UpdatedBy = Dev,
+                WebhookUrlProtected = secrets.ProtectChatUrl("https://hooks.slack.com/services/T000/B000/secretsecret"),
+            });
+            db.Set<ChatChannel>().Add(new ChatChannel
+            {
+                Kind = ChatChannelKinds.Teams, Host = "contoso.webhook.office.com", UpdatedBy = Dev,
+                WebhookUrlProtected = secrets.ProtectChatUrl("https://contoso.webhook.office.com/webhookb2/secret-path/IncomingWebhook/abcd"),
+            });
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Equal(2, await host.TimesheetsAsync());
+        await host.Get<ChatNotificationSender>().WaitIdleAsync();
+
+        var posted = Assert.Single(host.Transport.Sent); // one person chose Slack; nobody chose Teams
+        Assert.Equal("hooks.slack.com", posted.Url.Host);
+        Assert.Contains("Your timesheet is due tomorrow", posted.Body);
+        Assert.Contains("\"blocks\"", posted.Body);
+        Assert.Equal(2, host.Emails.Sent.Count);
+        Assert.Single(await host.NotificationsAsync(emailOnly.Email, ReminderKinds.Timesheet));
+    }
+
     // ---- Waiting on you ----
 
     [Fact]
@@ -471,7 +505,7 @@ public sealed class ReminderTests
 
     private sealed class FakeSettings : IReminderSettingsService
     {
-        public ReminderSettingsDto State { get; set; } = new(true, true, true, false, null, null, true);
+        public ReminderSettingsDto State { get; set; } = new(true, true, true, false, null, null, true, false, true);
         public SaveReminderSettingsRequest? Last { get; private set; }
 
         public Task<ReminderSettingsDto> GetMineAsync(CancellationToken cancellationToken = default) => Task.FromResult(State);
@@ -479,7 +513,7 @@ public sealed class ReminderTests
         public Task<ReminderSettingsDto> SetMineAsync(SaveReminderSettingsRequest r, CancellationToken cancellationToken = default)
         {
             Last = r;
-            return Task.FromResult(State = new(r.TimesheetEnabled, r.ApprovalsEnabled, r.ViaEmail, r.ViaTeams, r.QuietStartHour, r.QuietEndHour, State.TeamsAvailable));
+            return Task.FromResult(State = new(r.TimesheetEnabled, r.ApprovalsEnabled, r.ViaEmail, r.ViaTeams, r.QuietStartHour, r.QuietEndHour, State.TeamsAvailable, r.ViaSlack, State.SlackAvailable));
         }
     }
 
@@ -501,6 +535,9 @@ public sealed class ReminderTests
 
         card.Find("input[data-testid='reminder-teams'], [data-testid='reminder-teams'] input").Change(true);
         card.WaitForAssertion(() => Assert.True(settings.Last!.ViaTeams));
+
+        card.Find("input[data-testid='reminder-slack'], [data-testid='reminder-slack'] input").Change(true);
+        card.WaitForAssertion(() => Assert.True(settings.Last!.ViaSlack));
 
         card.Find("input[data-testid='reminder-quiet'], [data-testid='reminder-quiet'] input").Change(true);
         card.WaitForAssertion(() => Assert.Equal((18, 9), (settings.Last!.QuietStartHour!.Value, settings.Last.QuietEndHour!.Value)));

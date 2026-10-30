@@ -35,6 +35,7 @@ public sealed class TeamsAndCalendarUiTests
 
     private sealed class FakeTeams : ITeamsNotificationService
     {
+        public string Kind => "teams";
         public ChatChannelDto Channel { get; set; } = new("teams", false, false, null, null, null, null);
         public List<string> Chosen { get; set; } = [];
         public string? ConnectedWith { get; private set; }
@@ -111,12 +112,12 @@ public sealed class TeamsAndCalendarUiTests
     {
         var teams = new FakeTeams();
         await using var ctx = Context((typeof(ITeamsNotificationService), teams));
-        var hidden = ctx.Render<TeamsChoicesCard>();
-        Assert.Empty(hidden.FindAll("[data-testid='teams-choices']"));
+        var hidden = ctx.Render<ChatChoicesCard>();
+        Assert.Empty(hidden.FindAll("[data-testid='chat-choices']"));
 
         teams.Channel = teams.Channel with { Connected = true, IsActive = true, Host = "contoso.webhook.office.com" };
-        var card = ctx.Render<TeamsChoicesCard>();
-        card.WaitForAssertion(() => Assert.NotNull(card.Find("[data-testid='teams-choices']")));
+        var card = ctx.Render<ChatChoicesCard>();
+        card.WaitForAssertion(() => Assert.NotNull(card.Find("[data-testid='chat-choices']")));
         card.Find("input[data-testid='teams-approvals'], [data-testid='teams-approvals'] input").Change(true);
 
         card.WaitForAssertion(() => Assert.Equal([NotificationGroups.Approvals], teams.Chosen));

@@ -1,0 +1,95 @@
+@* On the Notifications page: which kinds of notification also go to the connected chat channels (Teams, Slack). Shows only the products an administrator connected, and nothing when none is. *@
+@using Workbench.Contracts.Notifications
+@inject IServiceProvider Services
+@inject ISnackbar Snackbar
+
+@if (_places.Count > 0)
+{
+    <MudPaper Outlined="true" Class="pa-4 mt-4" data-testid="chat-choices">
+        <MudText Typo="Typo.h6" HtmlTag="h2" id="chat-heading">Also post to @string.Join(" or ", _places.Select(p => p.Name))</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
+            Your team's @(_places.Count == 1 ? "channel" : "channels") can show these too, with your name on them and a link to open the item. Everyone in the channel sees them.
+        </MudText>
+        @if (_places.Count == 1)
+        {
+            @foreach (var group in _places[0].Choices.Groups)
+            {
+                <MudSwitch T="bool" Value="group.Enabled" ValueChanged="v => ToggleAsync(_places[0], group.Group, v)" Color="Color.Primary" Disabled="_busy"
+                           Label="@group.Label" data-testid="@($"{_places[0].Kind}-{group.Group}")" />
+            }
+        }
+        else
+        {
+            @foreach (var group in _places[0].Choices.Groups)
+            {
+                <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2" Class="mb-1">
+                    <MudText Typo="Typo.body1" Style="flex:1 1 220px">@group.Label</MudText>
+                    @foreach (var place in _places)
+                    {
+                        var enabled = place.Choices.Groups.First(g => g.Group == group.Group).Enabled;
+                        <MudSwitch T="bool" Value="enabled" ValueChanged="v => ToggleAsync(place, group.Group, v)" Color="Color.Primary" Disabled="_busy"
+                                   Label="@place.Name" aria-label="@($"{group.Label}: {place.Name}")" data-testid="@($"{place.Kind}-{group.Group}")" />
+                    }
+                </MudStack>
+            }
+        }
+    </MudPaper>
+}
+
+@code {
+    private sealed class Place(string kind, string name, IChatNotificationService service, ChatChoicesDto choices)
+    {
+        public string Kind { get; } = kind;
+        public string Name { get; } = name;
+        public IChatNotificationService Service { get; } = service;
+        public ChatChoicesDto Choices { get; set; } = choices;
+    }
+
+    private List<Place> _places = [];
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        List<Place> places = [];
+        foreach (var (kind, name, type) in new[] { (ChatChannelKinds.Teams, "Teams", typeof(ITeamsNotificationService)), (ChatChannelKinds.Slack, "Slack", typeof(ISlackNotificationService)) })
+        {
+            if (Services.GetService(type) is not IChatNotificationService service)
+            {
+                continue;
+            }
+
+            try
+            {
+                if (await service.GetMineAsync() is { Available: true } choices)
+                {
+                    places.Add(new Place(kind, name, service, choices));
+                }
+            }
+            catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException)
+            {
+                // Chat is optional: the page works without it.
+            }
+        }
+
+        _places = places;
+    }
+
+    private async Task ToggleAsync(Place place, string key, bool on)
+    {
+        var groups = place.Choices.Groups.Where(g => g.Group == key ? on : g.Enabled).Select(g => g.Group).ToList();
+        _busy = true;
+        try
+        {
+            place.Choices = await place.Service.SetMineAsync(new SaveChatChoicesRequest(groups));
+            Snackbar.Add("Saved", Severity.Success);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or ArgumentException or UnauthorizedAccessException)
+        {
+            Snackbar.Add($"Couldn't save: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}
