@@ -17,7 +17,7 @@
                 @if (Row is not null)
                 {
                     <MudSimpleTable Dense="true" Elevation="0">
-                        <thead><tr><th>Amount</th><th style="text-align:right">Costpoint</th><th style="text-align:right">Workbench</th><th style="text-align:right">Difference</th></tr></thead>
+                        <thead><tr><th>Amount</th><th style="text-align:right">@Source</th><th style="text-align:right">Workbench</th><th style="text-align:right">Difference</th></tr></thead>
                         <tbody>
                             @foreach (var value in Row.Values)
                             {
@@ -41,8 +41,8 @@
                     <Grid Columns="_drill.WorkbenchColumns" Rows="_drill.WorkbenchRows" Empty="Nothing in Workbench for this key." />
                 </div>
                 <div>
-                    <MudText Typo="Typo.subtitle2">Costpoint file (@_drill.CostpointRows.Count row(s))</MudText>
-                    <Grid Columns="_drill.CostpointColumns" Rows="_drill.CostpointRows" Empty="The Costpoint report has no row for this key." />
+                    <MudText Typo="Typo.subtitle2">@Source file (@_drill.CostpointRows.Count row(s))</MudText>
+                    <Grid Columns="_drill.CostpointColumns" Rows="_drill.CostpointRows" Empty="@($"The {Source} report has no row for this key.")" />
                 </div>
             </MudStack>
         }
@@ -64,6 +64,10 @@
 
     [Parameter]
     public ReconRowDto? Row { get; set; }
+
+    /// <summary>The system the uploaded report came from.</summary>
+    [Parameter]
+    public string Source { get; set; } = "Costpoint";
 
     [Parameter]
     public IReadOnlyList<ReconFieldDto> Measures { get; set; } = [];

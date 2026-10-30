@@ -21,6 +21,7 @@ public sealed class ReconciliationService(
     IWorkbenchDbContextFactory dbFactory,
     IFiscalCalendarService calendar,
     ReconciliationSources sources,
+    UnanetReconcileCauses unanetCauses,
     AuditRecorder audit,
     SecurityEventLog securityLog,
     TimeProvider clock) : IReconciliationService
@@ -162,6 +163,10 @@ public sealed class ReconciliationService(
         var scope = await ScopeAsync(report, mapping.Options, request.FiscalPeriodId, request.AsOf, cancellationToken);
         var figures = await sources.LoadAsync(request.Kind, scope, cancellationToken);
         var comparison = ReconciliationEngine.Compare(report, mapping, file, figures);
+        if (report.Source == "Unanet")
+        {
+            comparison = comparison with { Rows = await unanetCauses.ExplainAsync(request.Kind, scope, comparison.Rows, cancellationToken) };
+        }
 
         var keyLabels = report.Fields.Where(f => f.Role == ReconFieldRole.Key).Select(f => f.Label).ToList();
         var json = JsonSerializer.Serialize(new StoredResult(keyLabels, comparison.Rows, comparison.Problems), Json);
@@ -324,7 +329,8 @@ public sealed class ReconciliationService(
     public async Task<IReadOnlyList<ReconStatusDto>> GetStatusAsync(Guid fiscalPeriodId, CancellationToken cancellationToken = default)
     {
         var runs = await ListRunsAsync(fiscalPeriodId, cancellationToken);
-        return ReconciliationReports.All.Select(r => new ReconStatusDto(r.Kind, r.Title,
+        // The Costpoint evidence board: Unanet reconciliations have their own page and don't count towards the Costpoint go-live.
+        return ReconciliationReports.All.Where(r => r.Source == "Costpoint").Select(r => new ReconStatusDto(r.Kind, r.Title,
             runs.FirstOrDefault(x => x.Kind == r.Kind), runs.FirstOrDefault(x => x.Kind == r.Kind && x.IsSignedOff))).ToList();
     }
 

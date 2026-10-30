@@ -12,6 +12,11 @@
     <MudPaper Outlined="true" Class="pa-3" Style="min-width:120px"><MudText Typo="Typo.caption">Warnings</MudText><MudText Typo="Typo.h6" Color="@(Warnings > 0 ? Color.Warning : Color.Default)">@Warnings</MudText></MudPaper>
 </MudStack>
 
+@if (ShowPlan)
+{
+    <MudText Typo="Typo.body1" Class="mb-3" data-testid="import-plain">@ImportFormat.PlainWords(Job.Definition.Kind, Counts, Imported, Job.Plan)</MudText>
+}
+
 @if (Job.Errors.Count > 0)
 {
     <MudText Typo="Typo.subtitle2" Class="mb-1">Errors and warnings</MudText>
