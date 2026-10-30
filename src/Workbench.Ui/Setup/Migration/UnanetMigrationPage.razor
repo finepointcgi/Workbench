@@ -1,0 +1,72 @@
+@page "/setup/migration/unanet"
+@using Workbench.Ui.Setup.Import
+@inject IImportService Imports
+@inject ISnackbar Snackbar
+
+<PageTitle>Moving from Unanet · Go-live migration · Workbench</PageTitle>
+
+<SetupHeader Title="Moving from Unanet" Subtitle="Bring over what you need, one Unanet export at a time, then run a closed month in both systems and reconcile it. Every import has a dry run and can be rolled back.">
+    <MudButton Href="setup/migration/unanet/reconcile" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.CompareArrows" data-testid="open-unanet-reconcile">Reconcile a month</MudButton>
+    <MudButton Href="setup/import" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.History">Import history</MudButton>
+</SetupHeader>
+
+<UnanetMappingGuide />
+
+<MudStack Spacing="2" data-testid="unanet-steps">
+    @foreach (var step in Steps)
+    {
+        var latest = _jobs.Where(j => j.Source == ImportSource.Unanet && j.Kind == step.Kind).OrderByDescending(j => j.CreatedAtUtc).FirstOrDefault();
+        var imported = _jobs.Any(j => j.Source == ImportSource.Unanet && j.Kind == step.Kind && j.Status == ImportJobStatus.Imported);
+        <MudPaper Outlined="true" Class="pa-3" data-step="@step.Kind">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                <MudIcon Icon="@(imported ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.RadioButtonUnchecked)" Color="@(imported ? Color.Success : Color.Default)" />
+                <div style="flex:1">
+                    <MudText Typo="Typo.subtitle1"><b>@step.Title</b>@(step.Optional ? " (optional)" : "")</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">@step.Text</MudText>
+                    @if (latest is not null)
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">Last: @MigrationFormat.Job(latest.Status) @MigrationFormat.When(latest.ImportedAtUtc ?? latest.CreatedAtUtc) · @latest.Counts.Creates added, @latest.Counts.Updates changed, @latest.Counts.Errors with errors</MudText>
+                    }
+                </div>
+                <MudButton Variant="@(imported ? Variant.Text : Variant.Outlined)" Color="Color.Primary" Href="@($"setup/import?source=Unanet&kind={step.Kind}")">@(imported ? "Import again" : "Import")</MudButton>
+            </MudStack>
+        </MudPaper>
+    }
+</MudStack>
+
+@code {
+    private sealed record Step(ImportKind Kind, string Title, string Text, bool Optional = false);
+
+    private static readonly Step[] Steps =
+    [
+        new(ImportKind.OrgUnits, "1. Organizations", "Unanet › Organizations list, exported."),
+        new(ImportKind.LaborCategories, "2. Labor categories", "Unanet › Labor categories list, exported."),
+        new(ImportKind.Employees, "3. People", "Unanet › People list with email, organization, labor category, supervisor and cost rate."),
+        new(ImportKind.CostRates, "4. Cost rate history", "Rate changes by date, so past months cost correctly.", true),
+        new(ImportKind.Customers, "5. Customers", "Unanet › Customers list."),
+        new(ImportKind.Contracts, "6. Projects → contracts", "The Unanet projects export: each customer project becomes a contract."),
+        new(ImportKind.Clins, "7. Contract lines (CLINs)", "Only if you track CLINs in Unanet.", true),
+        new(ImportKind.Projects, "8. Projects and tasks", "The same projects export, with a row per task: projects and their WBS."),
+        new(ImportKind.BillRates, "9. Bill rates", "Bill rates by labor category.", true),
+        new(ImportKind.Budgets, "10. Budgets", "Project and task budgets: hours by labor category, other costs in dollars."),
+        new(ImportKind.Assignments, "11. Assignments", "Who is assigned to which project or task."),
+        new(ImportKind.Vendors, "12. Vendors", "Needed before open AP invoices.", true),
+        new(ImportKind.OpenApBills, "13. Open AP invoices", "Unpaid vendor invoices at cut-over (not posted).", true),
+        new(ImportKind.OpenArInvoices, "14. Open AR invoices", "Unpaid customer invoices at cut-over (not posted).", true),
+        new(ImportKind.Timesheets, "15. Timesheets", "Approved time for the fiscal year so far, as history. Do this last: it needs people and tasks."),
+    ];
+
+    private IReadOnlyList<ImportJobDto> _jobs = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _jobs = await Imports.ListJobsAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+    }
+}

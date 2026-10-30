@@ -1,0 +1,8 @@
+Project Code,Task Code,Labor Category,Budget Hours,Budget Amount,Expense Type
+HV-2201,100,PM,1200,,
+HV-2201,210,SE3,3000,,
+HV-2201,210,SE2,2400,,
+HV-2201,220,AN,1800,,
+HV-2201,100,,,25000,Travel
+HV-3305,100,PM,600,,
+HV-3305,200,SE3,2000,,
