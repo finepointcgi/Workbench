@@ -232,8 +232,10 @@ public sealed class MyTodoServiceTests
         Assert.Equal("1001 hours is at 92% of its hours ceiling", ceiling.Title);
         Assert.Equal(TodoUrgency.Today, ceiling.Urgency); // critical
         var clin = Assert.Single(pm.Items, i => i.Key.StartsWith("funding:", StringComparison.Ordinal));
-        Assert.Equal("CLIN 0001 on C1 has used 80% of its funding", clin.Title);
-        Assert.Contains("projected to run out Nov 30", clin.Reason);
+        var weeks = (int)Math.Round((new DateOnly(2026, 11, 30).DayNumber - Today.DayNumber) / 7.0);
+        Assert.Equal($"1001 is running low on funding: about {weeks} weeks left", clin.Title);
+        Assert.Contains("CLIN 0001 on C1 have $20,000 of funding left and will run out around Nov 30", clin.Reason);
+        Assert.Contains("Slow spending or ask Finance to request incremental funding.", clin.Reason);
         Assert.Null(clin.Due); // the run-out date is in the reason, not shown as a due date
         Assert.Equal(TodoUrgency.ThisWeek, clin.Urgency);
         Assert.Equal([kit.Fx.Project1], ceilings.Asked.Distinct());
