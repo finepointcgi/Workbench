@@ -21,7 +21,9 @@ public sealed record ReminderSettingsDto(
     bool ViaTeams,
     int? QuietStartHour,
     int? QuietEndHour,
-    bool TeamsAvailable);
+    bool TeamsAvailable,
+    bool ViaSlack = false,
+    bool SlackAvailable = false);
 
 public sealed record SaveReminderSettingsRequest(
     bool TimesheetEnabled,
@@ -29,7 +31,8 @@ public sealed record SaveReminderSettingsRequest(
     bool ViaEmail,
     bool ViaTeams,
     int? QuietStartHour,
-    int? QuietEndHour);
+    int? QuietEndHour,
+    bool ViaSlack = false);
 
 /// <summary>Each person chooses which reminders they get, where, and when not to be disturbed.</summary>
 public interface IReminderSettingsService

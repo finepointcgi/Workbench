@@ -14005,6 +14005,9 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.Property<bool>("ViaEmail")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("ViaSlack")
+                        .HasColumnType("INTEGER");
+
                     b.Property<bool>("ViaTeams")
                         .HasColumnType("INTEGER");
 
