@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.DependencyInjection;
 using Workbench.Application.Imports.Costpoint;
 using Workbench.Application.Imports.Smartsheet;
+using Workbench.Application.Imports.Unanet;
 using Workbench.Contracts.Imports;
 
 namespace Workbench.Application.Imports;
@@ -40,6 +41,10 @@ public static class ImportRegistration
         services.AddScoped<IImporter, OpeningBalanceImporter>();
         services.AddScoped<IImporter, OpenArInvoiceImporter>();
         services.AddScoped<IImporter, OpenApBillImporter>();
+        services.AddScoped<IImporter, FiscalCalendarImporter>();
+        services.AddScoped<IImporter, IndirectRateImporter>();
+        services.AddScoped<IImporter, IndirectPoolImporter>();
+        services.AddUnanetImporters();
         services.AddScoped<OpenItemConversion>();
         services.AddScoped<ImportRollback>();
         services.AddScoped<IImportService, ImportService>();

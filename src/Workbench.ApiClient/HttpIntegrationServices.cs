@@ -101,6 +101,8 @@ public static class IntegrationClientRegistration
         services.AddHttpClient<IWebhookService, HttpWebhookService>(c => c.BaseAddress = serverBaseAddress);
         services.AddHttpClient<IApiKeyService, HttpApiKeyService>(c => c.BaseAddress = serverBaseAddress);
         services.AddHttpClient<IConnectorService, HttpConnectorService>(c => c.BaseAddress = serverBaseAddress);
+        services.AddHttpClient<Contracts.Integrations.Jira.IJiraConnectionService, HttpJiraConnectionService>(c => c.BaseAddress = serverBaseAddress);
+        services.AddHttpClient<Contracts.Integrations.Jira.IJiraProjectSyncService, HttpJiraProjectSyncService>(c => c.BaseAddress = serverBaseAddress);
         services.AddHttpClient<Contracts.Integrations.GitLab.IGitLabConnectionService, HttpGitLabConnectionService>(c => c.BaseAddress = serverBaseAddress);
         services.AddHttpClient<Contracts.Integrations.GitLab.IGitLabProjectSyncService, HttpGitLabProjectSyncService>(c => c.BaseAddress = serverBaseAddress);
         return services;

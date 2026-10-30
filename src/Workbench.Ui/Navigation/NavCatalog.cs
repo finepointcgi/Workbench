@@ -153,6 +153,7 @@ public static class NavCatalog
 
 
         new(Finance, "Billing & AR", "Invoices", "billing", Icons.Material.Filled.Receipt, NavRule.Need(P.BillingInvoicesManage), MatchAll: true, Keywords: "billing receivables"),
+        new(Finance, "Billing & AR", "Ready to bill", "billing/ready", Icons.Material.Filled.PlaylistAddCheck, NavRule.Need(P.BillingInvoicesManage), Keywords: "invoice unbilled draft start"),
         new(Finance, "Billing & AR", "New invoice", "billing/new", Icons.Material.Filled.NoteAdd, NavRule.Need(P.BillingInvoicesManage), InMenu: false),
         new(Finance, "Billing & AR", "Customer payments", "billing/payments", Icons.Material.Filled.Payments, NavRule.Need(P.BillingPaymentsRecord), Keywords: "cash receipts"),
         new(Finance, "Billing & AR", "AR aging", "billing/aging", Icons.Material.Filled.HourglassBottom, NavRule.Need(P.BillingReportsView), Keywords: "receivables overdue"),
@@ -268,6 +269,7 @@ public static class NavCatalog
         new(Admin, "Integrations", "Integrations", "admin/integrations", Icons.Material.Filled.Hub, NavRule.Need(P.AdminIntegrations), Keywords: "webhooks api keys teams slack quickbooks sftp export connector"),
         new(Admin, "Integrations", "Import", "setup/import", Icons.Material.Filled.UploadFile, NavRule.Need(P.SetupImports), Detail: "Import", Keywords: "costpoint smartsheet unanet csv"),
         new(Admin, "Integrations", "Go-live migration", "setup/migration", Icons.Material.Filled.Flag, NavRule.Need(P.SetupImports), Detail: "Reconciliation", Keywords: "cutover cut-over costpoint parallel reconcile opening balances"),
+        new(Admin, "Integrations", "Costpoint parallel run", "setup/migration/parallel-run", Icons.Material.Filled.FactCheck, NavRule.Need(P.SetupImports), Detail: "Costpoint", Keywords: "costpoint parallel month trial balance project cost reconcile differences cause"),
         new(Admin, "Compliance", "DCAA readiness", "admin/dcaa-readiness", Icons.Material.Filled.Gavel, NavRule.Need(P.AdminCompliance), Keywords: "sf 1408 pre-award survey accounting system compliance cpa"),
         new(Admin, "Compliance", "Purchasing system review", "admin/cpsr-readiness", Icons.Material.Filled.FactCheck, NavRule.Need(P.CasCpsrManage), Keywords: "cpsr purchasing system review procurement file competition quotes sole source flowdown debarment"),
         new(Admin, "Compliance", "CAS disclosure statement", "admin/cas-disclosure", Icons.Material.Filled.MenuBook, NavRule.Need(P.CasCpsrManage), Keywords: "cas ds-1 ds1 ds-2 disclosure statement 401 402 cost accounting standards consistency"),

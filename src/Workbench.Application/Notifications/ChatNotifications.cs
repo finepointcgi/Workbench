@@ -13,7 +13,7 @@ using Workbench.Domain.Notifications;
 namespace Workbench.Application.Notifications;
 
 /// <summary>
-/// One chat product a notification can also be posted to (Teams today). Adding Slack is one more implementation: say which hosts its
+/// One chat product a notification can also be posted to (Teams, Slack). Adding another is one more implementation: say which hosts its
 /// incoming webhooks live on and how a <see cref="ChatMessage"/> looks, then register it with <c>AddSingleton&lt;IChatChannelFormat, ...&gt;</c>.
 /// </summary>
 public interface IChatChannelFormat
@@ -49,6 +49,18 @@ public sealed class TeamsChannelFormat : IChatChannelFormat
     }
 
     public JsonObject Format(ChatMessage message) => TeamsConnector.Card(message);
+}
+
+/// <summary>Slack: an incoming webhook (<c>hooks.slack.com</c> only) that takes a Block Kit message.</summary>
+public sealed class SlackChannelFormat : IChatChannelFormat
+{
+    public string Kind => ChatChannelKinds.Slack;
+    public string Name => "Slack";
+    public string HostHelp => "a Slack incoming webhook address (it starts with https://hooks.slack.com/services/)";
+
+    public bool IsAllowedHost(string host) => string.Equals(host.Trim().TrimEnd('.'), "hooks.slack.com", StringComparison.OrdinalIgnoreCase);
+
+    public JsonObject Format(ChatMessage message) => SlackConnector.Message(message);
 }
 
 /// <summary>Lets a feature point a chat message at a better page than the notification's own link (approvals: the document itself).</summary>
@@ -116,13 +128,22 @@ public sealed class ChatNotificationSender(
     public IChatChannelFormat? FormatFor(string kind) => formats.FirstOrDefault(f => f.Kind == kind);
 
     /// <summary>Finds the recipients who chose a group these notifications belong to and posts for them (everyone, when the sender already knows they want it). Never throws.</summary>
-    public async Task NotifyAsync(IReadOnlyList<Notification> notifications, bool postToAll = false)
+    public Task NotifyAsync(IReadOnlyList<Notification> notifications, bool postToAll = false) => NotifyAsync(notifications, kind => postToAll);
+
+    /// <summary>For a sender that carries its own choice (reminders): posts to everyone, but only on the chat products it chose. Never throws.</summary>
+    public Task NotifyAsync(IReadOnlyList<Notification> notifications, DeliveryChoice delivery) => NotifyAsync(notifications, kind => delivery.Wants(kind) ? true : null);
+
+    // postToAll(kind): true = everyone on that product, false = the people who chose it, null = skip that product.
+    private async Task NotifyAsync(IReadOnlyList<Notification> notifications, Func<string, bool?> postToAll)
     {
         try
         {
             foreach (var format in formats)
             {
-                await NotifyAsync(format, notifications, postToAll);
+                if (postToAll(format.Kind) is { } all)
+                {
+                    await NotifyAsync(format, notifications, all);
+                }
             }
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)

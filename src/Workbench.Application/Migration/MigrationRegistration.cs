@@ -13,8 +13,11 @@ public static class MigrationRegistration
     public static IServiceCollection AddWorkbenchMigration(this IServiceCollection services)
     {
         services.AddScoped<ReconciliationSources>();
+        services.AddScoped<UnanetReconcileCauses>();
         services.AddScoped<IReconciliationService, ReconciliationService>();
         services.AddScoped<IMigrationService, MigrationService>();
+        services.AddScoped<ParallelRunExplainer>();
+        services.AddScoped<IParallelRunService, ParallelRunService>();
         return services;
     }
 }

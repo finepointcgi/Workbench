@@ -32,7 +32,7 @@
         <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">@Run.Run.Keys keys</MudChip>
         <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined">@Run.Run.Matched matched</MudChip>
         <MudChip T="string" Size="Size.Small" Color="@(Run.Run.Different > 0 ? Color.Error : Color.Default)" Variant="Variant.Outlined">@Run.Run.Different different</MudChip>
-        <MudChip T="string" Size="Size.Small" Color="@(Run.Run.OnlyInCostpoint > 0 ? Color.Warning : Color.Default)" Variant="Variant.Outlined">@Run.Run.OnlyInCostpoint only in Costpoint</MudChip>
+        <MudChip T="string" Size="Size.Small" Color="@(Run.Run.OnlyInCostpoint > 0 ? Color.Warning : Color.Default)" Variant="Variant.Outlined">@Run.Run.OnlyInCostpoint only in @Source</MudChip>
         <MudChip T="string" Size="Size.Small" Color="@(Run.Run.OnlyInWorkbench > 0 ? Color.Warning : Color.Default)" Variant="Variant.Outlined">@Run.Run.OnlyInWorkbench only in Workbench</MudChip>
         @if (Run.Run.Problems > 0)
         {
@@ -41,7 +41,7 @@
         <MudSpacer />
         <MudText Typo="Typo.body2">
             Total @(Run.Measures.FirstOrDefault(m => m.Name == Run.Run.PrimaryField)?.Label ?? Run.Run.PrimaryField):
-            Costpoint <b>@MigrationFormat.Amount(Run.Run.CostpointTotal, PrimaryFormat)</b> · Workbench <b>@MigrationFormat.Amount(Run.Run.WorkbenchTotal, PrimaryFormat)</b>
+            @Source <b>@MigrationFormat.Amount(Run.Run.CostpointTotal, PrimaryFormat)</b> · Workbench <b>@MigrationFormat.Amount(Run.Run.WorkbenchTotal, PrimaryFormat)</b>
             · difference <b class="@(Run.Run.WorkbenchTotal == Run.Run.CostpointTotal ? "" : "mud-error-text")">@MigrationFormat.Amount(Run.Run.WorkbenchTotal - Run.Run.CostpointTotal, PrimaryFormat)</b>
         </MudText>
     </MudStack>
@@ -64,14 +64,15 @@
                     <th>Status</th>
                     @foreach (var measure in Run.Measures)
                     {
-                        <th style="text-align:right">@measure.Label<br /><span class="mud-text-secondary" style="font-weight:normal">Costpoint · Workbench · diff</span></th>
+                        <th style="text-align:right">@measure.Label<br /><span class="mud-text-secondary" style="font-weight:normal">@Source · Workbench · diff</span></th>
                     }
                 </tr>
             </thead>
             <tbody>
                 @foreach (var row in Visible.Take(_shown))
                 {
-                    var (text, color) = MigrationFormat.Row(row.Status);
+                    var (rowText, color) = MigrationFormat.Row(row.Status);
+                    var text = rowText.Replace("Costpoint", Source);
                     <tr style="cursor:pointer" @onclick="() => DrillAsync(row)" data-key="@row.Key" data-status="@row.Status">
                         @foreach (var part in row.KeyParts)
                         {
@@ -92,6 +93,14 @@
                             </td>
                         }
                     </tr>
+                    @if (row.Cause is { } cause)
+                    {
+                        <tr style="cursor:pointer" @onclick="() => DrillAsync(row)" data-cause-for="@row.Key">
+                            <td colspan="@(row.KeyParts.Count + 2 + Run.Measures.Count)" style="padding-top:0">
+                                <MudText Typo="Typo.body2" Class="mud-text-secondary"><MudIcon Icon="@Icons.Material.Filled.Lightbulb" Size="Size.Small" Class="mr-1" />@cause</MudText>
+                            </td>
+                        </tr>
+                    }
                 }
             </tbody>
         </MudSimpleTable>
@@ -107,7 +116,7 @@
 
     @if (Run.ProblemRows.Count > 0)
     {
-        <MudText Typo="Typo.subtitle2" Class="mt-3">Costpoint rows that couldn't be read</MudText>
+        <MudText Typo="Typo.subtitle2" Class="mt-3">@Source rows that couldn't be read</MudText>
         @foreach (var problem in Run.ProblemRows.Take(50))
         {
             <MudText Typo="Typo.body2">Row @problem.Row: @problem.Message</MudText>
@@ -130,6 +139,8 @@
     private int _shown = 200;
     private bool _busy;
 
+    private string Source => Report.Source;
+
     private ReconValueFormat PrimaryFormat => Run.Measures.FirstOrDefault(m => m.Name == Run.Run.PrimaryField)?.Format ?? ReconValueFormat.Money;
 
     private IEnumerable<ReconRowDto> Visible => Run.Rows
@@ -143,6 +154,7 @@
             { d => d.Key, row.Key },
             { d => d.Row, row },
             { d => d.Measures, Run.Measures },
+            { d => d.Source, Source },
         }, new DialogOptions { MaxWidth = MaxWidth.Large, FullWidth = true, CloseButton = true });
 
     private async Task ExportAsync()
@@ -168,7 +180,7 @@
         var dialog = await DialogService.ShowAsync<NoteDialog>($"Sign off {Report.Title}", new DialogParameters<NoteDialog>
         {
             { d => d.Message, differences
-                ? "This run has differences. Explain them (timing items, known Costpoint adjustments) to sign it off; your name, the time and the note are kept as evidence."
+                ? "This run has differences. Explain them (timing items, known @Source adjustments) to sign it off; your name, the time and the note are kept as evidence."
                 : "Records that you reviewed this comparison: your name and the time are kept as go-live evidence." },
             { d => d.Required, differences },
             { d => d.ConfirmText, "Sign off" },

@@ -173,6 +173,7 @@
 
     private IReadOnlyList<FiscalPeriodDto> _periods = [];
     private IReadOnlyList<ReconReportDto> _reports = [];
+    private IReadOnlyList<ReconReportDto> _allReports = [];
     private IReadOnlyList<ReconStatusDto> _status = [];
     private IReadOnlyList<ReconRunSummaryDto> _runs = [];
     private IReadOnlyList<ReconMappingDto> _mappings = [];
@@ -198,7 +199,8 @@
         try
         {
             _periods = await Calendar.ListPeriodsAsync();
-            _reports = await Reconciliation.ListReportsAsync();
+            _allReports = await Reconciliation.ListReportsAsync();
+            _reports = _allReports.Where(r => r.Source == "Costpoint").ToList();
             _parallelPeriodId = (await Migration.GetChecklistAsync()).Settings.ParallelPeriodId;
             var today = DateOnly.FromDateTime(DateTime.Today);
             _periodId = _parallelPeriodId ?? _periods.FirstOrDefault(p => p.Start <= today && today <= p.End)?.Id ?? _periods.LastOrDefault()?.Id;
@@ -237,7 +239,7 @@
     private void ShowRun(ReconRunDetailDto run)
     {
         _run = run;
-        _runReport = _reports.FirstOrDefault(r => r.Kind == run.Run.Kind);
+        _runReport = _allReports.FirstOrDefault(r => r.Kind == run.Run.Kind);
     }
 
     private async Task LoadPeriodAsync()
@@ -250,7 +252,7 @@
         try
         {
             _status = await Reconciliation.GetStatusAsync(period);
-            _runs = await Reconciliation.ListRunsAsync(period);
+            _runs = (await Reconciliation.ListRunsAsync(period)).Where(r => r.Kind is not (ReconReportKind.UnanetTimesheets or ReconReportKind.UnanetProjectCost)).ToList();
         }
         catch (Exception ex)
         {

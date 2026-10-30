@@ -8,7 +8,7 @@
 <MudText Typo="Typo.h4" HtmlTag="h1" Class="mb-1">Integrations</MudText>
 <MudText Class="mud-text-secondary mb-4">
     Connect Workbench to other systems: send events to your own services (webhooks), give programs access to the API with
-    keys, and set up ready-made connections to Teams, Slack, QuickBooks, SFTP and GitLab.
+    keys, and set up ready-made connections to Teams, Slack, QuickBooks, SFTP, GitLab and Jira.
 </MudText>
 
 @if (_me is null && _loading)
@@ -38,14 +38,20 @@ else
         <MudTabPanel Text="Teams alerts" Icon="@Icons.Material.Filled.Forum">
             <TeamsTab />
         </MudTabPanel>
+        <MudTabPanel Text="Slack alerts" Icon="@Icons.Material.Filled.Forum">
+            <SlackTab />
+        </MudTabPanel>
         <MudTabPanel Text="GitLab" Icon="@Icons.Material.Filled.AccountTree">
             <Workbench.Ui.Integrations.GitLab.GitLabTab />
+        </MudTabPanel>
+        <MudTabPanel Text="Jira" Icon="@Icons.Material.Filled.BugReport">
+            <Workbench.Ui.Integrations.Jira.JiraTab />
         </MudTabPanel>
     </MudTabs>
 }
 
 @code {
-    private static readonly string[] Tabs = ["webhooks", "deliveries", "api-keys", "connectors", "teams", "gitlab"];
+    private static readonly string[] Tabs = ["webhooks", "deliveries", "api-keys", "connectors", "teams", "slack", "gitlab", "jira"];
 
     [SupplyParameterFromQuery(Name = "tab")]
     public string? TabQuery { get; set; }

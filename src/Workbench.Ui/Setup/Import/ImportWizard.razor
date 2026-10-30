@@ -41,7 +41,15 @@
 
         case 1:
             <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">What are you importing?</MudText>
-            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">For a full move from Costpoint, import in this order: organizations, labor categories, employees, cost rates, customers, contracts, CLINs, projects, bill rates, budgets.</MudText>
+            @if (_source == ImportSource.Unanet)
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">For a full move from Unanet, import in this order: organizations, labor categories, people, customers, projects → contracts, projects and tasks, budgets, assignments, then vendors and open AP/AR, and last timesheets. Each step takes one Unanet report or list exported to Excel or CSV.</MudText>
+                <UnanetMappingGuide />
+            }
+            else
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">For a full move from Costpoint, import in this order: organizations, labor categories, employees, cost rates, customers, contracts, CLINs, projects, bill rates, budgets.</MudText>
+            }
             <MudGrid Spacing="2">
                 @foreach (var kind in KindsForSource)
                 {
@@ -88,12 +96,16 @@
             {
                 <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">Upload @_kind.Title</MudText>
                 <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
-                    A .csv or .xlsx export@(_source == ImportSource.Costpoint ? " of the Costpoint screen or report" : " (Smartsheet: File → Export → Microsoft Excel)").
+                    A .csv or .xlsx export@(_source == ImportSource.Costpoint ? " of the Costpoint screen or report" : _source == ImportSource.Unanet ? " of the Unanet report or list (run it, then export to Excel or CSV)" : " (Smartsheet: File → Export → Microsoft Excel)").
                     @if (_kind.SampleFile is not null)
                     {
                         <span>Example: <code>@_kind.SampleFile</code>.</span>
                     }
                 </MudText>
+                @if (_source == ImportSource.Unanet)
+                {
+                    <UnanetMappingGuide Kind="@_kind.Kind.ToString()" />
+                }
                 <MudSimpleTable Dense="true" Class="mb-3">
                     <thead><tr><th>Field</th><th>Expected headers (any of)</th><th></th></tr></thead>
                     <tbody>
@@ -140,6 +152,10 @@
         case 5 when _job is not null:
             <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">Dry run</MudText>
             <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">Nothing has changed yet. This is what the import will create, update and skip; rows already in Workbench (matched on their natural keys) are updated, not duplicated.</MudText>
+            @if (_job.Job.Source == ImportSource.Unanet)
+            {
+                <UnanetMappingGuide Kind="@_job.Definition.Kind.ToString()" />
+            }
             <ImportResults Job="_job" ShowPlan="true" />
             <MudStack Row="true" Spacing="2" Class="mt-3">
                 <MudButton Variant="Variant.Outlined" OnClick="() => GoTo(3)">Back to mapping</MudButton>
@@ -187,6 +203,7 @@
         (ImportSource.Costpoint, "Costpoint", "CSV or Excel exports of Costpoint screens and reports: organizations, employees and rates, customers, contracts and CLINs, projects and WBS, bill rates, budgets.", Icons.Material.Filled.AccountBalance),
         (ImportSource.SmartsheetApi, "Smartsheet (API)", "Connect with an API token and pick sheets. Imports columns, hierarchy, dates, predecessors and, optionally, comments and attachments.", Icons.Material.Filled.CloudSync),
         (ImportSource.SmartsheetExcel, "Smartsheet (.xlsx)", "Upload a sheet exported to Excel. Hierarchy comes from the row grouping or indentation.", Icons.Material.Filled.TableView),
+        (ImportSource.Unanet, "Unanet", "CSV or Excel exports of Unanet lists and reports: people, customers, projects and tasks, budgets, assignments, approved timesheets, open AP/AR.", Icons.Material.Filled.SwapHoriz),
     ];
 
     [Parameter]

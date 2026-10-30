@@ -130,6 +130,7 @@ app.MapWorkbenchCustomerView(); // Customer links /c/{token}: one contract's fun
 app.MapWorkbenchLiveUpdatesHub();
 app.MapWorkbenchNotificationsHub();
 app.MapWorkbenchEmailEvents(); // Bounce and complaint webhooks from SendGrid and SES (docs/operations/email.md).
+app.MapWorkbenchJiraWebhooks(); // Jira issue webhooks for linked projects (docs/integrations/jira.md).
 app.MapWorkbenchGitLabWebhooks(); // GitLab issue, epic and milestone webhooks for linked projects (docs/integrations/gitlab.md).
 app.MapWorkbenchCalendarFeed(); // Read-only per-person .ics feeds behind a private token.
 app.MapRazorComponents<App>()
