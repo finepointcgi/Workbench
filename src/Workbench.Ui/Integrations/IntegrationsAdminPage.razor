@@ -38,6 +38,9 @@ else
         <MudTabPanel Text="Teams alerts" Icon="@Icons.Material.Filled.Forum">
             <TeamsTab />
         </MudTabPanel>
+        <MudTabPanel Text="Slack alerts" Icon="@Icons.Material.Filled.Forum">
+            <SlackTab />
+        </MudTabPanel>
         <MudTabPanel Text="GitLab" Icon="@Icons.Material.Filled.AccountTree">
             <Workbench.Ui.Integrations.GitLab.GitLabTab />
         </MudTabPanel>
@@ -48,7 +51,7 @@ else
 }
 
 @code {
-    private static readonly string[] Tabs = ["webhooks", "deliveries", "api-keys", "connectors", "teams", "gitlab", "jira"];
+    private static readonly string[] Tabs = ["webhooks", "deliveries", "api-keys", "connectors", "teams", "slack", "gitlab", "jira"];
 
     [SupplyParameterFromQuery(Name = "tab")]
     public string? TabQuery { get; set; }

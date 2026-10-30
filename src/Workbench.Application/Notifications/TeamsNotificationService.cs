@@ -9,20 +9,23 @@ using Workbench.Domain.Notifications;
 namespace Workbench.Application.Notifications;
 
 /// <summary>
-/// Connects one Teams channel (administrators, "Manage integrations") and records who wants which groups of notifications there
-/// (everyone, for themselves). The webhook address is checked against Microsoft's hosts and the SSRF guard, stored encrypted, and
-/// shown back only as its host.
+/// Connects one chat channel per product (administrators, "Manage integrations") and records who wants which groups of notifications there
+/// (everyone, for themselves). The webhook address is checked against the product's own hosts and the SSRF guard, stored encrypted, and
+/// shown back only as its host. Teams and Slack differ only in their <see cref="IChatChannelFormat"/>.
 /// </summary>
-public sealed class TeamsNotificationService(
+public abstract class ChatNotificationService(
+    string kind,
     IWorkbenchDbContextFactory dbFactory,
     AccessControl access,
     IntegrationSecrets secrets,
     OutboundUrlGuard guard,
     ChatNotificationSender sender,
     TimeProvider clock,
-    NotificationOptions options) : ITeamsNotificationService
+    NotificationOptions options) : IChatNotificationService
 {
-    private const string Kind = ChatChannelKinds.Teams;
+    private readonly string Kind = kind;
+
+    string IChatNotificationService.Kind => Kind;
 
     public async Task<ChatChannelDto> GetChannelAsync(CancellationToken cancellationToken = default)
     {
@@ -76,7 +79,7 @@ public sealed class TeamsNotificationService(
         await access.RequireIntegrationAdminAsync(cancellationToken);
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var row = await db.Set<ChatChannel>().AsNoTracking().FirstOrDefaultAsync(c => c.Kind == Kind, cancellationToken)
-            ?? throw new ArgumentException("Connect a Teams channel first.");
+            ?? throw new ArgumentException($"Connect a {sender.FormatFor(Kind)!.Name} channel first.");
         var link = NotificationEmails.AbsoluteLink("notifications", options);
         var message = new ChatMessage("Workbench is connected to this channel",
             [("Next", "People choose which notifications also come here on their Notifications page.")],
@@ -122,7 +125,17 @@ public sealed class TeamsNotificationService(
         return access.Email;
     }
 
-    private static ChatChannelDto ToDto(ChatChannel? row) => row is null
+    private ChatChannelDto ToDto(ChatChannel? row) => row is null
         ? new ChatChannelDto(Kind, false, false, null, null, null, null)
         : new ChatChannelDto(Kind, true, row.IsActive, row.Host, row.LastError, row.LastPostedAtUtc, row.UpdatedAtUtc);
 }
+
+public sealed class TeamsNotificationService(
+    IWorkbenchDbContextFactory dbFactory, AccessControl access, IntegrationSecrets secrets, OutboundUrlGuard guard,
+    ChatNotificationSender sender, TimeProvider clock, NotificationOptions options)
+    : ChatNotificationService(ChatChannelKinds.Teams, dbFactory, access, secrets, guard, sender, clock, options), ITeamsNotificationService;
+
+public sealed class SlackNotificationService(
+    IWorkbenchDbContextFactory dbFactory, AccessControl access, IntegrationSecrets secrets, OutboundUrlGuard guard,
+    ChatNotificationSender sender, TimeProvider clock, NotificationOptions options)
+    : ChatNotificationService(ChatChannelKinds.Slack, dbFactory, access, secrets, guard, sender, clock, options), ISlackNotificationService;
