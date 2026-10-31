@@ -262,7 +262,6 @@ else if (_error is not null)
             {
                 <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-1" data-testid="plan-not-on-task">
                     Also on the project but not on a task: @string.Join(", ", (_try?.NotOnATask ?? shown.NotOnATask).Select(p => $"{p.Name} ({PlanPeopleFormat.Hours(p.Hours)} h)")).
-                    <a href="@($"projects/{shown.ProjectId}/staffing")">Budget &amp; staffing</a>
                 </MudText>
             }
         </MudPaper>

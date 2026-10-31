@@ -1,4 +1,5 @@
 .wb-assign-scroll {
+    position: relative; /* keeps the table's hidden screen-reader labels inside the scroll box instead of widening the page */
     overflow-x: auto;
     border: 1px solid var(--mud-palette-lines-default);
     border-radius: 6px;
@@ -24,6 +25,11 @@
     border-bottom: 1px solid var(--mud-palette-lines-default);
     vertical-align: middle;
 }
+
+/* Names, tasks and labor categories are what a PM reads here; give them room and let the table scroll inside its box rather than squeezing them to "Alex Rive". */
+.wb-assign-table th:nth-child(1) { min-width: 150px; }
+.wb-assign-table th:nth-child(2) { min-width: 170px; }
+.wb-assign-table th:nth-child(3) { min-width: 150px; }
 
 .wb-num {
     text-align: right;
