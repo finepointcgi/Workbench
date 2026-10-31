@@ -1,9 +1,9 @@
-@* The Plan tab: one WBS grid with its people, hours and cost. Above it, the money (planned against the ceiling and funding,
-   for the project and each CLIN), the plan's approval with Finance, and the totals (finish and float, hours and cost by
-   labor category, who's overbooked, the schedule check); on the grid, People / Hours / Cost columns; below it, the people
-   grid where they're assigned. "Try changes" shows what moving dates or changing people would do before anything is saved.
-   People are the same assignments as on Budget & staffing. Without the service, or for someone who can't see the
-   project's staffing, it shows the plan alone. *@
+@* The Plan tab: one WBS grid with its people, hours and cost. The grid comes first: above it only the money (planned against
+   the ceiling and funding, for the project and each CLIN), the plan's approval with Finance and the toolbar; on the grid,
+   People / Hours / Cost columns; below it, the totals (finish and float, hours and cost by labor category, who's
+   overbooked, the schedule check), the plan's details (steps, terms), then the people grid where they're assigned.
+   "Try changes" shows what moving dates or changing people would do before anything is saved. People are assigned only
+   here. Without the service, or for someone who can't see the project's staffing, it shows the plan alone. *@
 @using Workbench.Contracts
 @using Workbench.Contracts.ProjectAccounting
 @using Workbench.Contracts.Resourcing
@@ -15,9 +15,9 @@
 @if (_plan is { } plan)
 {
     var totals = _try?.After ?? plan.Totals;
-    <section class="wb-plan-bar mb-3" aria-labelledby="plan-totals-heading" data-testid="plan-totals">
-        <h2 id="plan-totals-heading" class="wb-sr-only">Plan totals</h2>
-        <MudPaper Outlined="true" Class="pa-3">
+    <section class="wb-plan-bar mb-2" aria-labelledby="plan-totals-heading" data-testid="plan-summary">
+        <h2 id="plan-totals-heading" class="wb-sr-only">Plan summary</h2>
+        <MudPaper Outlined="true" Class="pa-2">
             @if (totals.Money is { } money)
             {
                 <div class="@($"wb-plan-money {MoneyClass(money.Project.Status)}")" data-testid="plan-money" role="status" aria-live="polite">
@@ -40,9 +40,10 @@
                             <span> · @(left >= 0 ? $"{PlanPeopleFormat.Money(left)} left" : $"{PlanPeopleFormat.Money(-left)} over the ceiling")</span>
                         }
                     </span>
-                    <span class="wb-plan-detail">
-                        @MoneyWords(money.Project.Status) Priced as @money.Basis.@(plan.Totals.Money is { } was && was.Project.Planned != money.Project.Planned ? $" Was {PlanPeopleFormat.Money(was.Project.Planned)}." : "")
-                    </span>
+                    @if (money.Project.Status != PlanMoneyStatus.Ok)
+                    {
+                        <span class="wb-plan-detail">@MoneyWords(money.Project.Status)</span>
+                    }
                     @if (money.Lines.Any(l => l.ClinNumber is not null))
                     {
                         <div class="wb-plan-clins" data-testid="plan-money-clins">
@@ -54,71 +55,22 @@
                             }
                         </div>
                     }
-                    @foreach (var note in money.Notes)
-                    {
-                        <span class="wb-plan-detail d-block">@note</span>
-                    }
                 </div>
             }
             <PlanApprovalBar ProjectId="ProjectId" Version="_approvalVersion" Changed="ApprovalChangedAsync" />
-            <div class="wb-plan-stats">
-                <div class="wb-plan-stat" data-testid="plan-finish">
-                    <span class="wb-plan-label">Finishes</span>
-                    <span class="wb-plan-value">@(totals.Finish is { } f ? PlanPeopleFormat.Date(f) : "No dates yet")</span>
-                    <span class="wb-plan-detail">@Was(plan.Totals.Finish != totals.Finish, PlanPeopleFormat.Date(plan.Totals.Finish))@PlanPeopleFormat.Float(totals.CriticalFloatDays)</span>
-                </div>
-                <div class="wb-plan-stat" data-testid="plan-hours">
-                    <span class="wb-plan-label">Hours</span>
-                    <span class="wb-plan-value">@PlanPeopleFormat.Hours(totals.Hours) h</span>
-                    <span class="wb-plan-detail">
-                        @Was(plan.Totals.Hours != totals.Hours, $"{PlanPeopleFormat.Hours(plan.Totals.Hours)} h")@(totals.HasBudget ? $"of {PlanPeopleFormat.Hours(totals.BudgetHours)} budgeted" : "no budget yet: the plan is the budget")
-                    </span>
-                </div>
-                @if (plan.ShowsCost)
-                {
-                    <div class="wb-plan-stat" data-testid="plan-cost">
-                        <span class="wb-plan-label">Labor cost</span>
-                        <span class="wb-plan-value">@PlanPeopleFormat.Money(totals.Cost)</span>
-                        <span class="wb-plan-detail @(totals.CostGap < 0 ? "wb-plan-bad" : null)">
-                            @Was(plan.Totals.Cost != totals.Cost, PlanPeopleFormat.Money(plan.Totals.Cost))@(plan.CostIncludesBurden ? "with fringe, overhead and G&A · " : "")@CostGapText(totals)
-                        </span>
-                    </div>
-                }
-                <div class="wb-plan-stat" data-testid="plan-overbooked">
-                    <span class="wb-plan-label">People</span>
-                    @if (totals.OverbookedPeople.Count == 0)
-                    {
-                        <span class="wb-plan-value">Everyone fits</span>
-                        <span class="wb-plan-detail">nobody is booked past their hours</span>
-                    }
-                    else
-                    {
-                        <span class="wb-plan-value wb-plan-bad"><MudIcon Icon="@Icons.Material.Filled.WarningAmber" Size="Size.Small" aria-hidden="true" /> @Overbooked(totals.OverbookedPeople.Count)</span>
-                        <span class="wb-plan-detail">@string.Join(", ", totals.OverbookedPeople.Take(3))@(totals.OverbookedPeople.Count > 3 ? $" and {totals.OverbookedPeople.Count - 3} more" : "") · fix it in People below</span>
-                    }
-                </div>
-                @if (plan.Health is { } health)
-                {
-                    <div class="wb-plan-stat" data-testid="plan-health">
-                        <span class="wb-plan-label">Schedule check</span>
-                        <span class="wb-plan-value">@health.Passed pass · @health.Failed fail</span>
-                        <a class="wb-plan-detail" href="@($"projects/{plan.ProjectId}/schedule-health")" data-testid="plan-health-link">See the 14 checks</a>
-                    </div>
-                }
-            </div>
 
-            <div class="d-flex flex-wrap align-center gap-2 mt-2">
-                <MudSwitch T="bool" Value="_showColumns" ValueChanged="ShowColumns" Color="Color.Primary" Label="People and cost on the plan" data-testid="plan-people-toggle" />
-                <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@(_categoriesOpen ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)"
+            <div class="d-flex flex-wrap align-center gap-1 wb-plan-toolbar">
+                <MudSwitch T="bool" Value="_showColumns" ValueChanged="ShowColumns" Color="Color.Primary" Size="Size.Small" Label="People and cost" data-testid="plan-people-toggle" />
+                <MudButton Size="Size.Small" Variant="Variant.Text" EndIcon="@(_categoriesOpen ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)"
                            OnClick="() => _categoriesOpen = !_categoriesOpen" aria-expanded="@(_categoriesOpen ? "true" : "false")" data-testid="plan-categories-toggle">By labor category</MudButton>
                 @if (plan.CanChange)
                 {
-                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd" OnClick="AddPersonAsync"
+                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="AddPersonAsync"
                                data-testid="plan-add-person" title="Jump to the People grid below, ready to type a name">Add a person</MudButton>
                 }
                 @if (plan.CanChange && _try is null && _changes.Count == 0)
                 {
-                    <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Science" OnClick="StartTrying" data-testid="plan-try">Try changes</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="StartTrying" data-testid="plan-try">Try changes</MudButton>
                 }
                 @if (_undo is { } undo && _changes.Count == 0)
                 {
@@ -228,18 +180,6 @@
                     </div>
                 </MudAlert>
             }
-
-            @foreach (var note in plan.Notes)
-            {
-                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-1">@note</MudText>
-            }
-            @if (plan.NotOnATask.Count > 0)
-            {
-                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-1" data-testid="plan-not-on-task">
-                    Also on the project but not on a task: @string.Join(", ", (_try?.NotOnATask ?? plan.NotOnATask).Select(p => $"{p.Name} ({PlanPeopleFormat.Hours(p.Hours)} h)")).
-                    <a href="@($"projects/{plan.ProjectId}/staffing")">Budget &amp; staffing</a>
-                </MudText>
-            }
         </MudPaper>
     </section>
 }
@@ -253,6 +193,81 @@ else if (_error is not null)
 </CascadingValue>
 @if (_plan is { } shown)
 {
+    var totals = _try?.After ?? shown.Totals;
+    <section class="wb-plan-bar mt-3 mb-3" aria-labelledby="plan-stats-heading" data-testid="plan-totals">
+        <h2 id="plan-stats-heading" class="wb-sr-only">Plan totals</h2>
+        <MudPaper Outlined="true" Class="pa-3">
+            @if (totals.Money is { } basis)
+            {
+                <div class="mb-2" data-testid="plan-money-basis">
+                    <span class="wb-plan-detail d-block">@(basis.Project.Status == PlanMoneyStatus.Ok ? MoneyWords(basis.Project.Status) + " " : "")Priced as @basis.Basis.@(shown.Totals.Money is { } was && was.Project.Planned != basis.Project.Planned ? $" Was {PlanPeopleFormat.Money(was.Project.Planned)}." : "")</span>
+                    @foreach (var note in basis.Notes)
+                    {
+                        <span class="wb-plan-detail d-block">@note</span>
+                    }
+                </div>
+            }
+            <div class="wb-plan-stats">
+                <div class="wb-plan-stat" data-testid="plan-finish">
+                    <span class="wb-plan-label">Finishes</span>
+                    <span class="wb-plan-value">@(totals.Finish is { } f ? PlanPeopleFormat.Date(f) : "No dates yet")</span>
+                    <span class="wb-plan-detail">@Was(shown.Totals.Finish != totals.Finish, PlanPeopleFormat.Date(shown.Totals.Finish))@PlanPeopleFormat.Float(totals.CriticalFloatDays)</span>
+                </div>
+                <div class="wb-plan-stat" data-testid="plan-hours">
+                    <span class="wb-plan-label">Hours</span>
+                    <span class="wb-plan-value">@PlanPeopleFormat.Hours(totals.Hours) h</span>
+                    <span class="wb-plan-detail">
+                        @Was(shown.Totals.Hours != totals.Hours, $"{PlanPeopleFormat.Hours(shown.Totals.Hours)} h")@(totals.HasBudget ? $"of {PlanPeopleFormat.Hours(totals.BudgetHours)} budgeted" : "no budget yet: the shown is the budget")
+                    </span>
+                </div>
+                @if (shown.ShowsCost)
+                {
+                    <div class="wb-plan-stat" data-testid="plan-cost">
+                        <span class="wb-plan-label">Labor cost</span>
+                        <span class="wb-plan-value">@PlanPeopleFormat.Money(totals.Cost)</span>
+                        <span class="wb-plan-detail @(totals.CostGap < 0 ? "wb-plan-bad" : null)">
+                            @Was(shown.Totals.Cost != totals.Cost, PlanPeopleFormat.Money(shown.Totals.Cost))@(shown.CostIncludesBurden ? "with fringe, overhead and G&A · " : "")@CostGapText(totals)
+                        </span>
+                    </div>
+                }
+                <div class="wb-plan-stat" data-testid="plan-overbooked">
+                    <span class="wb-plan-label">People</span>
+                    @if (totals.OverbookedPeople.Count == 0)
+                    {
+                        <span class="wb-plan-value">Everyone fits</span>
+                        <span class="wb-plan-detail">nobody is booked past their hours</span>
+                    }
+                    else
+                    {
+                        <span class="wb-plan-value wb-plan-bad"><MudIcon Icon="@Icons.Material.Filled.WarningAmber" Size="Size.Small" aria-hidden="true" /> @Overbooked(totals.OverbookedPeople.Count)</span>
+                        <span class="wb-plan-detail">@string.Join(", ", totals.OverbookedPeople.Take(3))@(totals.OverbookedPeople.Count > 3 ? $" and {totals.OverbookedPeople.Count - 3} more" : "") · fix it in People below</span>
+                    }
+                </div>
+                @if (shown.Health is { } health)
+                {
+                    <div class="wb-plan-stat" data-testid="plan-health">
+                        <span class="wb-plan-label">Schedule check</span>
+                        <span class="wb-plan-value">@health.Passed pass · @health.Failed fail</span>
+                        <a class="wb-plan-detail" href="@($"projects/{shown.ProjectId}/schedule-health")" data-testid="plan-health-link">See the 14 checks</a>
+                    </div>
+                }
+            </div>
+            <PlanApprovalBar ProjectId="ProjectId" Version="_approvalVersion" Changed="ApprovalChangedAsync" Part="PlanApprovalPart.Details" />
+
+            @foreach (var note in shown.Notes)
+            {
+                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-1">@note</MudText>
+            }
+            @if (shown.NotOnATask.Count > 0)
+            {
+                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-1" data-testid="plan-not-on-task">
+                    Also on the project but not on a task: @string.Join(", ", (_try?.NotOnATask ?? shown.NotOnATask).Select(p => $"{p.Name} ({PlanPeopleFormat.Hours(p.Hours)} h)")).
+                    <a href="@($"projects/{shown.ProjectId}/staffing")">Budget &amp; staffing</a>
+                </MudText>
+            }
+        </MudPaper>
+    </section>
+
     <div class="mt-4">
         <AssignmentGrid @ref="_grid" ProjectId="ProjectId" Plan="shown" Tried="_try" Trying="@(_trying || _changes.Count > 0)" FilterWbsElementId="_filter"
                         ClearFilter="() => _filter = null" Submit="SubmitAsync" />

@@ -92,10 +92,11 @@ a.wb-plan-detail {
 
 .wb-plan-money {
     display: flex;
-    flex-direction: column;
-    gap: 2px;
-    padding: 8px 12px;
-    margin-bottom: 12px;
+    flex-flow: row wrap;
+    align-items: baseline;
+    gap: 2px 12px;
+    padding: 6px 12px;
+    margin-bottom: 8px;
     border-radius: 6px;
     border-left: 4px solid var(--mud-palette-success);
     background: color-mix(in srgb, var(--mud-palette-success) 8%, transparent);
@@ -120,6 +121,7 @@ a.wb-plan-detail {
 }
 
 .wb-plan-clins {
+    flex-basis: 100%;
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
@@ -150,4 +152,12 @@ a.wb-plan-detail {
     background: var(--mud-palette-surface);
     color: var(--mud-palette-text-primary);
     font: inherit;
+}
+
+.wb-plan-toolbar {
+    margin-top: 4px;
+}
+
+.wb-plan-toolbar ::deep .mud-switch {
+    margin-right: 0;
 }
