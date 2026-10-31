@@ -7,7 +7,7 @@
     min-width: 250px;
 }
 
-@media (max-width: 959.98px) {
+@media (max-width: 1279.98px) {
     .wb-inbox-host ::deep .wb-inbox .wb-inbox-actions {
         min-width: 0;
     }
