@@ -225,7 +225,7 @@ public sealed class ProjectHubService(
     {
         foreach (var item in Resourcing.StaffingTodoProvider.For(plan).Where(i => !i.Key.EndsWith(":budget", StringComparison.Ordinal)))
         {
-            yield return new ProjectAlertDto(ProjectAlertLevel.Warning, "staffing", $"{item.Title}. {item.Reason}", "staffing");
+            yield return new ProjectAlertDto(ProjectAlertLevel.Warning, "staffing", $"{item.Title}. {item.Reason}", "plan");
         }
     }
 
