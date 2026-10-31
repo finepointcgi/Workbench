@@ -122,7 +122,7 @@ public sealed class ProjectStaffingTests
         var todo = Assert.Single(StaffingTodoProvider.For(plan));
         Assert.Equal("160 budgeted hours on 1001 have nobody staffed", todo.Title);
         Assert.Equal("160 h of SE2 Systems Engineer II on 1001.01.02.", todo.Reason);
-        Assert.Equal($"projects/{host.Project1}/staffing", todo.Link);
+        Assert.Equal($"projects/{host.Project1}/plan", todo.Link);
     }
 
     [Fact]
@@ -250,7 +250,7 @@ public sealed class ProjectStaffingTests
 
         var hub = await host.As(Pm).Get<IProjectHubService>().GetProjectAsync(host.Project1);
         var alert = Assert.Single(hub.Alerts, a => a.Kind == "staffing");
-        Assert.Equal(("staffing", "400 budgeted hours on 1001 have nobody staffed. 400 h of SE2 Systems Engineer II on 1001.01.02."), (alert.Tab, alert.Message));
+        Assert.Equal(("plan", "400 budgeted hours on 1001 have nobody staffed. 400 h of SE2 Systems Engineer II on 1001.01.02."), (alert.Tab, alert.Message));
 
         var todos = await host.Get<IMyTodoService>().GetAsync();
         Assert.Contains(todos.Items, t => t.Title == "400 budgeted hours on 1001 have nobody staffed" && t.LinkLabel == "Assign people");
@@ -265,7 +265,7 @@ public sealed class ProjectStaffingTests
         Assert.False(plan.HasLaborBudget);
         Assert.Contains(plan.Notes, n => n.StartsWith("This project has no budget yet.", StringComparison.Ordinal));
         var todo = Assert.Single(StaffingTodoProvider.For(plan));
-        Assert.Equal(("Assign people to 1001", $"projects/{host.Project1}/staffing"), (todo.Title, todo.Link));
+        Assert.Equal(("Assign people to 1001", $"projects/{host.Project1}/plan"), (todo.Title, todo.Link));
         Assert.False((await host.Get<IProjectStaffingService>().GetSetupProgressAsync(host.Project1)).Steps.Single(s => s.Key == "staff").IsDone);
 
         await host.Get<IStaffingAssignmentService>().SaveAsync(new SaveAssignmentRequest(host.DevId, host.Project1, 40m, host.Build));
