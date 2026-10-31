@@ -91,7 +91,7 @@
             @* Wide windows: a compact table whose action column never scrolls away. Below 960px (Sm and smaller) each row becomes
                a card (MudTable's DataLabel layout), with the actions full width at the bottom. *@
             <div class="wb-inbox-host">
-            <MudTable T="ApprovalInboxItemDto" Items="Visible" Dense="true" Hover="true" Elevation="0" Breakpoint="Breakpoint.Sm" Class="wb-inbox" data-testid="inbox" aria-label="Approvals waiting on me"
+            <MudTable T="ApprovalInboxItemDto" Items="Visible" Dense="true" Hover="true" Elevation="0" Breakpoint="Breakpoint.Lg" Class="wb-inbox" data-testid="inbox" aria-label="Approvals waiting on me"
                       MultiSelection="true" SelectOnRowClick="false" @bind-SelectedItems="_selected">
                 <HeaderContent>
                     <MudTh>What</MudTh>
