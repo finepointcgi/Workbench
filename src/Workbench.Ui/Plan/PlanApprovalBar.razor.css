@@ -1,6 +1,6 @@
 .wb-approval {
-    padding: 8px 0 12px;
-    margin-bottom: 8px;
+    padding: 4px 0 6px;
+    margin-bottom: 4px;
     border-bottom: 1px solid var(--mud-palette-lines-default);
 }
 
@@ -70,4 +70,23 @@
 
 .wb-step-todo {
     color: var(--mud-palette-text-secondary);
+}
+
+.wb-approval-details {
+    margin-top: 8px;
+    padding-bottom: 0;
+    border-bottom: 0;
+}
+
+.wb-approval-row > .wb-approval-text {
+    flex: 1 1 220px;
+}
+
+.wb-approval-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px 8px;
+    margin-left: auto;
 }

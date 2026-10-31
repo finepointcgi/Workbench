@@ -28,7 +28,7 @@ else if (_sheet is null)
 }
 else
 {
-    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2" Wrap="Wrap.Wrap">
+    RenderFragment header = @<MudStack Row="true" AlignItems="AlignItems.Center" Class="@(Embedded ? "mb-1" : "mb-2")" Wrap="Wrap.Wrap">
         @if (Embedded)
         {
             <MudButton Href="@($"sheets/{SheetId}")" Variant="Variant.Text" Size="Size.Small" EndIcon="@Icons.Material.Filled.OpenInNew">Open the plan sheet</MudButton>
@@ -77,8 +77,14 @@ else
             <Workbench.Ui.Sheets.SheetMoreMenu Sheet="_sheet" CanEdit="_access.CanEdit" />
         }
         <MudIconButton Icon="@Icons.Material.Filled.Refresh" OnClick="LoadAsync" aria-label="Reload" />
-    </MudStack>
-    @if (!string.IsNullOrWhiteSpace(_sheet.Summary.Description))
+    </MudStack>;
+    @* On a project's Plan tab the grid comes first and these actions follow it. *@
+    @if (!Embedded)
+    {
+        @header
+    }
+
+    @if (!Embedded && !string.IsNullOrWhiteSpace(_sheet.Summary.Description))
     {
         <MudText Class="mud-text-secondary mb-4">@_sheet.Summary.Description</MudText>
     }
@@ -130,6 +136,10 @@ else
     </CascadingValue>
     </CascadingValue>
     </CascadingValue>
+    @if (Embedded)
+    {
+        <div class="mt-2">@header</div>
+    }
 }
 <SheetLiveRefresher SheetId="SheetId" Changed="OnLiveChangeAsync" />
 @foreach (var linked in _links.Links.Where(l => l.CanSee && l.TargetSheetId != SheetId).Select(l => l.TargetSheetId).Distinct())
