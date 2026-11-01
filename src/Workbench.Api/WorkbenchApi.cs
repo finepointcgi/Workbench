@@ -55,6 +55,7 @@ public static class WorkbenchApi
         v1.MapProjectHubEndpoints();
         v1.MapMyTodoEndpoints();
         v1.MapSignInSettingsEndpoints();
+        v1.MapLicenseEndpoints();
         v1.MapSupportEndpoints();
         v1.MapMigrationEndpoints();
         v1.MapTaskEndpoints();
@@ -94,6 +95,10 @@ public static class WorkbenchApi
         try
         {
             return await next(context);
+        }
+        catch (WorkbenchEditionException ex)
+        {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status402PaymentRequired);
         }
         catch (WorkbenchForbiddenException ex)
         {

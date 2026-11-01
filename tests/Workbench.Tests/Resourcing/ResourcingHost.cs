@@ -46,6 +46,7 @@ internal sealed class ResourcingHost : IAsyncDisposable
         services.AddSingleton<ICurrentUser>(User);
         services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         services.AddWorkbenchApplication();
+        services.UseBusinessEdition();
         services.AddSingleton<TimeProvider>(new FixedClock(new DateTimeOffset(Today.ToDateTime(new TimeOnly(12, 0)), TimeSpan.Zero)));
         services.AddSingleton<IResourceLeaveCalendar>(Leave);
         services.AddSingleton<IGsaPerDiemClient>(Gsa);

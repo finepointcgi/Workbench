@@ -10994,6 +10994,28 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.ToTable("LeaveRequestDay");
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Licensing.LicenseSettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ActivatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ActivatedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Key")
+                        .HasMaxLength(4000)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("LicenseSettings");
+                });
+
             modelBuilder.Entity("Workbench.Domain.Materials.BackflushSetting", b =>
                 {
                     b.Property<Guid>("Id")

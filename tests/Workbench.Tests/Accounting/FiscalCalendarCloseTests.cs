@@ -51,6 +51,7 @@ public sealed class FiscalCalendarCloseTests
         services.AddSingleton<ICurrentUser>(new TestUser { Email = SeededHost.Admin });
         services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         services.AddWorkbenchApplication();
+        services.UseBusinessEdition();
         services.AddScoped<IPeriodCloseCheck, UnfinishedCheck>();
         await using var provider = services.BuildServiceProvider();
         await using var scope = provider.CreateAsyncScope();

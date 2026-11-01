@@ -11778,6 +11778,30 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                     b.ToTable("LeaveRequestDay");
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Licensing.LicenseSettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ActivatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ActivatedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .UseCollation("C");
+
+                    b.Property<string>("Key")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)")
+                        .UseCollation("C");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("LicenseSettings");
+                });
+
             modelBuilder.Entity("Workbench.Domain.Materials.BackflushSetting", b =>
                 {
                     b.Property<Guid>("Id")
