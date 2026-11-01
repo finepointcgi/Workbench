@@ -41,10 +41,14 @@
   h2 { font-size: clamp(1.5rem, 3.4vw, 2.1rem); letter-spacing: -.02em; line-height: 1.2; margin: 0 0 12px; }
   .sub { color: var(--muted); max-width: 40rem; margin: 0 0 32px; }
   .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .grid.two { grid-template-columns: repeat(2, 1fr); }
+  .grid.four, .replace { grid-template-columns: repeat(2, 1fr); }
+  @media (min-width: 960px) { .grid.four, .replace { grid-template-columns: repeat(4, 1fr); } }
+  @media (max-width: 560px) { .grid.two, .grid.four, .replace { grid-template-columns: 1fr; } }
   .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 22px; }
   .card h3 { margin: 0 0 8px; font-size: 1.05rem; }
   .card p { margin: 0; color: var(--muted); font-size: .97rem; }
-  .replace { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+  .replace { display: grid; gap: 16px; }
   .replace .card h3 { font-size: 1rem; }
   .tag { display: inline-block; font-size: .75rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
     color: var(--accent); background: var(--accent-soft); padding: 3px 9px; border-radius: 99px; margin-bottom: 10px; }
@@ -72,6 +76,8 @@
   .shot figcaption { color: var(--muted); font-size: .88rem; margin-top: 10px; }
   .split { display: flex; gap: 40px; align-items: center; margin-bottom: 32px; }
   .split img { width: 220px; height: auto; flex: none; }
+  .split img.phone { border: 6px solid #1c2420; border-radius: 28px; box-shadow: 0 10px 30px rgba(0,0,0,.15); }
+  .shot img { border: 1px solid var(--line); }
   @media (max-width: 640px) { .split { flex-direction: column; align-items: flex-start; } }
   ol.steps { padding-left: 20px; max-width: 42rem; } ol.steps li { margin-bottom: 10px; }
 </style>
@@ -102,7 +108,7 @@
       <a class="btn ghost" href="#pricing">See pricing</a>
     </div>
     <p class="note">Free to run on your own server. No card, no sign-up, no call with sales.</p>
-    <figure class="shot"><img src="img/plan.svg" alt="A project schedule with task bars, dependencies, a critical path and a milestone" width="960" height="520"><figcaption>The Plan: dependencies, critical path and baselines. Illustration.</figcaption></figure>
+    <figure class="shot"><img src="img/plan.jpg" alt="Workbench Plan tab showing a Gantt chart with task bars, dependencies and the critical path in red" width="800" height="504"><figcaption>The Plan: dependencies and critical path, on the sample project that ships with the demo.</figcaption></figure>
   </div>
 
   <section id="replaces">
@@ -123,10 +129,11 @@
       <h2>Simple is the point</h2>
       <p class="sub">Contractor software is usually built for the person who configures it. This is built for the person who has to use it on a Friday afternoon.</p>
       <div class="split">
-        <img src="img/phone.svg" alt="A weekly timesheet on a phone with a Submit for approval button" width="320" height="560">
+        <img class="phone" src="img/phone.jpg" alt="The Workbench phone app showing this week's timesheet, one row per day" width="750" height="1624">
         <p class="sub" style="margin:0">Open the phone app, fill in the week, press one button. Your approver gets it, and the hours land on the right project and the right contract without anyone retyping them. That is the whole job for most of your people.</p>
       </div>
-      <div class="grid">
+      <figure class="shot" style="margin:0 0 32px"><img src="img/home.jpg" alt="The Workbench home page: a timer, this week's hours and a to-do list of what needs doing today" width="800" height="504"><figcaption>Your day starts with a to-do list, not a menu.</figcaption></figure>
+      <div class="grid two">
         <div class="card"><h3>Most people only enter time</h3><p>Employees who just record time, expenses and leave need nothing but a phone. They are free on every plan.</p></div>
         <div class="card"><h3>One place to look</h3><p>A global search and a short menu for what your role can do. If you are not allowed to see something, you do not see the button.</p></div>
         <div class="card"><h3>Works on a phone</h3><p>An installable phone app for timesheets and expenses, so nobody waits until Monday to remember their hours.</p></div>
@@ -139,8 +146,8 @@
     <div class="wrap">
       <h2>Made for the audit</h2>
       <p class="sub">A government contractor has to show an auditor its books on demand. Those pages are free on every plan, and you can never be locked out of them.</p>
-      <figure class="shot"><img src="img/funding.svg" alt="A contract page showing funded amount, billed to date, funding left and recent invoices" width="960" height="360"><figcaption>Funding and invoice status for a contract, the same view a contracting officer sees. Illustration.</figcaption></figure>
-      <div class="grid">
+      <figure class="shot"><img src="img/projects.jpg" alt="The Projects list with a health badge, funding used and spend against budget for each project" width="800" height="500"><figcaption>Every project shows its health, how much funding is used and what it has spent.</figcaption></figure>
+      <div class="grid four">
         <div class="card"><h3>Audit log</h3><p>Who changed what, and when, on records that matter.</p></div>
         <div class="card"><h3>DCAA, CAS and CPSR readiness</h3><p>Readiness pages that show where you stand against the questions an auditor asks.</p></div>
         <div class="card"><h3>Ceilings and funding</h3><p>Funding alerts, encumbrances and charge guards, so nobody charges a project that has run out of money.</p></div>
