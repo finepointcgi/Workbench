@@ -161,3 +161,13 @@ a.wb-plan-detail {
 .wb-plan-toolbar ::deep .mud-switch {
     margin-right: 0;
 }
+
+/* On a phone the money line and approval bar sit above the grid; keep them small so the grid starts sooner. */
+@media (max-width: 599.98px) {
+    .wb-plan-bar ::deep .mud-paper { padding: 4px 8px !important; }
+    .wb-plan-money { padding: 4px 8px; margin-bottom: 4px; }
+    .wb-plan-money-main { display: block; font-size: 0.85rem; line-height: 1.35; }
+    .wb-plan-bar ::deep .wb-approval-text { font-size: 0.75rem; flex-basis: 100%; }
+    .wb-plan-bar ::deep .wb-approval-actions { margin-left: 0; justify-content: flex-start; }
+    .wb-plan-toolbar { gap: 0 !important; }
+}
