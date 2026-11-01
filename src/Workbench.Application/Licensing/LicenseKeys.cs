@@ -4,7 +4,7 @@ using Workbench.Domain.Licensing;
 
 namespace Workbench.Application.Licensing;
 
-/// <summary>What a license key says. <see cref="Seats"/> counts full seats (people with a role beyond Employee).</summary>
+/// <summary>What a license key says. <see cref="Seats"/> is how many active people the license covers.</summary>
 public sealed record LicenseClaims(string Licensee, Edition Edition, int Seats, DateOnly ExpiresOn);
 
 /// <summary>Where the server finds the public half of the key pair that signs licenses.</summary>

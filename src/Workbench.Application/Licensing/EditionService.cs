@@ -4,7 +4,9 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Workbench.Contracts;
 using Workbench.Contracts.Licensing;
 using Workbench.Domain.Identity;
+using Workbench.Domain.Integrations;
 using Workbench.Domain.Licensing;
+using Workbench.Domain.Security;
 
 namespace Workbench.Application.Licensing;
 
@@ -25,7 +27,7 @@ public sealed record EditionState(
     string? Licensee,
     DateOnly? ExpiresOn,
     bool InGracePeriod,
-    int? FullSeatLimit,
+    int? SeatLimit,
     string? Problem);
 
 /// <summary>Works out which edition this organization has, from the hosting plan or the stored license key.</summary>
@@ -72,13 +74,26 @@ public sealed class EditionService(IWorkbenchDbContextFactory dbFactory, IHosted
             $"This license expired on {claims.ExpiresOn:d MMM yyyy}, so Business features are off. Your data is untouched.");
     }
 
-    /// <summary>People who hold any role beyond Employee. They take a full seat; Employees who only enter time are free.</summary>
-    public static async Task<(int Full, int TimeOnly)> CountSeatsAsync(IWorkbenchDbContext db, CancellationToken ct)
+    /// <summary>Active people. Everyone who can sign in takes a seat, whatever their role; API keys are not people and are not counted.</summary>
+    public static Task<int> CountSeatsAsync(IWorkbenchDbContext db, CancellationToken ct) =>
+        db.Set<AppUser>().AsNoTracking().CountAsync(u => u.IsActive && !db.Set<ApiKey>().Any(k => k.ServiceUserEmail == u.Email), ct);
+
+    /// <summary>Refuses to add one more person when every seat in the license is taken. Pending invitations hold a seat.</summary>
+    public async Task RequireFreeSeatAsync(IWorkbenchDbContext db, CancellationToken ct)
     {
-        var active = await db.Set<AppUser>().AsNoTracking().CountAsync(u => u.IsActive, ct);
-        var full = await db.Set<AppUser>().AsNoTracking().CountAsync(u => u.IsActive &&
-            db.Set<UserRole>().Any(ur => ur.UserId == u.Id && db.Set<Role>().Any(r => r.Id == ur.RoleId && r.BuiltIn != 0)), ct);
-        return (full, active - full);
+        if ((await GetAsync(ct)).SeatLimit is not { } limit)
+        {
+            return;
+        }
+
+        var now = clock.GetUtcNow().UtcDateTime;
+        var pending = await db.Set<UserInvite>().AsNoTracking()
+            .Where(i => i.AcceptedAtUtc == null && i.RevokedAtUtc == null && i.ExpiresAtUtc > now)
+            .Select(i => i.Email).Distinct().CountAsync(ct);
+        if (await CountSeatsAsync(db, ct) + pending >= limit)
+        {
+            throw new WorkbenchEditionException($"All {limit} seats in your license are in use. Deactivate someone who has left, or add seats under Setup › License.");
+        }
     }
 }
 

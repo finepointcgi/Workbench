@@ -17,7 +17,7 @@ using static Workbench.Tests.Identity.SeededHost;
 
 namespace Workbench.Tests.Licensing;
 
-/// <summary>Editions: signed keys, Business-only actions, full seats, expiry with grace, and the hosted plan.</summary>
+/// <summary>Editions: signed keys, Business-only actions, seats, expiry with grace, and the hosted plan.</summary>
 public sealed class LicensingTests
 {
     private static readonly ECDsa Signer = ECDsa.Create(ECCurve.NamedCurves.nistP256);
@@ -152,27 +152,33 @@ public sealed class LicensingTests
     }
 
     [Fact]
-    public async Task A_full_seat_is_anyone_with_a_role_beyond_Employee_and_the_license_limits_them()
+    public async Task Every_active_person_takes_a_seat_whatever_their_role_and_the_license_limits_them()
     {
         await using var seeded = await HostAsync();
         var admin = seeded.As(Admin).Host;
-        var before = await admin.Get<ILicenseService>().GetStatusAsync();
-        Assert.Equal(3, before.FullSeatsUsed); // Admin, Finance and Timekeeper hold roles; Pat and Val are Employees.
-        Assert.Equal(2, before.TimeOnlyUsers);
+        var license = admin.Get<ILicenseService>();
+        Assert.Equal(5, (await license.GetStatusAsync()).SeatsUsed); // Three with roles and two employees: all take a seat.
 
-        await Assert.ThrowsAsync<ArgumentException>(() => admin.Get<ILicenseService>().ActivateAsync(new ActivateLicenseRequest(Issue(seats: 2)))); // Fewer seats than people using them.
-        await admin.Get<ILicenseService>().ActivateAsync(new ActivateLicenseRequest(Issue(seats: 3)));
+        await Assert.ThrowsAsync<ArgumentException>(() => license.ActivateAsync(new ActivateLicenseRequest(Issue(seats: 4)))); // Fewer seats than people.
+        await license.ActivateAsync(new ActivateLicenseRequest(Issue(seats: 5)));
 
+        var invites = admin.Get<IInviteService>();
         var users = admin.Get<IUserAdminService>();
-        var full = await Assert.ThrowsAsync<WorkbenchEditionException>(() => users.SetRolesAsync(Owner, OrgRoles.Finance)); // A fourth full seat.
-        Assert.Contains("3 full seats", full.Message);
+        var full = await Assert.ThrowsAsync<WorkbenchEditionException>(() => invites.CreateAsync(new CreateInviteRequest("new.hire@example.com", "New Hire", OrgRoles.Employee)));
+        Assert.Contains("5 seats", full.Message);
 
-        var existing = await users.SetRolesAsync(Finance, OrgRoles.Finance | OrgRoles.Timekeeper); // Changing someone who already has a seat costs nothing.
+        var existing = await users.SetRolesAsync(Finance, OrgRoles.Finance | OrgRoles.Timekeeper); // Changing roles costs nothing.
         Assert.True(existing.Roles.HasFlag(OrgRoles.Timekeeper));
 
-        await admin.Get<ILicenseService>().ActivateAsync(new ActivateLicenseRequest(Issue(seats: 4)));
-        await users.SetRolesAsync(Owner, OrgRoles.Finance);
-        Assert.Equal(4, (await admin.Get<ILicenseService>().GetStatusAsync()).FullSeatsUsed);
+        await users.DeactivateAsync(Owner); // Frees a seat at once.
+        Assert.Equal(4, (await license.GetStatusAsync()).SeatsUsed);
+        await invites.CreateAsync(new CreateInviteRequest("new.hire@example.com", "New Hire", OrgRoles.Employee));
+        await Assert.ThrowsAsync<WorkbenchEditionException>(() => invites.CreateAsync(new CreateInviteRequest("second@example.com", "Second", OrgRoles.Employee))); // The pending invite holds the seat.
+        await Assert.ThrowsAsync<WorkbenchEditionException>(() => users.ReactivateAsync(Owner)); // So does coming back.
+
+        await license.ActivateAsync(new ActivateLicenseRequest(Issue(seats: 6)));
+        await users.ReactivateAsync(Owner);
+        Assert.Equal(5, (await license.GetStatusAsync()).SeatsUsed);
     }
 
     [Fact]
@@ -182,7 +188,7 @@ public sealed class LicensingTests
         var status = await seeded.As(Admin).Host.Get<ILicenseService>().GetStatusAsync();
         var created = await seeded.Host.Get<ICompanyService>().CreateAsync(new SaveCompanyRequest("B", "Second Co"));
 
-        Assert.Equal(("Business", EditionSource.HostedPlan, (int?)null), (status.Edition, status.Source, status.FullSeatLimit));
+        Assert.Equal(("Business", EditionSource.HostedPlan, (int?)null), (status.Edition, status.Source, status.SeatLimit));
         Assert.Equal("B", created.Code);
     }
 

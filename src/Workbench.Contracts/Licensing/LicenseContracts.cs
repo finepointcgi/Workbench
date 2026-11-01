@@ -18,17 +18,16 @@ public enum EditionSource
 
 public sealed record FeatureStatusDto(string Key, string Name, string Description, bool Included);
 
-/// <param name="FullSeatLimit">Null when seats aren't limited.</param>
-/// <param name="FullSeatsUsed">People with any role beyond Employee. Employees who only enter time and expenses are free.</param>
+/// <param name="SeatLimit">Null when seats aren't limited.</param>
+/// <param name="SeatsUsed">Active people. Everyone who can sign in takes a seat; API keys do not.</param>
 public sealed record LicenseStatusDto(
     string Edition,
     EditionSource Source,
     string? Licensee,
     DateOnly? ExpiresOn,
     bool InGracePeriod,
-    int? FullSeatLimit,
-    int FullSeatsUsed,
-    int TimeOnlyUsers,
+    int? SeatLimit,
+    int SeatsUsed,
     string? Problem,
     IReadOnlyList<FeatureStatusDto> Features);
 

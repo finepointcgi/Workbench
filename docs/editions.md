@@ -4,7 +4,7 @@ Workbench has two editions.
 
 - **Community** is free to self-host. It is a complete system for one company: time, expenses, projects, the Plan, sheets and
   dashboards, billing, the general ledger, purchasing, HR, the audit log, DCAA/CAS readiness and the importers.
-- **Business** adds what larger firms need, and is licensed per **full seat**.
+- **Business** adds what larger firms need, and is licensed **per person**: every active user takes a seat.
 
 ## What needs Business
 
@@ -27,12 +27,15 @@ books and get its data in and out whatever it pays.
 
 ## Seats
 
-A **full seat** is anyone who holds a role beyond Employee (project manager, finance, HR, administrator, any custom role).
-People who only enter time, expenses and leave are Employees and are **free**. Most of a contractor's people are in that
-group, which keeps the price per head low where it matters.
+A **seat** is any active person who can sign in, whatever their role: an employee who only enters time takes one, and so does an
+administrator. One price per person, one count. API keys are not people and do not take a seat. Community has no seat limit.
 
-A Business license has a number of full seats. Giving someone their first role when all seats are in use is refused with a
-message that says what to do. Changing the roles of someone who already holds a seat costs nothing.
+A Business license covers a number of seats. Adding a person (an invitation, a created user, or reactivating someone) when all
+seats are in use is refused with a message that says what to do; pending invitations hold a seat until they are accepted,
+revoked or expire. Deactivating someone frees their seat at once. Changing someone's roles costs nothing.
+
+Not enforced: a person who signs in for the first time on a server that allows open sign-up (no invitation needed, the
+development default) is counted but not refused. Production servers require invitations by default.
 
 ## Where the edition comes from
 
@@ -70,7 +73,7 @@ lost, no new keys can be issued for servers that carry that public key, so back 
 - **It does not take payment.** Keys are issued by hand and hosted plans are set by the host administrator. Card billing,
   invoices, renewals and a self-service purchase page are separate work.
 - **SCIM provisioning is not gated** (it authenticates with its own token, outside the edition check).
-- **Reactivating a deactivated user** does not check seats; only granting a first role does.
+- **Open sign-up** (off in production) counts new people but does not refuse them when seats run out.
 - **Terms.** The software license (what people may do with the source), the end-user terms and the price list are not
   written. Choose and have a lawyer review them before selling anything. A source-available license that forbids offering the
   software to others as a hosted service (for example BSL) fits a free self-hosted edition best; an unrestricted open-source
