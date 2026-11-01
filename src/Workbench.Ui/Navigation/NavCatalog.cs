@@ -255,6 +255,7 @@ public static class NavCatalog
         new(Admin, "Setup", "Sales and use tax", "setup/sales-tax", Icons.Material.Filled.ReceiptLong, NavRule.Need(P.SalesTaxManage), InMenu: false, Keywords: "sales tax rates jurisdictions tax codes exemption certificates resale avalara"),
         new(Admin, "Setup", "Organization", "setup/organization", Icons.Material.Filled.Tune, NavRule.Need(P.SetupOrganizationView), Keywords: "settings timesheet cadence company"),
         new(Admin, "Setup", "Companies", "setup/companies", Icons.Material.Filled.Domain, NavRule.Need(P.SetupCompanies), Keywords: "multicompany legal entity intercompany ein due to due from"),
+        new(Admin, "Setup", "License", "setup/license", Icons.Material.Filled.WorkspacePremium, NavRule.Need(P.AdminOrganization), Keywords: "edition business community seats upgrade subscription pricing key plan"),
         new(Admin, "People and access", "People", "setup/people", Icons.Material.Filled.People, NavRule.Need(P.SetupPeople), Keywords: "employees cost rates supervisors"),
         new(Admin, "People and access", "Users and security", "admin/users", Icons.Material.Filled.ManageAccounts, NavRule.Need(P.AdminUsers, P.AdminSecurity), Keywords: "sign in accounts security invite deactivate"),
         new(Admin, "People and access", "Roles", "admin/roles", Icons.Material.Filled.AdminPanelSettings, NavRule.Need(P.AdminRoles), Detail: "Role", Keywords: "permissions security groups access rights custom role"),

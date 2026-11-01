@@ -64,6 +64,7 @@ public sealed class ReminderTests
             services.AddSingleton<IBlobStore>(new MemoryBlobStore());
             services.AddSingleton<ICurrentUser>(User);
             services.AddWorkbenchApplication();
+            services.UseBusinessEdition();
             services.AddSingleton<TimeProvider>(Clock);
             services.AddSingleton(mailer ?? Emails);
             services.Configure<TimekeepingOptions>(o => o.TimeZone = "UTC");

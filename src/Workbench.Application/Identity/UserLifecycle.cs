@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Workbench.Application.Security;
 using Workbench.Contracts;
 using Workbench.Contracts.Identity;
+using Workbench.Contracts.Licensing;
 using Workbench.Contracts.Security;
 using Workbench.Domain.Identity;
 using Workbench.Domain.ProjectAccounting;
@@ -81,6 +82,7 @@ public sealed class UserLifecycle(
     IWorkbenchDbContextFactory dbFactory,
     UserStatusCache statusCache,
     SecurityEventLog securityLog,
+    Licensing.EditionService editions,
     TimeProvider clock)
 {
     public async Task<AppUser> GetAsync(string email, CancellationToken cancellationToken = default)
@@ -172,6 +174,21 @@ public sealed class UserLifecycle(
     public Task<AppUser> SetGrantAsync(string email, RoleGrant grant, string actor, CancellationToken cancellationToken = default) =>
         ChangeRolesAsync(email, _ => grant.RoleIds.Select(id => new RoleAssignment(id)), actor, cancellationToken);
 
+    /// <summary>Giving someone their first role beyond Employee takes a full seat; a Business license has a fixed number of them.</summary>
+    private async Task RequireFreeSeatAsync(IWorkbenchDbContext db, CancellationToken cancellationToken)
+    {
+        if ((await editions.GetAsync(cancellationToken)).FullSeatLimit is not { } limit)
+        {
+            return;
+        }
+
+        var (full, _) = await Licensing.EditionService.CountSeatsAsync(db, cancellationToken);
+        if (full >= limit)
+        {
+            throw new WorkbenchEditionException($"All {limit} full seats in your license are in use. Employees who only enter time and expenses are free, but anyone with a role needs a seat. Add seats under Setup › License.");
+        }
+    }
+
     /// <summary>
     /// Every change to the roles a user holds goes through here: nobody removes their own Admin role, there is always an
     /// active administrator, and the change is audit logged (before and after, with scopes) and recorded as a security event.
@@ -192,6 +209,11 @@ public sealed class UserLifecycle(
             }
 
             await RequireAnotherActiveAdminAsync(db, email, cancellationToken);
+        }
+
+        if (current.Count == 0 && wanted.Count > 0)
+        {
+            await RequireFreeSeatAsync(db, cancellationToken);
         }
 
         var now = clock.GetUtcNow().UtcDateTime;

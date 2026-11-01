@@ -24,6 +24,7 @@ internal sealed class CollaborationHost : IAsyncDisposable
         services.AddSingleton<ICurrentUser>(User);
         services.AddSingleton<Microsoft.Extensions.Configuration.IConfiguration>(new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
         services.AddWorkbenchApplication();
+        services.UseBusinessEdition();
         configure?.Invoke(services);
         _provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
         _scope = _provider.CreateAsyncScope();

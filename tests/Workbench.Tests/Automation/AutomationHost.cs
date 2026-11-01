@@ -28,6 +28,7 @@ internal sealed class AutomationHost : IAsyncDisposable
         services.AddSingleton<IBlobStore>(new MemoryBlobStore());
         services.AddSingleton<ICurrentUser>(User);
         services.AddWorkbenchApplication();
+        services.UseBusinessEdition();
         services.AddWorkbenchAutomationHosting();
         services.AddSingleton<TimeProvider>(Clock);
         services.AddSingleton<IEmailSender>(Emails);

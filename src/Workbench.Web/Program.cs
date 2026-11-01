@@ -52,6 +52,9 @@ builder.Services.AddMudServices();
 builder.Services.AddProblemDetails();
 
 builder.Services.AddWorkbenchApplication();
+var licenseOptions = new Workbench.Application.Licensing.LicenseOptions();
+builder.Configuration.GetSection(Workbench.Application.Licensing.LicenseOptions.SectionName).Bind(licenseOptions);
+Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.Replace(builder.Services, ServiceDescriptor.Singleton(licenseOptions)); // License:EditionOverride turns Business on for the demo; License:PublicKeyPem replaces the built-in public key.
 builder.Services.AddWorkbenchInfrastructure(builder.Configuration);
 
 // Authentication registers ICurrentUser, which the notifications/automation hosting decorates, so it comes first.
