@@ -69,7 +69,7 @@ else
         <MudPaper Outlined="true" Class="pa-4">
             <MudText Typo="Typo.h6" HtmlTag="h2">@(_status.Source == EditionSource.Key ? "Replace the license key" : "Add a license key")</MudText>
             <MudText Class="mud-text-secondary mb-2">Paste the key you were given. It is checked on this server; nothing is sent anywhere.</MudText>
-            <MudTextField @bind-Value="_key" Label="License key" Lines="3" Variant="Variant.Outlined" Placeholder="WB1…" data-testid="license-key" />
+            <MudTextField @bind-Value="_key" Immediate="true" Label="License key" Lines="3" Variant="Variant.Outlined" Placeholder="WB1…" data-testid="license-key" />
             <MudStack Row="true" Class="mt-2">
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(string.IsNullOrWhiteSpace(_key) || _busy)" OnClick="ActivateAsync" data-testid="license-activate">Activate</MudButton>
                 @if (_status.Source == EditionSource.Key)

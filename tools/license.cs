@@ -30,15 +30,20 @@ switch (args[0])
     {
         using var key = ECDsa.Create();
         key.ImportFromPem(File.ReadAllText(args[1]));
-        var payload = JsonSerializer.SerializeToUtf8Bytes(new
+        var buffer = new MemoryStream();
+        using (var json = new Utf8JsonWriter(buffer))
         {
-            v = 1,
-            licensee = args[2],
-            edition = args.Length > 5 ? args[5] : "business",
-            seats = int.Parse(args[3]),
-            expires = args[4],
-            issued = DateTime.UtcNow.ToString("yyyy-MM-dd"),
-        });
+            json.WriteStartObject();
+            json.WriteNumber("v", 1);
+            json.WriteString("licensee", args[2]);
+            json.WriteString("edition", args.Length > 5 ? args[5] : "business");
+            json.WriteNumber("seats", int.Parse(args[3]));
+            json.WriteString("expires", args[4]);
+            json.WriteString("issued", DateTime.UtcNow.ToString("yyyy-MM-dd"));
+            json.WriteEndObject();
+        }
+
+        var payload = buffer.ToArray();
         var sig = key.SignData(payload, HashAlgorithmName.SHA256, DSASignatureFormat.IeeeP1363FixedFieldConcatenation);
         Console.WriteLine($"WB1.{B64(payload)}.{B64(sig)}");
         return 0;
