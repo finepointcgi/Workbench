@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MS Project Alternative for Government Contractors | Workbench</title>
+<meta name="description" content="Gantt charts with all four dependency types, critical path, baselines and earned value, connected to timesheets and billing. Imports MS Project XML.">
+<link rel="canonical" href="https://REPLACE-WITH-DOMAIN/ms-project-alternative.html">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta property="og:type" content="article"><meta property="og:site_name" content="Workbench"><meta property="og:title" content="MS Project Alternative for Government Contractors | Workbench">
+<meta property="og:description" content="Gantt charts with all four dependency types, critical path, baselines and earned value, connected to timesheets and billing. Imports MS Project XML."><meta property="og:url" content="https://REPLACE-WITH-DOMAIN/ms-project-alternative.html"><meta property="og:image" content="https://REPLACE-WITH-DOMAIN/img/plan.jpg">
+<meta name="twitter:card" content="summary_large_image"><meta name="theme-color" content="#1f6f54">
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "Can I open my MS Project files?", "acceptedAnswer": {"@type": "Answer", "text": "Workbench reads and writes MS Project XML. It does not read .mpp files directly, so save your file as XML from MS Project first."}}, {"@type": "Question", "name": "Does it support the critical path and baselines?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. It shows the critical path and float, and keeps up to 11 baselines."}}, {"@type": "Question", "name": "What does it cost?", "acceptedAnswer": {"@type": "Answer", "text": "Community is free to self-host. Business is $10 per person per month."}}]}</script>
+<style>
+  :root {
+    --bg: #fbfaf7; --surface: #ffffff; --ink: #1c2420; --muted: #5b665f; --line: #e3e1d9;
+    --accent: #1f6f54; --accent-ink: #ffffff; --accent-soft: #e4f1ea; --warn-soft: #f6efe0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #121714; --surface: #1a211d; --ink: #eaeee9; --muted: #9ba89f; --line: #2b352f;
+      --accent: #4fb48c; --accent-ink: #08140e; --accent-soft: #1b2e25; --warn-soft: #2a261a;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--ink); line-height: 1.55;
+    font: 17px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  a { color: var(--accent); }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px; }
+  header { border-bottom: 1px solid var(--line); }
+  nav { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 0; flex-wrap: wrap; }
+  .brand { font-weight: 700; font-size: 1.15rem; letter-spacing: -.01em; color: var(--ink); text-decoration: none; }
+  nav .links { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+  nav .links a { color: var(--muted); text-decoration: none; font-size: .95rem; }
+  nav .links a:hover { color: var(--ink); }
+  .btn { display: inline-block; padding: 12px 20px; border-radius: 8px; font-weight: 600; text-decoration: none;
+    background: var(--accent); color: var(--accent-ink) !important; border: 1px solid var(--accent); }
+  .btn.ghost { background: transparent; color: var(--ink) !important; border-color: var(--line); }
+  .btn.small { padding: 8px 14px; font-size: .92rem; }
+  .hero { padding: 72px 0 56px; }
+  h1 { font-size: clamp(2rem, 5.4vw, 3.4rem); line-height: 1.1; letter-spacing: -.025em; margin: 0 0 18px; max-width: 18ch; }
+  .lede { font-size: 1.2rem; color: var(--muted); max-width: 40rem; margin: 0 0 28px; }
+  .cta { display: flex; gap: 12px; flex-wrap: wrap; }
+  .note { color: var(--muted); font-size: .9rem; margin-top: 14px; }
+  section { padding: 56px 0; border-top: 1px solid var(--line); }
+  h2 { font-size: clamp(1.5rem, 3.4vw, 2.1rem); letter-spacing: -.02em; line-height: 1.2; margin: 0 0 12px; }
+  .sub { color: var(--muted); max-width: 40rem; margin: 0 0 32px; }
+  .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .grid.two { grid-template-columns: repeat(2, 1fr); }
+  .grid.four, .replace { grid-template-columns: repeat(2, 1fr); }
+  @media (min-width: 960px) { .grid.four, .replace { grid-template-columns: repeat(4, 1fr); } }
+  @media (max-width: 560px) { .grid.two, .grid.four, .replace { grid-template-columns: 1fr; } }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 22px; }
+  .card h3 { margin: 0 0 8px; font-size: 1.05rem; }
+  .card p { margin: 0; color: var(--muted); font-size: .97rem; }
+  .replace { display: grid; gap: 16px; }
+  .replace .card h3 { font-size: 1rem; }
+  .tag { display: inline-block; font-size: .75rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+    color: var(--accent); background: var(--accent-soft); padding: 3px 9px; border-radius: 99px; margin-bottom: 10px; }
+  .plans { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); align-items: stretch; }
+  .plan { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 28px; display: flex; flex-direction: column; }
+  .plan.featured { border: 2px solid var(--accent); }
+  .plan h3 { margin: 0; font-size: 1.25rem; }
+  .price { font-size: 2.3rem; font-weight: 700; letter-spacing: -.02em; margin: 10px 0 2px; }
+  .price small { font-size: 1rem; font-weight: 500; color: var(--muted); letter-spacing: 0; }
+  .plan ul { list-style: none; padding: 0; margin: 18px 0 24px; flex: 1; }
+  .plan li { padding: 6px 0 6px 26px; position: relative; font-size: .97rem; }
+  .plan li::before { content: ""; position: absolute; left: 4px; top: 13px; width: 10px; height: 6px;
+    border-left: 2px solid var(--accent); border-bottom: 2px solid var(--accent); transform: rotate(-45deg); }
+  .callout { background: var(--accent-soft); border-radius: 12px; padding: 18px 22px; margin-top: 24px; }
+  .callout p { margin: 0; }
+  .honest { background: var(--warn-soft); border-radius: 12px; padding: 18px 22px; }
+  .honest h3 { margin: 0 0 8px; font-size: 1rem; }
+  .honest ul { margin: 0; padding-left: 20px; color: var(--muted); font-size: .97rem; }
+  details { border-bottom: 1px solid var(--line); padding: 16px 0; }
+  summary { font-weight: 600; cursor: pointer; }
+  details p { color: var(--muted); margin: 10px 0 0; max-width: 42rem; }
+  footer { border-top: 1px solid var(--line); padding: 32px 0 48px; color: var(--muted); font-size: .92rem; }
+  footer .row { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .shot { margin: 40px 0 0; } .shot img { width: 100%; height: auto; display: block; border-radius: 14px; box-shadow: 0 10px 30px rgba(0,0,0,.08); }
+  .shot figcaption { color: var(--muted); font-size: .88rem; margin-top: 10px; }
+  .split { display: flex; gap: 40px; align-items: center; margin-bottom: 32px; }
+  .split img { width: 220px; height: auto; flex: none; }
+  .split img.phone { border: 6px solid #1c2420; border-radius: 28px; box-shadow: 0 10px 30px rgba(0,0,0,.15); }
+  .shot img { border: 1px solid var(--line); }
+  @media (max-width: 640px) { .split { flex-direction: column; align-items: flex-start; } }
+  ol.steps { padding-left: 20px; max-width: 42rem; } ol.steps li { margin-bottom: 10px; }
+</style>
+<style>.prose p,.prose ul{max-width:42rem} .prose ul{padding-left:20px;color:var(--ink)} .prose li{margin-bottom:8px} .prose p{color:var(--ink)}
+table.cmp{width:100%;border-collapse:collapse;font-size:.95rem;margin-top:12px} table.cmp th,table.cmp td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top} table.cmp th{color:var(--muted);font-size:.8rem;text-transform:uppercase;letter-spacing:.05em}
+.tablewrap{overflow-x:auto}</style>
+</head><body>
+<header><div class="wrap"><nav aria-label="Main"><a class="brand" href="/">Workbench</a><div class="links">
+<a href="/#replaces">What it replaces</a><a href="/#pricing">Pricing</a><a href="/#faq">Questions</a>
+<a class="btn small" href="https://REPLACE-WITH-DEMO-URL">Try the demo</a></div></nav></div></header>
+<main>
+<div class="wrap hero" style="padding-bottom:32px"><h1 style="max-width:24ch">A scheduling tool that knows what the project costs</h1><p class="lede">Workbench schedules projects with the features contract managers expect (dependencies, critical path, baselines and earned value) and connects them to the hours people actually charge and the invoices you send.</p>
+<div class="cta"><a class="btn" href="https://REPLACE-WITH-DEMO-URL">Try the live demo</a><a class="btn ghost" href="/#pricing">See pricing</a></div></div>
+<section><div class="wrap prose"><h2>Scheduling features</h2><ul><li>Gantt chart with finish-to-start, start-to-start, finish-to-finish and start-to-finish links, with lead and lag.</li><li>Task constraints, project calendars, deadlines and milestones.</li><li>Critical path and float, and up to 11 saved baselines to compare against.</li><li>Status date, percent complete and a "try changes" mode to test a what-if before committing.</li><li>Earned value (CPI and SPI) and resource allocation and utilisation.</li><li>Import and export of MS Project XML.</li></ul></div></section>
+<section><div class="wrap prose"><h2>Connected to the money</h2><p>A schedule in a standalone tool is a guess. Here, the same project holds the budget, the hours entered against it and the funding on the contract, so status reports and earned value start from real numbers.</p></div></section>
+
+<section><div class="wrap"><div class="honest"><h3>Where MS Project is ahead today</h3><ul><li>Resource leveling, task types such as fixed units and fixed work, effort-driven scheduling, split and recurring tasks, subprojects with cross-project links, and views such as the network diagram and task usage are not in Workbench yet.</li><li>Workbench cannot open .mpp files; it uses XML.</li><li>If you plan very large programmes with heavy resource leveling, MS Project is still the stronger planner.</li></ul></div></div></section>
+<section id="faq"><div class="wrap"><h2>Questions</h2><details><summary>Can I open my MS Project files?</summary><p>Workbench reads and writes MS Project XML. It does not read .mpp files directly, so save your file as XML from MS Project first.</p></details><details><summary>Does it support the critical path and baselines?</summary><p>Yes. It shows the critical path and float, and keeps up to 11 baselines.</p></details><details><summary>What does it cost?</summary><p>Community is free to self-host. Business is $10 per person per month.</p></details></div></section>
+<section><div class="wrap"><h2>Price</h2><p class="sub" style="margin:0 0 16px">Community is free to run on your own server, for one company, with unlimited people. Business is $10 per person per month and adds more than one company, single sign-on, integrations, customer links, the supplier portal, custom approval workflows and incurred cost submission.</p>
+<div class="cta"><a class="btn" href="https://github.com/finepointcgi/workbench">Get Community</a><a class="btn ghost" href="mailto:REPLACE-WITH-SALES-EMAIL">Ask for a Business key</a></div>
+<p class="note">Related: <a href="/costpoint-alternative.html">Costpoint alternative</a> &middot; <a href="/smartsheet-alternative.html">Smartsheet alternative</a> &middot; <a href="/dcaa-timekeeping.html">DCAA timekeeping</a></p></div></section>
+</main>
+<footer><div class="wrap row"><div>Workbench</div><div>
+<a href="/costpoint-alternative.html">Costpoint alternative</a> &middot; <a href="/smartsheet-alternative.html">Smartsheet alternative</a> &middot;
+<a href="/ms-project-alternative.html">MS Project alternative</a> &middot; <a href="/dcaa-timekeeping.html">DCAA timekeeping</a> &middot;
+<a href="mailto:REPLACE-WITH-SALES-EMAIL">Contact</a></div></div></footer>
+</body></html>
