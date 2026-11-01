@@ -8,7 +8,7 @@
 <PageTitle>License · Setup · Workbench</PageTitle>
 
 <SetupHeader Title="License"
-             Subtitle="Workbench Community is free. Workbench Business adds what larger firms need and is licensed per full seat." />
+             Subtitle="Workbench Community is free. Workbench Business adds what larger firms need and is licensed per person." />
 
 @if (_error is not null)
 {
@@ -32,11 +32,10 @@ else
         </MudStack>
 
         <MudText Class="mt-3" data-testid="license-seats">
-            <b>@_status.FullSeatsUsed</b> full @(_status.FullSeatsUsed == 1 ? "seat" : "seats") in use@(_status.FullSeatLimit is { } l ? $" of {l}" : "").
-            <b>@_status.TimeOnlyUsers</b> @(_status.TimeOnlyUsers == 1 ? "person" : "people") only enter@(_status.TimeOnlyUsers == 1 ? "s" : "") time and expenses, which is free.
+            <b>@_status.SeatsUsed</b> @(_status.SeatsUsed == 1 ? "seat" : "seats") in use@(_status.SeatLimit is { } l ? $" of {l}" : "").
         </MudText>
         <MudText Typo="Typo.body2" Class="mud-text-secondary">
-            A full seat is anyone with a role beyond Employee: project managers, finance, HR and administrators.
+            Every active person takes a seat. Deactivate someone who has left and their seat is free again. API keys do not take a seat.
         </MudText>
     </MudPaper>
 

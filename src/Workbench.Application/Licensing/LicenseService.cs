@@ -12,12 +12,12 @@ public sealed class LicenseService(IWorkbenchDbContextFactory dbFactory, Edition
     {
         var state = await editions.GetAsync(cancellationToken);
         await using var db = await dbFactory.CreateAsync(cancellationToken);
-        var (full, timeOnly) = await EditionService.CountSeatsAsync(db, cancellationToken);
+        var used = await EditionService.CountSeatsAsync(db, cancellationToken);
         var features = FeatureCatalog.All
             .Select(f => new FeatureStatusDto(f.Feature.ToString(), f.Name, f.Description, FeatureCatalog.IsIncluded(state.Edition, f.Feature)))
             .ToList();
         return new LicenseStatusDto(state.Edition.ToString(), state.Source, state.Licensee, state.ExpiresOn, state.InGracePeriod,
-            state.FullSeatLimit, full, timeOnly, state.Problem, features);
+            state.SeatLimit, used, state.Problem, features);
     }
 
     public async Task<LicenseStatusDto> ActivateAsync(ActivateLicenseRequest request, CancellationToken cancellationToken = default)
@@ -34,10 +34,10 @@ public sealed class LicenseService(IWorkbenchDbContextFactory dbFactory, Edition
 
         await using (var db = await dbFactory.CreateAsync(cancellationToken))
         {
-            var (full, _) = await EditionService.CountSeatsAsync(db, cancellationToken);
-            if (full > claims.Seats)
+            var used = await EditionService.CountSeatsAsync(db, cancellationToken);
+            if (used > claims.Seats)
             {
-                throw new ArgumentException($"That license has {claims.Seats} full seats but {full} people already hold a role beyond Employee. Ask for a larger license, or remove some roles first.");
+                throw new ArgumentException($"That license has {claims.Seats} seats but {used} people are active. Ask for a larger license, or deactivate some people first.");
             }
 
             var row = await db.Set<LicenseSettings>().OrderBy(s => s.Id).FirstOrDefaultAsync(cancellationToken);
