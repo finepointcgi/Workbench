@@ -16,13 +16,15 @@ public sealed class MonthReviewTests
         var reports = new HttpAccountingReportService(finance);
 
         var periods = (await calendar.ListPeriodsAsync()).OrderBy(p => p.Start).ToList();
-        var october = periods.Single(p => p.Name == "2026-10");
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        var october = periods.Single(p => p.Start <= today && p.End >= today);
+        var previous = periods.Last(p => p.End < october.Start);
 
         var review = await reports.GetMonthReviewAsync(october.Id);
         var statement = await reports.GetIncomeStatementAsync(october.Id);
 
-        Assert.Equal("2026-10", review.PeriodName);
-        Assert.Equal("2026-09", review.PreviousPeriodName);
+        Assert.Equal(october.Name, review.PeriodName);
+        Assert.Equal(previous.Name, review.PreviousPeriodName);
         Assert.NotEmpty(review.Highlights);
 
         // The totals are the income statement's, not a second calculation.

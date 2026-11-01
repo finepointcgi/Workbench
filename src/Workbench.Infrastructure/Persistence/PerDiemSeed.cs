@@ -24,7 +24,7 @@ internal static class PerDiemSeed
         }
 
         var now = DateTime.UtcNow;
-        var today = DateOnly.FromDateTime(now);
+        var today = DateOnly.FromDateTime(DateTime.Now);
         var year = PerDiemTables.FiscalYearOf(today);
         foreach (var fy in new[] { year - 1, year })
         {

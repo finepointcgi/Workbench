@@ -31,7 +31,7 @@ internal static class ResourcingSeed
         }
 
         var now = DateTime.UtcNow;
-        var today = DateOnly.FromDateTime(now);
+        var today = DateOnly.FromDateTime(DateTime.Now);
         var holidays = (await db.Set<Domain.Leave.Holiday>().AsNoTracking().Select(h => h.Date).ToListAsync(cancellationToken)).ToHashSet();
 
         // Who works each task and for how long: the hours fit inside the task's working days.

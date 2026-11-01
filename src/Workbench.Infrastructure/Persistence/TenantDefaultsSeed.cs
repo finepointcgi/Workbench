@@ -26,7 +26,7 @@ public static class TenantDefaultsSeed
         if (!await db.Set<FiscalYear>().AnyAsync(cancellationToken))
         {
             var month = Math.Clamp(fiscalYearStartMonth, 1, 12);
-            var today = DateOnly.FromDateTime(now);
+            var today = DateOnly.FromDateTime(DateTime.Now);
             var start = new DateOnly(today.Month >= month ? today.Year : today.Year - 1, month, 1);
             foreach (var yearStart in new[] { start, start.AddYears(1) })
             {

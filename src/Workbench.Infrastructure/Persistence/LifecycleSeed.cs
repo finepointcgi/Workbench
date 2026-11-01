@@ -50,7 +50,7 @@ internal static class LifecycleSeed
         }
 
         var now = DateTime.UtcNow;
-        var today = DateOnly.FromDateTime(now);
+        var today = DateOnly.FromDateTime(DateTime.Now);
         var start = Weekday(today);
         var holidays = (await db.Set<Domain.Leave.Holiday>().AsNoTracking().Select(h => h.Date).ToListAsync(cancellationToken)).ToHashSet();
         var rates = (await db.Set<EmployeeCostRate>().AsNoTracking().ToListAsync(cancellationToken))

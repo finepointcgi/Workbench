@@ -43,7 +43,7 @@ internal static class SourcingSeed
 
         var factory = (IWorkbenchDbContextFactory)services.GetService(typeof(IWorkbenchDbContextFactory))!;
         var clock = TimeProvider.System;
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = DateOnly.FromDateTime(DateTime.Now);
         var user = new SeedUser { Email = "pm@example.com" };
         var audit = new AuditRecorder(user, clock);
         var access = new AccessControl(factory, user);
