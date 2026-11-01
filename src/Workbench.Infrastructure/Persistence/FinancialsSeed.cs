@@ -22,7 +22,7 @@ internal static class FinancialsSeed
         }
 
         var now = DateTime.UtcNow;
-        var today = DateOnly.FromDateTime(now);
+        var today = DateOnly.FromDateTime(DateTime.Now);
         var periods = await EnsurePreviousFiscalYearAsync(db, today.AddMonths(-1), cancellationToken);
         var current = periods.LastOrDefault(p => p.Start <= today);
         var previous = current is null ? null : periods.LastOrDefault(p => p.End < current.Start);

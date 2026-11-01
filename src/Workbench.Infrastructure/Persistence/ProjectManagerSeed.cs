@@ -34,7 +34,7 @@ internal static class ProjectManagerSeed
         db.Add(new EmployeeCostRate { EmployeeId = sam.Id, EffectiveFrom = sam.HireDate, HourlyCost = 79m });
 
         var now = DateTime.UtcNow;
-        var today = DateOnly.FromDateTime(now);
+        var today = DateOnly.FromDateTime(DateTime.Now);
         var workspace = new Workspace { Name = "1002 Data Platform Pilot" };
         var sheet = new Sheet
         {

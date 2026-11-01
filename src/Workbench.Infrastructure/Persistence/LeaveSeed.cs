@@ -29,7 +29,7 @@ internal static class LeaveSeed
         }
 
         var now = DateTime.UtcNow;
-        var today = DateOnly.FromDateTime(now);
+        var today = DateOnly.FromDateTime(DateTime.Now);
         var pto = new LeavePolicy
         {
             Code = "PTO",

@@ -33,7 +33,7 @@ internal static class ProcurementSeed
 
         var prima = await db.Set<Vendor>().AsNoTracking().FirstOrDefaultAsync(v => v.Code == "PRIMA", cancellationToken);
         var wbs = await db.Set<WbsElement>().AsNoTracking().FirstOrDefaultAsync(w => w.Code == "1001.01.04", cancellationToken);
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = DateOnly.FromDateTime(DateTime.Now);
         var period = await db.Set<FiscalPeriod>().AsNoTracking().FirstOrDefaultAsync(p => p.Start <= today && p.End >= today && p.Status == PeriodStatus.Open, cancellationToken);
         if (prima is null || wbs is null || period is null)
         {
