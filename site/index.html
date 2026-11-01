@@ -3,8 +3,45 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Workbench: one tool for government contractors</title>
-<meta name="description" content="Time, projects, billing and the general ledger in one simple tool for government contractors. Free to self-host. $10 a seat for Business.">
+<title>Workbench: Costpoint Alternative for Government Contractors</title>
+<meta name="description" content="Time, billing, general ledger and project schedules in one simple tool for government contractors. A Costpoint and Smartsheet alternative. Free to self-host.">
+<link rel="canonical" href="https://REPLACE-WITH-DOMAIN/">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Workbench">
+<meta property="og:title" content="Workbench: Costpoint Alternative for Government Contractors">
+<meta property="og:description" content="Time, billing, general ledger and project schedules in one simple tool. Free to self-host; Business is $10 per person per month.">
+<meta property="og:url" content="https://REPLACE-WITH-DOMAIN/">
+<meta property="og:image" content="https://REPLACE-WITH-DOMAIN/img/plan.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#1f6f54">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Workbench",
+  "applicationCategory": "BusinessApplication",
+  "operatingSystem": "Web, Linux, macOS, Windows",
+  "description": "Time and expenses, project scheduling, billing and the general ledger for government contractors, in one tool.",
+  "url": "https://REPLACE-WITH-DOMAIN/",
+  "offers": [
+    { "@type": "Offer", "name": "Community", "price": "0", "priceCurrency": "USD" },
+    { "@type": "Offer", "name": "Business", "price": "10", "priceCurrency": "USD",
+      "priceSpecification": { "@type": "UnitPriceSpecification", "price": "10", "priceCurrency": "USD", "unitText": "person per month" } }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    { "@type": "Question", "name": "What happens if I stop paying?", "acceptedAnswer": { "@type": "Answer", "text": "You drop back to Community after a 14-day grace period. Nothing is deleted, and you can still read everything. Only changing the Business features stops." } },
+    { "@type": "Question", "name": "Does the licence check call home?", "acceptedAnswer": { "@type": "Answer", "text": "No. The key is verified on your own server, so a self-hosted install never contacts us and works inside a closed network." } },
+    { "@type": "Question", "name": "Who owns my data?", "acceptedAnswer": { "@type": "Answer", "text": "You do. It sits in a PostgreSQL database you control, and there are importers and export tools so you can leave." } }
+  ]
+}
+</script>
 <style>
   :root {
     --bg: #fbfaf7; --surface: #ffffff; --ink: #1c2420; --muted: #5b665f; --line: #e3e1d9;
@@ -197,22 +234,6 @@
       </div>
       <div class="callout"><p><strong>One simple count.</strong> Every active person is one seat, whether they only enter their time or run the whole finance team. No tiers of user, no add-on for approvers. Someone leaves, you deactivate them, and the seat is free again.</p></div>
       <p class="note">Prefer not to run a server? We can host it for you on the Business plan. Ask us for a hosted quote.</p>
-    </div>
-  </section>
-
-  <section id="trust">
-    <div class="wrap">
-      <h2>What we will and will not claim</h2>
-      <p class="sub">You are trusting this with your books, so here is where it stands.</p>
-      <div class="honest">
-        <h3>Early software, plainly described</h3>
-        <ul>
-          <li>Workbench is new. It is not yet in use at a customer, and we are looking for a few contractors to try it with real data.</li>
-          <li>The readiness pages help you prepare for an audit. They do not certify that your company is compliant.</li>
-          <li>Some things are not built yet: electronic invoice submission through WAWF/iRAPT, Service Contract Act and Davis-Bacon wage determinations, resource leveling and subprojects. The list is public in our feature comparison.</li>
-          <li>It is English only, and has no offline mode.</li>
-        </ul>
-      </div>
     </div>
   </section>
 
