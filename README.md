@@ -147,3 +147,9 @@ validate, dry run, import; each job can be rolled back. Sample files and expecte
   `docs/operations/backup-restore.md`; run `scripts/test-backup-restore.sh` locally.
 - `SECURITY.md` (reporting vulnerabilities), `docs/security/threat-model.md`, and the ISMS templates in `docs/iso/`
   (start with `docs/iso/README.md`).
+
+## License
+
+Workbench is source-available under the [Functional Source License, Version 1.1, ALv2 Future License](LICENSE.md)
+(FSL-1.1-ALv2). You can use, change and self-host it for any purpose except offering a competing product or service.
+Each version becomes available under the Apache License 2.0 two years after it's released.
