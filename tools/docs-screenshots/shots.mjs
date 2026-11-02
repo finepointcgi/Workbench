@@ -142,6 +142,8 @@ export default [
   { name: 'admin-users', user: admin, path: 'admin/users' },
   { name: 'admin-users-invites', user: admin, path: 'admin/users', run: clickTab('Invites') },
   { name: 'admin-users-reviews', user: admin, path: 'admin/users', run: clickTab('Access reviews') },
+  { name: 'admin-users-events', user: admin, path: 'admin/users', run: clickTab('Security events') },
+  { name: 'admin-users-signin', user: admin, path: 'admin/users', run: clickTab('Sign-in') },
   { name: 'admin-roles', user: admin, path: 'admin/roles' },
   { name: 'admin-assistant', user: admin, path: 'admin/assistant' },
   { name: 'admin-audit', user: admin, path: 'setup/audit' },

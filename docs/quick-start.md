@@ -38,10 +38,10 @@ in with built-in email-and-password accounts (with an authenticator app); single
 1. Open the link the installer printed. You choose your password there and are signed in. (It works once, for 60 minutes;
    run `scripts/first-login-link.sh` for a new one.)
 2. Follow the setup checklist on the home page.
-3. Set up email so invites and password resets are sent ([`operations/email.md`](operations/email.md)).
+3. Set up email so invites and password resets are sent ([Email](operations/email.md)).
 4. Back up the `secrets/` folder somewhere safe. It holds the keys that protect your data
-   ([`operations/data-protection-keys.md`](operations/data-protection-keys.md)).
-5. Set up nightly backups ([`operations/backup-restore.md`](operations/backup-restore.md)).
+   ([Data Protection keys](operations/data-protection-keys.md)).
+5. Set up nightly backups ([Backup and restore](operations/backup-restore.md)).
 
 To try the installer on your own computer first, use `--domain localhost --http-port 8088 --https-port 8443`; your browser will
 warn about the test certificate.
@@ -49,7 +49,7 @@ warn about the test certificate.
 **Upgrade** with `scripts/upgrade.sh` (take a backup first). The database migration finishes before the new version starts.
 
 Other ways to run it (Kubernetes, your own identity provider, several servers) and every setting are in
-[`operations/README.md`](operations/README.md); `docker-compose.prod.yml` is the file the installer uses.
+[Operations](operations/README.md); `docker-compose.prod.yml` is the file the installer uses.
 
 ## Moving your data
 
@@ -60,4 +60,4 @@ importing each kind of data, checking the totals and running a month in parallel
 
 Community is complete for one company. To use single sign-on, more than one company, integrations, customer links, the supplier
 portal, custom approval workflows or incurred cost submission, add a Business license key under **Setup › License**. See
-[`editions.md`](editions.md).
+[Editions and licensing](editions.md).

@@ -9,7 +9,7 @@ built today versus designed for later.
 > site is configured differently** (custom fields, renamed columns, different project types). That is why nothing is
 > hard-coded to a column: every file goes through a column mapping that is suggested from the headers and can be changed
 > by the user before anything is imported. Anything about Unanet's REST API is a **marked assumption** to confirm
-> against the customer's own site (see [Part 3](#part-3--ongoing-api-sync-design-not-built)). No endpoint listed here
+> against the customer's own site (see [Part 3](#part-3-ongoing-api-sync-design-not-built)). No endpoint listed here
 > has been called.
 
 ## Where the data comes from
@@ -93,7 +93,7 @@ monthly), so Unanet weekly sheets are regrouped when Workbench uses a different 
 
 ### Reconciling the parallel month
 
-See [Part 2](#part-2--parallel-run-reconcile-built). Both are described again in
+See [Part 2](#part-2-parallel-run-reconcile-built). Both are described again in
 [the cut-over plan](../migration/costpoint-cutover.md), whose timeline, roles and freeze rules apply unchanged to a
 Unanet cut-over.
 
@@ -115,6 +115,6 @@ Unanet cut-over.
 
 ## Part 3 — Ongoing API sync (design, not built)
 
-See the design in [unanet-api-sync-design.md](unanet-api-sync-design.md). It lists the Unanet endpoints that would be
+See the design in [Unanet ongoing API sync — design (not built)](https://github.com/finepointcgi/Workbench/blob/master/docs/integrations/unanet-api-sync-design.md). It lists the Unanet endpoints that would be
 needed, what Workbench would do with each, and every assumption that has to be checked on a real, API-enabled Unanet
 site before any code is written.

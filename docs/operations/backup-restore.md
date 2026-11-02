@@ -154,4 +154,4 @@ using a real off-site copy, and keep its output as evidence (`docs/iso/backup-po
 ## Alerting
 
 Alert when a backup run fails or no complete run appears for longer than its schedule plus an hour (the dead-man
-switch, or the age of `BACKUP_DIR/LATEST`), and when the off-site copy fails. See [alerts.md](alerts.md).
+switch, or the age of `BACKUP_DIR/LATEST`), and when the off-site copy fails. See [Alerts and runbook](alerts.md).

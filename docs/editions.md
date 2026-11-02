@@ -74,7 +74,13 @@ lost, no new keys can be issued for servers that carry that public key, so back 
   invoices, renewals and a self-service purchase page are separate work.
 - **SCIM provisioning is not gated** (it authenticates with its own token, outside the edition check).
 - **Open sign-up** (off in production) counts new people but does not refuse them when seats run out.
-- **Terms.** The software license (what people may do with the source), the end-user terms and the price list are not
-  written. Choose and have a lawyer review them before selling anything. A source-available license that forbids offering the
-  software to others as a hosted service (for example BSL) fits a free self-hosted edition best; an unrestricted open-source
-  license would let a competitor host it and undercut the paid edition.
+- **Terms.** The end-user terms and the price list are not written yet. Have a lawyer review them before selling
+  anything.
+
+## Source code license
+
+The source is available under the [Functional Source License 1.1, ALv2 Future License](https://github.com/finepointcgi/Workbench/blob/master/LICENSE.md)
+(FSL-1.1-ALv2). You may use, change and self-host Workbench for any purpose except offering a product or service that
+competes with it. Each version becomes available under the Apache License 2.0 two years after it is released. The
+edition gates above are separate: they decide which features a running server unlocks, not what you may do with the
+source.

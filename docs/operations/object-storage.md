@@ -184,4 +184,4 @@ hosts. In containers, run it as a one-off job with the same image, settings and 
 ## Backups
 
 Bucket versioning (or GCS soft delete) and, for disaster recovery, replication to a second region. See
-[backup-restore.md](backup-restore.md).
+[Backup and restore](backup-restore.md).
