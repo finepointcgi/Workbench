@@ -3,7 +3,7 @@
 ISO 27001 A.8.15 (logging) and A.8.16 (monitoring activities). Workbench emits OpenTelemetry traces, metrics and
 logs over OTLP, writes structured JSON logs to stdout, and exposes liveness and readiness endpoints. Point it at an
 OpenTelemetry Collector (or any OTLP backend: Grafana Cloud, Azure Monitor, AWS ADOT/CloudWatch, Datadog, Honeycomb)
-and build the alerts in [alerts.md](alerts.md).
+and build the alerts in [Alerts and runbook](alerts.md).
 
 ## Turning it on
 

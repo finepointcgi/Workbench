@@ -13,12 +13,12 @@ learning, A.5.28 evidence, A.6.8 reporting).
   (Admin role in a break-glass tenant account), `kubectl`/SSH to the hosts, the database (read-only role), the vault,
   the cloud console. Break-glass accounts are in the vault and alert when used.
 - Logs are shipped off the hosts and retained ≥ 1 year; clocks are NTP-synced (all timestamps are UTC).
-- Backups and the restore test are current ([backup-restore.md](backup-restore.md)); the key-encryption key is
-  escrowed ([data-protection-keys.md](data-protection-keys.md)).
+- Backups and the restore test are current ([Backup and restore](backup-restore.md)); the key-encryption key is
+  escrowed ([Data Protection keys](data-protection-keys.md)).
 
 ## 1. Detect and assess (A.5.25)
 
-Triggers: an alert ([alerts.md](alerts.md)), a user or customer report, the IdP's risk detections, a vulnerability
+Triggers: an alert ([Alerts and runbook](alerts.md)), a user or customer report, the IdP's risk detections, a vulnerability
 report (`SECURITY.md`), a provider notice.
 
 1. **Open an incident record** (plan §7 log) with an ID, the UTC time detected, who reported it and what was seen.
@@ -51,9 +51,9 @@ Choose the narrowest action that stops the harm, and record it:
 | A user account is compromised | Deactivate the user (Users and security): sign-in is refused and **every session ends at once**. Revoke their sessions at the IdP and reset credentials/MFA there. |
 | An admin account is compromised | As above, then review Security events for role changes, invites and exports by that account; revert role changes. |
 | One tenant is attacked or is the source | Suspend the tenant on `/host` (403 for everyone in it; jobs skip it; data kept). |
-| SCIM token leaked | Set `Scim:Enabled=false` or rotate `Scim:BearerToken` and roll out ([runbooks.md](runbooks.md#rotate-a-secret)). |
-| Other secret leaked (DB password, OIDC secret, API keys) | Rotate it now ([runbooks.md](runbooks.md#rotate-a-secret)); check its use in the provider's logs. |
-| Key-encryption key or a database copy exposed | [data-protection-keys.md](data-protection-keys.md#if-the-key-encryption-key-is-compromised); treat vendor TINs/bank accounts as potentially exposed. |
+| SCIM token leaked | Set `Scim:Enabled=false` or rotate `Scim:BearerToken` and roll out ([Runbooks](runbooks.md#rotate-a-secret)). |
+| Other secret leaked (DB password, OIDC secret, API keys) | Rotate it now ([Runbooks](runbooks.md#rotate-a-secret)); check its use in the provider's logs. |
+| Key-encryption key or a database copy exposed | [Data Protection keys](data-protection-keys.md#if-the-key-encryption-key-is-compromised); treat vendor TINs/bank accounts as potentially exposed. |
 | Abusive traffic | Block at the proxy/WAF; lower `RateLimiting:*` temporarily. |
 | Compromised host or container | Isolate it (remove from the load balancer, deny egress) **without deleting it**; replace with fresh replicas from the scanned image digest. |
 | Whole service must stop | Scale web hosts to zero or take the proxy down with a maintenance page; the database keeps the evidence. |
@@ -75,7 +75,7 @@ Before eradicating anything:
    invites or API clients, fix the misconfiguration (the startup check lists known-weak settings).
 2. Rotate every secret the attacker could have seen.
 3. Restore data if it was destroyed or altered: point-in-time recovery to before the incident, or a single tenant's
-   logical backup ([backup-restore.md](backup-restore.md#restoring)). Restore into new databases; keep the damaged ones
+   logical backup ([Backup and restore](backup-restore.md#restoring)). Restore into new databases; keep the damaged ones
    as evidence.
 4. Verify: readiness healthy, smoke test, trial balance and recent timesheets look right, Security events show normal
    activity. Monitor closely for at least 48 hours.

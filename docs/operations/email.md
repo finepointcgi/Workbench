@@ -3,7 +3,7 @@
 Workbench sends notification emails (approvals, reminders, the daily digest, Limitation of Funds notices) and
 scheduled reports. Pick a provider with `Email:Mode`; every mode sends a plain-text and an HTML part, and attachments
 for scheduled reports. Deliveries are counted (`workbench.email.sent`) and a recent failure turns the readiness check's
-`email` entry *Degraded* ([monitoring.md](monitoring.md)). Addresses are never logged.
+`email` entry *Degraded* ([Monitoring](monitoring.md)). Addresses are never logged.
 
 ## Providers
 

@@ -498,4 +498,4 @@ App_Data/
 src/Workbench.Web/workbench.db.*
 
 # MkDocs guide build output
-/site/
+/build/guide/

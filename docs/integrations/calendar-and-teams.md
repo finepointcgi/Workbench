@@ -19,4 +19,4 @@ Entries cover the last 30 days and the next year. They are all-day entries, so t
 
 ## Teams notifications
 
-Teams (and Slack) chat notifications now live in [chat.md](chat.md), which covers both products, setup steps, security and limits.
+Teams (and Slack) chat notifications now live in [Chat notifications: Teams and Slack](chat.md), which covers both products, setup steps, security and limits.

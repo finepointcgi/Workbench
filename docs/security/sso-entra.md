@@ -11,7 +11,7 @@ There are two places to configure an identity provider:
 | Deployment | Where | Use when |
 | --- | --- | --- |
 | **SaaS (MultiTenant)** or self-hosted, per organization | **Admin › Users and security › Sign-in** (this guide) | Each customer organization brings its own Entra tenant. Secrets are stored encrypted in the organization's database. |
-| Self-hosted, server-wide | `Authentication:Oidc:*` configuration ([configuration.md](configuration.md)) | One Entra tenant for the whole server, plus bearer tokens for the desktop app. |
+| Self-hosted, server-wide | `Authentication:Oidc:*` configuration ([Security configuration and secrets](configuration.md)) | One Entra tenant for the whole server, plus bearer tokens for the desktop app. |
 
 Both can be on at once (the server-wide one is how a new SaaS tenant's first admin gets in); the organization's
 provider wins for the **Sign in** button, and you can refuse the server-wide one (step 6).
@@ -25,7 +25,9 @@ In Workbench, open **Admin › Users and security › Sign-in**. The *Identity p
 - **Sign-in redirect URI**: `https://<your Workbench address>/signin-sso` (SaaS: `https://acme.workbench.example/signin-sso`)
 - **Sign-out redirect URI**: `https://<your Workbench address>/signout-callback-sso`
 
-![Screenshot placeholder: Workbench Sign-in tab, redirect URIs highlighted](images/sso-entra-01-redirect-uris.png)
+<figure markdown="span">
+  ![Users and security, Sign-in tab: the identity provider, issuer URL, client id and secret, and the sign-in and sign-out redirect URIs to register at your provider](../assets/screenshots/admin-users-signin.png){ .shot }
+</figure>
 
 ## 2. Register Workbench in Entra ID
 
@@ -39,8 +41,6 @@ In Workbench, open **Admin › Users and security › Sign-in**. The *Identity p
    secret **Value** now (it's shown once). Put a reminder in your calendar to rotate it before it expires.
 7. **Token configuration › Add optional claim › ID**: add `email` and `auth_time` (and accept the *Microsoft Graph email
    permission* prompt). `amr` and `acr`/`acrs` are sent by default when they apply.
-
-![Screenshot placeholder: Entra app registration Overview with client and tenant IDs](images/sso-entra-02-app-registration.png)
 
 ## 3. Choose who can sign in
 
@@ -69,7 +69,9 @@ confirm it's you, sign in again and repeat.
 Test it: open a private browser window, go to Workbench, choose **Sign in**, and sign in with an assigned account. In
 **Security events**, the `signin.success` row shows `sso; amr=...`: the authentication methods Entra ID reported.
 
-![Screenshot placeholder: Workbench Security events showing signin.success with amr values](images/sso-entra-03-signin-event.png)
+<figure markdown="span">
+  ![Users and security, Security events tab: filters for date, event, outcome and actor, Export CSV, and the event list with signin events](../assets/screenshots/admin-users-events.png){ .shot }
+</figure>
 
 ## 5. Provisioning: invites, allowed domains, groups
 
@@ -86,7 +88,7 @@ IDs**: map each one (copy it from **Groups › <group> › Object ID**) to Workb
 **The provider manages roles** (optional): every sign-in then sets each person's organization roles from their groups.
 Workbench never removes the last active administrator this way; it records a failed `user.roles_changed` event instead.
 
-**Leavers**: with SCIM provisioning (Users tab and [configuration.md](configuration.md), self-hosted), Entra ID deactivates
+**Leavers**: with SCIM provisioning (Users tab and [Security configuration and secrets](configuration.md), self-hosted), Entra ID deactivates
 people in Workbench when they're unassigned or disabled; otherwise deactivate them in **Users**. Deactivated people
 can't sign in and their open sessions end at once.
 
@@ -111,8 +113,6 @@ carry `amr`, use a Conditional Access **authentication context** instead:
 2. A Conditional Access policy targeting authentication context `c1` that requires MFA.
 3. In Workbench: *acr values that prove MFA* = `c1`, *Ask the provider for* = `c1`. Workbench then sends a `claims`
    request for `acrs=c1` on every sign-in and Entra ID returns `acrs: ["c1"]` after enforcing the policy.
-
-![Screenshot placeholder: Conditional Access policy requiring MFA for Workbench](images/sso-entra-04-conditional-access.png)
 
 **Only this provider.** Once your provider works, turn on **Only allow sign-in through this provider** to refuse the
 server-wide sign-in for your organization. Workbench lets you turn it on only while you're signed in through your

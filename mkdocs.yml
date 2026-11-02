@@ -3,11 +3,12 @@
 # Screenshots come from tools/docs-screenshots (see its README).
 site_name: Workbench Guide
 site_description: User and administrator guide for Workbench, the project ERP and work-management system for government contractors.
-site_url: https://finepointcgi.github.io/workbench/
-repo_url: https://github.com/finepointcgi/workbench
-repo_name: finepointcgi/workbench
+site_url: https://finepointcgi.github.io/Workbench/
+repo_url: https://github.com/finepointcgi/Workbench
+repo_name: finepointcgi/Workbench
 edit_uri: edit/master/docs/
 docs_dir: docs
+site_dir: build/guide
 copyright: Workbench
 
 theme:
