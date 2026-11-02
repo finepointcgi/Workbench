@@ -1,1 +1,30 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Workbench"><rect width="64" height="64" rx="14" fill="#1f6f54"/><path d="M12 20l8 26 12-18 12 18 8-26" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="40 -228 1456 1456" role="img" aria-label="Workbench">
+  <defs>
+    <linearGradient id="fav-left" gradientUnits="userSpaceOnUse" x1="120" y1="220" x2="470" y2="660">
+      <stop offset="0" stop-color="#FF8F00"/>
+      <stop offset="0.6" stop-color="#FF4A00"/>
+      <stop offset="1" stop-color="#B81400"/>
+    </linearGradient>
+    <linearGradient id="fav-right" gradientUnits="userSpaceOnUse" x1="1250" y1="200" x2="1250" y2="700">
+      <stop offset="0" stop-color="#FF7A00"/>
+      <stop offset="1" stop-color="#FF5A00"/>
+    </linearGradient>
+    <linearGradient id="fav-fold" gradientUnits="userSpaceOnUse" x1="800" y1="400" x2="1150" y2="800">
+      <stop offset="0" stop-color="#B00E00"/>
+      <stop offset="0.4" stop-color="#FF4200"/>
+      <stop offset="0.8" stop-color="#FF6000"/>
+      <stop offset="1" stop-color="#FF8A00"/>
+    </linearGradient>
+    <linearGradient id="fav-front" gradientUnits="userSpaceOnUse" x1="600" y1="200" x2="820" y2="800">
+      <stop offset="0" stop-color="#FF8E00"/>
+      <stop offset="1" stop-color="#FF6200"/>
+    </linearGradient>
+  </defs>
+  <!-- back strips -->
+  <path fill="url(#fav-left)" d="M85,192 L290,192 Q340,195 366,238 L510,482 L332,702 Q312,714 300,692 L60,242 Q46,214 85,192 Z"/>
+  <path fill="url(#fav-right)" d="M1280,192 L1448,192 Q1494,196 1476,242 L1216,704 Q1196,714 1180,692 L1050,482 L1186,252 Q1214,194 1280,192 Z"/>
+  <!-- folded underside -->
+  <path fill="url(#fav-fold)" d="M773,477 Q812,380 902,380 Q976,382 1017,428 L1180,700 Q1200,712 1216,704 Q1162,806 1100,808 L1025,808 Q958,804 915,735 Z"/>
+  <!-- front band -->
+  <path fill="url(#fav-front)" d="M304,698 Q334,718 385,650 L638,242 Q668,194 715,192 L826,192 Q880,195 906,237 L1017,428 Q976,382 902,380 Q812,380 773,477 L606,750 Q568,806 505,808 L420,808 Q366,804 336,752 Z"/>
+</svg>
