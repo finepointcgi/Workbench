@@ -125,6 +125,10 @@ everywhere at once. Sensitive actions ask people to confirm it's them again.
 
 ## Security events and retention
 
+<figure markdown="span">
+  ![The Security events tab: filters for date, event, outcome and actor, Export CSV, and each event with its outcome, actor, target and IP address](../assets/screenshots/admin-users-events.png){ .shot }
+</figure>
+
 - **Security events**: sign-ins, failed sign-ins, lockouts, MFA changes, role and permission changes, API key use and
   exports of sensitive data. Filter and export them for your security reviews.
 - **Retention**: how long each kind of record is kept before it's purged, and **legal holds** that stop records from

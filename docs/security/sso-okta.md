@@ -6,14 +6,16 @@ Administrator** or **Application Administrator**.
 Workbench signs people in with OpenID Connect (authorization code flow with PKCE). Okta authenticates the person,
 including any second factor, and tells Workbench in the ID token who they are and how they signed in (`amr`, `acr`).
 Where to configure it (organization vs server-wide) is the same as for Entra ID: see the table at the top of
-[sso-entra.md](sso-entra.md). SAML isn't supported; Okta's OIDC web app integration covers everything Workbench needs.
+[Single sign-on with Microsoft Entra ID](sso-entra.md). SAML isn't supported; Okta's OIDC web app integration covers everything Workbench needs.
 
 ## 1. Find your redirect URIs
 
 In Workbench, open **Admin › Users and security › Sign-in**. Copy the **sign-in redirect URI**
 (`https://<your Workbench address>/signin-sso`) and the **sign-out redirect URI** (`.../signout-callback-sso`).
 
-![Screenshot placeholder: Workbench Sign-in tab, redirect URIs](images/sso-okta-01-redirect-uris.png)
+<figure markdown="span">
+  ![Users and security, Sign-in tab: the identity provider, issuer URL, client id and secret, and the sign-in and sign-out redirect URIs to register at your provider](../assets/screenshots/admin-users-signin.png){ .shot }
+</figure>
 
 ## 2. Create the app integration in Okta
 
@@ -25,8 +27,6 @@ In Workbench, open **Admin › Users and security › Sign-in**. Copy the **sign
 5. **Assignments**: *Limit access to selected groups* and pick the Workbench groups. **Save**.
 6. On the **General** tab, copy the **Client ID** and a **Client secret**. Under *Client Credentials*, keep **Require
    PKCE as additional verification** on.
-
-![Screenshot placeholder: Okta Workbench app General tab](images/sso-okta-02-app.png)
 
 ## 3. Pick the authorization server (issuer)
 
@@ -85,8 +85,6 @@ To make Okta step up even when its session is older, ask for a level of assuranc
 Workbench sends it as `acr_values`; Okta returns it in the `acr` claim once satisfied. A sign-in without MFA is refused
 with a clear message and a `signin.mfa_required` event.
 
-![Screenshot placeholder: Okta authentication policy requiring two factors](images/sso-okta-03-policy.png)
-
 ## 7. Sessions and re-authentication
 
 Same as [Entra ID, section 7](sso-entra.md#7-sessions-and-re-authentication): pay rates, bank details, vendor tax ids,
@@ -104,4 +102,4 @@ fresh `auth_time`. A response with an old `auth_time` is refused.
 | MFA refusal | Read the `amr`/`acr` in the `signin.mfa_required` detail and add those values, or fix the Okta policy. |
 | Groups don't map | The groups claim must be in the **ID token**, and names are case-sensitive. |
 
-The evidence table in [sso-entra.md](sso-entra.md#8-evidence-for-auditors) applies unchanged.
+The evidence table in [Single sign-on with Microsoft Entra ID](sso-entra.md#8-evidence-for-auditors) applies unchanged.

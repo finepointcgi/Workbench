@@ -5,12 +5,12 @@ pasted into a slide deck or shared as is.
 
 | Role | Who | Agenda | Quick-reference card |
 | --- | --- | --- | --- |
-| Employee | Everyone who records time | [agenda-employee.md](agenda-employee.md) | [card-employee.md](card-employee.md) |
-| Manager | Supervisors and project managers | [agenda-manager.md](agenda-manager.md) | [card-manager.md](card-manager.md) |
-| Finance | Accounting, billing, AP, payroll | [agenda-finance.md](agenda-finance.md) | [card-finance.md](card-finance.md) |
-| Administrator | Whoever sets up users and the organization | [agenda-admin.md](agenda-admin.md) | [card-admin.md](card-admin.md) |
+| Employee | Everyone who records time | [Employee training: one hour](agenda-employee.md) | [Workbench quick reference: Employee](card-employee.md) |
+| Manager | Supervisors and project managers | [Manager training: one hour](agenda-manager.md) | [Workbench quick reference: Manager](card-manager.md) |
+| Finance | Accounting, billing, AP, payroll | [Finance training: one hour](agenda-finance.md) | [Workbench quick reference: Finance](card-finance.md) |
+| Administrator | Whoever sets up users and the organization | [Administrator training: one hour](agenda-admin.md) | [Workbench quick reference: Administrator](card-admin.md) |
 
-The hands-on parts of every agenda use [exercise-script.md](exercise-script.md), which runs against the demo data.
+The hands-on parts of every agenda use [Exercise script (demo data)](exercise-script.md), which runs against the demo data.
 
 ## Preparing a training environment
 

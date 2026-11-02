@@ -1,7 +1,7 @@
 # Exercise script (demo data)
 
 Hands-on exercises for the pilot training agendas. They run against the demo data that a fresh Development database
-starts with (see [README.md](README.md) for how to reset it and who to sign in as). Each exercise says who to sign in
+starts with (see [Pilot training](README.md) for how to reset it and who to sign in as). Each exercise says who to sign in
 as, the steps, and what trainees should see. Exercises build on each other within a role, so run them in order.
 
 Dates in the demo data follow today's date, so the exact weeks you see will differ from the examples.

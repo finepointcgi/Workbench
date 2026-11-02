@@ -76,3 +76,10 @@
 .md-search__icon {
   color: var(--md-default-fg-color--light);
 }
+
+/* Setting names and other identifiers in tables: don't split them mid-word; the table scrolls instead. */
+.md-typeset td code {
+  word-break: keep-all;
+  overflow-wrap: normal;
+  white-space: nowrap;
+}
