@@ -35,9 +35,9 @@ scripts/install.sh --domain workbench.yourcompany.com --admin you@yourcompany.co
 That creates the secrets, builds and starts PostgreSQL, Workbench and the HTTPS proxy, and prints what to do next. People sign
 in with built-in email-and-password accounts (with an authenticator app); single sign-on can be added later.
 
-1. Open `https://workbench.yourcompany.com/account/forgot-password`, enter the admin email, and set your first password. Until
-   email is set up, the link is saved on the server: run `scripts/show-mail.sh` to read it.
-2. Sign in and follow the setup checklist on the home page.
+1. Open the link the installer printed. You choose your password there and are signed in. (It works once, for 60 minutes;
+   run `scripts/first-login-link.sh` for a new one.)
+2. Follow the setup checklist on the home page.
 3. Set up email so invites and password resets are sent ([`operations/email.md`](operations/email.md)).
 4. Back up the `secrets/` folder somewhere safe. It holds the keys that protect your data
    ([`operations/data-protection-keys.md`](operations/data-protection-keys.md)).
