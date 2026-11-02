@@ -48,15 +48,9 @@ html, body {
 }
 
 .wb-brand-mark {
-    display: inline-grid;
-    place-items: center;
-    width: 32px;
-    height: 32px;
-    border-radius: var(--wb-shape-s);
-    background: var(--mud-palette-primary-lighten);   /* primary container */
-    color: var(--mud-palette-primary);
-    font-size: 1rem;
-    font-weight: 700;
+    display: block;
+    height: 24px;                     /* logo/logo.svg is wider than tall */
+    width: auto;
 }
 
 /* ---- Navigation drawer: surface container low, 56px items, a full pill indicator on secondary container ---- */
