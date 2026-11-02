@@ -180,7 +180,7 @@ internal static class FinancialsSeed
     private static DateOnly Min(DateOnly a, DateOnly b) => a < b ? a : b;
 
     /// <summary>The calendar ordered by start, adding the fiscal year before the earliest one when no period covers <paramref name="needed"/>.</summary>
-    private static async Task<List<FiscalPeriod>> EnsurePreviousFiscalYearAsync(WorkbenchDbContext db, DateOnly needed, CancellationToken cancellationToken)
+    internal static async Task<List<FiscalPeriod>> EnsurePreviousFiscalYearAsync(WorkbenchDbContext db, DateOnly needed, CancellationToken cancellationToken)
     {
         var years = await db.Set<FiscalYear>().ToListAsync(cancellationToken);
         if (years.Count > 0 && !await db.Set<FiscalPeriod>().AnyAsync(p => p.Start <= needed && p.End >= needed, cancellationToken))
