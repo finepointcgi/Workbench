@@ -57,6 +57,9 @@ Production deploys apply migrations as their own step, then start the host:
 dotnet Workbench.Web.dll --migrate
 ```
 
+To install it on a server in one command (PostgreSQL, HTTPS and built-in accounts), see [`docs/quick-start.md`](docs/quick-start.md):
+`scripts/install.sh --domain workbench.example.com --admin you@example.com`.
+
 Production runs from the container image (`Dockerfile`; `docker-compose.prod.yml` is a complete single-host example
 with PostgreSQL, the migrate job and a TLS proxy). Deployment, every configuration setting, key encryption, backups,
 monitoring, alerts and incident steps are in `docs/operations/` (start with `docs/operations/README.md`).
