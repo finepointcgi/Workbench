@@ -3,7 +3,7 @@ using MudBlazor;
 namespace Workbench.Ui.Theme;
 
 /// <summary>
-/// The Workbench look, after Material 3: the color roles Material Theme Builder generates from a blue seed (primary,
+/// The Workbench look, after Material 3: the color roles Material Theme Builder generates from the logo's orange seed (primary,
 /// primary/secondary containers, surface and its tinted container levels, outline), the M3 type scale (regular-weight
 /// headlines, medium-weight titles and labels), pill-shaped buttons and navigation, and M3's five elevation levels.
 /// MudBlazor implements Material 2, so the shapes and tonal surfaces it can't express live in wwwroot/theme.css, which
@@ -25,10 +25,10 @@ public static class WorkbenchTheme
     {
         PaletteLight = new PaletteLight
         {
-            Primary = "#415F91",                 // M3 primary; 6.1:1 on the surface
+            Primary = "#C2410C",                 // brand orange, deepened from the logo for contrast; 4.9:1 on the surface
             PrimaryContrastText = "#FFFFFF",
-            PrimaryDarken = "#35507E",           // hover on filled buttons
-            PrimaryLighten = "#D6E3FF",          // M3 primary container
+            PrimaryDarken = "#9A3412",           // hover on filled buttons
+            PrimaryLighten = "#FFDBCB",          // M3 primary container
             Secondary = "#AD1457",
             Tertiary = "#705575",
             Info = "#1565C0",
@@ -54,18 +54,18 @@ public static class WorkbenchTheme
             LinesDefault = "#C4C6D0",            // M3 outline variant
             LinesInputs = "#74777F",             // M3 outline; 4.3:1
             TableLines = "#E1E2EA",
-            TableStriped = "rgba(65,95,145,0.04)",
-            TableHover = "rgba(65,95,145,0.06)",
+            TableStriped = "rgba(194,65,12,0.04)",
+            TableHover = "rgba(194,65,12,0.06)",
             Divider = "#C4C6D0",
             DividerLight = "#E1E2EA",
             OverlayDark = "rgba(25,28,32,0.40)",
         },
         PaletteDark = new PaletteDark
         {
-            Primary = "#AAC7FF",                 // M3 primary (dark); 10.9:1 on the surface
-            PrimaryContrastText = "#0A305F",
-            PrimaryDarken = "#C2D6FF",
-            PrimaryLighten = "#284777",          // M3 primary container (dark)
+            Primary = "#FFB59A",                 // M3 primary (dark); 10.9:1 on the surface
+            PrimaryContrastText = "#5A1A00",
+            PrimaryDarken = "#FFCBB6",
+            PrimaryLighten = "#7A2E00",          // M3 primary container (dark)
             Secondary = "#F48FB1",
             Tertiary = "#DDBCE0",
             Info = "#64B5F6",
@@ -96,8 +96,8 @@ public static class WorkbenchTheme
             LinesDefault = "#44474E",
             LinesInputs = "#8E9099",             // 5.8:1
             TableLines = "#2E3036",
-            TableStriped = "rgba(170,199,255,0.04)",
-            TableHover = "rgba(170,199,255,0.06)",
+            TableStriped = "rgba(255,181,154,0.04)",
+            TableHover = "rgba(255,181,154,0.06)",
             Divider = "#44474E",
             DividerLight = "#2E3036",
         },

@@ -1,13 +1,13 @@
 /* Supplier portal: plain, accessible pages (WCAG 2.1 AA contrast in both schemes). */
 :root {
     --bg: #f5f6f8; --surface: #ffffff; --text: #1f2328; --muted: #4b5563; --line: #d0d7de;
-    --accent: #1f5aa6; --accent-text: #ffffff; --link: #0b57d0; --focus: #1f5aa6;
+    --accent: #c2410c; --accent-text: #ffffff; --link: #0b57d0; --focus: #c2410c;
     --ok-bg: #e7f5ec; --ok-text: #14532d; --err-bg: #fdecec; --err-text: #8a1c1c;
 }
 @media (prefers-color-scheme: dark) {
     :root {
         --bg: #0f1216; --surface: #171b21; --text: #e6e9ee; --muted: #b3bac4; --line: #2f3742;
-        --accent: #6aa3f0; --accent-text: #0b1220; --link: #8ab4f8; --focus: #8ab4f8;
+        --accent: #ffb59a; --accent-text: #3a1200; --link: #8ab4f8; --focus: #ffb59a;
         --ok-bg: #12301f; --ok-text: #b7ebc8; --err-bg: #3a1515; --err-text: #ffc9c9;
     }
 }
