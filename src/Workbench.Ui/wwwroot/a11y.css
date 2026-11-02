@@ -33,7 +33,7 @@ html body h1[tabindex="-1"]:focus-visible {
    enough contrast; give every focusable control a 2px ring that shows on light and dark surfaces. "html body" outranks
    MudBlazor's "button:focus { outline: none }". */
 html body :focus-visible {
-    outline: 2px solid var(--mud-palette-primary, #415F91);
+    outline: 2px solid var(--mud-palette-primary, #C2410C);
     outline-offset: 2px;
 }
 
