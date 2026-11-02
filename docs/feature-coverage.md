@@ -35,7 +35,7 @@ Also present: GL, journals, close, AP, AR, billing (T&M, cost-plus, FFP, SF 1443
 subcontracts, fixed assets, cash and bank reconciliation, payroll providers, leave, per diem and travel, DCAA / CAS / CPSR
 readiness pages, EDI, and importers for Costpoint, Smartsheet and Unanet.
 
-**Not found, needs confirming:** WAWF / iRAPT electronic invoice submission; Service Contract Act and Davis-Bacon wage
+**Not found, needs confirming:** Direct electronic submission to WAWF/PIEE (the invoice page does produce the files for manual upload); Service Contract Act and Davis-Bacon wage
 determinations; subcontracting-plan (ISR/SSR) reports.
 
 ## MS Project

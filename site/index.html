@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Workbench: Costpoint Alternative for Government Contractors</title>
 <meta name="description" content="Time, billing, general ledger and project schedules in one simple tool for government contractors. A Costpoint and Smartsheet alternative. Free to self-host.">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<script defer data-domain="REPLACE-WITH-DOMAIN" src="https://plausible.io/js/script.js"></script>
 <link rel="canonical" href="https://REPLACE-WITH-DOMAIN/">
 <meta name="robots" content="index, follow, max-image-preview:large">
 <meta property="og:type" content="website">
@@ -116,6 +118,9 @@
   .split img.phone { border: 6px solid #1c2420; border-radius: 28px; box-shadow: 0 10px 30px rgba(0,0,0,.15); }
   .shot img { border: 1px solid var(--line); }
   @media (max-width: 640px) { .split { flex-direction: column; align-items: flex-start; } }
+  table.cmp{width:100%;border-collapse:collapse;font-size:.95rem} table.cmp th,table.cmp td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top} table.cmp th{color:var(--muted);font-size:.8rem;text-transform:uppercase;letter-spacing:.05em} .tablewrap{overflow-x:auto}
+  form.contact{display:grid;gap:12px;max-width:34rem} form.contact label{font-weight:600;font-size:.92rem} form.contact input,form.contact textarea,form.contact select{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font:inherit} form.contact button{justify-self:start;cursor:pointer;font:inherit}
+  .hp{position:absolute;left:-9999px}
   ol.steps { padding-left: 20px; max-width: 42rem; } ol.steps li { margin-bottom: 10px; }
 </style>
 </head>
@@ -124,12 +129,12 @@
 <header>
   <div class="wrap">
     <nav aria-label="Main">
-      <a class="brand" href="#top">Workbench</a>
+      <a class="brand" href="#top"><img src="/favicon.svg" alt="" width="26" height="26" style="vertical-align:-6px;margin-right:8px">Workbench</a>
       <div class="links">
         <a href="#replaces">What it replaces</a>
         <a href="#features">Features</a>
         <a href="#pricing">Pricing</a>
-        <a href="#faq">Questions</a>
+        <a href="#faq">Questions</a><a href="#contact">Contact</a>
         <a class="btn small" href="https://REPLACE-WITH-DEMO-URL">Try the demo</a>
       </div>
     </nav>
@@ -184,6 +189,8 @@
       <h2>Made for the audit</h2>
       <p class="sub">A government contractor has to show an auditor its books on demand. Those pages are free on every plan, and you can never be locked out of them.</p>
       <figure class="shot"><img src="img/projects.jpg" alt="The Projects list with a health badge, funding used and spend against budget for each project" width="800" height="500"><figcaption>Every project shows its health, how much funding is used and what it has spent.</figcaption></figure>
+      <figure class="shot"><img src="img/invoice.jpg" alt="An invoice with its general ledger entry, balance, and PIEE (WAWF) export for the contracting officer" width="800" height="500" loading="lazy"><figcaption>An invoice: posted to the ledger, with the file you upload to PIEE (WAWF) and a flag for unallowable cost.</figcaption></figure>
+      <figure class="shot"><img src="img/migration.jpg" alt="The go-live migration checklist for moving from Costpoint, with import steps for chart of accounts and organizations" width="800" height="500" loading="lazy"><figcaption>Moving from Costpoint: import each kind of data in order, check the totals, run a month in parallel.</figcaption></figure>
       <div class="grid four">
         <div class="card"><h3>Audit log</h3><p>Who changed what, and when, on records that matter.</p></div>
         <div class="card"><h3>DCAA, CAS and CPSR readiness</h3><p>Readiness pages that show where you stand against the questions an auditor asks.</p></div>
@@ -215,6 +222,7 @@
             <li>Unlimited users, one company</li>
           </ul>
           <a class="btn ghost" href="https://github.com/finepointcgi/workbench">Get Community</a>
+          <p class="note" style="margin:10px 0 0"><a href="/self-host.html">Try it on your computer in two minutes</a></p>
         </div>
         <div class="plan featured">
           <h3>Business</h3>
@@ -232,6 +240,22 @@
           <a class="btn" href="mailto:REPLACE-WITH-SALES-EMAIL">Ask for a Business key</a>
         </div>
       </div>
+
+      <h3 style="margin:40px 0 8px">Community and Business side by side</h3>
+      <div class="tablewrap"><table class="cmp"><thead><tr><th>What you can do</th><th>Community</th><th>Business</th></tr></thead><tbody>
+        <tr><td>Time, expenses, leave, approvals, phone app</td><td>Yes</td><td>Yes</td></tr>
+        <tr><td>Projects, the Plan (Gantt, critical path, baselines), sheets, dashboards</td><td>Yes</td><td>Yes</td></tr>
+        <tr><td>Billing, general ledger, payables, receivables, purchasing, HR</td><td>Yes</td><td>Yes</td></tr>
+        <tr><td>Audit log, DCAA / CAS / CPSR readiness pages, importers</td><td>Yes</td><td>Yes</td></tr>
+        <tr><td>People</td><td>Unlimited</td><td>Per seat</td></tr>
+        <tr><td>Companies</td><td>One</td><td>Many, with consolidation</td></tr>
+        <tr><td>Single sign-on</td><td>No</td><td>Yes</td></tr>
+        <tr><td>Jira, GitLab, Slack and Teams integrations</td><td>No</td><td>Yes</td></tr>
+        <tr><td>Customer view links and supplier portal</td><td>No</td><td>Yes</td></tr>
+        <tr><td>Custom approval workflows</td><td>Standard timesheet, leave and expense approvals</td><td>Yes</td></tr>
+        <tr><td>Incurred cost submission package</td><td>No</td><td>Yes</td></tr>
+        <tr><td>Price</td><td>Free</td><td>$10 per person per month</td></tr>
+      </tbody></table></div>
       <div class="callout"><p><strong>One simple count.</strong> Every active person is one seat, whether they only enter their time or run the whole finance team. No tiers of user, no add-on for approvers. Someone leaves, you deactivate them, and the seat is free again.</p></div>
       <p class="note">Prefer not to run a server? We can host it for you on the Business plan. Ask us for a hosted quote.</p>
     </div>
@@ -262,12 +286,28 @@
       <details><summary>Can you host it for us?</summary><p>Yes, on the Business plan, with a separate database for each customer.</p></details>
     </div>
   </section>
+  <section id="contact">
+    <div class="wrap">
+      <h2>Talk to us</h2>
+      <p class="sub">Tell us what you run today and how many people you have. We will reply with a Business key, a hosted quote, or an answer to whatever you are weighing up.</p>
+      <form class="contact" method="post" action="https://REPLACE-WITH-FORM-ENDPOINT">
+        <div><label for="c-name">Your name</label><input id="c-name" name="name" autocomplete="name" required></div>
+        <div><label for="c-email">Work email</label><input id="c-email" name="email" type="email" autocomplete="email" required></div>
+        <div><label for="c-size">People in your company</label><select id="c-size" name="size"><option>Under 25</option><option>25 to 100</option><option>100 to 500</option><option>Over 500</option></select></div>
+        <div><label for="c-using">What do you use today?</label><input id="c-using" name="using" placeholder="For example Costpoint and Smartsheet"></div>
+        <div><label for="c-msg">Anything else?</label><textarea id="c-msg" name="message" rows="4"></textarea></div>
+        <input class="hp" name="_gotcha" tabindex="-1" autocomplete="off" aria-hidden="true">
+        <button class="btn" type="submit">Send</button>
+      </form>
+      <p class="note">We use your details only to reply to you.</p>
+    </div>
+  </section>
 </main>
 
 <footer>
   <div class="wrap row">
     <div>Workbench</div>
-    <div><a href="/costpoint-alternative.html">Costpoint alternative</a> &middot; <a href="/smartsheet-alternative.html">Smartsheet alternative</a> &middot; <a href="/ms-project-alternative.html">MS Project alternative</a> &middot; <a href="/dcaa-timekeeping.html">DCAA timekeeping</a> &middot; <a href="https://REPLACE-WITH-DEMO-URL">Demo</a> &middot; <a href="mailto:REPLACE-WITH-SALES-EMAIL">Contact</a></div>
+    <div><a href="/costpoint-alternative.html">Costpoint alternative</a> &middot; <a href="/smartsheet-alternative.html">Smartsheet alternative</a> &middot; <a href="/ms-project-alternative.html">MS Project alternative</a> &middot; <a href="/dcaa-timekeeping.html">DCAA timekeeping</a> &middot; <a href="/self-host.html">Self-host</a> &middot; <a href="https://REPLACE-WITH-DEMO-URL">Demo</a> &middot; <a href="mailto:REPLACE-WITH-SALES-EMAIL">Contact</a></div>
   </div>
 </footer>
 
