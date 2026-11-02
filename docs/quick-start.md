@@ -21,19 +21,35 @@ The first build takes a few minutes. Press Ctrl+C to stop; the sample data goes 
 Good things to try: the **Plan** tab on project 1001, an invoice under Finance, **Setup › Migration** (the Costpoint importer),
 and the phone app at `/m/timesheet` (shrink the browser window, or open the page on your phone).
 
-## Run it for real
+## Run it for real (about ten minutes)
 
-A real installation runs on one server with PostgreSQL, behind HTTPS, with people signing in through your identity provider
-(Microsoft Entra ID, Google, Okta or any OpenID Connect provider). `docker-compose.prod.yml` is a complete single-host example:
-PostgreSQL, a migration step, the web host and a TLS proxy.
+You need a Linux server (or any machine) with Docker and Docker Compose, a name such as `workbench.yourcompany.com` pointing at
+it, and ports 80 and 443 reachable from the internet so it can get an HTTPS certificate for you.
 
-1. Point a DNS name at a Linux server with Docker.
-2. Run `scripts/prod/init-secrets.sh` to create the database password and keys, and fill in your identity provider's details.
-3. Run `docker compose -f docker-compose.prod.yml up -d --build`.
-4. Sign in as the bootstrap administrator and follow the setup checklist on the home page.
+```bash
+git clone https://github.com/finepointcgi/workbench.git
+cd workbench
+scripts/install.sh --domain workbench.yourcompany.com --admin you@yourcompany.com
+```
 
-The full guide, with every setting, backups, upgrades and monitoring, is in [`docs/operations/README.md`](operations/README.md).
-It assumes someone comfortable running a server; if that is not you, ask us about hosting.
+That creates the secrets, builds and starts PostgreSQL, Workbench and the HTTPS proxy, and prints what to do next. People sign
+in with built-in email-and-password accounts (with an authenticator app); single sign-on can be added later.
+
+1. Open `https://workbench.yourcompany.com/account/forgot-password`, enter the admin email, and set your first password. Until
+   email is set up, the link is saved on the server: run `scripts/show-mail.sh` to read it.
+2. Sign in and follow the setup checklist on the home page.
+3. Set up email so invites and password resets are sent ([`operations/email.md`](operations/email.md)).
+4. Back up the `secrets/` folder somewhere safe. It holds the keys that protect your data
+   ([`operations/data-protection-keys.md`](operations/data-protection-keys.md)).
+5. Set up nightly backups ([`operations/backup-restore.md`](operations/backup-restore.md)).
+
+To try the installer on your own computer first, use `--domain localhost --http-port 8088 --https-port 8443`; your browser will
+warn about the test certificate.
+
+**Upgrade** with `scripts/upgrade.sh` (take a backup first). The database migration finishes before the new version starts.
+
+Other ways to run it (Kubernetes, your own identity provider, several servers) and every setting are in
+[`operations/README.md`](operations/README.md); `docker-compose.prod.yml` is the file the installer uses.
 
 ## Moving your data
 
