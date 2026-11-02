@@ -7,6 +7,9 @@ Built with .NET 10, Blazor and MudBlazor. Runs in the browser and as a desktop a
 
 Product and technical plan: https://claude.ai/code/artifact/6cda230a-5649-42ac-9dc0-5ec505da3921
 
+User and administrator guide: https://finepointcgi.github.io/workbench/ (source in `docs/`, built with MkDocs by
+`.github/workflows/docs.yml`; screenshots from `tools/docs-screenshots`).
+
 ## Layout
 
 | Project | Purpose |
