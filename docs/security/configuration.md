@@ -81,8 +81,8 @@ Administrators can override retention periods in **Users and security → Retent
 ## Organization sign-in (SSO, MFA, provisioning)
 
 Besides the server-wide `Authentication:Oidc` provider, each organization (each tenant in MultiTenant mode) can set
-its own OpenID Connect provider in **Admin › Users and security › Sign-in**: Entra ID ([sso-entra.md](sso-entra.md)),
-Okta ([sso-okta.md](sso-okta.md)) or any standards-compliant IdP. These settings live in the organization's database,
+its own OpenID Connect provider in **Admin › Users and security › Sign-in**: Entra ID ([Single sign-on with Microsoft Entra ID](sso-entra.md)),
+Okta ([Single sign-on with Okta](sso-okta.md)) or any standards-compliant IdP. These settings live in the organization's database,
 not in configuration:
 
 | Setting | Effect |
@@ -100,7 +100,7 @@ page). The desktop app's bearer tokens still come from the server-wide provider.
 ## Built-in accounts
 
 Email and password sign-in with an authenticator app, for organizations without single sign-on (or alongside it). See
-[built-in-accounts.md](built-in-accounts.md) for the flows, the lockout and MFA rules, and the security events.
+[Built-in accounts (email, password and authenticator app)](built-in-accounts.md) for the flows, the lockout and MFA rules, and the security events.
 **Only allow sign-in through this provider** also refuses Workbench passwords.
 
 ## Startup check

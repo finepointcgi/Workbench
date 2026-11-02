@@ -22,7 +22,7 @@ MultiTenant deployment shares them.
 | `ForwardedHeaders:KnownNetworks` | `[]` | CIDR ranges of trusted proxies (a container network, an ingress pod range). |
 | `Security:HstsMaxAgeDays` | `365` | HSTS max-age, sent outside Development. |
 | `Security:ConnectSources` | `[]` | Extra origins for the CSP `connect-src`. |
-| `Storage:Provider` | `Local` | `Local` (a folder), `Gcs` or `S3`. Use a bucket to run more than one server. All `Storage:*` keys: [object-storage.md](object-storage.md). |
+| `Storage:Provider` | `Local` | `Local` (a folder), `Gcs` or `S3`. Use a bucket to run more than one server. All `Storage:*` keys: [Object storage for files](object-storage.md). |
 | `Storage:Root` | `App_Data/blobs` (`/data/blobs` in the image) | `Local`: attachments, receipts and exports. Also the source of `--copy-blobs`. |
 | `Storage:Bucket` / `Storage:Prefix` | — | `Gcs`/`S3`: the bucket, and an optional key prefix ending in `/`. |
 
@@ -54,7 +54,7 @@ MultiTenant deployment shares them.
 | `Authentication:Oidc:Scopes` | `[]` | Extra scopes beyond `openid profile email`. |
 | `Authentication:Oidc:RequireHttpsMetadata` | `true` | Must stay `true` outside Development. |
 | `Authentication:Admins` | `[]` | SingleTenant: bootstrap administrators (emails). Ignored in MultiTenant. Without SSO they set a first password with **Forgot your password?**. |
-| `Authentication:Passwords:Enabled` | `true` | Built-in accounts: email and password sign-in with an authenticator app ([built-in-accounts.md](../security/built-in-accounts.md)). |
+| `Authentication:Passwords:Enabled` | `true` | Built-in accounts: email and password sign-in with an authenticator app ([Built-in accounts (email, password and authenticator app)](../security/built-in-accounts.md)). |
 | `Authentication:Passwords:MinimumLength` | `12` | Also refused: common passwords, ones containing the email, runs like `123456789012`. |
 | `Authentication:Passwords:MaxFailedAttempts` | `5` | Wrong passwords or codes in a row before the account locks. |
 | `Authentication:Passwords:LockoutDuration` | `00:15:00` | |
@@ -74,7 +74,7 @@ Single sign-on and MFA settings added later are documented in `docs/security/con
 
 ## Data Protection (key ring encryption)
 
-Details and procedures: [data-protection-keys.md](data-protection-keys.md).
+Details and procedures: [Data Protection keys](data-protection-keys.md).
 
 | Key | Default | Notes |
 | --- | --- | --- |
@@ -96,7 +96,7 @@ Details and procedures: [data-protection-keys.md](data-protection-keys.md).
 
 ## Email
 
-Details: [email.md](email.md).
+Details: [Email](email.md).
 
 | Key | Default | Notes |
 | --- | --- | --- |
@@ -110,9 +110,9 @@ Details: [email.md](email.md).
 | `Email:Smtp:EnableSsl` | `true` | Legacy switch; `false` means `None` when `Security` isn't set. |
 | `Email:Smtp:UserName` / `:Password` | — | Password is a **secret**. |
 | `Email:SendGrid:ApiKey` | — | **Secret.** A key with only *Mail Send* permission. |
-| `Email:SendGrid:WebhookVerificationKey` | — | The signed Event Webhook's public key. Turns on `/webhooks/email/sendgrid` (bounces, spam reports; [email.md](email.md)). |
+| `Email:SendGrid:WebhookVerificationKey` | — | The signed Event Webhook's public key. Turns on `/webhooks/email/sendgrid` (bounces, spam reports; [Email](email.md)). |
 | `Email:Ses:Region` | SDK default | |
-| `Email:Ses:ConfigurationSet` | — | Publishes bounce/complaint events (see [email.md](email.md)). |
+| `Email:Ses:ConfigurationSet` | — | Publishes bounce/complaint events (see [Email](email.md)). |
 | `Email:Ses:AccessKeyId` / `:SecretAccessKey` | — | **Secret.** Prefer an IAM role. |
 | `Email:Ses:BounceTopicArns` | `[]` | SNS topics whose bounce and complaint events `/webhooks/email/ses` accepts. Empty: the endpoint is off. |
 | `Notifications:PublicBaseUrl` | — | Absolute base for links in emails; may contain `{tenant}` (`https://{tenant}.workbench.example.com`). |
@@ -120,7 +120,7 @@ Details: [email.md](email.md).
 
 ## Telemetry and logging
 
-Details: [monitoring.md](monitoring.md).
+Details: [Monitoring](monitoring.md).
 
 | Key | Default | Notes |
 | --- | --- | --- |
@@ -218,7 +218,9 @@ Server-wide connections; each organization turns the assistant on and picks a co
 Outbound integration traffic goes straight from the web host (no proxy) to public addresses only. Allow egress on 443 (and the
 SFTP ports you use) from the web hosts. Signing secrets and connector secrets are encrypted with the Data Protection key ring.
 
-## GitLab sync (docs/integrations/gitlab.md)
+## GitLab sync
+
+Setting up the connection: [GitLab](../integrations/gitlab.md).
 
 | Key | Default | Notes |
 | --- | --- | --- |
@@ -235,7 +237,9 @@ GitLab webhooks reach `POST /webhooks/gitlab/{linkId}` on the tenant's address; 
 Maintainer role, using `Notifications:PublicBaseUrl` (or the address the web host was last reached on). A private certificate
 authority for a self-managed server is pasted on Admin › Integrations › GitLab; nothing to configure on the host.
 
-## Jira sync (docs/integrations/jira.md)
+## Jira sync
+
+Setting up the connection: [Jira](../integrations/jira.md).
 
 | Key | Default | Meaning |
 | --- | --- | --- |

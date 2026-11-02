@@ -142,7 +142,7 @@ from a certificate), run `--rewrap-data-protection-keys`, restart, verify, remov
 
 ## If the key-encryption key is compromised
 
-1. Treat it as a security incident ([incident-response.md](incident-response.md)).
+1. Treat it as a security incident ([Incident response: technical steps](incident-response.md)).
 2. Rotate it at once with the procedure above, including the rewrap, then revoke/delete the compromised certificate
    or disable the vault key version.
 3. An attacker who had both the key-encryption key **and** a copy of the database could read the protected values:
