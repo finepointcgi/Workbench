@@ -58,15 +58,21 @@ for _ in $(seq 1 60); do
 done
 [[ "${ready:-}" == 1 ]] || { echo "It did not answer in time. See: docker compose -f docker-compose.prod.yml logs web" >&2; exit 1; }
 
+link="$(scripts/first-login-link.sh 2>/dev/null || true)"
+
 cat <<MSG
 
 Workbench is running at $base
 
 Next:
-  1. Open $base/account/forgot-password and enter $admin to set your first password.
-     Email is not set up yet, so the link is saved on this machine. Show it with: scripts/show-mail.sh
-  2. Sign in and follow the setup checklist on the home page.
-  3. Set up email (so invites and password resets are sent): docs/operations/email.md
+  1. Choose your password with this link (it works once, for 60 minutes), then you are signed in:
+
+       ${link:-$base/account/forgot-password   (enter $admin; then run scripts/show-mail.sh to read the link)}
+
+     Need a new link later: scripts/first-login-link.sh
+  2. Follow the setup checklist on the home page.
+  3. Set up email so invites and password resets are sent: docs/operations/email.md
+     Until then they are saved on this machine; read the latest with scripts/show-mail.sh
   4. Keep secrets/ safe and back it up. It holds the keys that protect your data: docs/operations/data-protection-keys.md
   5. Set up nightly backups: docs/operations/backup-restore.md
 
