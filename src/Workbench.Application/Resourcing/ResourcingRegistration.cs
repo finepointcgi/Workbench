@@ -23,6 +23,7 @@ public static class ResourcingRegistration
         services.AddScoped<IProjectStaffingService>(sp => sp.GetRequiredService<ProjectStaffingService>());
         services.AddScoped<StaffingAssignmentService>();
         services.AddScoped<IStaffingAssignmentService>(sp => sp.GetRequiredService<StaffingAssignmentService>());
+        services.AddScoped<ISkillService, SkillService>();
         services.AddScoped<IResourcePlanService, ResourcePlanService>();
         services.AddScoped<MyTodo.IMyTodoProvider, StaffingTodoProvider>();
         return services;
