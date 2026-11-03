@@ -282,6 +282,22 @@ public sealed class ResourcePlanningService(
             people = people.Where(p => p.Id == me).ToList();
         }
 
+        var skillRows = await db.Set<EmployeeSkill>().AsNoTracking().Where(s => people.Select(p => p.Id).Contains(s.EmployeeId)).ToListAsync(cancellationToken);
+        if (query.SkillIds is { Count: > 0 } wanted)
+        {
+            var minimum = (Domain.Resourcing.SkillLevel)(int)query.MinSkillLevel;
+            var qualified = skillRows.Where(s => s.Level >= minimum && wanted.Contains(s.SkillId))
+                .GroupBy(s => s.EmployeeId).Where(g => g.Select(s => s.SkillId).Distinct().Count() == wanted.Distinct().Count())
+                .Select(g => g.Key).ToHashSet();
+            people = people.Where(p => qualified.Contains(p.Id)).ToList();
+        }
+
+        var skillNames = await db.Set<Skill>().AsNoTracking().ToDictionaryAsync(s => s.Id, cancellationToken);
+        var skillsByPerson = skillRows.GroupBy(s => s.EmployeeId).ToDictionary(g => g.Key, g => (IReadOnlyList<EmployeeSkillDto>)g
+            .Where(s => skillNames.ContainsKey(s.SkillId))
+            .Select(s => new EmployeeSkillDto(s.SkillId, skillNames[s.SkillId].Name, skillNames[s.SkillId].Category, (Contracts.Resourcing.SkillLevel)(int)s.Level, s.Years))
+            .OrderByDescending(s => s.Level).ThenBy(s => s.Name, StringComparer.OrdinalIgnoreCase).ToList());
+
         var capacity = await CapacityAsync(people, weeks, cancellationToken);
         var (firstWeek, lastWeek) = (weeks[0], weeks[^1]);
         var allocated = (await db.Set<ResourceAllocation>().AsNoTracking().Where(a => a.WeekStart >= firstWeek && a.WeekStart <= lastWeek).ToListAsync(cancellationToken))
@@ -297,7 +313,8 @@ public sealed class ResourcePlanningService(
                     return new AvailableWeekDto(c.WeekStart, c.Capacity, hours, Math.Max(0, c.Capacity - hours));
                 }).ToList();
                 return new AvailablePersonDto(p.Id, p.DisplayName, p.DefaultLaborCategoryId is { } c ? cats.GetValueOrDefault(c) : null,
-                    p.OrgUnitId is { } o ? orgs.GetValueOrDefault(o) : null, w.Sum(x => x.Capacity), w.Sum(x => x.Allocated), w.Sum(x => x.Available), w);
+                    p.OrgUnitId is { } o ? orgs.GetValueOrDefault(o) : null, w.Sum(x => x.Capacity), w.Sum(x => x.Allocated), w.Sum(x => x.Available), w,
+                    skillsByPerson.GetValueOrDefault(p.Id) ?? []);
             })
             .Where(p => p.AvailableHours >= query.MinAvailableHours)
             .OrderByDescending(p => p.AvailableHours).ThenBy(p => p.EmployeeName, StringComparer.OrdinalIgnoreCase)

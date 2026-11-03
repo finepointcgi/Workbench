@@ -15,6 +15,46 @@ internal static class ResourcingSeed
 {
     private const string Actor = "seed@workbench.local";
 
+    /// <summary>A few skills on the sample people, so "Find available people" has something to filter by.</summary>
+    public static async Task SeedSkillsAsync(WorkbenchDbContext db, CancellationToken cancellationToken)
+    {
+        if (await db.Set<Skill>().AnyAsync(cancellationToken))
+        {
+            return;
+        }
+
+        var employees = await db.Set<Employee>().ToDictionaryAsync(e => e.Email, cancellationToken);
+        var now = DateTime.UtcNow;
+        var skills = new Dictionary<string, Skill>();
+        foreach (var (email, name, category, level, years) in new (string, string, string, SkillLevel, decimal)[]
+        {
+            ("pm@example.com", "Program management", "Management", SkillLevel.Expert, 12),
+            ("pm@example.com", "DCAA audit support", "Finance", SkillLevel.Advanced, 6),
+            ("analyst@example.com", "Cost accounting", "Finance", SkillLevel.Advanced, 7),
+            ("analyst@example.com", "DCAA audit support", "Finance", SkillLevel.Working, 3),
+            ("analyst@example.com", "SQL", "Engineering", SkillLevel.Working, 4),
+            ("dev@workbench.local", "C#", "Engineering", SkillLevel.Expert, 9),
+            ("dev@workbench.local", "SQL", "Engineering", SkillLevel.Advanced, 8),
+            ("dev@workbench.local", "Azure", "Engineering", SkillLevel.Working, 3),
+        })
+        {
+            if (!employees.TryGetValue(email, out var employee))
+            {
+                continue;
+            }
+
+            if (!skills.TryGetValue(name, out var skill))
+            {
+                skill = skills[name] = new Skill { Name = name, Category = category };
+                db.Add(skill);
+            }
+
+            db.Add(new EmployeeSkill { EmployeeId = employee.Id, SkillId = skill.Id, Level = level, Years = years, UpdatedAtUtc = now, UpdatedBy = Actor });
+        }
+
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
     public static async Task SeedAsync(WorkbenchDbContext db, CancellationToken cancellationToken)
     {
         if (await db.Set<ResourceAllocation>().AnyAsync(cancellationToken) || await db.Set<StaffingAssignment>().AnyAsync(cancellationToken))
