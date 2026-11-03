@@ -17,12 +17,12 @@ namespace Workbench.Ui.Theme;
 public static class M3Tokens
 {
     /// <summary>The brand seed the tonal palettes are generated from.</summary>
-    public const string Seed = "#C2410C";
+    public const string Seed = "#B53C0A";
 
     /// <summary>Light scheme, role name (kebab-case, no prefix) to hex.</summary>
     public static IReadOnlyDictionary<string, string> Light { get; } = new Dictionary<string, string>
     {
-        ["primary"] = "#C2410C", ["on-primary"] = "#FFFFFF", ["primary-container"] = "#FFDBCB", ["on-primary-container"] = "#380D00",
+        ["primary"] = "#B53C0A", ["on-primary"] = "#FFFFFF", ["primary-container"] = "#FFDBCB", ["on-primary-container"] = "#380D00",
         ["secondary"] = "#565F71", ["on-secondary"] = "#FFFFFF", ["secondary-container"] = "#DAE2F9", ["on-secondary-container"] = "#131C2B",
         ["tertiary"] = "#705575", ["on-tertiary"] = "#FFFFFF", ["tertiary-container"] = "#FAD8FD", ["on-tertiary-container"] = "#28132E",
         ["error"] = "#BA1A1A", ["on-error"] = "#FFFFFF", ["error-container"] = "#FFDAD6", ["on-error-container"] = "#410002",
@@ -51,7 +51,7 @@ public static class M3Tokens
         ["surface-container-lowest"] = "#0C0E13", ["surface-container-low"] = "#191C20", ["surface-container"] = "#1D2024",
         ["surface-container-high"] = "#282A2F", ["surface-container-highest"] = "#33353A",
         ["outline"] = "#8E9099", ["outline-variant"] = "#44474E",
-        ["inverse-surface"] = "#E2E2E9", ["inverse-on-surface"] = "#2E3135", ["inverse-primary"] = "#C2410C",
+        ["inverse-surface"] = "#E2E2E9", ["inverse-on-surface"] = "#2E3135", ["inverse-primary"] = "#B53C0A",
         ["scrim"] = "#000000",
         ["success"] = "#66BB6A", ["on-success"] = "#121212",
         ["warning"] = "#FFB74D", ["on-warning"] = "#121212",
