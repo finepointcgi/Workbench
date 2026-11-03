@@ -1,10 +1,10 @@
 /* Generated from Workbench.Ui.Theme.M3Tokens (a test keeps this file equal to it). Material 3 color roles for
    pages that follow the operating system's light/dark setting; the app itself emits the same variables per mode. */
 :root {
-    --md-sys-color-primary: #415F91;
+    --md-sys-color-primary: #B53C0A;
     --md-sys-color-on-primary: #FFFFFF;
-    --md-sys-color-primary-container: #D6E3FF;
-    --md-sys-color-on-primary-container: #001B3E;
+    --md-sys-color-primary-container: #FFDBCB;
+    --md-sys-color-on-primary-container: #380D00;
     --md-sys-color-secondary: #565F71;
     --md-sys-color-on-secondary: #FFFFFF;
     --md-sys-color-secondary-container: #DAE2F9;
@@ -32,7 +32,7 @@
     --md-sys-color-outline-variant: #C4C6D0;
     --md-sys-color-inverse-surface: #2E3135;
     --md-sys-color-inverse-on-surface: #F0F0F7;
-    --md-sys-color-inverse-primary: #AAC7FF;
+    --md-sys-color-inverse-primary: #FFB59A;
     --md-sys-color-scrim: #000000;
     --md-sys-color-success: #2E7D32;
     --md-sys-color-on-success: #FFFFFF;
@@ -43,10 +43,10 @@
 }
 @media (prefers-color-scheme: dark) {
     :root {
-        --md-sys-color-primary: #AAC7FF;
-        --md-sys-color-on-primary: #0A305F;
-        --md-sys-color-primary-container: #284777;
-        --md-sys-color-on-primary-container: #D6E3FF;
+        --md-sys-color-primary: #FFB59A;
+        --md-sys-color-on-primary: #5A1A00;
+        --md-sys-color-primary-container: #7A2E00;
+        --md-sys-color-on-primary-container: #FFDBCB;
         --md-sys-color-secondary: #BEC6DC;
         --md-sys-color-on-secondary: #283141;
         --md-sys-color-secondary-container: #3E4759;
@@ -74,7 +74,7 @@
         --md-sys-color-outline-variant: #44474E;
         --md-sys-color-inverse-surface: #E2E2E9;
         --md-sys-color-inverse-on-surface: #2E3135;
-        --md-sys-color-inverse-primary: #415F91;
+        --md-sys-color-inverse-primary: #B53C0A;
         --md-sys-color-scrim: #000000;
         --md-sys-color-success: #66BB6A;
         --md-sys-color-on-success: #121212;
