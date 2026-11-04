@@ -84,7 +84,7 @@
                     <tr @key="r.Key" class="@RowClass(r)" data-testid="assign-row">
                         @if (!CanChange)
                         {
-                            <td>@r.PersonText</td>
+                            <td>@r.PersonText<div><SkillChips Skills="SkillsOf(r.EmployeeId)" Max="3" /></div></td>
                             <td>@r.TaskLabel</td>
                             <td>@CategoryLabel(r.CategoryId)</td>
                             @if (_byWeek)
@@ -107,6 +107,7 @@
                             <td>
                                 <input class="wb-assign-input" list="@($"{GridId}-people")" value="@r.PersonText" aria-label="Person" placeholder="@(r.IsNew ? "Add a person…" : null)"
                                        @onchange="e => SetPersonAsync(r, e.Value as string)" data-testid="assign-person-cell" />
+                                <SkillChips Skills="SkillsOf(r.EmployeeId)" Max="3" />
                             </td>
                             <td>
                                 @if (r.TaskFixed)
@@ -273,7 +274,7 @@
     <datalist id="@($"{GridId}-people")">
         @foreach (var c in _candidates)
         {
-            <option value="@c.Name">@(c.LaborCategory ?? "no labor category") · @ResourcingFormat.Hours(c.BookedHoursPerWeek) of @ResourcingFormat.Hours(c.StandardHoursPerWeek) h a week booked</option>
+            <option value="@c.Name">@(c.LaborCategory ?? "no labor category") · @ResourcingFormat.Hours(c.BookedHoursPerWeek) of @ResourcingFormat.Hours(c.StandardHoursPerWeek) h a week booked@(SkillSummary(c))</option>
         }
     </datalist>
 </section>
@@ -481,6 +482,13 @@
 
         _rows = rows;
     }
+
+    private IReadOnlyList<EmployeeSkillDto>? SkillsOf(Guid? employeeId) =>
+        employeeId is { } id ? _candidates.FirstOrDefault(c => c.EmployeeId == id)?.Skills : null;
+
+    /// <summary>" · C# Expert, SQL Advanced": the best three, so the name list says who fits the work.</summary>
+    private static string SkillSummary(StaffingCandidateDto c) =>
+        c.Skills is { Count: > 0 } skills ? " · " + string.Join(", ", skills.Take(3).Select(s => $"{s.Name} {SkillLabels.Label(s.Level)}")) : "";
 
     private static Row From(PlanPersonDto p, Guid? wbs, string label, bool taskFixed) => new()
     {
