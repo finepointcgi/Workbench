@@ -78,7 +78,7 @@ else
     {
         var open = !_collapsed.Contains(n.EmployeeId);
         <li role="treeitem" aria-level="@level" aria-expanded="@(n.DirectReports > 0 ? (open ? "true" : "false") : null)">
-            <div class="wb-org-card">
+            <div class="wb-org-card" data-emp="@n.EmployeeId">
                 <a href="@($"hr/employees/{n.EmployeeId}")">@n.DisplayName</a>
                 <div class="wb-org-title">@(string.IsNullOrWhiteSpace(n.JobTitle) ? "No title" : n.JobTitle)</div>
                 @if (n.OrgUnitName is not null)

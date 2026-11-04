@@ -83,6 +83,27 @@ export function attach(viewport, canvas) {
         e.preventDefault();
     };
 
+    // Showing or hiding a team changes the tree's size. Keep the card you pressed where it was on screen, so the view
+    // doesn't end up looking at empty space.
+    let anchor = null;
+    const onToggleClick = e => {
+        const card = e.target.closest && e.target.closest('.wb-org-toggle') ? e.target.closest('.wb-org-card') : null;
+        if (!card) { return; }
+        const r = card.getBoundingClientRect();
+        anchor = { id: card.dataset.emp, left: r.left, top: r.top, at: Date.now() };
+    };
+    const observer = new MutationObserver(() => {
+        if (!anchor || Date.now() - anchor.at > 5000) { anchor = null; return; }
+        const card = [...canvas.querySelectorAll('.wb-org-card')].find(c => c.dataset.emp === anchor.id);
+        if (!card) { return; }
+        const r = card.getBoundingClientRect();
+        x += anchor.left - r.left;
+        y += anchor.top - r.top;
+        anchor = null;
+        apply();
+    });
+    observer.observe(canvas, { childList: true, subtree: true });
+    viewport.addEventListener('click', onToggleClick, true);
     viewport.addEventListener('pointerdown', onDown);
     viewport.addEventListener('pointermove', onMove);
     viewport.addEventListener('pointerup', onUp);
@@ -97,6 +118,8 @@ export function attach(viewport, canvas) {
         zoomOut: () => zoomAt(1 / 1.2, ...center()),
         fit: () => fit(false),
         dispose: () => {
+            observer.disconnect();
+            viewport.removeEventListener('click', onToggleClick, true);
             viewport.removeEventListener('pointerdown', onDown);
             viewport.removeEventListener('pointermove', onMove);
             viewport.removeEventListener('pointerup', onUp);
