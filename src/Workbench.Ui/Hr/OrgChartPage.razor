@@ -1,10 +1,12 @@
 @page "/hr/org-chart"
+@implements IAsyncDisposable
 @inject IHrPersonnelService Personnel
+@inject IJSRuntime JS
 
 <PageTitle>Org chart · Workbench</PageTitle>
 
 <MudText Typo="Typo.h4" HtmlTag="h1" Class="mb-2">Org chart</MudText>
-<MudText Class="mud-text-secondary mb-4">Who reports to whom, from each person's supervisor. Expand a manager to see their team.</MudText>
+<MudText Class="mud-text-secondary mb-4">Who reports to whom, from each person's supervisor. Drag to move around, Ctrl or Command with the mouse wheel (or pinch) to zoom. The + and − under a manager show or hide their team.</MudText>
 
 @if (Error is not null)
 {
@@ -14,39 +16,82 @@ else if (Loading)
 {
     <MudProgressLinear aria-label="Loading" Indeterminate="true" />
 }
+else if (_nodes.Count == 0)
+{
+    <MudText Class="mud-text-secondary">Nobody to show yet. Set each person's supervisor on their Job tab and the chart draws itself.</MudText>
+}
 else
 {
-    <MudPaper Outlined="true" Class="pa-4" data-testid="org-chart">
-        <ul class="wb-orgchart" role="tree" aria-label="Org chart">
-            @foreach (var root in Children(null))
-            {
-                @Node(root, 1)
-            }
-        </ul>
-    </MudPaper>
+    <div class="wb-org-viewport" @ref="_viewport" tabindex="0" role="group" data-testid="org-chart"
+         aria-label="Org chart. Drag to move around, Ctrl or Command with the mouse wheel to zoom, or use the arrow keys, plus, minus and 0 to fit.">
+        <div class="wb-org-tools">
+            <MudIconButton Icon="@Icons.Material.Filled.Add" Size="Size.Small" aria-label="Zoom in" OnClick="() => ZoomAsync(1)" />
+            <MudIconButton Icon="@Icons.Material.Filled.Remove" Size="Size.Small" aria-label="Zoom out" OnClick="() => ZoomAsync(-1)" />
+            <MudIconButton Icon="@Icons.Material.Filled.FitScreen" Size="Size.Small" aria-label="Fit everyone on screen" OnClick="() => ZoomAsync(0)" data-testid="org-fit" />
+        </div>
+        <div class="wb-org-canvas" @ref="_canvas">
+            <ul class="wb-tree" role="tree" aria-label="Org chart">
+                @foreach (var root in Children(null))
+                {
+                    @Node(root, 1)
+                }
+            </ul>
+        </div>
+    </div>
 }
 
 
 @code {
     private IReadOnlyList<OrgChartNodeDto> _nodes = [];
     private readonly HashSet<Guid> _collapsed = [];
+    private ElementReference _viewport;
+    private ElementReference _canvas;
+    private IJSObjectReference? _module;
+    private IJSObjectReference? _view;
+    private bool _attached;
 
     protected override Task OnInitializedAsync() => LoadAsync(async () => _nodes = await Personnel.GetOrgChartAsync());
 
-    private IEnumerable<OrgChartNodeDto> Children(Guid? manager) => _nodes.Where(n => n.SupervisorId == manager);
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_attached || Loading || Error is not null || _nodes.Count == 0)
+        {
+            return;
+        }
+
+        _attached = true;
+        _module = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/Workbench.Ui/orgChart.js");
+        _view = await _module.InvokeAsync<IJSObjectReference>("attach", _viewport, _canvas);
+    }
+
+    private async Task ZoomAsync(int direction)
+    {
+        if (_view is not null)
+        {
+            await _view.InvokeVoidAsync(direction > 0 ? "zoomIn" : direction < 0 ? "zoomOut" : "fit");
+        }
+    }
+
+    private IEnumerable<OrgChartNodeDto> Children(Guid? manager) => _nodes.Where(n => n.SupervisorId == manager).OrderBy(n => n.DisplayName, StringComparer.OrdinalIgnoreCase);
 
     private RenderFragment Node(OrgChartNodeDto n, int level) => __builder =>
     {
         var open = !_collapsed.Contains(n.EmployeeId);
         <li role="treeitem" aria-level="@level" aria-expanded="@(n.DirectReports > 0 ? (open ? "true" : "false") : null)">
-            <span class="wb-org-node">
+            <div class="wb-org-card">
+                <a href="@($"hr/employees/{n.EmployeeId}")">@n.DisplayName</a>
+                <div class="wb-org-title">@(string.IsNullOrWhiteSpace(n.JobTitle) ? "No title" : n.JobTitle)</div>
+                @if (n.OrgUnitName is not null)
+                {
+                    <div class="wb-org-title">@n.OrgUnitName</div>
+                }
                 @if (n.DirectReports > 0)
                 {
-                    <button type="button" class="wb-org-toggle" aria-label="@($"{(open ? "Collapse" : "Expand")} {n.DisplayName}'s team")" @onclick="() => Toggle(n.EmployeeId)">@(open ? "▾" : "▸")</button>
+                    <button type="button" class="wb-org-toggle" aria-label="@($"{(open ? "Hide" : "Show")} {n.DisplayName}'s team of {n.DirectReports}")" @onclick="() => Toggle(n.EmployeeId)">
+                        @(open ? "−" : "+") @n.DirectReports
+                    </button>
                 }
-                <a href="@($"hr/employees/{n.EmployeeId}")"><strong>@n.DisplayName</strong></a>
-                <span class="mud-text-secondary">@n.JobTitle@(n.OrgUnitName is null ? "" : $" · {n.OrgUnitName}")@(n.DirectReports > 0 ? $" · {n.DirectReports} direct report(s)" : "")</span>
-            </span>
+            </div>
             @if (n.DirectReports > 0 && open)
             {
                 <ul role="group">
@@ -64,6 +109,26 @@ else
         if (!_collapsed.Remove(id))
         {
             _collapsed.Add(id);
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            if (_view is not null)
+            {
+                await _view.InvokeVoidAsync("dispose");
+                await _view.DisposeAsync();
+            }
+
+            if (_module is not null)
+            {
+                await _module.DisposeAsync();
+            }
+        }
+        catch (JSDisconnectedException)
+        {
         }
     }
 }
