@@ -50,6 +50,7 @@ internal static class PerDiemResourcingEndpoints
         res.MapGet("/projects/{projectId:guid}/staffing", (Guid projectId, IResourcePlanningService s, CancellationToken ct) => s.GetProjectStaffingAsync(projectId, ct));
         res.MapGet("/utilization", (DateOnly from, DateOnly to, IResourcePlanningService s, CancellationToken ct) => s.GetUtilizationAsync(from, to, ct));
         res.MapGet("/open-demand", (Guid? projectId, IResourcePlanningService s, CancellationToken ct) => s.ListOpenDemandAsync(projectId, ct));
+        res.MapGet("/people-skills", (ISkillService s, CancellationToken ct) => s.ListPeopleSkillsAsync(ct));
         res.MapGet("/skills", (ISkillService s, CancellationToken ct) => s.ListSkillsAsync(ct));
         res.MapPut("/skills/{skillId:guid}", (Guid skillId, RenameSkillRequest r, ISkillService s, CancellationToken ct) => s.RenameSkillAsync(skillId, r, ct));
         res.MapDelete("/skills/{skillId:guid}", async (Guid skillId, ISkillService s, CancellationToken ct) =>

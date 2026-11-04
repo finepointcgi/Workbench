@@ -35,6 +35,9 @@ public sealed record EmployeeSkillDto(Guid SkillId, string Name, string? Categor
 /// </summary>
 public sealed record SetEmployeeSkillRequest(string SkillName, SkillLevel Level, decimal? Years = null, string? Category = null);
 
+/// <summary>One person's skills, best first.</summary>
+public sealed record PersonSkillsDto(Guid EmployeeId, IReadOnlyList<EmployeeSkillDto> Skills);
+
 public sealed record RenameSkillRequest(string Name, string? Category = null);
 
 /// <summary>Skills on people: the company list, each person's skills, and who has what.</summary>
@@ -43,10 +46,13 @@ public interface ISkillService
     /// <summary>The company's skills, most-held first. Anyone signed in.</summary>
     Task<IReadOnlyList<SkillDto>> ListSkillsAsync(CancellationToken cancellationToken = default);
 
-    /// <summary>A person's skills: yourself, or anyone for staffing roles.</summary>
+    /// <summary>Everyone's skills in one call, for screens that show them beside names. Staffing roles see everyone; others only themselves.</summary>
+    Task<IReadOnlyList<PersonSkillsDto>> ListPeopleSkillsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>A person's skills: yourself, your reports, or anyone for staffing roles.</summary>
     Task<IReadOnlyList<EmployeeSkillDto>> GetEmployeeSkillsAsync(Guid employeeId, CancellationToken cancellationToken = default);
 
-    /// <summary>Yourself, or anyone for resource managers, HR and administrators.</summary>
+    /// <summary>Yourself, the people you supervise, or anyone for resource managers, HR and administrators.</summary>
     Task<EmployeeSkillDto> SetEmployeeSkillAsync(Guid employeeId, SetEmployeeSkillRequest request, CancellationToken cancellationToken = default);
 
     Task RemoveEmployeeSkillAsync(Guid employeeId, Guid skillId, CancellationToken cancellationToken = default);
