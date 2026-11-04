@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using Workbench.Contracts;
 using Workbench.Contracts.Resourcing;
 using static Workbench.Tests.Resourcing.ResourcingHost;
@@ -98,5 +99,41 @@ public sealed class SkillTests
         await host.As(ResourceManager).Get<ISkillService>().DeleteSkillAsync(skillId);
         Assert.Empty(await host.As(Pm).Get<ISkillService>().ListSkillsAsync());
         Assert.Empty(await host.As(ResourceManager).Get<ISkillService>().GetEmployeeSkillsAsync(host.DevId));
+    }
+
+    [Fact]
+    public async Task A_supervisor_sets_the_skills_of_their_direct_reports_and_only_theirs()
+    {
+        await using var host = await CreateAsync();
+        await using (var db = await host.Db.CreateAsync(CancellationToken.None))
+        {
+            var dev = await db.Set<Workbench.Domain.ProjectAccounting.Employee>().FirstAsync(e => e.Id == host.DevId);
+            dev.SupervisorId = host.PmId;
+            await db.SaveChangesAsync();
+        }
+
+        var asPm = host.As(Pm).Get<ISkillService>();
+        await asPm.SetEmployeeSkillAsync(host.DevId, new SetEmployeeSkillRequest("Azure", SkillLevel.Advanced));
+
+        Assert.Equal("Azure", Assert.Single(await asPm.GetEmployeeSkillsAsync(host.DevId)).Name);
+        await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => host.As(Dev).Get<ISkillService>().SetEmployeeSkillAsync(host.PmId, new SetEmployeeSkillRequest("Azure", SkillLevel.Expert)));
+        await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => asPm.SetEmployeeSkillAsync(host.Pm2Id, new SetEmployeeSkillRequest("Azure", SkillLevel.Expert)));
+    }
+
+    [Fact]
+    public async Task The_people_you_can_assign_come_with_their_skills_best_first()
+    {
+        await using var host = await CreateAsync();
+        var rm = host.As(ResourceManager).Get<ISkillService>();
+        await rm.SetEmployeeSkillAsync(host.DevId, new SetEmployeeSkillRequest("SQL", SkillLevel.Working));
+        await rm.SetEmployeeSkillAsync(host.DevId, new SetEmployeeSkillRequest("C#", SkillLevel.Expert));
+
+        var candidates = await host.As(Pm).Get<IProjectStaffingService>().ListCandidatesAsync(host.Project1, null);
+
+        Assert.Equal(["C#", "SQL"], candidates.Single(c => c.EmployeeId == host.DevId).Skills!.Select(x => x.Name));
+        Assert.Empty(candidates.Single(c => c.EmployeeId == host.PmId).Skills!);
+        var everyone = await host.As(ResourceManager).Get<ISkillService>().ListPeopleSkillsAsync();
+        Assert.Equal(2, everyone.Single(p => p.EmployeeId == host.DevId).Skills.Count);
+        Assert.Empty((await host.As(Dev).Get<ISkillService>().ListPeopleSkillsAsync()).Where(p => p.EmployeeId != host.DevId));
     }
 }

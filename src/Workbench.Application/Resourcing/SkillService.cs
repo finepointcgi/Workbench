@@ -32,6 +32,27 @@ public sealed class SkillService(IWorkbenchDbContextFactory dbFactory, Resourcin
             .ToList();
     }
 
+    public async Task<IReadOnlyList<PersonSkillsDto>> ListPeopleSkillsAsync(CancellationToken cancellationToken = default)
+    {
+        rules.Access.RequireSignedIn();
+        var me = await rules.MeAsync(cancellationToken);
+        var everyone = await rules.SeesEveryoneAsync(cancellationToken) || await ManagesAsync(cancellationToken);
+        await using var db = await dbFactory.CreateAsync(cancellationToken);
+        var rows = await db.Set<D.EmployeeSkill>().AsNoTracking().ToListAsync(cancellationToken);
+        if (!everyone)
+        {
+            var reports = await db.Set<Employee>().AsNoTracking().Where(e => e.SupervisorId == me && me != null).Select(e => e.Id).ToListAsync(cancellationToken);
+            var visible = reports.Append(me ?? Guid.Empty).ToHashSet();
+            rows = rows.Where(r => visible.Contains(r.EmployeeId)).ToList();
+        }
+
+        var skills = await db.Set<D.Skill>().AsNoTracking().ToDictionaryAsync(s => s.Id, cancellationToken);
+        return rows.Where(r => skills.ContainsKey(r.SkillId)).GroupBy(r => r.EmployeeId)
+            .Select(g => new PersonSkillsDto(g.Key, g.Select(r => ToDto(r, skills[r.SkillId]))
+                .OrderByDescending(s => s.Level).ThenBy(s => s.Name, StringComparer.OrdinalIgnoreCase).ToList()))
+            .ToList();
+    }
+
     public async Task<IReadOnlyList<EmployeeSkillDto>> GetEmployeeSkillsAsync(Guid employeeId, CancellationToken cancellationToken = default)
     {
         await RequireSeeAsync(employeeId, cancellationToken);
@@ -182,6 +203,19 @@ public sealed class SkillService(IWorkbenchDbContextFactory dbFactory, Resourcin
     private async Task<bool> ManagesAsync(CancellationToken ct) =>
         (await rules.RolesAsync(ct)).HasAny(Permission.ResourcingManage, Permission.HrRecordsManage);
 
+    /// <summary>True when the signed-in person is this employee's supervisor.</summary>
+    private async Task<bool> SupervisesAsync(Guid employeeId, CancellationToken ct)
+    {
+        var me = await rules.MeAsync(ct);
+        if (me is null)
+        {
+            return false;
+        }
+
+        await using var db = await dbFactory.CreateAsync(ct);
+        return await db.Set<Employee>().AsNoTracking().AnyAsync(e => e.Id == employeeId && e.SupervisorId == me, ct);
+    }
+
     private async Task RequireManageListAsync(CancellationToken ct)
     {
         rules.Access.RequireSignedIn();
@@ -194,9 +228,9 @@ public sealed class SkillService(IWorkbenchDbContextFactory dbFactory, Resourcin
     private async Task RequireEditAsync(Guid employeeId, CancellationToken ct)
     {
         rules.Access.RequireSignedIn();
-        if (await rules.MeAsync(ct) != employeeId && !await ManagesAsync(ct))
+        if (await rules.MeAsync(ct) != employeeId && !await ManagesAsync(ct) && !await SupervisesAsync(employeeId, ct))
         {
-            throw new WorkbenchForbiddenException("You can change your own skills. Resource managers and HR can change anyone's.");
+            throw new WorkbenchForbiddenException("You can change your own skills and your direct reports'. Resource managers and HR can change anyone's.");
         }
     }
 
@@ -204,7 +238,7 @@ public sealed class SkillService(IWorkbenchDbContextFactory dbFactory, Resourcin
     private async Task RequireSeeAsync(Guid employeeId, CancellationToken ct)
     {
         rules.Access.RequireSignedIn();
-        if (await rules.MeAsync(ct) != employeeId && !await rules.SeesEveryoneAsync(ct) && !await ManagesAsync(ct))
+        if (await rules.MeAsync(ct) != employeeId && !await rules.SeesEveryoneAsync(ct) && !await ManagesAsync(ct) && !await SupervisesAsync(employeeId, ct))
         {
             throw new WorkbenchForbiddenException("You can see your own skills. Project and resource managers can see everyone's.");
         }

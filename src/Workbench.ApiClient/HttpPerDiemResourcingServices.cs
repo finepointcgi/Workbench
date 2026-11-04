@@ -247,6 +247,9 @@ public sealed class HttpSkillService(HttpClient http) : ISkillService
     public async Task<IReadOnlyList<SkillDto>> ListSkillsAsync(CancellationToken cancellationToken = default) =>
         await (await http.GetAsync($"{Root}/skills", cancellationToken)).ReadAsync<List<SkillDto>>(cancellationToken);
 
+    public async Task<IReadOnlyList<PersonSkillsDto>> ListPeopleSkillsAsync(CancellationToken cancellationToken = default) =>
+        await (await http.GetAsync($"{Root}/people-skills", cancellationToken)).ReadAsync<List<PersonSkillsDto>>(cancellationToken);
+
     public async Task<IReadOnlyList<EmployeeSkillDto>> GetEmployeeSkillsAsync(Guid employeeId, CancellationToken cancellationToken = default) =>
         await (await http.GetAsync($"{Root}/employees/{employeeId}/skills", cancellationToken)).ReadAsync<List<EmployeeSkillDto>>(cancellationToken);
 
