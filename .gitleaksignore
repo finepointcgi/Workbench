@@ -1,0 +1,2 @@
+# A fake token used by the GitLab test double; it is not a real credential.
+06719bb1f849ec7fa6713545749b06ef71a51905:tests/Workbench.Tests/Integrations/GitLab/FakeGitLab.cs:gitlab-pat:25

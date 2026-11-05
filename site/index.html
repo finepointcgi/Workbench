@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Workbench: Costpoint Alternative for Government Contractors</title>
+<meta name="description" content="Time, billing, general ledger and project schedules in one simple tool for government contractors. A Costpoint and Smartsheet alternative. Free to self-host.">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<script defer data-domain="REPLACE-WITH-DOMAIN" src="https://plausible.io/js/script.js"></script>
+<link rel="canonical" href="https://REPLACE-WITH-DOMAIN/">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Workbench">
+<meta property="og:title" content="Workbench: Costpoint Alternative for Government Contractors">
+<meta property="og:description" content="Time, billing, general ledger and project schedules in one simple tool. Free to self-host; Business is $10 per person per month.">
+<meta property="og:url" content="https://REPLACE-WITH-DOMAIN/">
+<meta property="og:image" content="https://REPLACE-WITH-DOMAIN/img/plan.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#c2410c">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Workbench",
+  "applicationCategory": "BusinessApplication",
+  "operatingSystem": "Web, Linux, macOS, Windows",
+  "description": "Time and expenses, project scheduling, billing and the general ledger for government contractors, in one tool.",
+  "url": "https://REPLACE-WITH-DOMAIN/",
+  "offers": [
+    { "@type": "Offer", "name": "Community", "price": "0", "priceCurrency": "USD" },
+    { "@type": "Offer", "name": "Business", "price": "10", "priceCurrency": "USD",
+      "priceSpecification": { "@type": "UnitPriceSpecification", "price": "10", "priceCurrency": "USD", "unitText": "person per month" } }
+  ]
+}
+</script>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    { "@type": "Question", "name": "What happens if I stop paying?", "acceptedAnswer": { "@type": "Answer", "text": "You drop back to Community after a 14-day grace period. Nothing is deleted, and you can still read everything. Only changing the Business features stops." } },
+    { "@type": "Question", "name": "Does the licence check call home?", "acceptedAnswer": { "@type": "Answer", "text": "No. The key is verified on your own server, so a self-hosted install never contacts us and works inside a closed network." } },
+    { "@type": "Question", "name": "Who owns my data?", "acceptedAnswer": { "@type": "Answer", "text": "You do. It sits in a PostgreSQL database you control, and there are importers and export tools so you can leave." } }
+  ]
+}
+</script>
+<style>
+  :root {
+    --bg: #fbfaf7; --surface: #ffffff; --ink: #1c2420; --muted: #5b665f; --line: #e3e1d9;
+    --accent: #c2410c; --accent-ink: #ffffff; --accent-soft: #fff1ea; --warn-soft: #f6efe0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #121714; --surface: #1a211d; --ink: #eaeee9; --muted: #9ba89f; --line: #2b352f;
+      --accent: #ffb59a; --accent-ink: #3a1200; --accent-soft: #3a2118; --warn-soft: #2a261a;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--ink); line-height: 1.55;
+    font: 17px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  a { color: var(--accent); }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px; }
+  header { border-bottom: 1px solid var(--line); }
+  nav { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 0; flex-wrap: wrap; }
+  .brand { font-weight: 700; font-size: 1.15rem; letter-spacing: -.01em; color: var(--ink); text-decoration: none; }
+  nav .links { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+  nav .links a { color: var(--muted); text-decoration: none; font-size: .95rem; }
+  nav .links a:hover { color: var(--ink); }
+  .btn { display: inline-block; padding: 12px 20px; border-radius: 8px; font-weight: 600; text-decoration: none;
+    background: var(--accent); color: var(--accent-ink) !important; border: 1px solid var(--accent); }
+  .btn.ghost { background: transparent; color: var(--ink) !important; border-color: var(--line); }
+  .btn.small { padding: 8px 14px; font-size: .92rem; }
+  .hero { padding: 72px 0 56px; }
+  h1 { font-size: clamp(2rem, 5.4vw, 3.4rem); line-height: 1.1; letter-spacing: -.025em; margin: 0 0 18px; max-width: 18ch; }
+  .lede { font-size: 1.2rem; color: var(--muted); max-width: 40rem; margin: 0 0 28px; }
+  .cta { display: flex; gap: 12px; flex-wrap: wrap; }
+  .note { color: var(--muted); font-size: .9rem; margin-top: 14px; }
+  section { padding: 56px 0; border-top: 1px solid var(--line); }
+  h2 { font-size: clamp(1.5rem, 3.4vw, 2.1rem); letter-spacing: -.02em; line-height: 1.2; margin: 0 0 12px; }
+  .sub { color: var(--muted); max-width: 40rem; margin: 0 0 32px; }
+  .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .grid.two { grid-template-columns: repeat(2, 1fr); }
+  .grid.four, .replace { grid-template-columns: repeat(2, 1fr); }
+  @media (min-width: 960px) { .grid.four, .replace { grid-template-columns: repeat(4, 1fr); } }
+  @media (max-width: 560px) { .grid.two, .grid.four, .replace { grid-template-columns: 1fr; } }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 22px; }
+  .card h3 { margin: 0 0 8px; font-size: 1.05rem; }
+  .card p { margin: 0; color: var(--muted); font-size: .97rem; }
+  .replace { display: grid; gap: 16px; }
+  .replace .card h3 { font-size: 1rem; }
+  .tag { display: inline-block; font-size: .75rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+    color: var(--accent); background: var(--accent-soft); padding: 3px 9px; border-radius: 99px; margin-bottom: 10px; }
+  .plans { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); align-items: stretch; }
+  .plan { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 28px; display: flex; flex-direction: column; }
+  .plan.featured { border: 2px solid var(--accent); }
+  .plan h3 { margin: 0; font-size: 1.25rem; }
+  .price { font-size: 2.3rem; font-weight: 700; letter-spacing: -.02em; margin: 10px 0 2px; }
+  .price small { font-size: 1rem; font-weight: 500; color: var(--muted); letter-spacing: 0; }
+  .plan ul { list-style: none; padding: 0; margin: 18px 0 24px; flex: 1; }
+  .plan li { padding: 6px 0 6px 26px; position: relative; font-size: .97rem; }
+  .plan li::before { content: ""; position: absolute; left: 4px; top: 13px; width: 10px; height: 6px;
+    border-left: 2px solid var(--accent); border-bottom: 2px solid var(--accent); transform: rotate(-45deg); }
+  .callout { background: var(--accent-soft); border-radius: 12px; padding: 18px 22px; margin-top: 24px; }
+  .callout p { margin: 0; }
+  .honest { background: var(--warn-soft); border-radius: 12px; padding: 18px 22px; }
+  .honest h3 { margin: 0 0 8px; font-size: 1rem; }
+  .honest ul { margin: 0; padding-left: 20px; color: var(--muted); font-size: .97rem; }
+  details { border-bottom: 1px solid var(--line); padding: 16px 0; }
+  summary { font-weight: 600; cursor: pointer; }
+  details p { color: var(--muted); margin: 10px 0 0; max-width: 42rem; }
+  footer { border-top: 1px solid var(--line); padding: 32px 0 48px; color: var(--muted); font-size: .92rem; }
+  footer .row { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .shot { margin: 40px 0 0; } .shot img { width: 100%; height: auto; display: block; border-radius: 14px; box-shadow: 0 10px 30px rgba(0,0,0,.08); }
+  .shot figcaption { color: var(--muted); font-size: .88rem; margin-top: 10px; }
+  .split { display: flex; gap: 40px; align-items: center; margin-bottom: 32px; }
+  .split img { width: 220px; height: auto; flex: none; }
+  .split img.phone { border: 6px solid #1c2420; border-radius: 28px; box-shadow: 0 10px 30px rgba(0,0,0,.15); }
+  .shot img { border: 1px solid var(--line); }
+  @media (max-width: 640px) { .split { flex-direction: column; align-items: flex-start; } }
+  table.cmp{width:100%;border-collapse:collapse;font-size:.95rem} table.cmp th,table.cmp td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top} table.cmp th{color:var(--muted);font-size:.8rem;text-transform:uppercase;letter-spacing:.05em} .tablewrap{overflow-x:auto}
+  form.contact{display:grid;gap:12px;max-width:34rem} form.contact label{font-weight:600;font-size:.92rem} form.contact input,form.contact textarea,form.contact select{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font:inherit} form.contact button{justify-self:start;cursor:pointer;font:inherit}
+  .hp{position:absolute;left:-9999px}
+  ol.steps { padding-left: 20px; max-width: 42rem; } ol.steps li { margin-bottom: 10px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <nav aria-label="Main">
+      <a class="brand" href="#top"><img src="/logo.svg" alt="" width="50" height="22" style="vertical-align:-4px;margin-right:8px">Workbench</a>
+      <div class="links">
+        <a href="#replaces">What it replaces</a>
+        <a href="#features">Features</a>
+        <a href="#pricing">Pricing</a>
+        <a href="/docs.html">Docs</a><a href="#faq">Questions</a><a href="#contact">Contact</a>
+        <a class="btn small" href="https://REPLACE-WITH-DEMO-URL">Try the demo</a>
+      </div>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+  <div class="wrap hero">
+    <h1>One simple tool for the whole contract.</h1>
+    <p class="lede">Timesheets, projects, billing and the books, together in one place. Built for government contractors who are tired of paying for Costpoint, Smartsheet, monday.com and MS Project, and stitching them together by hand.</p>
+    <div class="cta">
+      <a class="btn" href="https://REPLACE-WITH-DEMO-URL">Try the live demo</a>
+      <a class="btn ghost" href="#pricing">See pricing</a>
+    </div>
+    <p class="note">Free to run on your own server. No card, no sign-up, no call with sales.</p>
+    <figure class="shot"><img src="img/plan.jpg" alt="Workbench Plan tab showing a Gantt chart with task bars, dependencies and the critical path in red" width="800" height="504"><figcaption>The Plan: dependencies and critical path, on the sample project that ships with the demo.</figcaption></figure>
+  </div>
+
+  <section id="replaces">
+    <div class="wrap">
+      <h2>Four tools, one login</h2>
+      <p class="sub">Most small and mid-size contractors keep their numbers in one system and their plans in three others. Workbench puts them next to each other, so a number in a schedule and the same number in an invoice are the same number.</p>
+      <div class="replace">
+        <div class="card"><span class="tag">Accounting</span><h3><a href="/costpoint-alternative.html" style="color:inherit">Instead of Costpoint</a></h3><p>General ledger, journals, close, payables, receivables, billing (T&amp;M, cost-plus, fixed price, SF 1443), purchasing, fixed assets, cash and bank reconciliation.</p></div>
+        <div class="card"><span class="tag">Sheets</span><h3><a href="/smartsheet-alternative.html" style="color:inherit">Instead of Smartsheet</a></h3><p>Grids with formulas, cross-sheet references, forms, dashboards, reports and automations, and an importer for your existing sheets.</p></div>
+        <div class="card"><span class="tag">Boards</span><h3>Instead of monday.com</h3><p>Board, calendar and Gantt views, automations, mirrored items, time tracking and workload.</p></div>
+        <div class="card"><span class="tag">Scheduling</span><h3><a href="/ms-project-alternative.html" style="color:inherit">Instead of MS Project</a></h3><p>Gantt with all four dependency types, critical path, baselines, earned value, and import and export of MS Project XML.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="simple">
+    <div class="wrap">
+      <h2>Simple is the point</h2>
+      <p class="sub">Contractor software is usually built for the person who configures it. This is built for the person who has to use it on a Friday afternoon.</p>
+      <div class="split">
+        <img class="phone" src="img/phone.jpg" alt="The Workbench phone app showing this week's timesheet, one row per day" width="750" height="1624">
+        <p class="sub" style="margin:0">Open the phone app, fill in the week, press one button. Your approver gets it, and the hours land on the right project and the right contract without anyone retyping them. That is the whole job for most of your people.</p>
+      </div>
+      <figure class="shot" style="margin:0 0 32px"><img src="img/home.jpg" alt="The Workbench home page: a timer, this week's hours and a to-do list of what needs doing today" width="800" height="504"><figcaption>Your day starts with a to-do list, not a menu.</figcaption></figure>
+      <div class="grid two">
+        <div class="card"><h3>Most people only enter time</h3><p>Employees who just record time, expenses and leave need nothing but a phone. They never see a menu of things they cannot use.</p></div>
+        <div class="card"><h3>One place to look</h3><p>A global search and a short menu for what your role can do. If you are not allowed to see something, you do not see the button.</p></div>
+        <div class="card"><h3>Works on a phone</h3><p>An installable phone app for timesheets and expenses, so nobody waits until Monday to remember their hours.</p></div>
+        <div class="card"><h3>Bring your old data</h3><p>Importers for Costpoint, Smartsheet and Unanet, so you are not starting from an empty screen.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="features">
+    <div class="wrap">
+      <h2>Made for the audit</h2>
+      <p class="sub">A government contractor has to show an auditor its books on demand. Those pages are free on every plan, and you can never be locked out of them.</p>
+      <figure class="shot"><img src="img/projects.jpg" alt="The Projects list with a health badge, funding used and spend against budget for each project" width="800" height="500"><figcaption>Every project shows its health, how much funding is used and what it has spent.</figcaption></figure>
+      <figure class="shot"><img src="img/invoice.jpg" alt="An invoice with its general ledger entry, balance, and PIEE (WAWF) export for the contracting officer" width="800" height="500" loading="lazy"><figcaption>An invoice: posted to the ledger, with the file you upload to PIEE (WAWF) and a flag for unallowable cost.</figcaption></figure>
+      <figure class="shot"><img src="img/migration.jpg" alt="The go-live migration checklist for moving from Costpoint, with import steps for chart of accounts and organizations" width="800" height="500" loading="lazy"><figcaption>Moving from Costpoint: import each kind of data in order, check the totals, run a month in parallel.</figcaption></figure>
+      <div class="grid four">
+        <div class="card"><h3>Audit log</h3><p>Who changed what, and when, on records that matter.</p></div>
+        <div class="card"><h3>DCAA, CAS and CPSR readiness</h3><p>Readiness pages that show where you stand against the questions an auditor asks.</p></div>
+        <div class="card"><h3>Ceilings and funding</h3><p>Funding alerts, encumbrances and charge guards, so nobody charges a project that has run out of money.</p></div>
+        <div class="card"><h3>Indirect rates and incurred cost</h3><p>Rate setup and an incurred cost submission package.</p></div>
+        <div class="card"><h3>Customer view</h3><p>A read-only link a contracting officer opens without an account, showing a contract's funding and invoice status.</p></div>
+        <div class="card"><h3>Revenue recognition</h3><p>Setup, estimates and per-project reports, tied to the ledger.</p></div>
+        <div class="card"><h3>HR and payroll hand-off</h3><p>Leave, benefits, onboarding, per diem and travel, with payroll provider integration.</p></div>
+        <div class="card"><h3>Supply chain</h3><p>Purchasing, RFQs, a supplier portal, subcontracts, inventory and manufacturing.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="pricing">
+    <div class="wrap">
+      <h2>Pricing you can say out loud</h2>
+      <p class="sub">The free version is a complete system for one company. You pay when you grow into the things a larger firm needs, and the price is the same for everyone.</p>
+      <div class="plans">
+        <div class="plan">
+          <h3>Community</h3>
+          <div class="price">Free <small>on your own server</small></div>
+          <ul>
+            <li>Time, expenses, leave and projects</li>
+            <li>The Plan, sheets and dashboards</li>
+            <li>Billing and the general ledger</li>
+            <li>Purchasing and HR</li>
+            <li>Audit log and DCAA readiness pages</li>
+            <li>Importers for your old data</li>
+            <li>Unlimited users, one company</li>
+          </ul>
+          <a class="btn ghost" href="https://github.com/finepointcgi/workbench">Get Community</a>
+          <p class="note" style="margin:10px 0 0"><a href="/self-host.html">Install it in one command</a> &middot; <a href="/docs.html">Read the documentation</a></p>
+        </div>
+        <div class="plan featured">
+          <h3>Business</h3>
+          <div class="price">$10 <small>per person, per month</small></div>
+          <ul>
+            <li>Everything in Community</li>
+            <li>More than one company, consolidation</li>
+            <li>Single sign-on</li>
+            <li>Integrations: Jira, GitLab, Slack, Teams</li>
+            <li>Customer view links</li>
+            <li>Supplier portal</li>
+            <li>Custom approval workflows</li>
+            <li>Incurred cost submission</li>
+          </ul>
+          <a class="btn" href="mailto:REPLACE-WITH-SALES-EMAIL">Ask for a Business key</a>
+        </div>
+      </div>
+
+      <h3 style="margin:40px 0 8px">Community and Business side by side</h3>
+      <div class="tablewrap"><table class="cmp"><thead><tr><th>What you can do</th><th>Community</th><th>Business</th></tr></thead><tbody>
+        <tr><td>Time, expenses, leave, approvals, phone app</td><td>Yes</td><td>Yes</td></tr>
+        <tr><td>Projects, the Plan (Gantt, critical path, baselines), sheets, dashboards</td><td>Yes</td><td>Yes</td></tr>
+        <tr><td>Billing, general ledger, payables, receivables, purchasing, HR</td><td>Yes</td><td>Yes</td></tr>
+        <tr><td>Audit log, DCAA / CAS / CPSR readiness pages, importers</td><td>Yes</td><td>Yes</td></tr>
+        <tr><td>People</td><td>Unlimited</td><td>Per seat</td></tr>
+        <tr><td>Companies</td><td>One</td><td>Many, with consolidation</td></tr>
+        <tr><td>Single sign-on</td><td>No</td><td>Yes</td></tr>
+        <tr><td>Jira, GitLab, Slack and Teams integrations</td><td>No</td><td>Yes</td></tr>
+        <tr><td>Customer view links and supplier portal</td><td>No</td><td>Yes</td></tr>
+        <tr><td>Custom approval workflows</td><td>Standard timesheet, leave and expense approvals</td><td>Yes</td></tr>
+        <tr><td>Incurred cost submission package</td><td>No</td><td>Yes</td></tr>
+        <tr><td>Price</td><td>Free</td><td>$10 per person per month</td></tr>
+      </tbody></table></div>
+      <div class="callout"><p><strong>One simple count.</strong> Every active person is one seat, whether they only enter their time or run the whole finance team. No tiers of user, no add-on for approvers. Someone leaves, you deactivate them, and the seat is free again.</p></div>
+      <p class="note">Prefer not to run a server? We can host it for you on the Business plan. Ask us for a hosted quote.</p>
+    </div>
+  </section>
+
+  <section id="start">
+    <div class="wrap">
+      <h2>Get going</h2>
+      <ol class="steps">
+        <li><strong>Try the demo.</strong> It is filled with sample data. Sign in as an administrator or an employee and click around.</li>
+        <li><strong>Run it yourself.</strong> It runs on your own server with PostgreSQL. Import a copy of your data and see if it adds up.</li>
+        <li><strong>Add Business when you need it.</strong> Paste a licence key into Setup, License. Nothing is deleted if you stop; you drop back to Community.</li>
+      </ol>
+      <div class="cta" style="margin-top:20px">
+        <a class="btn" href="https://REPLACE-WITH-DEMO-URL">Try the live demo</a>
+      </div>
+    </div>
+  </section>
+
+  <section id="faq">
+    <div class="wrap">
+      <h2>Questions</h2>
+      <details><summary>What happens if I stop paying?</summary><p>You drop back to Community after a 14-day grace period. Nothing is deleted, and you can still read everything. Only changing the Business features stops.</p></details>
+      <details><summary>Does the licence check call home?</summary><p>No. The key is verified on your own server, so a self-hosted install never contacts us and works inside a closed network.</p></details>
+      <details><summary>Who owns my data?</summary><p>You do. It sits in a PostgreSQL database you control, and there are importers and export tools so you can leave.</p></details>
+      <details><summary>Can I use it with my existing payroll?</summary><p>There is a payroll provider integration, starting with Paylocity. Tell us what you use.</p></details>
+      <details><summary>Is it secure enough for contract data?</summary><p>It has roles, an audit log, single sign-on and SCIM. A third-party security review has not been done yet, and we will say so until it has.</p></details>
+      <details><summary>Can you host it for us?</summary><p>Yes, on the Business plan, with a separate database for each customer.</p></details>
+    </div>
+  </section>
+  <section id="contact">
+    <div class="wrap">
+      <h2>Talk to us</h2>
+      <p class="sub">Tell us what you run today and how many people you have. We will reply with a Business key, a hosted quote, or an answer to whatever you are weighing up.</p>
+      <form class="contact" method="post" action="https://REPLACE-WITH-FORM-ENDPOINT">
+        <div><label for="c-name">Your name</label><input id="c-name" name="name" autocomplete="name" required></div>
+        <div><label for="c-email">Work email</label><input id="c-email" name="email" type="email" autocomplete="email" required></div>
+        <div><label for="c-size">People in your company</label><select id="c-size" name="size"><option>Under 25</option><option>25 to 100</option><option>100 to 500</option><option>Over 500</option></select></div>
+        <div><label for="c-using">What do you use today?</label><input id="c-using" name="using" placeholder="For example Costpoint and Smartsheet"></div>
+        <div><label for="c-msg">Anything else?</label><textarea id="c-msg" name="message" rows="4"></textarea></div>
+        <input class="hp" name="_gotcha" tabindex="-1" autocomplete="off" aria-hidden="true">
+        <button class="btn" type="submit">Send</button>
+      </form>
+      <p class="note">We use your details only to reply to you.</p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap row">
+    <div>Workbench</div>
+    <div><a href="/costpoint-alternative.html">Costpoint alternative</a> &middot; <a href="/smartsheet-alternative.html">Smartsheet alternative</a> &middot; <a href="/ms-project-alternative.html">MS Project alternative</a> &middot; <a href="/dcaa-timekeeping.html">DCAA timekeeping</a> &middot; <a href="/self-host.html">Self-host</a> &middot; <a href="/docs.html">Documentation</a> &middot; <a href="https://REPLACE-WITH-DEMO-URL">Demo</a> &middot; <a href="mailto:REPLACE-WITH-SALES-EMAIL">Contact</a></div>
+  </div>
+</footer>
+
+</body>
+</html>

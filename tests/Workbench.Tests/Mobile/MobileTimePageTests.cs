@@ -56,6 +56,24 @@ public sealed class MobileTimePageTests
     }
 
     [Fact]
+    public async Task Typing_hours_turns_Save_on_straight_away_without_leaving_the_box()
+    {
+        await using var ctx = Context();
+        var detail = Detail(null, Entry(Direct, "1001.01", Wednesday, 6m), Entry(Overhead, "IND.OH", Monday, 2m));
+        Register(ctx, detail);
+        Providers(ctx);
+
+        var page = ctx.Render<TodayPage>(p => p.Add(x => x.TodayOverride, Wednesday));
+        page.WaitForAssertion(() => Assert.Equal("6", page.Find("[data-testid='hours-1001.01']").GetAttribute("value")));
+        Assert.True(page.Find("button[data-testid='save']").HasAttribute("disabled"));
+
+        page.Find("[data-testid='hours-1001.01']").Input("8");
+
+        Assert.False(page.Find("button[data-testid='save']").HasAttribute("disabled"));
+        Assert.Contains("8", page.Find("button[data-testid='save']").TextContent, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Today_needs_a_reason_once_the_timesheet_was_submitted()
     {
         await using var ctx = Context();

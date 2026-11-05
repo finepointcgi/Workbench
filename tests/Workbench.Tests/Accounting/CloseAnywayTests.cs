@@ -161,6 +161,7 @@ public sealed class CloseAnywayTests
             services.AddSingleton<ICurrentUser>(user);
             services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
             services.AddWorkbenchApplication();
+            services.UseBusinessEdition();
             if (failingCheck)
             {
                 services.AddScoped<IPeriodCloseCheck, UnfinishedCheck>();

@@ -52,10 +52,14 @@ public sealed class CreditTests
         }
     }
 
+    // Credits post as of today, and the fixture's fiscal calendar starts in October 2026.
+    private static Task<PurchasingKit> KitInOctoberAsync() =>
+        PurchasingKit.CreateAsync(s => s.AddSingleton<TimeProvider>(new MyWork.MyWorkServiceTests.FixedClock(new DateTimeOffset(2026, 10, 20, 15, 0, 0, TimeSpan.Zero))));
+
     [Fact]
     public async Task Crediting_a_project_bill_takes_the_cost_back_off_the_same_WBS_and_applies_to_the_bill()
     {
-        await using var kit = await PurchasingKit.CreateAsync();
+        await using var kit = await KitInOctoberAsync();
         var bill = await kit.PostedBillAsync(new SaveBillRequest(kit.Acme.Id, "A-1", PurchasingKit.Day,
             [PurchasingKit.ProjectLine(kit.Fx.Wbs1, 400m), kit.OverheadLine(600m, "6120", "Office supplies")]));
         Assert.Equal(400m, await VendorProjectCostAsync(kit, kit.Acme.Id));
@@ -111,7 +115,7 @@ public sealed class CreditTests
     [Fact]
     public async Task A_subcontract_credit_reverses_its_share_of_retainage_and_lowers_billed_to_date()
     {
-        await using var kit = await PurchasingKit.CreateAsync();
+        await using var kit = await KitInOctoberAsync();
         var bill = await kit.PostedBillAsync(new SaveBillRequest(kit.Acme.Id, "A-1", PurchasingKit.Day, [kit.SubLine(1_000m)]));
         var memo = await ApproveAsync(kit, await Credits(kit).CreditBillAsync(bill.Bill.Id, new CreditBillRequest("CM-1",
             Lines: [new CreditBillLineRequest(bill.Lines[0].Id, 400m)])));
@@ -399,7 +403,7 @@ public sealed class CreditTests
     [Fact]
     public async Task A_quality_return_to_vendor_becomes_an_AP_debit_memo()
     {
-        await using var kit = await PurchasingKit.CreateAsync();
+        await using var kit = await KitInOctoberAsync();
         Guid qualityId;
         var clearing = new Account { Number = "1405", Name = "Inventory received not invoiced", Type = AccountType.Asset, NormalBalance = NormalBalance.Debit, IsActive = true };
         await using (var db = await kit.Factory.CreateAsync())

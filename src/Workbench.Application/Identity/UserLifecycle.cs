@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Workbench.Application.Security;
 using Workbench.Contracts;
 using Workbench.Contracts.Identity;
+using Workbench.Contracts.Licensing;
 using Workbench.Contracts.Security;
 using Workbench.Domain.Identity;
 using Workbench.Domain.ProjectAccounting;
@@ -81,6 +82,7 @@ public sealed class UserLifecycle(
     IWorkbenchDbContextFactory dbFactory,
     UserStatusCache statusCache,
     SecurityEventLog securityLog,
+    Licensing.EditionService editions,
     TimeProvider clock)
 {
     public async Task<AppUser> GetAsync(string email, CancellationToken cancellationToken = default)
@@ -99,6 +101,11 @@ public sealed class UserLifecycle(
         if (await db.Set<AppUser>().AnyAsync(u => u.Email == email, cancellationToken))
         {
             throw new ArgumentException($"A user with email {email} already exists.", nameof(email));
+        }
+
+        if (active)
+        {
+            await editions.RequireFreeSeatAsync(db, cancellationToken);
         }
 
         var now = clock.GetUtcNow().UtcDateTime;
@@ -255,6 +262,7 @@ public sealed class UserLifecycle(
         }
         else
         {
+            await editions.RequireFreeSeatAsync(db, cancellationToken);
             user.IsActive = true;
             user.DeactivatedAtUtc = null;
             user.DeactivatedBy = null;

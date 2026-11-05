@@ -13,6 +13,8 @@ public static class AutomationClients
         services.AddHttpClient<INotificationService, HttpNotificationService>(client => client.BaseAddress = serverBaseAddress);
         services.AddHttpClient<Contracts.Calendar.ICalendarFeedService, HttpCalendarFeedService>(client => client.BaseAddress = serverBaseAddress);
         services.AddHttpClient<ITeamsNotificationService, HttpTeamsNotificationService>(client => client.BaseAddress = serverBaseAddress);
+        services.AddHttpClient<ISlackNotificationService, HttpSlackNotificationService>(client => client.BaseAddress = serverBaseAddress);
+        services.AddHttpClient<IReminderSettingsService, HttpReminderSettingsService>(client => client.BaseAddress = serverBaseAddress);
         services.AddSingleton<INotificationFeed>(_ => new SignalRNotificationFeed(serverBaseAddress));
         return services;
     }

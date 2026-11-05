@@ -1,0 +1,147 @@
+@page "/setup/license"
+@using Workbench.Contracts.Identity
+@using Workbench.Contracts.Licensing
+@inject ILicenseService Licenses
+@inject ICurrentUserContext CurrentUser
+@inject ISnackbar Snackbar
+
+<PageTitle>License · Setup · Workbench</PageTitle>
+
+<SetupHeader Title="License"
+             Subtitle="Workbench Community is free. Workbench Business adds what larger firms need and is licensed per person." />
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error">@_error</MudAlert>
+}
+else if (_status is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    @if (_status.Problem is not null)
+    {
+        <MudAlert Severity="Severity.Warning" Class="mb-3" data-testid="license-problem">@_status.Problem</MudAlert>
+    }
+
+    <MudPaper Outlined="true" Class="pa-4 mb-4" data-testid="license-summary">
+        <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+            <MudChip T="string" Color="@(_business ? Color.Primary : Color.Default)" Variant="Variant.Filled" data-testid="license-edition">Workbench @_status.Edition</MudChip>
+            <MudText>@Source()</MudText>
+        </MudStack>
+
+        <MudText Class="mt-3" data-testid="license-seats">
+            <b>@_status.SeatsUsed</b> @(_status.SeatsUsed == 1 ? "seat" : "seats") in use@(_status.SeatLimit is { } l ? $" of {l}" : "").
+        </MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">
+            Every active person takes a seat. Deactivate someone who has left and their seat is free again. API keys do not take a seat.
+        </MudText>
+    </MudPaper>
+
+    <MudPaper Outlined="true" Class="pa-4 mb-4">
+        <MudText Typo="Typo.h6" HtmlTag="h2">What each edition includes</MudText>
+        <MudText Class="mud-text-secondary mb-2">
+            Everything else is in Community: time, expenses, projects, the Plan, billing, the general ledger, the audit log, DCAA readiness and the importers.
+            Business features only add or change things, so reading your data never stops if a license lapses.
+        </MudText>
+        <MudSimpleTable Dense="true" aria-label="Features by edition" data-testid="license-features">
+            <thead><tr><th scope="col">Feature</th><th scope="col">What it does</th><th scope="col">Your edition</th></tr></thead>
+            <tbody>
+                @foreach (var f in _status.Features)
+                {
+                    <tr>
+                        <td>@f.Name</td>
+                        <td>@f.Description</td>
+                        <td>
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@(f.Included ? Color.Success : Color.Default)"
+                                     Icon="@(f.Included ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Lock)">@(f.Included ? "Included" : "Business")</MudChip>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+
+    @if (_canManage)
+    {
+        <MudPaper Outlined="true" Class="pa-4">
+            <MudText Typo="Typo.h6" HtmlTag="h2">@(_status.Source == EditionSource.Key ? "Replace the license key" : "Add a license key")</MudText>
+            <MudText Class="mud-text-secondary mb-2">Paste the key you were given. It is checked on this server; nothing is sent anywhere.</MudText>
+            <MudTextField @bind-Value="_key" Immediate="true" Label="License key" Lines="3" Variant="Variant.Outlined" Placeholder="WB1…" data-testid="license-key" />
+            <MudStack Row="true" Class="mt-2">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(string.IsNullOrWhiteSpace(_key) || _busy)" OnClick="ActivateAsync" data-testid="license-activate">Activate</MudButton>
+                @if (_status.Source == EditionSource.Key)
+                {
+                    <MudButton Variant="Variant.Outlined" Disabled="_busy" OnClick="RemoveAsync" data-testid="license-remove">Remove the license</MudButton>
+                }
+            </MudStack>
+        </MudPaper>
+    }
+    else
+    {
+        <MudAlert Severity="Severity.Info" Dense="true">An administrator can add or change the license.</MudAlert>
+    }
+}
+
+@code {
+    private LicenseStatusDto? _status;
+    private bool _canManage;
+    private bool _busy;
+    private string _key = "";
+    private string? _error;
+
+    private bool _business => _status?.Edition == "Business";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _canManage = (await CurrentUser.GetAsync()).Can(Permission.AdminOrganization);
+            _status = await Licenses.GetStatusAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = SetupFormat.Error(ex);
+        }
+    }
+
+    private string Source() => _status switch
+    {
+        { Source: EditionSource.Configuration } => "Turned on by this server's configuration (a demo or trial).",
+        { Source: EditionSource.HostedPlan } => "Included in your hosted plan.",
+        { Source: EditionSource.Key, Licensee: { } who, ExpiresOn: { } until } => $"Licensed to {who} until {until:d MMM yyyy}.",
+        { Source: EditionSource.Key } => "A license key is saved but isn't valid.",
+        _ => "No license. This is the free edition.",
+    };
+
+    private async Task ActivateAsync() => await RunAsync(async () =>
+    {
+        _status = await Licenses.ActivateAsync(new ActivateLicenseRequest(_key));
+        _key = "";
+        Snackbar.Add("License activated.", Severity.Success);
+    });
+
+    private async Task RemoveAsync() => await RunAsync(async () =>
+    {
+        _status = await Licenses.RemoveAsync();
+        Snackbar.Add("License removed. Nothing in your data changed.", Severity.Info);
+    });
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        try
+        {
+            await action();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

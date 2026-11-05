@@ -12,6 +12,7 @@ public static class TimekeepingRegistration
 
         services.AddScoped<ITimesheetNotifier, PublishingTimesheetNotifier>();
         services.AddScoped<MissingTimesheetCheck>();
+        services.AddScoped<TimesheetReminderCheck>();
 
         services.AddScoped<ITimesheetService, TimesheetService>();
         services.AddScoped<ITimesheetApprovalService, TimesheetApprovalService>();
@@ -21,10 +22,11 @@ public static class TimekeepingRegistration
         return services;
     }
 
-    /// <summary>For the server host: the daily "timesheet missing for yesterday" reminder.</summary>
+    /// <summary>For the server host: the daily "timesheet missing for yesterday" reminder and the "your timesheet isn't in" nudges.</summary>
     public static IServiceCollection AddWorkbenchTimekeepingHosting(this IServiceCollection services)
     {
         services.AddHostedService<MissingTimesheetBackgroundService>();
+        services.AddHostedService<Notifications.ReminderBackgroundService<TimesheetReminderCheck>>(); // "Your timesheet isn't in" nudges.
         return services;
     }
 }

@@ -33,7 +33,7 @@ internal static class ProcurementSeed
 
         var prima = await db.Set<Vendor>().AsNoTracking().FirstOrDefaultAsync(v => v.Code == "PRIMA", cancellationToken);
         var wbs = await db.Set<WbsElement>().AsNoTracking().FirstOrDefaultAsync(w => w.Code == "1001.01.04", cancellationToken);
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = DateOnly.FromDateTime(DateTime.Now);
         var period = await db.Set<FiscalPeriod>().AsNoTracking().FirstOrDefaultAsync(p => p.Start <= today && p.End >= today && p.Status == PeriodStatus.Open, cancellationToken);
         if (prima is null || wbs is null || period is null)
         {
@@ -56,9 +56,9 @@ internal static class ProcurementSeed
             [req.Requisition.Id], prima.Id, period.Start, Terms: "Net 15, FOB destination", ShipTo: "Workbench HQ, 1200 Wilson Blvd, Arlington VA",
             Receivers: ["analyst@example.com"]), cancellationToken);
         po = await kit.Orders.IssueAsync(po.Order.Id, cancellationToken);
-        po = await kit.Orders.ReceiveAsync(po.Order.Id, new ReceiveRequest(period.Start.AddDays(3), [new ReceiveLineRequest(po.Lines[0].Id, 2)], "First two units"), cancellationToken);
+        po = await kit.Orders.ReceiveAsync(po.Order.Id, new ReceiveRequest(Earlier(period.Start.AddDays(3), today), [new ReceiveLineRequest(po.Lines[0].Id, 2)], "First two units"), cancellationToken);
 
-        var bill = await kit.Bills.CreateAsync(new SaveBillRequest(prima.Id, "PR-90102", period.Start.AddDays(4),
+        var bill = await kit.Bills.CreateAsync(new SaveBillRequest(prima.Id, "PR-90102", Earlier(period.Start.AddDays(4), today),
             [new SaveBillLineRequest(BillLineKind.ProjectCost, "", 0, PurchaseOrderLineId: po.Lines[0].Id, Quantity: 2)],
             Description: $"{po.Order.Number}: first two laptops"), cancellationToken);
         await kit.Bills.SubmitAsync(bill.Bill.Id, new SubmitBillRequest(), cancellationToken);
@@ -103,4 +103,7 @@ internal static class ProcurementSeed
         public Task<IReadOnlyList<string>> PublishAsync(IEnumerable<string?> recipientEmails, string kind, string title, string? body = null, string? link = null, Guid? sheetId = null, Guid? itemId = null) =>
             Task.FromResult<IReadOnlyList<string>>([]);
     }
+
+    // The first days of a period are still in the future for the sample receipt and bill, which can't be dated ahead.
+    private static DateOnly Earlier(DateOnly date, DateOnly today) => date < today ? date : today;
 }

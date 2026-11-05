@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Workbench.Application.Accounting;
 using Workbench.Application.Automation;
+using Workbench.Application.Licensing;
 using Workbench.Application.Billing;
 using Workbench.Application.Ceilings;
 using Workbench.Application.Cash;
@@ -115,6 +116,7 @@ public static class DependencyInjection
         // Keep AddWorkbenchIdentity last: its permission decorators must wrap the outermost existing decorator
         // (activity recording and any later feature's), so new decorators belong above this line.
         services.AddWorkbenchIdentity();
+        services.AddWorkbenchEditionGates(); // After identity: the edition check is the outermost wrapper, on top of the role checks.
         return services;
     }
 }

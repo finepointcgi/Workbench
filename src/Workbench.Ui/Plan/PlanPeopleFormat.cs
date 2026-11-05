@@ -3,6 +3,13 @@ using Workbench.Contracts.Resourcing;
 
 namespace Workbench.Ui.Plan;
 
+/// <summary>Which half of the approval bar to draw: the status and next step, or the plan's details (steps and terms).</summary>
+public enum PlanApprovalPart
+{
+    Bar,
+    Details,
+}
+
 /// <summary>Plain words for the Plan tab's people, hours and cost.</summary>
 public static class PlanPeopleFormat
 {

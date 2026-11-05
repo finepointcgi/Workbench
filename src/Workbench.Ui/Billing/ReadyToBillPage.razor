@@ -1,0 +1,109 @@
+@page "/billing/ready"
+@inject IInvoiceService Invoices
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Ready to bill · Billing · Workbench</PageTitle>
+
+<BillingHeader Title="Ready to bill" Subtitle="Contracts with approved time, expenses or completed milestones that no invoice has billed yet, oldest work first. The amount is what the draft invoice will contain." />
+
+@if (_error is not null)
+{
+    <BillingError Message="@_error" Forbidden="_forbidden" />
+}
+else if (_data is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else if (_data.Rows.Count == 0)
+{
+    <MudAlert Severity="Severity.Success" data-testid="ready-empty">Nothing is waiting to be billed. Approved work will show up here.</MudAlert>
+}
+else
+{
+    <MudPaper Outlined="true" Class="pa-4 mb-3" data-testid="ready-total">
+        <MudText Typo="Typo.h5">@BillingFormat.Money(_data.Total) ready to bill</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">
+            @_data.Rows.Count contract@(_data.Rows.Count == 1 ? "" : "s"), @_data.DraftableCount of them ready to draft now@(_data.Rows.Count > _data.DraftableCount ? "; the rest need something fixed first (shown in each row)" : "").
+        </MudText>
+    </MudPaper>
+    <MudPaper Outlined="true" Style="overflow-x:auto">
+        <MudSimpleTable Dense="true" data-testid="ready-rows">
+            <thead>
+                <tr><th>Contract</th><th>Customer</th><th style="text-align:right">Ready to bill</th><th>Oldest work</th><th>What's holding it up</th><th></th></tr>
+            </thead>
+            <tbody>
+                @foreach (var r in _data.Rows)
+                {
+                    <tr data-testid="ready-row" data-contract="@r.ContractNumber">
+                        <td><MudLink Href="@($"billing/contracts/{r.ContractId}")">@r.ContractNumber</MudLink><MudText Typo="Typo.caption" Class="mud-text-secondary">@r.ContractName</MudText></td>
+                        <td>@r.CustomerName</td>
+                        <td style="text-align:right"><strong data-testid="ready-amount">@BillingFormat.Money(r.Amount)</strong><MudText Typo="Typo.caption" Class="mud-text-secondary">@r.Covers</MudText></td>
+                        <td>@(r.OldestWorkDate is { } d ? BillingFormat.Date(d) : "")</td>
+                        <td>
+                            @if (r.Blockers.Count == 0)
+                            {
+                                <MudText Typo="Typo.body2" Class="mud-text-secondary">Nothing</MudText>
+                            }
+                            @foreach (var b in r.Blockers)
+                            {
+                                <MudText Typo="Typo.body2" data-testid="ready-blocker">@b.Text</MudText>
+                            }
+                        </td>
+                        <td style="white-space:nowrap">
+                            @if (r.Blockers.Count == 0)
+                            {
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Small" OnClick="() => DraftAsync(r)" Disabled="@(_busy is not null)" data-testid="draft-invoice">Draft invoice</MudButton>
+                            }
+                            else
+                            {
+                                var first = r.Blockers[0];
+                                <MudButton Variant="Variant.Outlined" Size="Size.Small" Href="@(first.Link ?? $"billing/contracts/{r.ContractId}")" data-testid="fix-first">@(first.LinkLabel ?? "Fix this first")</MudButton>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+}
+
+@code {
+    private ReadyToBillDto? _data;
+    private string? _error;
+    private bool _forbidden;
+    private Guid? _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _data = await Invoices.GetReadyToBillAsync();
+        }
+        catch (Exception ex)
+        {
+            (_error, _forbidden) = (BillingFormat.Error(ex), BillingFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task DraftAsync(ReadyToBillRowDto row)
+    {
+        _busy = row.ContractId;
+        try
+        {
+            InvoiceDto? last = null;
+            foreach (var d in row.Drafts)
+            {
+                last = await Invoices.GenerateDraftAsync(new GenerateInvoiceRequest(row.ContractId, d.Type, d.PeriodFrom, d.PeriodTo));
+            }
+
+            // One draft opens on its invoice; several (a contract that bills more than one way) open on the invoice list.
+            Navigation.NavigateTo(row.Drafts.Count == 1 && last is not null ? $"billing/invoices/{last.Summary.Id}" : "billing");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(BillingFormat.Error(ex), Severity.Error);
+            _busy = null;
+        }
+    }
+}

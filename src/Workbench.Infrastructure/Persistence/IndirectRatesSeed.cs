@@ -54,7 +54,7 @@ internal static class IndirectRatesSeed
 
         var audit = new AuditRecorder(new SeedUser(), TimeProvider.System);
         var engine = new AllocationEngine(new GeneralLedger(audit, TimeProvider.System), audit);
-        var today = DateOnly.FromDateTime(now);
+        var today = DateOnly.FromDateTime(DateTime.Now);
         var periods = await db.Set<FiscalPeriod>().AsNoTracking().Where(p => p.Status == PeriodStatus.Open && p.Start <= today).OrderBy(p => p.Start).ToListAsync(cancellationToken);
         foreach (var period in periods)
         {

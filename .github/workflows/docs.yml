@@ -1,0 +1,63 @@
+# Publishes to GitHub Pages: the website (site/) at the root and the user and administrator guide (mkdocs.yml, docs/)
+# under guide/, on every push to master that touches either, and on demand. Pull requests get a build check only.
+# One-time setup: Settings → Pages → Build and deployment → Source: GitHub Actions.
+# The website's demo link, sales email, contact form and analytics come from repository variables (Settings → Secrets
+# and variables → Actions → Variables); see scripts/build-pages.py for what happens when one isn't set.
+name: Docs
+
+on:
+  push:
+    branches: [master]
+    paths: [docs/**, mkdocs.yml, site/**, scripts/build-pages.py, .github/workflows/docs.yml]
+  pull_request:
+    paths: [docs/**, mkdocs.yml, site/**, scripts/build-pages.py, .github/workflows/docs.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NO_MKDOCS_2_WARNING: "1"
+
+jobs:
+  build:
+    name: Build the website and guide
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: docs/requirements.txt
+      - run: pip install -r docs/requirements.txt
+      - run: mkdocs build --strict
+      - run: python scripts/build-pages.py
+        env:
+          DEMO_URL: ${{ vars.SITE_DEMO_URL || (vars.FLY_DEMO_APP && format('https://{0}.fly.dev', vars.FLY_DEMO_APP)) || '' }}
+          SALES_EMAIL: ${{ vars.SITE_SALES_EMAIL }}
+          FORM_ENDPOINT: ${{ vars.SITE_FORM_ENDPOINT }}
+          ANALYTICS_DOMAIN: ${{ vars.SITE_ANALYTICS_DOMAIN }}
+      - if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/pages
+
+  deploy:
+    name: Publish to GitHub Pages
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -50,7 +50,7 @@ public sealed class StaffingTodoProvider : IMyTodoProvider
                 $"staffing:assign:{string.Join(",", codes)}", TodoCategories.Project,
                 $"Assign people to {codes.Count} projects",
                 $"Nobody is assigned to {Join(codes)} yet. Give each person their hours on a task and the dates.",
-                TodoUrgency.ThisWeek, null, $"projects/{empty[0].ProjectId}/staffing", $"Start with {codes[0]}", Priority: 5));
+                TodoUrgency.ThisWeek, null, $"projects/{empty[0].ProjectId}/plan", $"Start with {codes[0]}", Priority: 5));
         }
 
         return items;
@@ -67,7 +67,7 @@ public sealed class StaffingTodoProvider : IMyTodoProvider
     /// <param name="planIsBudget">Finance approved the plan, so it is the budget: changes since are sent for approval (the plan's own to-do), not chased as staffing gaps.</param>
     private static IEnumerable<MyTodoItem> For(ProjectStaffingPlanDto plan, bool includeAssign, bool planIsBudget = false)
     {
-        var link = $"projects/{plan.ProjectId}/staffing";
+        var link = $"projects/{plan.ProjectId}/plan";
         string H(decimal h) => ProjectStaffingService.Hours(h);
         if (NeedsPeople(plan) && includeAssign)
         {
