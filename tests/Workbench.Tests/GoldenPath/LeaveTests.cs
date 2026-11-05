@@ -26,7 +26,25 @@ public sealed class LeaveTests
         var balances = new HttpLeaveBalanceService(employee);
         var pto = (await balances.GetMyBalancesAsync()).First(b => b.Type == LeaveTypeKind.Pto);
         var requests = new HttpLeaveRequestService(employee);
-        var asked = await requests.CreateAsync(new CreateLeaveRequest(pto.PolicyId, day, day, null, "Long weekend"));
+        // Holidays are refused too (three weeks ahead can be Thanksgiving), so move on to the next working day.
+        LeaveRequestDto? asked = null;
+        for (var tries = 0; asked is null && tries < 14; tries++)
+        {
+            try
+            {
+                asked = await requests.CreateAsync(new CreateLeaveRequest(pto.PolicyId, day, day, null, "Long weekend"));
+            }
+            catch (ArgumentException)
+            {
+                day = day.AddDays(1);
+                while (day.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday)
+                {
+                    day = day.AddDays(1);
+                }
+            }
+        }
+
+        Assert.NotNull(asked);
         Assert.Equal((LeaveRequestState.Pending, 8m), (asked.Status, asked.Hours));
 
         // Pat has it waiting and approves.
