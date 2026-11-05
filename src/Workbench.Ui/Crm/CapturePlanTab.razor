@@ -1,0 +1,184 @@
+@* The capture plan: a Pwin assessment (six scored factors suggest the Pwin), the win strategy (themes, discriminators, the
+   customer's hot buttons), a SWOT and the capture risks. *@
+@inject ICapturePlanService Plans
+@inject ISnackbar Snackbar
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error">@_error</MudAlert>
+}
+else if (_plan is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <section class="pwin-card mb-6" aria-labelledby="pwin-heading" data-testid="pwin-assessment">
+        <div class="pwin-factors">
+            <MudText Typo="Typo.h6" HtmlTag="h2" id="pwin-heading">Pwin assessment</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">Score each factor from 0 (not at all) to 5 (fully). The weighted score suggests the Pwin.</MudText>
+            @foreach (var (key, label, question, weight) in PwinFactors.Definitions)
+            {
+                <div class="factor">
+                    <div class="factor-text">
+                        <div class="factor-label">@label <span class="factor-weight">@weight%</span></div>
+                        <div class="factor-question">@question</div>
+                    </div>
+                    <div class="factor-scale" role="radiogroup" aria-label="@label">
+                        @for (var i = 0; i <= 5; i++)
+                        {
+                            var score = i;
+                            var selected = _factors[key] == score;
+                            <button type="button" role="radio" aria-checked="@(selected ? "true" : "false")" aria-label="@($"{label}: {score}")"
+                                    class="factor-dot @(selected ? "selected" : "") @(score <= _factors[key] && score > 0 ? "filled" : "")"
+                                    disabled="@(!_plan.CanEdit)" @onclick="() => Score(key, score)">@score</button>
+                        }
+                    </div>
+                </div>
+            }
+            @if (_plan.CanEdit)
+            {
+                <MudTextField T="string" @bind-Value="_notes" Label="Notes on the assessment" Lines="2" MaxLength="2000" Class="mt-3" Variant="Variant.Outlined" />
+            }
+        </div>
+        <aside class="pwin-result" aria-live="polite">
+            <div class="pwin-gauge" style="--pwin: @_factors.SuggestedPwin">
+                <div class="pwin-gauge-inner">
+                    <span class="pwin-number" data-testid="suggested-pwin">@_factors.SuggestedPwin%</span>
+                    <span class="pwin-caption">suggested Pwin</span>
+                </div>
+            </div>
+            <div class="pwin-meta">
+                <div>Score <strong>@_factors.Score.ToString("0")</strong> of 100</div>
+                <div>Current Pwin <strong>@Opportunity.Pwin%</strong></div>
+                @if (_plan.AgencyHistory is { } history)
+                {
+                    <div class="pwin-history">
+                        With @history.Scope: @history.Won won, @history.Lost lost@(history.WinRate is { } rate ? $" ({rate:0}%)" : "")
+                    </div>
+                }
+                @if (_plan.Assessment is { } a)
+                {
+                    <div class="pwin-when">Last assessed @a.AssessedAtUtc.ToLocalTime().ToString("MMM d, yyyy") by @a.AssessedBy</div>
+                }
+            </div>
+            @if (_plan.CanEdit)
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true" Disabled="_busy" OnClick="() => SaveAssessmentAsync(true)" data-testid="apply-pwin">
+                    Save and set Pwin to @_factors.SuggestedPwin%
+                </MudButton>
+                <MudButton Variant="Variant.Text" FullWidth="true" Disabled="_busy" OnClick="() => SaveAssessmentAsync(false)">Save without changing Pwin</MudButton>
+            }
+        </aside>
+    </section>
+
+    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">Win strategy</MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">Why the customer should choose us, in their terms. These carry into the proposal's themes and executive summary.</MudText>
+    <div class="plan-grid plan-grid-3 mb-6">
+        <PlanList Kind="CapturePlanItemKind.HotButton" Title="Customer hot buttons" Icon="@Icons.Material.Outlined.LocalFireDepartment" Tone="caution"
+                  Hint="What the customer cares about most: their pain points and priorities." Placeholder="Add a hot button" Items="Of(CapturePlanItemKind.HotButton)" CanEdit="_plan.CanEdit" Add="AddAsync" Remove="RemoveAsync" />
+        <PlanList Kind="CapturePlanItemKind.WinTheme" Title="Win themes" Icon="@Icons.Material.Outlined.EmojiEvents" Tone="brand"
+                  Hint="A benefit to the customer, backed by proof, tied to a hot button." Placeholder="Add a win theme" Items="Of(CapturePlanItemKind.WinTheme)" CanEdit="_plan.CanEdit" Add="AddAsync" Remove="RemoveAsync" />
+        <PlanList Kind="CapturePlanItemKind.Discriminator" Title="Discriminators" Icon="@Icons.Material.Outlined.Star" Tone="info"
+                  Hint="What we offer that competitors can't, and the customer values." Placeholder="Add a discriminator" Items="Of(CapturePlanItemKind.Discriminator)" CanEdit="_plan.CanEdit" Add="AddAsync" Remove="RemoveAsync" />
+    </div>
+
+    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">SWOT</MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">Our position on this pursuit against the field.</MudText>
+    <div class="plan-grid plan-grid-2 mb-6">
+        <PlanList Kind="CapturePlanItemKind.Strength" Title="Strengths" Icon="@Icons.Material.Outlined.TrendingUp" Tone="good" Placeholder="Add a strength"
+                  Items="Of(CapturePlanItemKind.Strength)" CanEdit="_plan.CanEdit" Add="AddAsync" Remove="RemoveAsync" />
+        <PlanList Kind="CapturePlanItemKind.Weakness" Title="Weaknesses" Icon="@Icons.Material.Outlined.TrendingDown" Tone="caution" Placeholder="Add a weakness"
+                  Items="Of(CapturePlanItemKind.Weakness)" CanEdit="_plan.CanEdit" Add="AddAsync" Remove="RemoveAsync" />
+        <PlanList Kind="CapturePlanItemKind.Opportunity" Title="Opportunities" Icon="@Icons.Material.Outlined.Lightbulb" Tone="info" Placeholder="Add an opportunity"
+                  Items="Of(CapturePlanItemKind.Opportunity)" CanEdit="_plan.CanEdit" Add="AddAsync" Remove="RemoveAsync" />
+        <PlanList Kind="CapturePlanItemKind.Threat" Title="Threats" Icon="@Icons.Material.Outlined.Shield" Tone="risk" Placeholder="Add a threat"
+                  Items="Of(CapturePlanItemKind.Threat)" CanEdit="_plan.CanEdit" Add="AddAsync" Remove="RemoveAsync" />
+    </div>
+
+    <div class="plan-grid plan-grid-1">
+        <PlanList Kind="CapturePlanItemKind.Risk" Title="Capture risks and mitigations" Icon="@Icons.Material.Outlined.ReportProblem" Tone="risk"
+                  Hint="What could cost us the win, and what we're doing about it." Placeholder="Add a risk" Items="Of(CapturePlanItemKind.Risk)" CanEdit="_plan.CanEdit" Add="AddAsync" Remove="RemoveAsync" />
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public OpportunityDto Opportunity { get; set; } = default!;
+
+    /// <summary>Raised when the opportunity itself changed (the Pwin was applied).</summary>
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private CapturePlanDto? _plan;
+    private List<PlanItemDto> _items = [];
+    private PwinFactors _factors = PwinFactors.Empty;
+    private string? _notes;
+    private string? _error;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _plan = await Plans.GetAsync(Opportunity.Id);
+            _items = _plan.Items.ToList();
+            _factors = _plan.Assessment?.Factors ?? PwinFactors.Empty;
+            _notes = _plan.Assessment?.Notes;
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private IReadOnlyList<PlanItemDto> Of(CapturePlanItemKind kind) => _items.Where(i => i.Kind == kind).OrderBy(i => i.Order).ToList();
+
+    private void Score(string key, int score) => _factors = _factors.With(key, score);
+
+    private async Task AddAsync(SavePlanItemRequest request)
+    {
+        try
+        {
+            _items.Add(await Plans.AddItemAsync(Opportunity.Id, request));
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task RemoveAsync(PlanItemDto item)
+    {
+        try
+        {
+            await Plans.DeleteItemAsync(item.Id);
+            _items.Remove(item);
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task SaveAssessmentAsync(bool apply)
+    {
+        _busy = true;
+        try
+        {
+            var saved = await Plans.SaveAssessmentAsync(Opportunity.Id, new SavePwinAssessmentRequest(_factors, _notes, apply));
+            _plan = _plan! with { Assessment = saved };
+            Snackbar.Add(apply ? $"Assessment saved; Pwin is now {saved.SuggestedPwin}%." : "Assessment saved.", Severity.Success);
+            if (apply)
+            {
+                await Changed.InvokeAsync();
+            }
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

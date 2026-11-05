@@ -146,6 +146,9 @@ public sealed class HttpPipelineService(HttpClient http) : IPipelineService
     public async Task<ForecastDto> GetForecastAsync(CancellationToken cancellationToken = default) =>
         await (await http.GetAsync("api/v1/crm/pipeline/forecast", cancellationToken)).ReadAsync<ForecastDto>(cancellationToken);
 
+    public async Task<BdHighlightsDto> GetHighlightsAsync(int windowDays = 30, CancellationToken cancellationToken = default) =>
+        await (await http.GetAsync($"api/v1/crm/pipeline/highlights?windowDays={windowDays}", cancellationToken)).ReadAsync<BdHighlightsDto>(cancellationToken);
+
     public async Task<WinLossDto> GetWinLossAsync(DateOnly? from = null, DateOnly? to = null, CancellationToken cancellationToken = default) =>
         await (await http.GetAsync($"api/v1/crm/pipeline/win-loss?{HttpCrmAccountService.Query(("from", from?.ToString("yyyy-MM-dd")), ("to", to?.ToString("yyyy-MM-dd")))}", cancellationToken))
             .ReadAsync<WinLossDto>(cancellationToken);
@@ -164,6 +167,41 @@ public sealed class HttpPipelineService(HttpClient http) : IPipelineService
         await (await http.GetAsync("api/v1/crm/pipeline/settings/bp-parent-options", cancellationToken)).ReadAsync<List<BpParentOptionDto>>(cancellationToken);
 }
 
+public sealed class HttpCapturePlanService(HttpClient http) : ICapturePlanService
+{
+    private const string Base = "api/v1/crm/opportunities";
+
+    public async Task<CapturePlanDto> GetAsync(Guid opportunityId, CancellationToken cancellationToken = default) =>
+        await (await http.GetAsync($"{Base}/{opportunityId}/capture-plan", cancellationToken)).ReadAsync<CapturePlanDto>(cancellationToken);
+
+    public async Task<PlanItemDto> AddItemAsync(Guid opportunityId, SavePlanItemRequest request, CancellationToken cancellationToken = default) =>
+        await (await http.PostAsJsonAsync($"{Base}/{opportunityId}/capture-plan/items", request, cancellationToken)).ReadAsync<PlanItemDto>(cancellationToken);
+
+    public async Task<PlanItemDto> UpdateItemAsync(Guid itemId, SavePlanItemRequest request, CancellationToken cancellationToken = default) =>
+        await (await http.PutAsJsonAsync($"api/v1/crm/capture-plan-items/{itemId}", request, cancellationToken)).ReadAsync<PlanItemDto>(cancellationToken);
+
+    public async Task DeleteItemAsync(Guid itemId, CancellationToken cancellationToken = default) =>
+        await (await http.DeleteAsync($"api/v1/crm/capture-plan-items/{itemId}", cancellationToken)).EnsureOkAsync(cancellationToken);
+
+    public async Task<MilestoneDto> AddMilestoneAsync(Guid opportunityId, SaveMilestoneRequest request, CancellationToken cancellationToken = default) =>
+        await (await http.PostAsJsonAsync($"{Base}/{opportunityId}/milestones", request, cancellationToken)).ReadAsync<MilestoneDto>(cancellationToken);
+
+    public async Task<MilestoneDto> UpdateMilestoneAsync(Guid milestoneId, SaveMilestoneRequest request, CancellationToken cancellationToken = default) =>
+        await (await http.PutAsJsonAsync($"api/v1/crm/milestones/{milestoneId}", request, cancellationToken)).ReadAsync<MilestoneDto>(cancellationToken);
+
+    public async Task<MilestoneDto> SetMilestoneDoneAsync(Guid milestoneId, bool done, CancellationToken cancellationToken = default) =>
+        await (await http.PostAsJsonAsync($"api/v1/crm/milestones/{milestoneId}/done", new { Done = done }, cancellationToken)).ReadAsync<MilestoneDto>(cancellationToken);
+
+    public async Task DeleteMilestoneAsync(Guid milestoneId, CancellationToken cancellationToken = default) =>
+        await (await http.DeleteAsync($"api/v1/crm/milestones/{milestoneId}", cancellationToken)).EnsureOkAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<MilestoneDto>> AddStandardScheduleAsync(Guid opportunityId, CancellationToken cancellationToken = default) =>
+        await (await http.PostAsync($"{Base}/{opportunityId}/milestones/standard", null, cancellationToken)).ReadAsync<List<MilestoneDto>>(cancellationToken);
+
+    public async Task<PwinAssessmentDto> SaveAssessmentAsync(Guid opportunityId, SavePwinAssessmentRequest request, CancellationToken cancellationToken = default) =>
+        await (await http.PutAsJsonAsync($"{Base}/{opportunityId}/pwin-assessment", request, cancellationToken)).ReadAsync<PwinAssessmentDto>(cancellationToken);
+}
+
 public static class CrmClientRegistration
 {
     public static IServiceCollection AddCrmClients(this IServiceCollection services, Uri serverBaseAddress)
@@ -173,6 +211,7 @@ public static class CrmClientRegistration
         services.AddHttpClient<IOpportunityGateService, HttpOpportunityGateService>(c => c.BaseAddress = serverBaseAddress);
         services.AddHttpClient<IOpportunityLeadService, HttpOpportunityLeadService>(c => c.BaseAddress = serverBaseAddress);
         services.AddHttpClient<IPipelineService, HttpPipelineService>(c => c.BaseAddress = serverBaseAddress);
+        services.AddHttpClient<ICapturePlanService, HttpCapturePlanService>(c => c.BaseAddress = serverBaseAddress);
         return services;
     }
 }

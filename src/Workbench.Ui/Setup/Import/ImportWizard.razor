@@ -96,7 +96,13 @@
             {
                 <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">Upload @_kind.Title</MudText>
                 <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
-                    A .csv or .xlsx export@(_source == ImportSource.Costpoint ? " of the Costpoint screen or report" : _source == ImportSource.Unanet ? " of the Unanet report or list (run it, then export to Excel or CSV)" : " (Smartsheet: File → Export → Microsoft Excel)").
+                    A .csv or .xlsx export@(_source switch
+                    {
+                        ImportSource.Costpoint => " of the Costpoint screen or report",
+                        ImportSource.Unanet => " of the Unanet report or list (run it, then export to Excel or CSV)",
+                        ImportSource.CaptureExec => " of a Capture Exec list view or report (open the list, choose the columns you want, then Export to Excel)",
+                        _ => " (Smartsheet: File → Export → Microsoft Excel)",
+                    }).
                     @if (_kind.SampleFile is not null)
                     {
                         <span>Example: <code>@_kind.SampleFile</code>.</span>
@@ -204,6 +210,7 @@
         (ImportSource.SmartsheetApi, "Smartsheet (API)", "Connect with an API token and pick sheets. Imports columns, hierarchy, dates, predecessors and, optionally, comments and attachments.", Icons.Material.Filled.CloudSync),
         (ImportSource.SmartsheetExcel, "Smartsheet (.xlsx)", "Upload a sheet exported to Excel. Hierarchy comes from the row grouping or indentation.", Icons.Material.Filled.TableView),
         (ImportSource.Unanet, "Unanet", "CSV or Excel exports of Unanet lists and reports: people, customers, projects and tasks, budgets, assignments, approved timesheets, open AP/AR.", Icons.Material.Filled.SwapHoriz),
+        (ImportSource.CaptureExec, "Capture Exec", "Excel or CSV exports of Capture Exec companies, contacts and opportunities: stages, Pwin/Pgo, dates, managers, competitors and outcomes. Re-import to update.", Icons.Material.Filled.TrendingUp),
     ];
 
     [Parameter]
@@ -448,6 +455,13 @@
                 break;
             case ImportKind.FixedAssets:
                 yield return ("Fixed assets", "assets");
+                break;
+            case ImportKind.CrmAccounts or ImportKind.CrmContacts:
+                yield return ("Accounts and contacts", "bd/accounts");
+                break;
+            case ImportKind.Opportunities:
+                yield return ("Pipeline", "bd");
+                yield return ("Opportunities", "bd/opportunities");
                 break;
             default:
                 yield return ("Projects", "setup/projects");

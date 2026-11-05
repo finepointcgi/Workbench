@@ -1,0 +1,257 @@
+@* The pursuit's schedule as a timeline: solicitation dates and the proposal's color-team reviews, with today marked. The
+   standard schedule back-plans the reviews from the proposal due date. *@
+@inject ICapturePlanService Plans
+@inject ISnackbar Snackbar
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error">@_error</MudAlert>
+}
+else if (_milestones is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-3" Spacing="2">
+        <div>
+            <MudText Typo="Typo.h6" HtmlTag="h2">Schedule</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                @if (Opportunity.ProposalDueOn is { } due)
+                {
+                    <span>Proposal due @CrmFormat.Date(due) · @_milestones.Count(m => m.IsDone) of @_milestones.Count done</span>
+                }
+                else
+                {
+                    <span>Set the proposal due date on Details to back-plan the color-team reviews.</span>
+                }
+            </MudText>
+        </div>
+        <MudSpacer />
+        @if (_canEdit && Opportunity.ProposalDueOn is not null)
+        {
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.AutoAwesome" OnClick="StandardAsync" Disabled="_busy" data-testid="standard-schedule">
+                Add standard schedule
+            </MudButton>
+        }
+    </MudStack>
+
+    @if (_milestones.Count == 0)
+    {
+        <div class="timeline-empty">
+            <MudIcon Icon="@Icons.Material.Outlined.Timeline" Size="Size.Large" />
+            <div>
+                <MudText Typo="Typo.subtitle1">No milestones yet</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                    The standard schedule adds a black hat, blue team, kickoff, pink, red and gold team reviews, white glove and submission, counted back from the due date.
+                </MudText>
+            </div>
+        </div>
+    }
+    else
+    {
+        <ol class="timeline" data-testid="milestones">
+            @{
+                var todayShown = false;
+            }
+            @foreach (var m in _milestones)
+            {
+                @if (!todayShown && m.DueOn > _today)
+                {
+                    todayShown = true;
+                    <li class="timeline-today" aria-label="Today"><span>Today · @_today.ToString("MMM d")</span></li>
+                }
+                var late = !m.IsDone && m.DueOn < _today;
+                <li class="timeline-row @(m.IsDone ? "done" : "") @(late ? "late" : "")" style="--team: @TeamColor(m.Kind)">
+                    <div class="timeline-date">
+                        <span class="timeline-day">@m.DueOn.ToString("MMM d")</span>
+                        <span class="timeline-dow">@m.DueOn.DayOfWeek.ToString()[..3]</span>
+                    </div>
+                    <div class="timeline-rail" aria-hidden="true"><span class="timeline-node"></span></div>
+                    <div class="timeline-card">
+                        <div class="timeline-main">
+                            <div class="timeline-name">
+                                @if (CapturePlanLabels.IsColorReview(m.Kind))
+                                {
+                                    <span class="team-swatch" aria-hidden="true"></span>
+                                }
+                                @m.Name
+                            </div>
+                            <div class="timeline-meta">
+                                @(m.IsDone ? "Done" : CrmFormat.DueIn(m.DueOn, _today))
+                                @if (m.OwnerName is { } owner)
+                                {
+                                    <span> · @owner</span>
+                                }
+                                @if (m.Notes is { } notes)
+                                {
+                                    <span> · @notes</span>
+                                }
+                            </div>
+                        </div>
+                        @if (_canEdit)
+                        {
+                            <MudCheckBox T="bool" Value="m.IsDone" ValueChanged="v => DoneAsync(m, v)" Size="Size.Small" Color="Color.Success" aria-label="@($"{m.Name} done")" />
+                            <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small" aria-label="@($"Remove {m.Name}")" OnClick="() => RemoveAsync(m)" />
+                        }
+                    </div>
+                </li>
+            }
+            @if (!todayShown)
+            {
+                <li class="timeline-today" aria-label="Today"><span>Today · @_today.ToString("MMM d")</span></li>
+            }
+        </ol>
+    }
+
+    @if (_canEdit)
+    {
+        <MudPaper Outlined="true" Class="pa-3 mt-4 add-milestone">
+            <MudText Typo="Typo.subtitle2" HtmlTag="h3" Class="mb-2">Add a milestone</MudText>
+            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Wrap="Wrap.Wrap">
+                <MudSelect T="MilestoneKind" Value="_kind" ValueChanged="KindChanged" Label="Kind" Style="min-width: 190px">
+                    @foreach (var k in Enum.GetValues<MilestoneKind>())
+                    {
+                        <MudSelectItem T="MilestoneKind" Value="k">@CapturePlanLabels.Label(k)</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudTextField T="string" @bind-Value="_name" Label="Name" MaxLength="200" Style="min-width: 200px" />
+                <MudDatePicker Date="CrmFormat.ToDateTime(_date)" DateChanged="d => _date = CrmFormat.ToDateOnly(d)" DateFormat="yyyy-MM-dd" Label="Date" Style="max-width: 170px" />
+                <MudSelect T="string" @bind-Value="_owner" Label="Owner" Clearable="true" Style="min-width: 200px">
+                    @foreach (var p in People)
+                    {
+                        <MudSelectItem T="string" Value="p.Email">@p.DisplayName</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="AddAsync" Disabled="@(_busy || _date is null)">Add</MudButton>
+            </MudStack>
+        </MudPaper>
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public OpportunityDto Opportunity { get; set; } = default!;
+
+    [Parameter] public IReadOnlyList<Workbench.Contracts.Identity.UserDto> People { get; set; } = [];
+
+    private List<MilestoneDto>? _milestones;
+    private bool _canEdit;
+    private string? _error;
+    private bool _busy;
+    private MilestoneKind _kind = MilestoneKind.Other;
+    private string? _name;
+    private DateOnly? _date;
+    private string? _owner;
+    private readonly DateOnly _today = DateOnly.FromDateTime(DateTime.Today);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var plan = await Plans.GetAsync(Opportunity.Id);
+            _milestones = plan.Milestones.ToList();
+            _canEdit = plan.CanEdit;
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private void KindChanged(MilestoneKind kind)
+    {
+        if (string.IsNullOrWhiteSpace(_name) || Enum.GetValues<MilestoneKind>().Any(k => CapturePlanLabels.Label(k) == _name))
+        {
+            _name = kind == MilestoneKind.Other ? null : CapturePlanLabels.Label(kind);
+        }
+
+        _kind = kind;
+    }
+
+    /// <summary>The color teams wear their colors; other milestones are neutral.</summary>
+    private static string TeamColor(MilestoneKind kind) => kind switch
+    {
+        MilestoneKind.BlackHat => "var(--mud-palette-text-primary)",
+        MilestoneKind.BlueTeam => "#2563EB",
+        MilestoneKind.PinkTeam => "#DB2777",
+        MilestoneKind.RedTeam => "#DC2626",
+        MilestoneKind.GoldTeam => "#CA8A04",
+        MilestoneKind.WhiteGlove => "#94A3B8",
+        MilestoneKind.Submission => "var(--mud-palette-primary)",
+        MilestoneKind.RfpRelease or MilestoneKind.DraftRfp => "#0D9488",
+        _ => "var(--mud-palette-text-secondary)",
+    };
+
+    private async Task StandardAsync()
+    {
+        _busy = true;
+        try
+        {
+            var before = _milestones!.Count;
+            _milestones = (await Plans.AddStandardScheduleAsync(Opportunity.Id)).ToList();
+            var added = _milestones.Count - before;
+            Snackbar.Add(added == 0 ? "The schedule already has every standard review (or their dates have passed)." : $"Added {added} milestones.", added == 0 ? Severity.Info : Severity.Success);
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task AddAsync()
+    {
+        if (_date is not { } date)
+        {
+            return;
+        }
+
+        _busy = true;
+        try
+        {
+            var added = await Plans.AddMilestoneAsync(Opportunity.Id, new SaveMilestoneRequest(_kind, _name ?? CapturePlanLabels.Label(_kind), date, _owner));
+            _milestones!.Add(added);
+            _milestones = _milestones.OrderBy(m => m.DueOn).ToList();
+            _name = null;
+            _date = null;
+            _kind = MilestoneKind.Other;
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DoneAsync(MilestoneDto milestone, bool done)
+    {
+        try
+        {
+            var updated = await Plans.SetMilestoneDoneAsync(milestone.Id, done);
+            _milestones![_milestones.IndexOf(milestone)] = updated;
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task RemoveAsync(MilestoneDto milestone)
+    {
+        try
+        {
+            await Plans.DeleteMilestoneAsync(milestone.Id);
+            _milestones!.Remove(milestone);
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+}

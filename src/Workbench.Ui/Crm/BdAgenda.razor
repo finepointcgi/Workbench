@@ -1,0 +1,119 @@
+@* What's coming up (grouped by week) or what needs attention, across the pursuits the viewer sees. *@
+
+@if (Mode == "upcoming")
+{
+    @if (Highlights.Upcoming.Count == 0)
+    {
+        <div class="agenda-empty">
+            <MudIcon Icon="@Icons.Material.Outlined.EventAvailable" />
+            <MudText Class="mud-text-secondary">Nothing due in the next @Highlights.WindowDays days.</MudText>
+        </div>
+    }
+    else
+    {
+        @foreach (var group in Highlights.Upcoming.GroupBy(u => Bucket(u.DueOn)))
+        {
+            <MudText Typo="Typo.overline" HtmlTag="h3" Class="agenda-group">@group.Key</MudText>
+            <ul class="agenda-list" data-testid="bd-upcoming">
+                @foreach (var item in group)
+                {
+                    <li class="agenda-row">
+                        <div class="agenda-date">
+                            <span class="agenda-day">@item.DueOn.Day</span>
+                            <span class="agenda-month">@item.DueOn.ToString("MMM", Us)</span>
+                        </div>
+                        <MudIcon Icon="@Icon(item.Kind)" Size="Size.Small" Class="agenda-icon" aria-hidden="true" />
+                        <div class="agenda-main">
+                            <div class="agenda-what">@item.What</div>
+                            <a href="@($"bd/opportunities/{item.OpportunityId}")" class="agenda-opp">@item.Number · @item.Name</a>
+                        </div>
+                        <div class="agenda-side">
+                            <span class="agenda-when">@CrmFormat.DueIn(item.DueOn, Today, "")</span>
+                            @if (item.Owner is { } owner)
+                            {
+                                <MudAvatar Size="Size.Small" Class="agenda-avatar" title="@owner">@CrmFormat.Initials(owner)</MudAvatar>
+                            }
+                        </div>
+                    </li>
+                }
+            </ul>
+        }
+    }
+}
+else
+{
+    @if (Highlights.Attention.Count == 0)
+    {
+        <div class="agenda-empty">
+            <MudIcon Icon="@Icons.Material.Outlined.TaskAlt" Color="Color.Success" />
+            <MudText Class="mud-text-secondary">Every pursuit has an owner, a plan and its dates in hand.</MudText>
+        </div>
+    }
+    else
+    {
+        <ul class="agenda-list" data-testid="bd-attention">
+            @foreach (var item in Highlights.Attention)
+            {
+                <li class="agenda-row attention-@item.Severity.ToString().ToLowerInvariant()">
+                    <MudIcon Icon="@SeverityIcon(item.Severity)" Color="@SeverityColor(item.Severity)" Size="Size.Small" Class="agenda-icon" aria-label="@item.Severity.ToString()" />
+                    <div class="agenda-main">
+                        <div class="agenda-what">@item.Reason</div>
+                        <a href="@($"bd/opportunities/{item.OpportunityId}")" class="agenda-opp">@item.Number · @item.Name</a>
+                    </div>
+                    <div class="agenda-side">
+                        <span class="wb-stage-pill @CrmFormat.StageClass(item.Stage)"><span class="wb-stage-dot" aria-hidden="true"></span>@CrmFormat.Stage(item.Stage)</span>
+                    </div>
+                </li>
+            }
+        </ul>
+    }
+}
+
+@code {
+    private static readonly System.Globalization.CultureInfo Us = System.Globalization.CultureInfo.GetCultureInfo("en-US");
+
+    [Parameter, EditorRequired] public BdHighlightsDto Highlights { get; set; } = default!;
+
+    /// <summary>"upcoming" or "attention".</summary>
+    [Parameter] public string Mode { get; set; } = "upcoming";
+
+    [Parameter] public DateOnly Today { get; set; } = DateOnly.FromDateTime(DateTime.Today);
+
+    private string Bucket(DateOnly date)
+    {
+        var days = date.DayNumber - Today.DayNumber;
+        var endOfWeek = Today.AddDays(((int)DayOfWeek.Sunday - (int)Today.DayOfWeek + 7) % 7);
+        return days switch
+        {
+            0 => "Today",
+            1 => "Tomorrow",
+            _ when date <= endOfWeek => "This week",
+            _ when date <= endOfWeek.AddDays(7) => "Next week",
+            _ => "Later",
+        };
+    }
+
+    private static string Icon(UpcomingKind kind) => kind switch
+    {
+        UpcomingKind.ProposalDue => Icons.Material.Outlined.Send,
+        UpcomingKind.RfiDue => Icons.Material.Outlined.QuestionAnswer,
+        UpcomingKind.RfpRelease => Icons.Material.Outlined.Description,
+        UpcomingKind.Milestone => Icons.Material.Outlined.Flag,
+        UpcomingKind.Task => Icons.Material.Outlined.TaskAlt,
+        _ => Icons.Material.Outlined.EmojiEvents,
+    };
+
+    private static string SeverityIcon(AttentionSeverity s) => s switch
+    {
+        AttentionSeverity.Critical => Icons.Material.Filled.Error,
+        AttentionSeverity.Warning => Icons.Material.Filled.Warning,
+        _ => Icons.Material.Outlined.Info,
+    };
+
+    private static Color SeverityColor(AttentionSeverity s) => s switch
+    {
+        AttentionSeverity.Critical => Color.Error,
+        AttentionSeverity.Warning => Color.Warning,
+        _ => Color.Info,
+    };
+}

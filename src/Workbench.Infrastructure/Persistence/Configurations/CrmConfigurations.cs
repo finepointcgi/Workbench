@@ -85,6 +85,8 @@ internal sealed class OpportunityConfiguration : IEntityTypeConfiguration<Opport
         b.Property(o => o.Source).HasConversion<string>().HasMaxLength(16);
         b.Property(o => o.SourceUrl).HasMaxLength(500);
         b.Property(o => o.SamNoticeId).HasMaxLength(64);
+        b.Property(o => o.SourceId).HasMaxLength(100);
+        b.HasIndex(o => new { o.Source, o.SourceId });
         b.Property(o => o.OutcomeReason).HasConversion<string>().HasMaxLength(32);
         b.Property(o => o.OutcomeNotes).HasMaxLength(2000);
         b.Property(o => o.AwardedValue).HasPrecision(18, 2);
@@ -241,5 +243,44 @@ internal sealed class CrmSettingsConfiguration : IEntityTypeConfiguration<CrmSet
     {
         b.Property(s => s.UpdatedBy).HasMaxLength(320);
         b.HasOne<WbsElement>().WithMany().HasForeignKey(s => s.BpParentWbsElementId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class OpportunityPlanItemConfiguration : IEntityTypeConfiguration<OpportunityPlanItem>
+{
+    public void Configure(EntityTypeBuilder<OpportunityPlanItem> b)
+    {
+        b.Property(i => i.Kind).HasConversion<string>().HasMaxLength(16);
+        b.Property(i => i.Text).HasMaxLength(500);
+        b.Property(i => i.Detail).HasMaxLength(2000);
+        b.Property(i => i.CreatedBy).HasMaxLength(320);
+        b.HasIndex(i => i.OpportunityId);
+        b.HasOne<Opportunity>().WithMany().HasForeignKey(i => i.OpportunityId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+internal sealed class OpportunityMilestoneConfiguration : IEntityTypeConfiguration<OpportunityMilestone>
+{
+    public void Configure(EntityTypeBuilder<OpportunityMilestone> b)
+    {
+        b.Property(m => m.Kind).HasConversion<string>().HasMaxLength(16);
+        b.Property(m => m.Name).HasMaxLength(200);
+        b.Property(m => m.OwnerEmail).HasMaxLength(320);
+        b.Property(m => m.Notes).HasMaxLength(1000);
+        b.Property(m => m.CreatedBy).HasMaxLength(320);
+        b.HasIndex(m => m.OpportunityId);
+        b.HasIndex(m => new { m.IsDone, m.DueOn });
+        b.HasOne<Opportunity>().WithMany().HasForeignKey(m => m.OpportunityId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+internal sealed class OpportunityPwinAssessmentConfiguration : IEntityTypeConfiguration<OpportunityPwinAssessment>
+{
+    public void Configure(EntityTypeBuilder<OpportunityPwinAssessment> b)
+    {
+        b.Property(a => a.Notes).HasMaxLength(2000);
+        b.Property(a => a.AssessedBy).HasMaxLength(320);
+        b.HasIndex(a => a.OpportunityId).IsUnique();
+        b.HasOne<Opportunity>().WithMany().HasForeignKey(a => a.OpportunityId).OnDelete(DeleteBehavior.Cascade);
     }
 }

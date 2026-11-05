@@ -1,0 +1,116 @@
+.agenda-list {
+    list-style: none;
+    margin: 0 0 12px;
+    padding: 0;
+    border: 1px solid var(--wb-outline-variant);
+    border-radius: var(--wb-shape-m);
+    overflow: hidden;
+    background: var(--mud-palette-surface);
+}
+
+.agenda-group {
+    display: block;
+    margin: 8px 0 4px;
+    color: var(--mud-palette-text-secondary);
+}
+
+.agenda-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border-top: 1px solid var(--wb-outline-variant);
+}
+
+.agenda-row:first-child {
+    border-top: none;
+}
+
+.agenda-row:hover {
+    background: var(--wb-state-hover);
+}
+
+.agenda-date {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 40px;
+    flex: 0 0 auto;
+    line-height: 1.1;
+}
+
+.agenda-day {
+    font-size: 1.125rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.agenda-month {
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--mud-palette-text-secondary);
+}
+
+::deep .agenda-icon {
+    flex: 0 0 auto;
+    color: var(--mud-palette-text-secondary);
+}
+
+.agenda-main {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.agenda-what {
+    font-weight: 500;
+    overflow-wrap: anywhere;
+}
+
+.agenda-opp {
+    font-size: 0.8125rem;
+    color: var(--mud-palette-text-secondary);
+    overflow-wrap: anywhere;
+}
+
+.agenda-side {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
+}
+
+.agenda-when {
+    font-size: 0.8125rem;
+    color: var(--mud-palette-text-secondary);
+    white-space: nowrap;
+}
+
+::deep .agenda-avatar {
+    font-size: 0.6875rem;
+    background: var(--wb-secondary-container);
+    color: var(--wb-on-secondary-container);
+}
+
+.attention-critical {
+    box-shadow: inset 3px 0 0 var(--mud-palette-error);
+}
+
+.attention-warning {
+    box-shadow: inset 3px 0 0 var(--mud-palette-warning);
+}
+
+.agenda-empty {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 24px 16px;
+    border: 1px dashed var(--wb-outline-variant);
+    border-radius: var(--wb-shape-m);
+}
+
+@media (max-width: 600px) {
+    .agenda-when {
+        display: none;
+    }
+}

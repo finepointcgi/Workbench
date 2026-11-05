@@ -41,6 +41,43 @@ public static class CrmFormat
         _ => Icons.Material.Filled.Flag,
     };
 
+    /// <summary>The stage's accent class (<c>wb-stage-proposal</c>), from theme.css.</summary>
+    public static string StageClass(OpportunityStage stage) => $"wb-stage-{stage.ToString().ToLowerInvariant()}";
+
+    /// <summary>"Due today", "Due in 5 days", "Due tomorrow", "3 days late".</summary>
+    public static string DueIn(DateOnly due, DateOnly today, string verb = "Due")
+    {
+        var days = due.DayNumber - today.DayNumber;
+        var text = days switch
+        {
+            0 => $"{verb} today",
+            1 => $"{verb} tomorrow",
+            > 1 => $"{verb} in {days} days",
+            -1 => "1 day late",
+            _ => $"{-days} days late",
+        };
+        text = text.Trim();
+        return char.ToUpperInvariant(text[0]) + text[1..];
+    }
+
+    /// <summary>"Blake Ortiz" → "BO"; an email's name part when there's no display name.</summary>
+    public static string Initials(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return "?";
+        }
+
+        var text = name.Contains('@') ? name[..name.IndexOf('@')].Replace('.', ' ') : name;
+        var parts = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length switch
+        {
+            0 => "?",
+            1 => parts[0][..Math.Min(2, parts[0].Length)].ToUpperInvariant(),
+            _ => $"{char.ToUpperInvariant(parts[0][0])}{char.ToUpperInvariant(parts[^1][0])}",
+        };
+    }
+
     public static string Date(DateOnly? date) => date is { } d ? d.ToString("MMM d, yyyy", Us) : "—";
 
     public static string Percent(int value) => $"{value}%";

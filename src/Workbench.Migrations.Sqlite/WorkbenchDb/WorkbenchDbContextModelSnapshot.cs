@@ -5401,6 +5401,10 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .HasMaxLength(16)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("SourceId")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("SourceUrl")
                         .HasMaxLength(500)
                         .HasColumnType("TEXT");
@@ -5440,6 +5444,8 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.HasIndex("SolicitationKey");
 
                     b.HasIndex("Stage");
+
+                    b.HasIndex("Source", "SourceId");
 
                     b.ToTable("Opportunity");
                 });
@@ -5687,6 +5693,147 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.HasIndex("Status");
 
                     b.ToTable("OpportunityLead");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Crm.OpportunityMilestone", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("DueOn")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsDone")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OpportunityId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OwnerEmail")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OpportunityId");
+
+                    b.HasIndex("IsDone", "DueOn");
+
+                    b.ToTable("OpportunityMilestone");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Crm.OpportunityPlanItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Detail")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OpportunityId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OpportunityId");
+
+                    b.ToTable("OpportunityPlanItem");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Crm.OpportunityPwinAssessment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("AssessedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AssessedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("CompetitivePosition")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("CustomerRelationship")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OpportunityId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("PastPerformance")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("PriceToWin")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("SolutionFit")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Teaming")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OpportunityId")
+                        .IsUnique();
+
+                    b.ToTable("OpportunityPwinAssessment");
                 });
 
             modelBuilder.Entity("Workbench.Domain.Crm.OpportunityStageChange", b =>
@@ -24235,6 +24382,33 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .WithMany()
                         .HasForeignKey("SavedSearchId")
                         .OnDelete(DeleteBehavior.SetNull);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Crm.OpportunityMilestone", b =>
+                {
+                    b.HasOne("Workbench.Domain.Crm.Opportunity", null)
+                        .WithMany()
+                        .HasForeignKey("OpportunityId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Crm.OpportunityPlanItem", b =>
+                {
+                    b.HasOne("Workbench.Domain.Crm.Opportunity", null)
+                        .WithMany()
+                        .HasForeignKey("OpportunityId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Crm.OpportunityPwinAssessment", b =>
+                {
+                    b.HasOne("Workbench.Domain.Crm.Opportunity", null)
+                        .WithMany()
+                        .HasForeignKey("OpportunityId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Workbench.Domain.Crm.OpportunityStageChange", b =>

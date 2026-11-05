@@ -1,0 +1,93 @@
+.plan-list {
+    --plan-accent: var(--mud-palette-text-secondary);
+    border: 1px solid var(--wb-outline-variant);
+    border-radius: var(--wb-shape-m);
+    background: var(--mud-palette-surface);
+    padding: 12px 14px 8px;
+    min-width: 0;
+    height: 100%;
+}
+
+.plan-good { --plan-accent: var(--mud-palette-success); background: color-mix(in srgb, var(--mud-palette-success) 5%, var(--mud-palette-surface)); }
+.plan-caution { --plan-accent: var(--mud-palette-warning); background: color-mix(in srgb, var(--mud-palette-warning) 6%, var(--mud-palette-surface)); }
+.plan-info { --plan-accent: var(--mud-palette-info); background: color-mix(in srgb, var(--mud-palette-info) 5%, var(--mud-palette-surface)); }
+.plan-risk { --plan-accent: var(--mud-palette-error); background: color-mix(in srgb, var(--mud-palette-error) 5%, var(--mud-palette-surface)); }
+.plan-brand { --plan-accent: var(--mud-palette-primary); }
+
+.plan-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+::deep .plan-icon {
+    color: var(--plan-accent);
+}
+
+.plan-count {
+    margin-left: auto;
+    font-size: 0.75rem;
+    color: var(--mud-palette-text-secondary);
+    font-variant-numeric: tabular-nums;
+}
+
+.plan-hint {
+    margin: 0 0 6px;
+    font-size: 0.8125rem;
+    color: var(--mud-palette-text-secondary);
+}
+
+.plan-items {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.plan-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 5px 0;
+    border-top: 1px solid var(--wb-outline-variant);
+}
+
+.plan-item:first-child {
+    border-top: none;
+}
+
+.plan-bullet {
+    width: 6px;
+    height: 6px;
+    margin-top: 8px;
+    flex: 0 0 auto;
+    border-radius: var(--wb-shape-full);
+    background: var(--plan-accent);
+}
+
+.plan-text {
+    flex: 1 1 auto;
+    overflow-wrap: anywhere;
+    line-height: 1.45;
+}
+
+::deep .plan-remove {
+    margin: -4px -6px -4px 0;
+    opacity: 0.55;
+}
+
+.plan-item:hover ::deep .plan-remove,
+::deep .plan-remove:focus-visible {
+    opacity: 1;
+}
+
+.plan-add {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 2px;
+}
+
+::deep .plan-input {
+    flex: 1 1 auto;
+}

@@ -1,0 +1,63 @@
+@* The pipeline's headline figures and the stage funnel (value by stage, as one bar). *@
+
+<div class="wb-kpi-grid mb-3" data-testid="bd-kpis">
+    <div class="wb-kpi">
+        <div class="wb-kpi-label"><MudIcon Icon="@Icons.Material.Outlined.Flag" Size="Size.Small" />Open pursuits</div>
+        <div class="wb-kpi-value">@Highlights.OpenCount</div>
+        <div class="wb-kpi-note">@CrmFormat.Compact(Highlights.OpenValue) total value</div>
+    </div>
+    <div class="wb-kpi">
+        <div class="wb-kpi-label"><MudIcon Icon="@Icons.Material.Outlined.Balance" Size="Size.Small" />Weighted pipeline</div>
+        <div class="wb-kpi-value">@CrmFormat.Compact(Highlights.WeightedValue)</div>
+        <div class="wb-kpi-note">Value × Pwin × Pgo</div>
+    </div>
+    <div class="wb-kpi">
+        <div class="wb-kpi-label"><MudIcon Icon="@Icons.Material.Outlined.EmojiEvents" Size="Size.Small" />Win rate, last 12 months</div>
+        <div class="wb-kpi-value">@(Highlights.WinRate12Months is { } rate ? $"{rate:0}%" : "—")</div>
+        <div class="wb-kpi-note">@Highlights.Won12Months won · @Highlights.Lost12Months lost · @CrmFormat.Compact(Highlights.WonValue12Months) won</div>
+    </div>
+    <div class="wb-kpi">
+        <div class="wb-kpi-label"><MudIcon Icon="@Icons.Material.Outlined.Event" Size="Size.Small" />Due in @Highlights.WindowDays days</div>
+        <div class="wb-kpi-value">@Highlights.DueSoonCount</div>
+        <div class="wb-kpi-note">Proposals, reviews, RFIs and tasks</div>
+    </div>
+    <div class="wb-kpi">
+        <div class="wb-kpi-label"><MudIcon Icon="@Icons.Material.Outlined.ReportProblem" Size="Size.Small" />Needs attention</div>
+        <div class="wb-kpi-value">@Highlights.Attention.Count</div>
+        <div class="wb-kpi-note">@(Highlights.Attention.Count(a => a.Severity == AttentionSeverity.Critical)) urgent</div>
+    </div>
+</div>
+
+@{
+    var total = Highlights.Funnel.Sum(f => f.TotalValue);
+}
+@if (Highlights.OpenCount > 0)
+{
+    <div class="funnel mb-4" data-testid="bd-funnel">
+        <div class="funnel-bar" role="img" aria-label="@FunnelLabel()">
+            @foreach (var step in Highlights.Funnel.Where(f => f.Count > 0))
+            {
+                var share = total == 0 ? 100m / Highlights.Funnel.Count(f => f.Count > 0) : Math.Max(4m, 100m * step.TotalValue / total);
+                <span class="funnel-seg @CrmFormat.StageClass(step.Stage)" style="flex: @share.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) 1 0"
+                      title="@($"{CrmFormat.Stage(step.Stage)}: {step.Count} · {CrmFormat.Money(step.TotalValue)}")"></span>
+            }
+        </div>
+        <div class="funnel-legend">
+            @foreach (var step in Highlights.Funnel)
+            {
+                <div class="funnel-item @CrmFormat.StageClass(step.Stage)">
+                    <span class="wb-stage-dot" aria-hidden="true"></span>
+                    <span class="funnel-name">@CrmFormat.Stage(step.Stage)</span>
+                    <span class="funnel-figure">@step.Count · @CrmFormat.Compact(step.TotalValue)</span>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public BdHighlightsDto Highlights { get; set; } = default!;
+
+    private string FunnelLabel() =>
+        "Open pipeline by stage: " + string.Join("; ", Highlights.Funnel.Select(f => $"{CrmFormat.Stage(f.Stage)} {f.Count} worth {CrmFormat.Compact(f.TotalValue)}"));
+}
