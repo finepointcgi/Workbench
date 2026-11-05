@@ -205,7 +205,8 @@ public sealed class ImportPermissionTests
     {
         await using var host = await ImportHost.CreateAsync();
         var kinds = await host.Imports.ListKindsAsync();
-        Assert.Equal(21, kinds.Count(k => k.Source != ImportSource.Unanet && k.Source != ImportSource.CaptureExec)); // 18 Costpoint and Smartsheet, plus 3 Costpoint calendar/rate kinds; Unanet and Capture Exec are counted by their own tests.
+        Assert.Equal(21, kinds.Count(k => k.Source is not (ImportSource.Unanet or ImportSource.CaptureExec)));
+        Assert.Equal(3, kinds.Count(k => k.Source == ImportSource.CaptureExec));
         foreach (var kind in kinds.Where(k => k.SampleFile is not null))
         {
             Assert.True(File.Exists(Samples.PathOf(kind.SampleFile!)), kind.SampleFile);

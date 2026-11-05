@@ -42,13 +42,13 @@ public static class ImportRegistration
         services.AddScoped<IImporter, OpeningBalanceImporter>();
         services.AddScoped<IImporter, OpenArInvoiceImporter>();
         services.AddScoped<IImporter, OpenApBillImporter>();
-        services.AddScoped<IImporter, CaptureExecAccountImporter>();
-        services.AddScoped<IImporter, CaptureExecContactImporter>();
-        services.AddScoped<IImporter, CaptureExecOpportunityImporter>();
         services.AddScoped<IImporter, FiscalCalendarImporter>();
         services.AddScoped<IImporter, IndirectRateImporter>();
         services.AddScoped<IImporter, IndirectPoolImporter>();
         services.AddUnanetImporters();
+        services.AddScoped<IImporter, CaptureExecAccountImporter>();
+        services.AddScoped<IImporter, CaptureExecContactImporter>();
+        services.AddScoped<IImporter, CaptureExecOpportunityImporter>();
         services.AddScoped<OpenItemConversion>();
         services.AddScoped<ImportRollback>();
         services.AddScoped<IImportService, ImportService>();

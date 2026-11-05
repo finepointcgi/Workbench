@@ -4,7 +4,7 @@ namespace Workbench.Ui.Theme;
 
 /// <summary>
 /// The Workbench look, after Material 3: the color roles from <see cref="M3Tokens"/> (generated from the brand seed
-/// #415F91), mapped into MudBlazor's palette; the M3 type scale (regular-weight
+/// #415F91, with the brand orange as primary), mapped into MudBlazor's palette; the M3 type scale (regular-weight
 /// headlines, medium-weight titles and labels), pill-shaped buttons and navigation, and M3's five elevation levels.
 /// MudBlazor implements Material 2, so the shapes and tonal surfaces it can't express live in wwwroot/theme.css, which
 /// derives the surface-container levels from these colors (so dark mode follows).
