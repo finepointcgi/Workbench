@@ -130,12 +130,18 @@ public sealed class ProjectStaffingService(
         var last = thisWeek.AddDays(7 * 3);
         var booked = (await db.Set<ResourceAllocation>().AsNoTracking().Where(a => a.WeekStart >= thisWeek && a.WeekStart <= last).ToListAsync(cancellationToken))
             .GroupBy(a => a.EmployeeId).ToDictionary(g => g.Key, g => Math.Round(g.Sum(a => a.Hours) / 4m, 1));
+        var skillNames = await db.Set<Skill>().AsNoTracking().ToDictionaryAsync(x => x.Id, cancellationToken);
+        var skillsByPerson = (await db.Set<EmployeeSkill>().AsNoTracking().ToListAsync(cancellationToken))
+            .Where(x => skillNames.ContainsKey(x.SkillId)).GroupBy(x => x.EmployeeId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<EmployeeSkillDto>)g
+                .Select(x => new EmployeeSkillDto(x.SkillId, skillNames[x.SkillId].Name, skillNames[x.SkillId].Category, (Contracts.Resourcing.SkillLevel)(int)x.Level, x.Years))
+                .OrderByDescending(x => x.Level).ThenBy(x => x.Name, StringComparer.OrdinalIgnoreCase).ToList());
         return people
             .Select(p => new StaffingCandidateDto(
                 p.Id, p.DisplayName, p.DefaultLaborCategoryId,
                 p.DefaultLaborCategoryId is { } c && categories.TryGetValue(c, out var cat) ? Label(cat) : null,
                 laborCategoryId is not null && StaffingCalculator.Qualifies(qualified, p.Id, laborCategoryId),
-                p.StandardHoursPerWeek, booked.GetValueOrDefault(p.Id)))
+                p.StandardHoursPerWeek, booked.GetValueOrDefault(p.Id), skillsByPerson.GetValueOrDefault(p.Id) ?? []))
             .OrderByDescending(p => p.Qualifies)
             .ThenBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();

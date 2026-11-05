@@ -1,0 +1,23 @@
+@* A person's skills as small chips, best first: "C# · Expert". More than Max shows "+N". Nothing when they have none. *@
+@if (Skills is { Count: > 0 })
+{
+    <span data-testid="skill-chips">
+        @foreach (var s in Skills.Take(Max))
+        {
+            <MudChip T="string" Size="Size.Small" Class="ma-0 mr-1" Color="@(Highlight.Contains(s.SkillId) ? Color.Primary : Color.Default)">@s.Name · @SkillLabels.Label(s.Level)</MudChip>
+        }
+        @if (Skills.Count > Max)
+        {
+            <span class="mud-text-secondary" style="font-size: 0.75rem">+@(Skills.Count - Max)</span>
+        }
+    </span>
+}
+
+@code {
+    [Parameter] public IReadOnlyList<EmployeeSkillDto>? Skills { get; set; }
+
+    [Parameter] public int Max { get; set; } = 4;
+
+    /// <summary>Skills to draw attention to (the ones being searched for).</summary>
+    [Parameter] public IReadOnlySet<Guid> Highlight { get; set; } = new HashSet<Guid>();
+}

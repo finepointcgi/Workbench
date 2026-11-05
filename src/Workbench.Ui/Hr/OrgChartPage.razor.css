@@ -1,5 +1,96 @@
-.wb-orgchart, .wb-orgchart ul { list-style: none; padding-left: 0; margin: 0; }
-.wb-orgchart ul { padding-left: 1.5rem; border-left: 1px solid var(--mud-palette-lines-default); margin-left: .75rem; }
-.wb-orgchart li { margin: .25rem 0; }
-.wb-orgchart .wb-org-node { display: inline-flex; gap: .5rem; align-items: baseline; padding: .25rem .5rem; border-radius: 4px; }
-.wb-orgchart button.wb-org-toggle { background: none; border: none; cursor: pointer; color: inherit; font: inherit; padding: 0 .25rem; }
+/* The viewport is a fixed-height window; the tree inside it is moved and scaled by wwwroot/orgChart.js. */
+.wb-org-viewport {
+    position: relative;
+    height: min(70vh, 720px);
+    min-height: 360px;
+    overflow: hidden;
+    cursor: grab;
+    touch-action: none;
+    border-radius: var(--md-sys-shape-corner-medium, 12px);
+    background: var(--md-sys-color-surface-container-low, var(--mud-palette-background-gray));
+    outline-offset: 2px;
+}
+
+.wb-org-viewport.wb-org-panning { cursor: grabbing; user-select: none; }
+
+.wb-org-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: max-content;
+    transform-origin: 0 0;
+}
+
+.wb-org-tools {
+    position: absolute;
+    top: .5rem;
+    right: .5rem;
+    z-index: 2;
+    display: flex;
+    gap: .25rem;
+    padding: .125rem;
+    border-radius: 999px;
+    background: var(--md-sys-color-surface, var(--mud-palette-surface));
+    box-shadow: 0 1px 3px rgb(0 0 0 / .25);
+}
+
+/* The tree: levels side by side under their manager, joined by lines. */
+.wb-tree, .wb-tree ul { list-style: none; margin: 0; padding: 0; }
+.wb-tree ul { display: flex; justify-content: center; padding-top: 24px; position: relative; }
+.wb-tree { display: flex; justify-content: center; }
+.wb-tree li { position: relative; display: flex; flex-direction: column; align-items: center; padding: 24px 10px 0; }
+.wb-tree > li { padding-top: 16px; }
+
+/* Lines: up from each card to a bar across its siblings, and down from a manager to that bar. */
+.wb-tree li::before, .wb-tree li::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    width: 50%;
+    height: 24px;
+    border-top: 2px solid var(--md-sys-color-outline, var(--mud-palette-lines-inputs));
+}
+.wb-tree li::before { right: 50%; }
+.wb-tree li::after { left: 50%; border-left: 2px solid var(--md-sys-color-outline, var(--mud-palette-lines-inputs)); }
+.wb-tree > li::before, .wb-tree > li::after { display: none; }
+.wb-tree li:only-child::before, .wb-tree li:only-child::after { display: none; }
+.wb-tree li:only-child { padding-top: 24px; }
+.wb-tree li:first-child::before, .wb-tree li:last-child::after { border-top: none; }
+.wb-tree li:last-child::before { border-right: 2px solid var(--md-sys-color-outline, var(--mud-palette-lines-inputs)); border-radius: 0 8px 0 0; }
+.wb-tree li:first-child::after { border-radius: 8px 0 0 0; }
+.wb-tree li ul::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 50%;
+    height: 24px;
+    border-left: 2px solid var(--md-sys-color-outline, var(--mud-palette-lines-inputs));
+}
+/* An only child needs just the stem from its manager (drawn by the manager's list). */
+.wb-tree li:only-child > .wb-org-card { margin-top: 0; }
+
+.wb-org-card {
+    width: 190px;
+    padding: .625rem .75rem;
+    text-align: center;
+    border-radius: var(--md-sys-shape-corner-medium, 12px);
+    background: var(--md-sys-color-surface, var(--mud-palette-surface));
+    border: 1px solid var(--md-sys-color-outline-variant, var(--mud-palette-lines-default));
+    box-shadow: 0 1px 2px rgb(0 0 0 / .12);
+}
+
+.wb-org-card a { color: var(--md-sys-color-primary, var(--mud-palette-primary)); font-weight: 600; text-decoration: none; }
+.wb-org-card a:hover, .wb-org-card a:focus-visible { text-decoration: underline; }
+.wb-org-title { font-size: .8125rem; color: var(--md-sys-color-on-surface-variant, var(--mud-palette-text-secondary)); }
+
+.wb-org-toggle {
+    margin-top: .375rem;
+    padding: .125rem .625rem;
+    font: inherit;
+    font-size: .75rem;
+    cursor: pointer;
+    color: var(--md-sys-color-on-secondary-container, inherit);
+    background: var(--md-sys-color-secondary-container, transparent);
+    border: none;
+    border-radius: 999px;
+}
