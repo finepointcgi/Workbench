@@ -28,6 +28,7 @@ internal static class SecurityAdminEndpoints
         invites.MapGet("/", (IInviteService s, CancellationToken ct) => s.ListAsync(ct));
         invites.MapPost("/", (CreateInviteRequest r, IInviteService s, CancellationToken ct) => s.CreateAsync(r, ct));
         invites.MapPost("/{id:guid}/revoke", (Guid id, IInviteService s, CancellationToken ct) => s.RevokeAsync(id, ct));
+        invites.MapPost("/{id:guid}/link", (Guid id, IInviteService s, CancellationToken ct) => s.GetLinkAsync(id, ct));
 
         var reviews = admin.MapGroup("/access-reviews");
         reviews.MapGet("/", (IAccessReviewService s, CancellationToken ct) => s.ListAsync(ct));

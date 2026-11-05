@@ -13,7 +13,7 @@
     <MudAppBar Elevation="0">
         <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start"
                        OnClick="ToggleDrawer" aria-label="Toggle navigation" aria-expanded="@(_drawerOpen ? "true" : "false")" />
-        <span class="wb-brand"><span class="wb-brand-mark" aria-hidden="true">W</span>Workbench</span>
+        <span class="wb-brand"><img class="wb-brand-mark" src="_content/Workbench.Ui/logo/logo.svg" alt="" />Workbench</span>
         <MudSpacer />
         <NewMenu @ref="_new" Access="_access" />
         <Workbench.Ui.Companies.CompanySwitcher />

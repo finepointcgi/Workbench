@@ -105,15 +105,9 @@ html, body {
 }
 
 .wb-brand-mark {
-    display: inline-grid;
-    place-items: center;
-    width: 32px;
-    height: 32px;
-    border-radius: var(--md-sys-shape-corner-small);
-    background: var(--md-sys-color-primary-container);
-    color: var(--md-sys-color-on-primary-container);
-    font-size: 1rem;
-    font-weight: 700;
+    display: block;
+    height: 24px;                     /* logo/logo.svg is wider than tall */
+    width: auto;
 }
 
 /* ---- Navigation drawer: surface container low, 48px items, a full pill indicator on the secondary container ---- */

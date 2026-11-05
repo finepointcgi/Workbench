@@ -1,12 +1,16 @@
+@using Microsoft.JSInterop
 @using Workbench.Contracts
 @using Workbench.Contracts.Security
 @inject IInviteService Invites
 @inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+@inject IJSRuntime Js
 
 <MudText Class="mud-text-secondary mb-3">
-    Invite someone by email. The email has a link to choose a Workbench password, or they can sign in with that email
-    through your organization's single sign-on; either way they get the roles below the first time. Invitations expire
-    after 7 days. People provisioned by SCIM don't need one.
+    Invite someone by email. They get a link to choose their own Workbench password, or they can sign in with that email
+    through your organization's single sign-on; either way they get the roles below the first time. No email set up
+    yet? After you invite them, copy the link and give it to them yourself: they open it, choose a password and are in.
+    Invitations expire after 7 days. People provisioned by SCIM don't need one.
 </MudText>
 
 <MudPaper Outlined="true" Class="pa-3 mb-4">
@@ -30,6 +34,18 @@
         </MudItem>
     </MudGrid>
 </MudPaper>
+
+@if (_link is { } link)
+{
+    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mb-4" data-testid="invite-link-panel">
+        <MudText><b>Link for @link.Name</b>. Give it to them if they didn't get an email. They open it, choose a password and are signed in. It works once and expires @link.ExpiresAtUtc.ToString("MMM d HH:mm") UTC.</MudText>
+        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Class="mt-2">
+            <MudTextField T="string" Value="@link.Url" ReadOnly="true" Variant="Variant.Outlined" Margin="Margin.Dense" Class="flex-grow-1" data-testid="invite-link-url" />
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.ContentCopy" OnClick="CopyLinkAsync" data-testid="invite-link-copy">Copy</MudButton>
+            <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" OnClick="() => _link = null" aria-label="Hide the link" />
+        </MudStack>
+    </MudAlert>
+}
 
 <MudTable T="InviteDto" Items="_invites" Loading="_loading" Dense="true" Hover="true" Breakpoint="Breakpoint.Sm" Filter="Matches" data-testid="invites-table">
     <ToolBarContent>
@@ -67,6 +83,7 @@
         <MudTd>
             @if (context.Status == InviteStatus.Pending)
             {
+                <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => ShowLinkAsync(context)" data-testid="invite-get-link">Get link</MudButton>
                 <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="() => RevokeAsync(context)">Revoke</MudButton>
             }
         </MudTd>
@@ -83,6 +100,7 @@
     private OrgRoles _roles;
     private IReadOnlyCollection<Guid> _custom = [];
     private InviteStatus? _status;
+    private (string Name, string Url, DateTime ExpiresAtUtc)? _link;
 
     protected override async Task OnInitializedAsync()
     {
@@ -110,6 +128,7 @@
             var invite = await Invites.CreateAsync(new CreateInviteRequest(_email!, _name!, _roles, _custom.ToList()));
             _invites = await Invites.ListAsync();
             Snackbar.Add($"Invited {invite.Email}. The invitation expires {invite.ExpiresAtUtc:MMM d HH:mm} UTC.", Severity.Success);
+            await ShowLinkAsync(invite);
             _email = null;
             _name = null;
             _roles = OrgRoles.Employee;
@@ -122,6 +141,38 @@
         finally
         {
             _busy = false;
+        }
+    }
+
+    private async Task ShowLinkAsync(InviteDto invite)
+    {
+        try
+        {
+            var made = await Invites.GetLinkAsync(invite.Id);
+            var url = made.Url.StartsWith('/') ? Navigation.ToAbsoluteUri(made.Url).ToString() : made.Url;
+            _link = (invite.DisplayName, url, made.ExpiresAtUtc);
+        }
+        catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException or HttpRequestException or WorkbenchNotFoundException)
+        {
+            Snackbar.Add(ex.Message, Severity.Warning);
+        }
+    }
+
+    private async Task CopyLinkAsync()
+    {
+        if (_link is not { } link)
+        {
+            return;
+        }
+
+        try
+        {
+            await Js.InvokeVoidAsync("navigator.clipboard.writeText", link.Url);
+            Snackbar.Add("Link copied.", Severity.Success);
+        }
+        catch (JSException)
+        {
+            Snackbar.Add("Couldn't copy automatically. Select the link and copy it.", Severity.Warning);
         }
     }
 

@@ -64,6 +64,20 @@ dotnet Workbench.Web.dll --migrate
 To install it on a server in one command (PostgreSQL, HTTPS and built-in accounts), see [`docs/quick-start.md`](docs/quick-start.md):
 `scripts/install.sh --domain workbench.example.com --admin you@example.com`.
 
+## Self-host in 5 minutes
+
+You need a Linux server (or any machine) with Docker. Point a domain at it and open ports 80 and 443, then:
+
+```bash
+curl -fsSL https://github.com/finepointcgi/workbench/releases/latest/download/install.sh | bash -s -- \
+  --domain workbench.example.com --admin you@example.com
+```
+
+It downloads the release's `docker-compose.yml`, creates the passwords and keys, starts PostgreSQL, Workbench and an HTTPS
+proxy, and prints a link where you choose your password. Use `--domain localhost` to try it on your own machine. To
+upgrade, run `./upgrade.sh` in the install folder. The release page also has the compose file and a zip if you prefer
+to run `docker compose up -d` yourself.
+
 Production runs from the container image (`Dockerfile`; `docker-compose.prod.yml` is a complete single-host example
 with PostgreSQL, the migrate job and a TLS proxy). Deployment, every configuration setting, key encryption, backups,
 monitoring, alerts and incident steps are in `docs/operations/` (start with `docs/operations/README.md`).
