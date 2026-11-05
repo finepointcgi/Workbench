@@ -1,7 +1,7 @@
 /* Generated from Workbench.Ui.Theme.M3Tokens (a test keeps this file equal to it). Material 3 color roles for
    pages that follow the operating system's light/dark setting; the app itself emits the same variables per mode. */
 :root {
-    --md-sys-color-primary: #B33C0B;
+    --md-sys-color-primary: #B53C0A;
     --md-sys-color-on-primary: #FFFFFF;
     --md-sys-color-primary-container: #FFDBCB;
     --md-sys-color-on-primary-container: #380D00;
@@ -74,7 +74,7 @@
         --md-sys-color-outline-variant: #44474E;
         --md-sys-color-inverse-surface: #E2E2E9;
         --md-sys-color-inverse-on-surface: #2E3135;
-        --md-sys-color-inverse-primary: #B33C0B;
+        --md-sys-color-inverse-primary: #B53C0A;
         --md-sys-color-scrim: #000000;
         --md-sys-color-success: #66BB6A;
         --md-sys-color-on-success: #121212;

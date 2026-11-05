@@ -20921,6 +20921,43 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.ToTable("SavedReports", (string)null);
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Resourcing.EmployeeSkill", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Level")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("SkillId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UpdatedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("Years")
+                        .HasPrecision(4, 1)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SkillId");
+
+                    b.HasIndex("EmployeeId", "SkillId")
+                        .IsUnique();
+
+                    b.ToTable("EmployeeSkill");
+                });
+
             modelBuilder.Entity("Workbench.Domain.Resourcing.ResourceAllocation", b =>
                 {
                     b.Property<Guid>("Id")
@@ -20993,6 +21030,29 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.HasIndex("ProjectId", "WeekStart");
 
                     b.ToTable("ResourceAllocation");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Resourcing.Skill", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Category")
+                        .HasMaxLength(80)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("Skill");
                 });
 
             modelBuilder.Entity("Workbench.Domain.Resourcing.StaffingAssignment", b =>
@@ -27663,6 +27723,21 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .WithMany()
                         .HasForeignKey("SavedReportId")
                         .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Resourcing.EmployeeSkill", b =>
+                {
+                    b.HasOne("Workbench.Domain.ProjectAccounting.Employee", null)
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.Resourcing.Skill", null)
+                        .WithMany()
+                        .HasForeignKey("SkillId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 

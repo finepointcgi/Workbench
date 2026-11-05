@@ -19,7 +19,7 @@ rest looks right without page-level styling. Ease of use comes first: the skin n
 
 ## Color
 
-The roles are the Material Theme Builder output for the brand seed **#415F91** (the Workbench blue); the seed is
+The roles are the Material Theme Builder output for the brand seed **#B53C0A** (the Workbench blue); the seed is
 `M3Tokens.Seed`. Light and dark are two sets of the same roles. Use the CSS variables, never a hex value:
 
 | Role | Use |

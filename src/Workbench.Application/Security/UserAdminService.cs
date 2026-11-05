@@ -235,6 +235,28 @@ public sealed class InviteService(
         return ToDto(invite, now, (await RoleStore.RefsAsync(db, RoleStore.ParseIds(invite.CustomRoleIds), cancellationToken)).ToDictionary(r => r.Id));
     }
 
+    public async Task<InviteLinkDto> GetLinkAsync(Guid inviteId, CancellationToken cancellationToken = default)
+    {
+        await access.RequireAsync(Permission.AdminUsers, "administer users", cancellationToken);
+        if (!passwords.Options.Enabled)
+        {
+            throw new ArgumentException("Built-in accounts are turned off, so people sign in through your single sign-on instead of a link.");
+        }
+
+        var now = clock.GetUtcNow().UtcDateTime;
+        await using var db = await dbFactory.CreateAsync(cancellationToken);
+        var invite = await db.Set<UserInvite>().AsNoTracking().FirstOrDefaultAsync(i => i.Id == inviteId, cancellationToken)
+            ?? throw WorkbenchNotFoundException.For("Invite", inviteId);
+        if (ToDto(invite, now, new Dictionary<Guid, RoleRef>()).Status != InviteStatus.Pending)
+        {
+            throw new ArgumentException("Only pending invites have a link. Invite them again to get a new one.", nameof(inviteId));
+        }
+
+        var token = await passwords.IssueInviteTokenAsync(invite, cancellationToken);
+        await securityLog.RecordAsync(SecurityEventTypes.InviteCreated, invite.Email, detail: "Sign-up link issued to the administrator to hand over", cancellationToken: cancellationToken);
+        return new InviteLinkDto(links.Absolute($"/account/accept-invite?token={token}"), invite.ExpiresAtUtc);
+    }
+
     private async Task SendInviteEmailAsync(UserInvite invite, CancellationToken cancellationToken)
     {
         var signIn = string.IsNullOrWhiteSpace(notificationOptions.PublicBaseUrl) && links.FallbackBaseUrl is null
