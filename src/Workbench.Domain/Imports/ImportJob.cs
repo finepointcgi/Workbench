@@ -14,6 +14,7 @@ public enum ImportSource
 
     /// <summary>CSV or Excel exports of Unanet reports and lists.</summary>
     Unanet,
+
     /// <summary>Excel or CSV exports of Capture Exec companies, contacts and opportunities.</summary>
     CaptureExec,
 }
@@ -48,6 +49,7 @@ public enum ImportKind
     FiscalCalendar,
     IndirectRates,
     IndirectPools,
+
     // Business development (Capture Exec): companies → accounts, contacts, opportunities.
     CrmAccounts,
     CrmContacts,
