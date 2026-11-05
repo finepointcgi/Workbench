@@ -1,0 +1,8 @@
+Company Name,Company Type,Parent Company,Abbreviation,UEI,CAGE Code,Web Site,Main Phone,Street,City,State,Zip,Description
+Department of Homeland Security,Customer,,DHS,,,https://www.dhs.gov,,2707 Martin Luther King Jr Ave SE,Washington,DC,20528,Cabinet department
+Cybersecurity and Infrastructure Security Agency,Customer,Department of Homeland Security,CISA,,,https://www.cisa.gov,,,Arlington,VA,22201,
+Department of Veterans Affairs,Customer,,VA,,,https://www.va.gov,,810 Vermont Ave NW,Washington,DC,20420,
+VA Technology Acquisition Center,Office,Department of Veterans Affairs,TAC,,,,,23 Christopher Way,Eatontown,NJ,07724,Buys most VA IT services
+Apex Federal Solutions,Teaming Partner,,,ZQ4XLM1KJ2N7,7ABC1,https://apexfed.example.com,703-555-0110,,Reston,VA,20190,SDVOSB partner with VA past performance
+Ironclad Systems,Competitor,,,MK8RJT2PL9W3,4XYZ9,https://ironclad.example.com,,,Herndon,VA,20171,Incumbent on CISA CDM dashboard work
+Northwind Digital,Prime,,,,,,,,McLean,VA,22102,Large prime; potential sub opportunities

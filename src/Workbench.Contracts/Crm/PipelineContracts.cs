@@ -82,6 +82,37 @@ public sealed record BpSpendDto(
     DateOnly? FirstCharged,
     DateOnly? LastCharged);
 
+public enum UpcomingKind { ProposalDue, RfiDue, RfpRelease, Milestone, Task, AwardExpected }
+
+/// <summary>Something dated coming up on a pursuit the viewer sees: a due date, a schedule milestone or an open task.</summary>
+public sealed record UpcomingItemDto(Guid OpportunityId, string Number, string Name, UpcomingKind Kind, string What, DateOnly DueOn, string? Owner);
+
+public enum AttentionSeverity { Info, Warning, Critical }
+
+/// <summary>A pursuit that needs someone to act: no capture manager, stalled in its stage, a missed date, no Pwin assessment...</summary>
+public sealed record AttentionItemDto(Guid OpportunityId, string Number, string Name, OpportunityStage Stage, string Reason, AttentionSeverity Severity);
+
+/// <summary>One step of the funnel: open pursuits in a stage.</summary>
+public sealed record FunnelStepDto(OpportunityStage Stage, int Count, decimal TotalValue, decimal WeightedValue);
+
+/// <summary>
+/// The business development home: headline figures, the funnel, what's due in the next <see cref="WindowDays"/> days and what
+/// needs attention. Win rate and won value cover decisions in the last 12 months.
+/// </summary>
+public sealed record BdHighlightsDto(
+    int OpenCount,
+    decimal OpenValue,
+    decimal WeightedValue,
+    int DueSoonCount,
+    decimal? WinRate12Months,
+    decimal WonValue12Months,
+    int Won12Months,
+    int Lost12Months,
+    IReadOnlyList<FunnelStepDto> Funnel,
+    IReadOnlyList<UpcomingItemDto> Upcoming,
+    IReadOnlyList<AttentionItemDto> Attention,
+    int WindowDays);
+
 public sealed record CrmSettingsDto(Guid? BpParentWbsElementId, string? BpParentCode, string? BpParentName, bool BpParentFound);
 
 /// <summary>A charge code a B&amp;P element may be (indirect elements), for the settings picker.</summary>
@@ -94,6 +125,9 @@ public interface IPipelineService
     Task<PipelineBoardDto> GetBoardAsync(bool includeOutcomes = false, CancellationToken cancellationToken = default);
 
     Task<ForecastDto> GetForecastAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Headline figures, funnel, what's coming up and what needs attention, over the pursuits the viewer sees.</summary>
+    Task<BdHighlightsDto> GetHighlightsAsync(int windowDays = 30, CancellationToken cancellationToken = default);
 
     Task<WinLossDto> GetWinLossAsync(DateOnly? from = null, DateOnly? to = null, CancellationToken cancellationToken = default);
 

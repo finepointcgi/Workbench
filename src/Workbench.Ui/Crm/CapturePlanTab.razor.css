@@ -1,0 +1,164 @@
+.pwin-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 260px;
+    gap: 24px;
+    padding: 18px 20px;
+    border: 1px solid var(--wb-outline-variant);
+    border-radius: var(--wb-shape-l);
+    background: var(--wb-surface-container-low);
+}
+
+@media (max-width: 860px) {
+    .pwin-card {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+.factor {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 10px 0;
+    border-top: 1px solid var(--wb-outline-variant);
+    flex-wrap: wrap;
+}
+
+.factor-text {
+    flex: 1 1 260px;
+    min-width: 0;
+}
+
+.factor-label {
+    font-weight: 600;
+}
+
+.factor-weight {
+    margin-left: 6px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--mud-palette-text-secondary);
+}
+
+.factor-question {
+    font-size: 0.8125rem;
+    color: var(--mud-palette-text-secondary);
+}
+
+.factor-scale {
+    display: flex;
+    gap: 6px;
+}
+
+.factor-dot {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--wb-shape-full);
+    border: 1px solid var(--wb-outline);
+    background: var(--mud-palette-surface);
+    color: var(--mud-palette-text-primary);
+    font: inherit;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;
+}
+
+.factor-dot:hover:not(:disabled) {
+    background: var(--wb-state-hover);
+    transform: scale(1.06);
+}
+
+.factor-dot.filled {
+    background: color-mix(in srgb, var(--mud-palette-primary) 18%, var(--mud-palette-surface));
+    border-color: color-mix(in srgb, var(--mud-palette-primary) 55%, transparent);
+}
+
+.factor-dot.selected {
+    background: var(--mud-palette-primary);
+    border-color: var(--mud-palette-primary);
+    color: var(--mud-palette-primary-text);
+}
+
+.factor-dot:disabled {
+    cursor: default;
+}
+
+.pwin-result {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+}
+
+.pwin-gauge {
+    --pwin: 0;
+    align-self: center;
+    width: 168px;
+    height: 168px;
+    border-radius: var(--wb-shape-full);
+    background: conic-gradient(var(--mud-palette-primary) calc(var(--pwin) * 1%), var(--wb-surface-container-highest) 0);
+    display: grid;
+    place-items: center;
+    transition: background 200ms ease;
+}
+
+.pwin-gauge-inner {
+    width: 132px;
+    height: 132px;
+    border-radius: var(--wb-shape-full);
+    background: var(--mud-palette-surface);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.pwin-number {
+    font-size: 2.25rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    font-variant-numeric: tabular-nums;
+}
+
+.pwin-caption {
+    font-size: 0.75rem;
+    color: var(--mud-palette-text-secondary);
+}
+
+.pwin-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 0.875rem;
+    text-align: center;
+}
+
+.pwin-history,
+.pwin-when {
+    font-size: 0.8125rem;
+    color: var(--mud-palette-text-secondary);
+}
+
+.plan-grid {
+    display: grid;
+    gap: 12px;
+}
+
+.plan-grid-3 {
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+/* The SWOT is always a 2 × 2 square (one column on a phone). */
+.plan-grid-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 700px) {
+    .plan-grid-2 {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+.plan-grid-1 {
+    grid-template-columns: minmax(0, 1fr);
+}

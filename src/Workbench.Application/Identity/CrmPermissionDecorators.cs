@@ -19,6 +19,7 @@ public static class CrmPermissionRegistration
         services.Decorate<IOpportunityGateService, PermissionCheckingOpportunityGateService>();
         services.Decorate<IOpportunityLeadService, PermissionCheckingOpportunityLeadService>();
         services.Decorate<IPipelineService, PermissionCheckingPipelineService>();
+        services.Decorate<ICapturePlanService, PermissionCheckingCapturePlanService>();
         return services;
     }
 }
@@ -347,6 +348,12 @@ public sealed class PermissionCheckingPipelineService(IPipelineService inner, Cr
         return await inner.GetForecastAsync(cancellationToken);
     }
 
+    public async Task<BdHighlightsDto> GetHighlightsAsync(int windowDays = 30, CancellationToken cancellationToken = default)
+    {
+        await access.RequirePipelineAsync("see the pipeline", cancellationToken, orManager: true);
+        return await inner.GetHighlightsAsync(windowDays, cancellationToken);
+    }
+
     public async Task<WinLossDto> GetWinLossAsync(DateOnly? from = null, DateOnly? to = null, CancellationToken cancellationToken = default)
     {
         await access.RequirePipelineAsync("see win/loss analysis", cancellationToken);
@@ -383,5 +390,83 @@ public sealed class PermissionCheckingPipelineService(IPipelineService inner, Cr
     {
         await access.RequireAsync(Permission.BpChargeCode, "choose the B&P charge code", cancellationToken);
         return await inner.ListBpParentOptionsAsync(cancellationToken);
+    }
+}
+
+/// <summary>Capture plans follow their opportunity: whoever may see it reads the plan, whoever may edit it changes the plan.</summary>
+public sealed class PermissionCheckingCapturePlanService(ICapturePlanService inner, CrmAccess access, IWorkbenchDbContextFactory dbFactory) : ICapturePlanService
+{
+    public async Task<CapturePlanDto> GetAsync(Guid opportunityId, CancellationToken cancellationToken = default)
+    {
+        await access.RequireReadAsync(opportunityId, cancellationToken);
+        return await inner.GetAsync(opportunityId, cancellationToken);
+    }
+
+    public async Task<PlanItemDto> AddItemAsync(Guid opportunityId, SavePlanItemRequest request, CancellationToken cancellationToken = default)
+    {
+        await access.RequireEditAsync(opportunityId, cancellationToken);
+        return await inner.AddItemAsync(opportunityId, request, cancellationToken);
+    }
+
+    public async Task<PlanItemDto> UpdateItemAsync(Guid itemId, SavePlanItemRequest request, CancellationToken cancellationToken = default)
+    {
+        await access.RequireEditAsync(await OfItemAsync(itemId, cancellationToken), cancellationToken);
+        return await inner.UpdateItemAsync(itemId, request, cancellationToken);
+    }
+
+    public async Task DeleteItemAsync(Guid itemId, CancellationToken cancellationToken = default)
+    {
+        await access.RequireEditAsync(await OfItemAsync(itemId, cancellationToken), cancellationToken);
+        await inner.DeleteItemAsync(itemId, cancellationToken);
+    }
+
+    public async Task<MilestoneDto> AddMilestoneAsync(Guid opportunityId, SaveMilestoneRequest request, CancellationToken cancellationToken = default)
+    {
+        await access.RequireEditAsync(opportunityId, cancellationToken);
+        return await inner.AddMilestoneAsync(opportunityId, request, cancellationToken);
+    }
+
+    public async Task<MilestoneDto> UpdateMilestoneAsync(Guid milestoneId, SaveMilestoneRequest request, CancellationToken cancellationToken = default)
+    {
+        await access.RequireEditAsync(await OfMilestoneAsync(milestoneId, cancellationToken), cancellationToken);
+        return await inner.UpdateMilestoneAsync(milestoneId, request, cancellationToken);
+    }
+
+    public async Task<MilestoneDto> SetMilestoneDoneAsync(Guid milestoneId, bool done, CancellationToken cancellationToken = default)
+    {
+        await access.RequireEditAsync(await OfMilestoneAsync(milestoneId, cancellationToken), cancellationToken);
+        return await inner.SetMilestoneDoneAsync(milestoneId, done, cancellationToken);
+    }
+
+    public async Task DeleteMilestoneAsync(Guid milestoneId, CancellationToken cancellationToken = default)
+    {
+        await access.RequireEditAsync(await OfMilestoneAsync(milestoneId, cancellationToken), cancellationToken);
+        await inner.DeleteMilestoneAsync(milestoneId, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<MilestoneDto>> AddStandardScheduleAsync(Guid opportunityId, CancellationToken cancellationToken = default)
+    {
+        await access.RequireEditAsync(opportunityId, cancellationToken);
+        return await inner.AddStandardScheduleAsync(opportunityId, cancellationToken);
+    }
+
+    public async Task<PwinAssessmentDto> SaveAssessmentAsync(Guid opportunityId, SavePwinAssessmentRequest request, CancellationToken cancellationToken = default)
+    {
+        await access.RequireEditAsync(opportunityId, cancellationToken);
+        return await inner.SaveAssessmentAsync(opportunityId, request, cancellationToken);
+    }
+
+    private async Task<Guid> OfItemAsync(Guid itemId, CancellationToken ct)
+    {
+        await using var db = await dbFactory.CreateAsync(ct);
+        return await db.Set<Domain.Crm.OpportunityPlanItem>().AsNoTracking().Where(i => i.Id == itemId).Select(i => (Guid?)i.OpportunityId).FirstOrDefaultAsync(ct)
+            ?? throw WorkbenchNotFoundException.For("Capture plan entry", itemId);
+    }
+
+    private async Task<Guid> OfMilestoneAsync(Guid milestoneId, CancellationToken ct)
+    {
+        await using var db = await dbFactory.CreateAsync(ct);
+        return await db.Set<Domain.Crm.OpportunityMilestone>().AsNoTracking().Where(m => m.Id == milestoneId).Select(m => (Guid?)m.OpportunityId).FirstOrDefaultAsync(ct)
+            ?? throw WorkbenchNotFoundException.For("Milestone", milestoneId);
     }
 }

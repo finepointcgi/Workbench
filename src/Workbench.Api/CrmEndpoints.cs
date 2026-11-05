@@ -13,6 +13,9 @@ internal static class CrmEndpoints
     /// <summary>Request body for linking an account to a customer.</summary>
     public sealed record LinkCustomerBody(Guid? CustomerId);
 
+    /// <summary>Request body for marking a milestone done or not.</summary>
+    public sealed record DoneBody(bool Done);
+
     /// <summary>Request body for choosing the B&amp;P parent element.</summary>
     public sealed record BpParentBody(Guid? WbsElementId);
 
@@ -32,6 +35,27 @@ internal static class CrmEndpoints
         o.MapPost("/{id:guid}/bp-charge-code", (Guid id, IOpportunityService s, CancellationToken ct) => s.EnsureBpChargeCodeAsync(id, ct));
         o.MapGet("/{id:guid}/gate-reviews", (Guid id, IOpportunityGateService s, CancellationToken ct) => s.ListReviewsAsync(id, ct));
         o.MapPost("/{id:guid}/gate-reviews", (Guid id, SubmitGateReviewRequest r, IOpportunityGateService s, CancellationToken ct) => s.SubmitAsync(id, r, ct));
+
+        o.MapGet("/{id:guid}/capture-plan", (Guid id, ICapturePlanService s, CancellationToken ct) => s.GetAsync(id, ct));
+        o.MapPost("/{id:guid}/capture-plan/items", (Guid id, SavePlanItemRequest r, ICapturePlanService s, CancellationToken ct) => s.AddItemAsync(id, r, ct));
+        o.MapPost("/{id:guid}/milestones", (Guid id, SaveMilestoneRequest r, ICapturePlanService s, CancellationToken ct) => s.AddMilestoneAsync(id, r, ct));
+        o.MapPost("/{id:guid}/milestones/standard", (Guid id, ICapturePlanService s, CancellationToken ct) => s.AddStandardScheduleAsync(id, ct));
+        o.MapPut("/{id:guid}/pwin-assessment", (Guid id, SavePwinAssessmentRequest r, ICapturePlanService s, CancellationToken ct) => s.SaveAssessmentAsync(id, r, ct));
+        var pi = v1.MapGroup("/crm/capture-plan-items").WithTags("Business development");
+        pi.MapPut("/{id:guid}", (Guid id, SavePlanItemRequest r, ICapturePlanService s, CancellationToken ct) => s.UpdateItemAsync(id, r, ct));
+        pi.MapDelete("/{id:guid}", async (Guid id, ICapturePlanService s, CancellationToken ct) =>
+        {
+            await s.DeleteItemAsync(id, ct);
+            return Results.NoContent();
+        });
+        var ms = v1.MapGroup("/crm/milestones").WithTags("Business development");
+        ms.MapPut("/{id:guid}", (Guid id, SaveMilestoneRequest r, ICapturePlanService s, CancellationToken ct) => s.UpdateMilestoneAsync(id, r, ct));
+        ms.MapPost("/{id:guid}/done", (Guid id, DoneBody r, ICapturePlanService s, CancellationToken ct) => s.SetMilestoneDoneAsync(id, r.Done, ct));
+        ms.MapDelete("/{id:guid}", async (Guid id, ICapturePlanService s, CancellationToken ct) =>
+        {
+            await s.DeleteMilestoneAsync(id, ct);
+            return Results.NoContent();
+        });
 
         var g = v1.MapGroup("/crm/gates").WithTags("Business development");
         g.MapGet("", (bool? includeInactive, IOpportunityGateService s, CancellationToken ct) => s.ListGatesAsync(includeInactive ?? false, ct));
@@ -77,6 +101,7 @@ internal static class CrmEndpoints
         var p = v1.MapGroup("/crm/pipeline").WithTags("Business development");
         p.MapGet("/board", (bool? includeOutcomes, IPipelineService s, CancellationToken ct) => s.GetBoardAsync(includeOutcomes ?? false, ct));
         p.MapGet("/forecast", (IPipelineService s, CancellationToken ct) => s.GetForecastAsync(ct));
+        p.MapGet("/highlights", (int? windowDays, IPipelineService s, CancellationToken ct) => s.GetHighlightsAsync(windowDays ?? 30, ct));
         p.MapGet("/win-loss", (DateOnly? from, DateOnly? to, IPipelineService s, CancellationToken ct) => s.GetWinLossAsync(from, to, ct));
         p.MapGet("/bp-spend", (Guid? opportunityId, IPipelineService s, CancellationToken ct) => s.GetBpSpendAsync(opportunityId, ct));
         p.MapGet("/settings", (IPipelineService s, CancellationToken ct) => s.GetSettingsAsync(ct));

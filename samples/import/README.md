@@ -392,3 +392,25 @@ Sample: [`opening-trial-balance.csv`](costpoint/opening-trial-balance.csv)
 | Credit |  | `Credit`, `CR_AMT`, `Credit Amount`, `Credits`, `Ending Credit` | Credit balance (positive). |
 | As-of date |  | `Date`, `As-of date`, `FY_END_DT`, `As Of Date`, `Period End` | Used when no as-of date is chosen; every row must have the same date. |
 | Memo |  | `Memo`, `DESCRIPTION`, `ACCT_NAME`, `Account Name` | Line memo. |
+
+## Capture Exec
+
+Capture Exec has no documented public API, so its data comes across as exports: open a list view (Companies,
+Contacts, Opportunities), choose the columns you want, and export to Excel. Column names follow each customer's
+Capture Exec setup, so every field accepts the common spellings and the mapping screen covers the rest. Import in this
+order: [`companies.csv`](captureexec/companies.csv), [`contacts.csv`](captureexec/contacts.csv),
+[`opportunities.csv`](captureexec/opportunities.csv). Shortcuts to each are on **Business development → Gates and
+settings**.
+
+- **Companies → accounts.** Matched on UEI, then name or acronym. "Customer"/"Government" read as an agency,
+  "Office" as a government office, "Teaming Partner"/"Subcontractor" as a partner. A parent company (department over
+  agency, agency over office) can come earlier or later in the file. Blank cells keep what Workbench has.
+- **Contacts.** Matched on email, then company and name. The company must already be an account. Roles such as
+  "Contracting Officer", "COR" or "Program Manager" are read from the role column.
+- **Opportunities.** Matched on the Capture Exec ID, then the solicitation number, so re-importing the same export
+  updates what changed and skips the rest. Stages and statuses map to Workbench's (Lead/Prospect → Identified,
+  Pursue → Qualified, Pre-RFP → Capture, Proposal Development → Proposal, Awaiting Award → Submitted, Awarded → Won,
+  Closed Lost → Lost, No-Go/Dropped → No-bid). Pwin and Pgo may be 40, 40% or 0.4; a period of performance may say
+  "5 years". Managers are matched to Workbench users by email or name. Imported stages are history: they skip the
+  go/no-go gates, create no B&P charge code and send no notifications. Business development or administrators only
+  (Finance can import companies and contacts).

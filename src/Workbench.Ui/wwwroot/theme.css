@@ -310,3 +310,89 @@ html body .mud-typography a:not(.mud-button-root):not(.mud-chip):hover {
     padding: 0 0 8px;
     font-size: 0.8125rem;
 }
+
+/* ---- Business development: one accent per capture stage ----
+   Used for bars, dots and borders only (never as text color), so contrast comes from the text on the surface. */
+.wb-stage-identified { --wb-stage: #64748B; }
+.wb-stage-qualified { --wb-stage: #2563EB; }
+.wb-stage-capture { --wb-stage: #7C3AED; }
+.wb-stage-proposal { --wb-stage: var(--mud-palette-primary); }
+.wb-stage-submitted { --wb-stage: #0D9488; }
+.wb-stage-won { --wb-stage: var(--mud-palette-success); }
+.wb-stage-lost { --wb-stage: var(--mud-palette-error); }
+.wb-stage-nobid { --wb-stage: #9CA3AF; }
+
+.wb-stage-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: var(--wb-shape-full);
+    background: var(--wb-stage, var(--mud-palette-lines-default));
+    flex: 0 0 auto;
+}
+
+.wb-stage-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 10px;
+    border-radius: var(--wb-shape-full);
+    background: color-mix(in srgb, var(--wb-stage) 14%, var(--mud-palette-surface));
+    border: 1px solid color-mix(in srgb, var(--wb-stage) 45%, transparent);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+/* A thin meter: Pwin, scores. --wb-meter is the filled share (0–100%). */
+.wb-meter {
+    height: 6px;
+    border-radius: var(--wb-shape-full);
+    background: var(--wb-surface-container-highest);
+    overflow: hidden;
+}
+
+.wb-meter > span {
+    display: block;
+    height: 100%;
+    width: var(--wb-meter, 0%);
+    border-radius: inherit;
+    background: var(--wb-meter-color, var(--mud-palette-primary));
+    transition: width 200ms ease;
+}
+
+/* Figure cards on BD pages. */
+.wb-kpi {
+    border-radius: var(--wb-shape-m);
+    background: var(--wb-surface-container-low);
+    border: 1px solid var(--wb-outline-variant);
+    padding: 14px 16px;
+    min-width: 0;
+}
+
+.wb-kpi-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8125rem;
+    color: var(--mud-palette-text-secondary);
+}
+
+.wb-kpi-value {
+    font-size: 1.625rem;
+    line-height: 2.125rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
+}
+
+.wb-kpi-note {
+    font-size: 0.75rem;
+    color: var(--mud-palette-text-secondary);
+}
+
+.wb-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 12px;
+}

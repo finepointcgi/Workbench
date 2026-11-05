@@ -1,0 +1,115 @@
+@* An opportunity at a glance: name and stage, where it is on the capture path, and the figures people ask about first. *@
+
+<div class="opp-header @CrmFormat.StageClass(Opportunity.Stage)">
+    <div class="opp-title-row">
+        <MudIconButton Href="bd" Icon="@Icons.Material.Filled.ArrowBack" aria-label="Back to the pipeline" Class="opp-back" />
+        <div class="opp-title">
+            <div class="opp-eyebrow">
+                <span>@Opportunity.Number</span>
+                @if (Opportunity.SolicitationNumber is { } sol)
+                {
+                    <span>· @sol</span>
+                }
+                @if (Opportunity.Kind == OpportunityKind.Recompete)
+                {
+                    <span>· Recompete</span>
+                }
+                @if (Opportunity.Source == OpportunitySource.CaptureExec)
+                {
+                    <span>· From Capture Exec</span>
+                }
+                @if (Opportunity.SourceUrl is { } url)
+                {
+                    <span>· <a href="@url" target="_blank" rel="noopener noreferrer">Notice<span class="wb-sr-only"> (opens in a new tab)</span></a></span>
+                }
+            </div>
+            <MudText Typo="Typo.h4" HtmlTag="h1" Class="opp-name">@Opportunity.Name</MudText>
+            <div class="opp-agency">@(Opportunity.AgencyName ?? "No agency yet")</div>
+        </div>
+        <span class="wb-stage-pill opp-stage" data-testid="opp-stage"><span class="wb-stage-dot" aria-hidden="true"></span>@CrmFormat.Stage(Opportunity.Stage)</span>
+    </div>
+
+    <ol class="stepper" aria-label="Capture stages">
+        @foreach (var stage in OpportunityStages.Open)
+        {
+            var state = Opportunity.Stage == stage ? "current" : StageIndex(Opportunity.Stage) > StageIndex(stage) ? "done" : "todo";
+            <li class="step step-@state @CrmFormat.StageClass(stage)" aria-current="@(state == "current" ? "step" : null)">
+                <span class="step-mark" aria-hidden="true">
+                    @if (state == "done")
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" />
+                    }
+                </span>
+                <span class="step-label">@CrmFormat.Stage(stage)<span class="wb-sr-only">@(state == "done" ? " (done)" : state == "current" ? " (current)" : "")</span></span>
+            </li>
+        }
+        @{
+            var outcome = Opportunity.Stage.IsOpen() ? null : (OpportunityStage?)Opportunity.Stage;
+        }
+        <li class="step @(outcome is null ? "step-todo" : "step-current") @(outcome is { } s ? CrmFormat.StageClass(s) : "wb-stage-won")">
+            <span class="step-mark" aria-hidden="true">
+                @if (outcome is { } o)
+                {
+                    <MudIcon Icon="@CrmFormat.StageIcon(o)" Size="Size.Small" />
+                }
+            </span>
+            <span class="step-label">@(outcome is { } done ? CrmFormat.Stage(done) : "Award")</span>
+        </li>
+    </ol>
+
+    <div class="opp-figures">
+        <div class="opp-figure">
+            <span class="opp-figure-label">Estimated value</span>
+            <span class="opp-figure-value">@CrmFormat.Compact(Opportunity.EstimatedValue)</span>
+            <span class="opp-figure-note">@(Opportunity.PeriodOfPerformanceMonths is { } m ? $"over {m} months" : "total, options included")</span>
+        </div>
+        <div class="opp-figure">
+            <span class="opp-figure-label">Weighted</span>
+            <span class="opp-figure-value">@CrmFormat.Compact(Opportunity.WeightedValue)</span>
+            <span class="opp-figure-note">value × Pwin × Pgo</span>
+        </div>
+        <div class="opp-figure">
+            <span class="opp-figure-label">Pwin · Pgo</span>
+            <span class="opp-figure-value">@Opportunity.Pwin% <span class="opp-figure-dim">· @Opportunity.Pgo%</span></span>
+            <div class="wb-meter" style="--wb-meter: @(Opportunity.Pwin)%; --wb-meter-color: var(--wb-stage)" aria-hidden="true"><span></span></div>
+        </div>
+        <div class="opp-figure">
+            <span class="opp-figure-label">Proposal due</span>
+            @if (Opportunity.ProposalDueOn is { } due)
+            {
+                var late = due < Today && Opportunity.Stage < OpportunityStage.Submitted;
+                <span class="opp-figure-value">@due.ToString("MMM d")</span>
+                <span class="opp-figure-note @(late ? "late" : "")">@(Opportunity.Stage.IsOpen() && Opportunity.Stage < OpportunityStage.Submitted ? CrmFormat.DueIn(due, Today) : due.ToString("yyyy"))</span>
+            }
+            else
+            {
+                <span class="opp-figure-value opp-figure-dim">—</span>
+                <span class="opp-figure-note">@(Opportunity.RfpReleaseOn is { } rfp ? $"RFP expected {rfp:MMM d}" : "Not set")</span>
+            }
+        </div>
+        <div class="opp-figure">
+            <span class="opp-figure-label">Award expected</span>
+            <span class="opp-figure-value">@(Opportunity.EstimatedAwardDate is { } award ? award.ToString("MMM yyyy") : "—")</span>
+            <span class="opp-figure-note">@(Opportunity.ContractVehicle ?? "No vehicle")</span>
+        </div>
+        <div class="opp-figure opp-people">
+            <span class="opp-figure-label">Team</span>
+            <div class="opp-person">
+                <MudAvatar Size="Size.Small" Class="opp-avatar">@CrmFormat.Initials(Opportunity.CaptureManagerName)</MudAvatar>
+                <span><span class="opp-figure-note">Capture</span> @(Opportunity.CaptureManagerName ?? "None")</span>
+            </div>
+            <div class="opp-person">
+                <MudAvatar Size="Size.Small" Class="opp-avatar">@CrmFormat.Initials(Opportunity.ProposalManagerName)</MudAvatar>
+                <span><span class="opp-figure-note">Proposal</span> @(Opportunity.ProposalManagerName ?? "None")</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public OpportunityDto Opportunity { get; set; } = default!;
+
+    [Parameter] public DateOnly Today { get; set; } = DateOnly.FromDateTime(DateTime.Today);
+
+    private static int StageIndex(OpportunityStage stage) => stage.IsOpen() ? (int)stage : OpportunityStages.Open.Count;
+}

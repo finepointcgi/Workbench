@@ -5,10 +5,10 @@ namespace Workbench.Contracts.Imports;
 
 // Enums mirror Workbench.Domain.Imports by name and value.
 
-public enum ImportSource { Costpoint, SmartsheetApi, SmartsheetExcel }
+public enum ImportSource { Costpoint, SmartsheetApi, SmartsheetExcel, CaptureExec }
 
 public enum ImportKind { OrgUnits, LaborCategories, Employees, CostRates, Customers, Contracts, Clins, Projects, BillRates, Budgets, Sheets, FixedAssets,
-    Accounts, Vendors, OpeningBalances, OpenArInvoices, OpenApBills }
+    Accounts, Vendors, OpeningBalances, OpenArInvoices, OpenApBills, CrmAccounts, CrmContacts, Opportunities }
 
 public enum ImportJobStatus { Uploaded, Mapped, Validated, DryRunDone, Imported, Failed, RolledBack }
 

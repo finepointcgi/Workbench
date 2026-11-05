@@ -1,0 +1,36 @@
+.funnel-bar {
+    display: flex;
+    gap: 3px;
+    height: 12px;
+    border-radius: var(--wb-shape-full);
+    overflow: hidden;
+}
+
+.funnel-seg {
+    display: block;
+    background: var(--wb-stage);
+    min-width: 6px;
+}
+
+.funnel-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 20px;
+    margin-top: 8px;
+}
+
+.funnel-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.8125rem;
+}
+
+.funnel-name {
+    font-weight: 500;
+}
+
+.funnel-figure {
+    color: var(--mud-palette-text-secondary);
+    font-variant-numeric: tabular-nums;
+}

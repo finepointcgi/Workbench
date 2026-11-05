@@ -1,0 +1,185 @@
+.opp-header {
+    margin-bottom: 16px;
+}
+
+.opp-title-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.opp-title {
+    flex: 1 1 320px;
+    min-width: 0;
+}
+
+.opp-eyebrow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--mud-palette-text-secondary);
+}
+
+::deep .opp-name {
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+}
+
+.opp-agency {
+    color: var(--mud-palette-text-secondary);
+    margin-top: 2px;
+}
+
+.opp-stage {
+    margin-top: 6px;
+}
+
+/* ---- Stage stepper ---- */
+.stepper {
+    display: flex;
+    list-style: none;
+    margin: 16px 0 0;
+    padding: 0;
+    overflow-x: auto;
+}
+
+.step {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1 1 0;
+    min-width: 108px;
+    position: relative;
+    padding: 0 8px 0 0;
+    font-size: 0.8125rem;
+}
+
+/* The connector to the next step. */
+.step:not(:last-child)::after {
+    content: "";
+    flex: 1 1 auto;
+    height: 2px;
+    min-width: 12px;
+    border-radius: 2px;
+    background: var(--wb-outline-variant);
+}
+
+.step-done:not(:last-child)::after {
+    background: var(--wb-stage);
+}
+
+.step-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    flex: 0 0 auto;
+    border-radius: var(--wb-shape-full);
+    border: 2px solid var(--wb-outline-variant);
+    background: var(--mud-palette-surface);
+}
+
+.step-done .step-mark {
+    background: var(--wb-stage);
+    border-color: var(--wb-stage);
+    color: #fff;
+}
+
+.step-current .step-mark {
+    border-color: var(--wb-stage);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--wb-stage) 22%, transparent);
+    background: color-mix(in srgb, var(--wb-stage) 22%, var(--mud-palette-surface));
+}
+
+.step-label {
+    white-space: nowrap;
+    color: var(--mud-palette-text-secondary);
+}
+
+.step-current .step-label {
+    color: var(--mud-palette-text-primary);
+    font-weight: 600;
+}
+
+.step-done .step-label {
+    color: var(--mud-palette-text-primary);
+}
+
+::deep .step-mark .mud-icon-root {
+    font-size: 1rem;
+}
+
+/* ---- Figures ---- */
+.opp-figures {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1px;
+    margin-top: 16px;
+    border: 1px solid var(--wb-outline-variant);
+    border-radius: var(--wb-shape-m);
+    overflow: hidden;
+    background: var(--wb-outline-variant);
+}
+
+.opp-figure {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 12px 14px;
+    background: var(--wb-surface-container-low);
+    min-width: 0;
+}
+
+.opp-figure-label {
+    font-size: 0.75rem;
+    color: var(--mud-palette-text-secondary);
+}
+
+.opp-figure-value {
+    font-size: 1.25rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.opp-figure-dim {
+    color: var(--mud-palette-text-secondary);
+    font-weight: 400;
+}
+
+.opp-figure-note {
+    font-size: 0.75rem;
+    color: var(--mud-palette-text-secondary);
+}
+
+.opp-figure-note.late {
+    color: var(--mud-palette-error);
+    font-weight: 600;
+}
+
+.opp-figure .wb-meter {
+    margin-top: 6px;
+}
+
+.opp-people {
+    gap: 6px;
+}
+
+.opp-person {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.875rem;
+    min-width: 0;
+}
+
+::deep .opp-avatar {
+    width: 24px;
+    height: 24px;
+    font-size: 0.625rem;
+    background: var(--wb-secondary-container);
+    color: var(--wb-on-secondary-container);
+}

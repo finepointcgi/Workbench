@@ -1,6 +1,7 @@
 @page "/bd"
-@* The capture pipeline as a board: one lane per stage. Drag a card or use its "Move to" menu (the keyboard way); moving
-   into a gated stage opens the opportunity's gates instead. *@
+@* The business development home: headline figures and the stage funnel, then the pipeline as a board (one lane per stage),
+   what's coming up, or what needs attention. Drag a card or use its "Move to" menu (the keyboard way); moving into a gated
+   stage opens the opportunity's gates instead. *@
 @inject IPipelineService Pipeline
 @inject IOpportunityService Opportunities
 @inject ICurrentUserContext CurrentUser
@@ -10,9 +11,11 @@
 <PageTitle>Pipeline · Workbench</PageTitle>
 
 <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3" Wrap="Wrap.Wrap">
-    <MudText Typo="Typo.h4" HtmlTag="h1">Pipeline</MudText>
+    <div>
+        <MudText Typo="Typo.h4" HtmlTag="h1">Pipeline</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">Every pursuit from first sighting to award.</MudText>
+    </div>
     <MudSpacer />
-    <MudSwitch T="bool" Value="_outcomes" ValueChanged="SetOutcomesAsync" Color="Color.Primary" Label="Show won, lost and no-bid" data-testid="show-outcomes" />
     @if (_canCreate)
     {
         <MudButton Href="bd/opportunities/new" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" data-testid="new-opportunity">New opportunity</MudButton>
@@ -31,97 +34,141 @@ else if (_board is null)
 else
 {
     var open = _board.Lanes.Where(l => l.Stage.IsOpen()).ToList();
-    <MudText Class="mud-text-secondary mb-3" data-testid="pipeline-totals">
-        @open.Sum(l => l.Cards.Count) open opportunities · @CrmFormat.Money(open.Sum(l => l.TotalValue)) total ·
-        @CrmFormat.Money(open.Sum(l => l.WeightedValue)) weighted (value × Pwin × Pgo)
-    </MudText>
-    <div class="pipeline-board">
-        <MudDropContainer @ref="_container" T="PipelineCardDto" Items="_cards" ItemsSelector="@((card, lane) => LaneId(card.Stage) == lane)"
-                          ItemDropped="DroppedAsync" CanDrop="@((card, lane) => card.CanEdit && LaneStage(lane) is { } s && s.IsOpen())" Class="board-lanes">
-            <ChildContent>
-                @foreach (var lane in _board.Lanes)
-                {
-                    <MudPaper Class="board-lane pa-2" Elevation="0" data-lane="@lane.Stage">
-                        <div class="px-1 pb-2">
-                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
-                                <MudIcon Icon="@CrmFormat.StageIcon(lane.Stage)" Size="Size.Small" Color="@CrmFormat.StageColor(lane.Stage)" />
-                                <MudText Typo="Typo.subtitle2" HtmlTag="h2">@CrmFormat.Stage(lane.Stage)</MudText>
-                                <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Class="ma-0">@lane.Cards.Count</MudChip>
-                            </MudStack>
-                            <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">
-                                @CrmFormat.Compact(lane.TotalValue) · @CrmFormat.Compact(lane.WeightedValue) weighted
-                            </MudText>
-                            @if (lane.GateName is { } gate)
+    @if (_highlights is { } h)
+    {
+        <BdKpis Highlights="h" />
+    }
+
+    <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-3" Wrap="Wrap.Wrap" Spacing="2">
+        <MudToggleGroup T="string" Value="_view" ValueChanged="ViewChanged" Color="Color.Primary" Size="Size.Small" Outlined="true" CheckMark="false" aria-label="View" data-testid="bd-view">
+            <MudToggleItem Value="@("board")"><MudIcon Icon="@Icons.Material.Filled.ViewKanban" Size="Size.Small" Class="mr-1" />Board</MudToggleItem>
+            <MudToggleItem Value="@("upcoming")"><MudIcon Icon="@Icons.Material.Outlined.Event" Size="Size.Small" Class="mr-1" />Coming up@(_highlights is { } u ? $" ({u.Upcoming.Count})" : "")</MudToggleItem>
+            <MudToggleItem Value="@("attention")"><MudIcon Icon="@Icons.Material.Outlined.ReportProblem" Size="Size.Small" Class="mr-1" />Needs attention@(_highlights is { } a ? $" ({a.Attention.Count})" : "")</MudToggleItem>
+        </MudToggleGroup>
+        <MudSpacer />
+        @if (_view == "board")
+        {
+            <MudSwitch T="bool" Value="_outcomes" ValueChanged="SetOutcomesAsync" Color="Color.Primary" Label="Show won, lost and no-bid" data-testid="show-outcomes" />
+        }
+    </MudStack>
+
+    @if (_view == "board")
+    {
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2" data-testid="pipeline-totals">
+            @open.Sum(l => l.Cards.Count) open opportunities · @CrmFormat.Money(open.Sum(l => l.TotalValue)) total ·
+            @CrmFormat.Money(open.Sum(l => l.WeightedValue)) weighted (value × Pwin × Pgo)
+        </MudText>
+        <div class="pipeline-board">
+            <MudDropContainer @ref="_container" T="PipelineCardDto" Items="_cards" ItemsSelector="@((card, lane) => LaneId(card.Stage) == lane)"
+                              ItemDropped="DroppedAsync" CanDrop="@((card, lane) => card.CanEdit && LaneStage(lane) is { } s && s.IsOpen())" Class="board-lanes">
+                <ChildContent>
+                    @foreach (var lane in _board.Lanes)
+                    {
+                        <section class="board-lane @CrmFormat.StageClass(lane.Stage)" data-lane="@lane.Stage" aria-label="@CrmFormat.Stage(lane.Stage)">
+                            <header class="lane-head">
+                                <div class="lane-title">
+                                    <span class="wb-stage-dot" aria-hidden="true"></span>
+                                    <MudText Typo="Typo.subtitle2" HtmlTag="h2">@CrmFormat.Stage(lane.Stage)</MudText>
+                                    <span class="lane-count">@lane.Cards.Count</span>
+                                </div>
+                                <div class="lane-figures">
+                                    <span>@CrmFormat.Compact(lane.TotalValue)</span>
+                                    <span class="lane-weighted">@CrmFormat.Compact(lane.WeightedValue) weighted</span>
+                                </div>
+                                @if (lane.GateName is { } gate)
+                                {
+                                    <div class="lane-gate"><MudIcon Icon="@Icons.Material.Outlined.Rule" Size="Size.Small" />Gate: @gate</div>
+                                }
+                            </header>
+                            <MudDropZone T="PipelineCardDto" Identifier="@LaneId(lane.Stage)" Class="board-lane-zone" AllowReorder="false" />
+                        </section>
+                    }
+                </ChildContent>
+                <ItemRenderer>
+                    <article class="board-card @CrmFormat.StageClass(context.Stage)" data-testid="pipeline-card">
+                        <div class="card-top">
+                            <span class="card-number">@context.Number</span>
+                            @if (context.Kind == OpportunityKind.Recompete)
                             {
-                                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block"><span aria-hidden="true">⛩ </span>Gate: @gate</MudText>
+                                <span class="card-tag">Recompete</span>
+                            }
+                            @if (context.HasPendingGate)
+                            {
+                                <span class="card-tag card-tag-warn"><MudIcon Icon="@Icons.Material.Filled.HourglassTop" Size="Size.Small" />Gate pending</span>
+                            }
+                            <MudSpacer />
+                            @if (context.CanEdit)
+                            {
+                                <MudMenu Icon="@Icons.Material.Filled.MoreHoriz" Size="Size.Small" Dense="true" Class="card-menu" AriaLabel="@($"Move {context.Number} {context.Name} to another stage")">
+                                    @foreach (var stage in OpportunityStages.Open.Where(s => s != context.Stage))
+                                    {
+                                        <MudMenuItem OnClick="() => MoveAsync(context, stage)">Move to @CrmFormat.Stage(stage)</MudMenuItem>
+                                    }
+                                </MudMenu>
                             }
                         </div>
-                        <MudDropZone T="PipelineCardDto" Identifier="@LaneId(lane.Stage)" Class="board-lane-zone" AllowReorder="false" />
-                    </MudPaper>
-                }
-            </ChildContent>
-            <ItemRenderer>
-                <MudPaper Class="board-card pa-3 mb-2" Elevation="1" data-testid="pipeline-card">
-                    <MudStack Row="true" AlignItems="AlignItems.Start" Spacing="1">
-                        <a href="@($"bd/opportunities/{context.Id}")" class="board-card-title mud-typography mud-typography-body2">
-                            <span class="mud-text-secondary">@context.Number</span> @context.Name
-                        </a>
-                        <MudSpacer />
-                        @if (context.CanEdit)
+                        <a href="@($"bd/opportunities/{context.Id}")" class="card-title">@context.Name</a>
+                        @if (context.AgencyName is { } agency)
                         {
-                            <MudMenu Icon="@Icons.Material.Filled.DriveFileMove" Size="Size.Small" Dense="true" AriaLabel="@($"Move {context.Number} {context.Name} to another stage")">
-                                @foreach (var stage in OpportunityStages.Open.Where(s => s != context.Stage))
-                                {
-                                    <MudMenuItem OnClick="() => MoveAsync(context, stage)">Move to @CrmFormat.Stage(stage)</MudMenuItem>
-                                }
-                            </MudMenu>
+                            <div class="card-agency">@agency</div>
                         }
-                    </MudStack>
-                    @if (context.AgencyName is { } agency)
-                    {
-                        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@agency</MudText>
-                    }
-                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="mt-2" Wrap="Wrap.Wrap">
-                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Class="ma-0" title="Estimated value">@CrmFormat.Compact(context.EstimatedValue)</MudChip>
-                        <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Class="ma-0" title="Probability of win × probability of go">Pwin @context.Pwin% · Pgo @context.Pgo%</MudChip>
-                        @if (context.Kind == OpportunityKind.Recompete)
-                        {
-                            <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Class="ma-0">Recompete</MudChip>
-                        }
-                        @if (context.ProposalDueOn is { } due && context.Stage.IsOpen())
-                        {
-                            var late = due < _today;
-                            <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Class="ma-0" Color="@(late ? Color.Error : Color.Default)"
-                                     Icon="@(late ? Icons.Material.Filled.Warning : Icons.Material.Outlined.Event)">Due @due.ToString("MMM d")</MudChip>
-                        }
-                        @if (context.HasPendingGate)
-                        {
-                            <MudChip T="string" Size="Size.Small" Variant="Variant.Text" Class="ma-0" Color="Color.Warning" Icon="@Icons.Material.Filled.HourglassTop">Gate pending</MudChip>
-                        }
-                    </MudStack>
-                    @if (context.CaptureManagerName is { } manager)
-                    {
-                        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-1">Capture: @manager</MudText>
-                    }
-                </MudPaper>
-            </ItemRenderer>
-        </MudDropContainer>
-    </div>
+                        <div class="card-value">
+                            <span class="card-amount" title="Estimated value">@CrmFormat.Compact(context.EstimatedValue)</span>
+                            <span class="card-weighted" title="Weighted value">@CrmFormat.Compact(context.WeightedValue) wtd</span>
+                        </div>
+                        <div class="card-pwin" title="Probability of win × probability of go">
+                            <div class="wb-meter" style="--wb-meter: @(context.Pwin)%" aria-hidden="true"><span></span></div>
+                            <span class="card-pwin-text">Pwin @context.Pwin% · Pgo @context.Pgo%</span>
+                        </div>
+                        <div class="card-foot">
+                            @if (context.ProposalDueOn is { } due && context.Stage.IsOpen())
+                            {
+                                var days = due.DayNumber - _today.DayNumber;
+                                <span class="card-due @(days < 0 ? "late" : days <= 14 ? "soon" : "")">
+                                    <MudIcon Icon="@(days < 0 ? Icons.Material.Filled.Warning : Icons.Material.Outlined.Event)" Size="Size.Small" />
+                                    @CrmFormat.DueIn(due, _today)
+                                </span>
+                            }
+                            <MudSpacer />
+                            @if (context.CaptureManagerName is { } manager)
+                            {
+                                <MudAvatar Size="Size.Small" Class="card-avatar" title="@($"Capture: {manager}")" aria-label="@($"Capture: {manager}")">@CrmFormat.Initials(manager)</MudAvatar>
+                            }
+                        </div>
+                    </article>
+                </ItemRenderer>
+            </MudDropContainer>
+        </div>
+    }
+    else if (_highlights is { } hl)
+    {
+        <BdAgenda Highlights="hl" Mode="@_view" Today="_today" />
+    }
+    else
+    {
+        <MudAlert Severity="Severity.Info">This view isn't available right now.</MudAlert>
+    }
+
     <div class="wb-sr-only" role="status" aria-live="polite" data-testid="pipeline-status">@_announcement</div>
 }
 
 @code {
     private PipelineBoardDto? _board;
+    private BdHighlightsDto? _highlights;
     private List<PipelineCardDto> _cards = [];
     private MudDropContainer<PipelineCardDto>? _container;
     private bool _outcomes;
     private bool _canCreate;
     private string? _error;
     private string? _announcement;
+    private string _view = "board";
     private DateOnly _today = DateOnly.FromDateTime(DateTime.Today);
+
+    [SupplyParameterFromQuery(Name = "view")] public string? View { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
+        _view = View is "upcoming" or "attention" ? View : "board";
         try
         {
             _canCreate = (await CurrentUser.GetAsync()).Can(Workbench.Contracts.Identity.Permission.CaptureManage);
@@ -146,7 +193,24 @@ else
         catch (Exception ex) when (CrmFormat.IsExpected(ex))
         {
             _error = ex.Message;
+            return;
         }
+
+        try
+        {
+            _highlights = await Pipeline.GetHighlightsAsync();
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex) || ex is NotSupportedException)
+        {
+            // The board stands on its own; the figures are a bonus.
+            _highlights = null;
+        }
+    }
+
+    private void ViewChanged(string view)
+    {
+        _view = view;
+        Navigation.NavigateTo(view == "board" ? "bd" : $"bd?view={view}", replace: true);
     }
 
     private async Task SetOutcomesAsync(bool value)

@@ -20,6 +20,30 @@ else if (_gates is null || _settings is null)
 }
 else
 {
+    <MudPaper Outlined="true" Class="pa-4 mb-4" data-testid="captureexec-card">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-1">
+            <MudIcon Icon="@Icons.Material.Filled.SyncAlt" Color="Color.Primary" />
+            <MudText Typo="Typo.subtitle1" HtmlTag="h2">Capture Exec</MudText>
+        </MudStack>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+            Bring your Capture Exec pipeline across: export companies, contacts and opportunities from Capture Exec (open the list view, pick the columns,
+            then Export to Excel) and import them in that order. Each import is checked and dry-run before anything changes, and can be rolled back.
+            Import the same export again later to update what changed: opportunities match on their Capture Exec ID.
+        </MudText>
+        @if (_canImport)
+        {
+            <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap">
+                <MudButton Variant="Variant.Outlined" Href="setup/import?source=CaptureExec&kind=CrmAccounts" StartIcon="@Icons.Material.Outlined.Business">1. Companies</MudButton>
+                <MudButton Variant="Variant.Outlined" Href="setup/import?source=CaptureExec&kind=CrmContacts" StartIcon="@Icons.Material.Outlined.Contacts">2. Contacts</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="setup/import?source=CaptureExec&kind=Opportunities" StartIcon="@Icons.Material.Outlined.Flag">3. Opportunities</MudButton>
+            </MudStack>
+        }
+        else
+        {
+            <MudText Typo="Typo.body2">An administrator (or Finance, for companies and contacts) runs the import under Setup › Import data.</MudText>
+        }
+    </MudPaper>
+
     <MudPaper Outlined="true" Class="pa-4 mb-4">
         <MudText Typo="Typo.subtitle1" HtmlTag="h2">Go/no-go gates</MudText>
         <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
@@ -116,6 +140,7 @@ else
     private IReadOnlyList<BpParentOptionDto> _options = [];
     private bool _canEditGates;
     private bool _isFinance;
+    private bool _canImport;
     private bool _busy;
     private string? _error;
     private GateDefinitionDto? _editing;
@@ -132,6 +157,7 @@ else
             var me = await CurrentUser.GetAsync();
             _canEditGates = me.Can(Workbench.Contracts.Identity.Permission.CaptureManage);
             _isFinance = me.Can(Workbench.Contracts.Identity.Permission.BpChargeCode);
+            _canImport = me.Can(Workbench.Contracts.Identity.Permission.SetupImports);
             _gates = await Gates.ListGatesAsync(includeInactive: true);
             _settings = await Pipeline.GetSettingsAsync();
             if (_isFinance)

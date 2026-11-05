@@ -1,0 +1,75 @@
+@* One list of a capture plan (win themes, a SWOT quadrant, risks...): its entries, and a field to add one. *@
+
+<section class="plan-list plan-@Tone" aria-labelledby="@_headingId" data-testid="@($"plan-{Kind.ToString().ToLowerInvariant()}")">
+    <header class="plan-head">
+        <MudIcon Icon="@Icon" Size="Size.Small" Class="plan-icon" aria-hidden="true" />
+        <MudText Typo="Typo.subtitle2" HtmlTag="h3" id="@_headingId">@Title</MudText>
+        <span class="plan-count">@Items.Count</span>
+    </header>
+    @if (Hint is not null && Items.Count == 0)
+    {
+        <p class="plan-hint">@Hint</p>
+    }
+    <ul class="plan-items">
+        @foreach (var item in Items)
+        {
+            <li class="plan-item">
+                <span class="plan-bullet" aria-hidden="true"></span>
+                <span class="plan-text">@item.Text</span>
+                @if (CanEdit)
+                {
+                    <MudIconButton Icon="@Icons.Material.Outlined.Close" Size="Size.Small" Class="plan-remove" aria-label="@($"Remove \"{item.Text}\"")"
+                                   OnClick="() => Remove.InvokeAsync(item)" />
+                }
+            </li>
+        }
+    </ul>
+    @if (CanEdit)
+    {
+        <div class="plan-add">
+            <MudTextField T="string" @bind-Value="_text" Placeholder="@Placeholder" Variant="Variant.Text" Margin="Margin.Dense" MaxLength="500"
+                          aria-label="@($"Add to {Title}")" Immediate="true" Class="plan-input" OnKeyUp="KeyUpAsync" />
+            <MudIconButton Icon="@Icons.Material.Filled.Add" Size="Size.Small" Disabled="@string.IsNullOrWhiteSpace(_text)" aria-label="@($"Add to {Title}")" OnClick="AddAsync" />
+        </div>
+    }
+</section>
+
+@code {
+    private readonly string _headingId = $"plan-{Guid.NewGuid():N}";
+    private string? _text;
+
+    [Parameter, EditorRequired] public CapturePlanItemKind Kind { get; set; }
+
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+
+    [Parameter] public string Icon { get; set; } = Icons.Material.Outlined.Lightbulb;
+
+    /// <summary>neutral, good, caution, info or risk: the list's accent.</summary>
+    [Parameter] public string Tone { get; set; } = "neutral";
+
+    [Parameter] public string? Hint { get; set; }
+
+    [Parameter] public string Placeholder { get; set; } = "Add…";
+
+    [Parameter] public IReadOnlyList<PlanItemDto> Items { get; set; } = [];
+
+    [Parameter] public bool CanEdit { get; set; }
+
+    [Parameter] public EventCallback<SavePlanItemRequest> Add { get; set; }
+
+    [Parameter] public EventCallback<PlanItemDto> Remove { get; set; }
+
+    private Task KeyUpAsync(KeyboardEventArgs e) => e.Key == "Enter" ? AddAsync() : Task.CompletedTask;
+
+    private async Task AddAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_text))
+        {
+            return;
+        }
+
+        var text = _text.Trim();
+        _text = null;
+        await Add.InvokeAsync(new SavePlanItemRequest(Kind, text));
+    }
+}

@@ -63,6 +63,143 @@ public sealed class PipelineService(IWorkbenchDbContextFactory dbFactory, CrmAcc
             date => QuarterOf(years, date));
     }
 
+    /// <summary>Days in one stage before an early-stage pursuit counts as stalled.</summary>
+    internal const int StalledAfterDays = 60;
+
+    public async Task<BdHighlightsDto> GetHighlightsAsync(int windowDays = 30, CancellationToken cancellationToken = default)
+    {
+        windowDays = Math.Clamp(windowDays, 1, 365);
+        var roles = await access.RolesAsync(cancellationToken);
+        var me = access.Email;
+        var now = clock.GetUtcNow().UtcDateTime;
+        var today = DateOnly.FromDateTime(now);
+        var until = today.AddDays(windowDays);
+        await using var db = await dbFactory.CreateAsync(cancellationToken);
+        var query = db.Set<D.Opportunity>().AsNoTracking();
+        if (!roles.Has(Permission.PipelineView))
+        {
+            query = query.Where(o => o.CaptureManagerEmail == me || o.ProposalManagerEmail == me);
+        }
+
+        var all = await query.ToListAsync(cancellationToken);
+        var open = all.Where(o => o.Stage < D.OpportunityStage.Won).ToList();
+        var openIds = open.Select(o => o.Id).ToList();
+        var milestones = await db.Set<D.OpportunityMilestone>().AsNoTracking().Where(m => openIds.Contains(m.OpportunityId) && !m.IsDone).ToListAsync(cancellationToken);
+        var hasSchedule = (await db.Set<D.OpportunityMilestone>().AsNoTracking().Where(m => openIds.Contains(m.OpportunityId)).Select(m => m.OpportunityId).Distinct().ToListAsync(cancellationToken)).ToHashSet();
+        var assessed = (await db.Set<D.OpportunityPwinAssessment>().AsNoTracking().Where(a => openIds.Contains(a.OpportunityId)).Select(a => a.OpportunityId).ToListAsync(cancellationToken)).ToHashSet();
+        var tasks = await db.Set<D.CrmActivity>().AsNoTracking()
+            .Where(a => a.OpportunityId != null && openIds.Contains(a.OpportunityId.Value) && a.Kind == D.CrmActivityKind.Task && !a.IsDone && a.DueOn != null)
+            .ToListAsync(cancellationToken);
+        var emails = open.Select(o => o.CaptureManagerEmail).Concat(milestones.Select(m => m.OwnerEmail)).Concat(tasks.Select(t => t.AssignedTo)).OfType<string>().Distinct().ToList();
+        var names = await db.Set<AppUser>().AsNoTracking().Where(u => emails.Contains(u.Email)).ToDictionaryAsync(u => u.Email, u => u.DisplayName, cancellationToken);
+        string? Name(string? email) => email is null ? null : names.GetValueOrDefault(email) ?? email;
+        var byId = open.ToDictionary(o => o.Id);
+
+        var upcoming = new List<UpcomingItemDto>();
+        void Add(D.Opportunity o, UpcomingKind kind, string what, DateOnly? on, string? owner)
+        {
+            if (on is { } d && d >= today && d <= until)
+            {
+                upcoming.Add(new UpcomingItemDto(o.Id, o.Number, o.Name, kind, what, d, owner));
+            }
+        }
+
+        foreach (var o in open)
+        {
+            if (o.Stage < D.OpportunityStage.Submitted)
+            {
+                Add(o, UpcomingKind.ProposalDue, "Proposal due", o.ProposalDueOn, Name(o.CaptureManagerEmail));
+                Add(o, UpcomingKind.RfpRelease, "RFP expected", o.RfpReleaseOn, Name(o.CaptureManagerEmail));
+                Add(o, UpcomingKind.RfiDue, "RFI response due", o.RfiDueOn, Name(o.CaptureManagerEmail));
+            }
+            else
+            {
+                Add(o, UpcomingKind.AwardExpected, "Award expected", o.EstimatedAwardDate, Name(o.CaptureManagerEmail));
+            }
+        }
+
+        foreach (var m in milestones)
+        {
+            // The submission milestone repeats the proposal due date when they match.
+            if (!(m.Kind == D.MilestoneKind.Submission && byId[m.OpportunityId].ProposalDueOn == m.DueOn))
+            {
+                Add(byId[m.OpportunityId], UpcomingKind.Milestone, m.Name, m.DueOn, Name(m.OwnerEmail));
+            }
+        }
+
+        foreach (var t in tasks)
+        {
+            Add(byId[t.OpportunityId!.Value], UpcomingKind.Task, t.Subject, t.DueOn, Name(t.AssignedTo));
+        }
+
+        var attention = new List<AttentionItemDto>();
+        void Flag(D.Opportunity o, string reason, AttentionSeverity severity) =>
+            attention.Add(new AttentionItemDto(o.Id, o.Number, o.Name, o.Stage.ToContract(), reason, severity));
+
+        foreach (var o in open)
+        {
+            if (o.Stage < D.OpportunityStage.Submitted && o.ProposalDueOn is { } due && due < today)
+            {
+                Flag(o, $"The proposal was due {due:MMM d} and it's still in {OpportunityStages.Label(o.Stage.ToContract())}: submit it or record a no-bid.", AttentionSeverity.Critical);
+            }
+
+            if (o.Stage == D.OpportunityStage.Submitted && o.EstimatedAwardDate is { } award && award < today.AddDays(-14))
+            {
+                Flag(o, $"Award was expected {award:MMM d}: record the outcome or move the date.", AttentionSeverity.Warning);
+            }
+
+            if (o.CaptureManagerEmail is null)
+            {
+                Flag(o, "No capture manager.", AttentionSeverity.Warning);
+            }
+
+            var days = (now - o.StageChangedAtUtc).Days;
+            if (o.Stage <= D.OpportunityStage.Capture && days > StalledAfterDays)
+            {
+                Flag(o, $"In {OpportunityStages.Label(o.Stage.ToContract())} for {days} days.", AttentionSeverity.Info);
+            }
+
+            if (o.Stage is D.OpportunityStage.Capture or D.OpportunityStage.Proposal && !assessed.Contains(o.Id))
+            {
+                Flag(o, "No Pwin assessment: score the six factors on the capture plan.", AttentionSeverity.Info);
+            }
+
+            if (o.Stage == D.OpportunityStage.Proposal && !hasSchedule.Contains(o.Id))
+            {
+                Flag(o, "No proposal schedule: add the color-team reviews.", AttentionSeverity.Info);
+            }
+        }
+
+        foreach (var m in milestones.Where(m => m.DueOn < today))
+        {
+            Flag(byId[m.OpportunityId], $"{m.Name} was due {m.DueOn:MMM d} and isn't marked done.", AttentionSeverity.Warning);
+        }
+
+        var yearAgo = today.AddDays(-365);
+        var decided = all.Where(o => o.Stage is D.OpportunityStage.Won or D.OpportunityStage.Lost
+                                     && (o.DecidedOn ?? DateOnly.FromDateTime(o.StageChangedAtUtc)) >= yearAgo).ToList();
+        var won = decided.Where(o => o.Stage == D.OpportunityStage.Won).ToList();
+        var lost = decided.Count - won.Count;
+        var funnel = OpportunityStages.Open.Select(stage =>
+        {
+            var inStage = open.Where(o => o.Stage.ToContract() == stage).ToList();
+            return new FunnelStepDto(stage, inStage.Count, inStage.Sum(o => o.EstimatedValue), inStage.Sum(o => PipelineMath.Weighted(o.EstimatedValue, o.Pwin, o.Pgo)));
+        }).ToList();
+        return new BdHighlightsDto(
+            open.Count,
+            open.Sum(o => o.EstimatedValue),
+            open.Sum(o => PipelineMath.Weighted(o.EstimatedValue, o.Pwin, o.Pgo)),
+            upcoming.Count,
+            decided.Count == 0 ? null : Math.Round(100m * won.Count / decided.Count, 0),
+            won.Sum(o => o.AwardedValue ?? o.EstimatedValue),
+            won.Count,
+            lost,
+            funnel,
+            upcoming.OrderBy(u => u.DueOn).ThenBy(u => u.Number).Take(40).ToList(),
+            attention.OrderByDescending(a => a.Severity).ThenBy(a => a.Number).Take(30).ToList(),
+            windowDays);
+    }
+
     /// <summary>The fiscal quarter from the organization's fiscal calendar when the date is in a defined year, else October–September.</summary>
     internal static (int Year, int Quarter) QuarterOf(IReadOnlyList<FiscalYear> years, DateOnly date) =>
         years.FirstOrDefault(y => y.Start <= date && y.End >= date) is { } year

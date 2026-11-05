@@ -42,6 +42,9 @@ public enum OpportunitySource
     Manual,
     SamGov,
     CsvImport,
+
+    /// <summary>Imported from a Capture Exec export; <see cref="Opportunity.SourceId"/> holds its id.</summary>
+    CaptureExec,
 }
 
 /// <summary>Why a pursuit was won, lost or not bid (win/loss analysis).</summary>
@@ -125,6 +128,9 @@ public sealed class Opportunity : Entity
 
     /// <summary>SAM.gov notice id, when imported from SAM.gov.</summary>
     public string? SamNoticeId { get; set; }
+
+    /// <summary>The record's id in the system it came from (Capture Exec's opportunity id): re-imports update it.</summary>
+    public string? SourceId { get; set; }
 
     // ---- Outcome ----
     public OutcomeReason? OutcomeReason { get; set; }
