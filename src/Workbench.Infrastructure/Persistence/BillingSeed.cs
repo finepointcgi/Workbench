@@ -37,7 +37,7 @@ internal static class BillingSeed
             return;
         }
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = DateOnly.FromDateTime(DateTime.Now);
         var periods = (await db.Set<FiscalPeriod>().AsNoTracking().ToListAsync(cancellationToken)).OrderBy(p => p.Start).ToList();
         var current = periods.LastOrDefault(p => p.Start <= today);
         var previous = current is null ? null : periods.LastOrDefault(p => p.End < current.Start);

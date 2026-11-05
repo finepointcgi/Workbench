@@ -3,8 +3,8 @@ using MudBlazor;
 namespace Workbench.Ui.Theme;
 
 /// <summary>
-/// The Workbench look, after Material 3: the color roles Material Theme Builder generates from the logo's orange seed (primary,
-/// primary/secondary containers, surface and its tinted container levels, outline), the M3 type scale (regular-weight
+/// The Workbench look, after Material 3: the color roles from <see cref="M3Tokens"/> (generated from the brand seed
+/// #415F91), mapped into MudBlazor's palette; the M3 type scale (regular-weight
 /// headlines, medium-weight titles and labels), pill-shaped buttons and navigation, and M3's five elevation levels.
 /// MudBlazor implements Material 2, so the shapes and tonal surfaces it can't express live in wwwroot/theme.css, which
 /// derives the surface-container levels from these colors (so dark mode follows).
@@ -23,84 +23,8 @@ public static class WorkbenchTheme
 
     public static MudTheme Default { get; } = new()
     {
-        PaletteLight = new PaletteLight
-        {
-            Primary = "#C2410C",                 // brand orange, deepened from the logo for contrast; 4.9:1 on the surface
-            PrimaryContrastText = "#FFFFFF",
-            PrimaryDarken = "#9A3412",           // hover on filled buttons
-            PrimaryLighten = "#FFDBCB",          // M3 primary container
-            Secondary = "#AD1457",
-            Tertiary = "#705575",
-            Info = "#1565C0",
-            Success = "#2E7D32",
-            Warning = "#A35200",
-            Error = "#BA1A1A",                   // M3 error
-            Dark = "#44474E",
-
-            Background = "#F9F9FF",              // M3 surface
-            BackgroundGray = "#EDEDF4",
-            Surface = "#F9F9FF",
-            AppbarBackground = "#F9F9FF",
-            AppbarText = "#191C20",
-            DrawerBackground = "#F3F3FA",        // M3 surface container low
-            DrawerText = "#44474E",
-            DrawerIcon = "#44474E",
-
-            TextPrimary = "#191C20",             // M3 on surface
-            TextSecondary = "#44474E",           // M3 on surface variant; 8.9:1
-            ActionDefault = "#44474E",
-            ActionDisabled = "rgba(25,28,32,0.38)",
-            ActionDisabledBackground = "rgba(25,28,32,0.12)",
-            LinesDefault = "#C4C6D0",            // M3 outline variant
-            LinesInputs = "#74777F",             // M3 outline; 4.3:1
-            TableLines = "#E1E2EA",
-            TableStriped = "rgba(194,65,12,0.04)",
-            TableHover = "rgba(194,65,12,0.06)",
-            Divider = "#C4C6D0",
-            DividerLight = "#E1E2EA",
-            OverlayDark = "rgba(25,28,32,0.40)",
-        },
-        PaletteDark = new PaletteDark
-        {
-            Primary = "#FFB59A",                 // M3 primary (dark); 10.9:1 on the surface
-            PrimaryContrastText = "#5A1A00",
-            PrimaryDarken = "#FFCBB6",
-            PrimaryLighten = "#7A2E00",          // M3 primary container (dark)
-            Secondary = "#F48FB1",
-            Tertiary = "#DDBCE0",
-            Info = "#64B5F6",
-            Success = "#66BB6A",
-            Warning = "#FFB74D",
-            Error = "#FFB4AB",                   // M3 error (dark)
-            Dark = "#C4C6D0",
-            // Light fills take dark text (white on these is under 3:1).
-            SecondaryContrastText = "#121212",
-            TertiaryContrastText = "#121212",
-            InfoContrastText = "#121212",
-            SuccessContrastText = "#121212",
-            WarningContrastText = "#121212",
-            ErrorContrastText = "#690005",
-
-            Background = "#111318",              // M3 surface (dark)
-            BackgroundGray = "#1D2024",
-            Surface = "#111318",
-            AppbarBackground = "#111318",
-            AppbarText = "#E2E2E9",
-            DrawerBackground = "#191C20",        // M3 surface container low (dark)
-            DrawerText = "#C4C6D0",
-            DrawerIcon = "#C4C6D0",
-
-            TextPrimary = "#E2E2E9",
-            TextSecondary = "#C4C6D0",
-            ActionDefault = "#C4C6D0",
-            LinesDefault = "#44474E",
-            LinesInputs = "#8E9099",             // 5.8:1
-            TableLines = "#2E3036",
-            TableStriped = "rgba(255,181,154,0.04)",
-            TableHover = "rgba(255,181,154,0.06)",
-            Divider = "#44474E",
-            DividerLight = "#2E3036",
-        },
+        PaletteLight = LightPalette(),
+        PaletteDark = DarkPalette(),
         LayoutProperties = new LayoutProperties
         {
             DefaultBorderRadius = "12px",        // M3 medium shape; text fields and menus are narrowed in theme.css
@@ -137,6 +61,62 @@ public static class WorkbenchTheme
             ],
         },
     };
+
+    // The MudBlazor palette is filled from the M3 color roles (M3Tokens), so a Mud component and a CSS rule that reads
+    // --md-sys-color-* agree. Mud's primary-lighten is the primary container and its primary-darken the hover shade.
+    private static PaletteLight LightPalette()
+    {
+        var c = M3Tokens.Light;
+        return new PaletteLight
+        {
+            Primary = c["primary"], PrimaryContrastText = c["on-primary"], PrimaryDarken = "#35507E", PrimaryLighten = c["primary-container"],
+            Secondary = c["secondary"], SecondaryContrastText = c["on-secondary"],
+            Tertiary = c["tertiary"], TertiaryContrastText = c["on-tertiary"],
+            Info = c["info"], InfoContrastText = c["on-info"],
+            Success = c["success"], SuccessContrastText = c["on-success"],
+            Warning = c["warning"], WarningContrastText = c["on-warning"],
+            Error = c["error"], ErrorContrastText = c["on-error"],
+            Dark = c["on-surface-variant"],
+
+            Background = c["surface"], BackgroundGray = c["surface-container"], Surface = c["surface"],
+            AppbarBackground = c["surface"], AppbarText = c["on-surface"],
+            DrawerBackground = c["surface-container-low"], DrawerText = c["on-surface-variant"], DrawerIcon = c["on-surface-variant"],
+
+            TextPrimary = c["on-surface"], TextSecondary = c["on-surface-variant"],
+            ActionDefault = c["on-surface-variant"],
+            ActionDisabled = "rgba(25,28,32,0.38)", ActionDisabledBackground = "rgba(25,28,32,0.12)",
+            LinesDefault = c["outline-variant"], LinesInputs = c["outline"],
+            TableLines = c["surface-container-highest"], TableStriped = "rgba(65,95,145,0.04)", TableHover = "rgba(65,95,145,0.06)",
+            Divider = c["outline-variant"], DividerLight = c["surface-container-highest"],
+            OverlayDark = "rgba(0,0,0,0.40)",
+        };
+    }
+
+    private static PaletteDark DarkPalette()
+    {
+        var c = M3Tokens.Dark;
+        return new PaletteDark
+        {
+            Primary = c["primary"], PrimaryContrastText = c["on-primary"], PrimaryDarken = "#C2D6FF", PrimaryLighten = c["primary-container"],
+            Secondary = c["secondary"], SecondaryContrastText = c["on-secondary"],
+            Tertiary = c["tertiary"], TertiaryContrastText = c["on-tertiary"],
+            Info = c["info"], InfoContrastText = c["on-info"],
+            Success = c["success"], SuccessContrastText = c["on-success"],
+            Warning = c["warning"], WarningContrastText = c["on-warning"],
+            Error = c["error"], ErrorContrastText = c["on-error"],
+            Dark = c["on-surface-variant"],
+
+            Background = c["surface"], BackgroundGray = c["surface-container"], Surface = c["surface"],
+            AppbarBackground = c["surface"], AppbarText = c["on-surface"],
+            DrawerBackground = c["surface-container-low"], DrawerText = c["on-surface-variant"], DrawerIcon = c["on-surface-variant"],
+
+            TextPrimary = c["on-surface"], TextSecondary = c["on-surface-variant"],
+            ActionDefault = c["on-surface-variant"],
+            LinesDefault = c["outline-variant"], LinesInputs = c["outline"],
+            TableLines = "#2E3036", TableStriped = "rgba(170,199,255,0.04)", TableHover = "rgba(170,199,255,0.06)",
+            Divider = c["outline-variant"], DividerLight = "#2E3036",
+        };
+    }
 
     private const string Level1 = "0 1px 2px 0 rgba(0,0,0,0.30), 0 1px 3px 1px rgba(0,0,0,0.15)";
     private const string Level2 = "0 1px 2px 0 rgba(0,0,0,0.30), 0 2px 6px 2px rgba(0,0,0,0.15)";

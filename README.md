@@ -7,6 +7,10 @@ Built with .NET 10, Blazor and MudBlazor. Runs in the browser and as a desktop a
 
 Product and technical plan: https://claude.ai/code/artifact/6cda230a-5649-42ac-9dc0-5ec505da3921
 
+Website: https://finepointcgi.github.io/Workbench/ (source in `site/`). User and administrator guide:
+https://finepointcgi.github.io/Workbench/guide/ (source in `docs/`, built with MkDocs; screenshots from
+`tools/docs-screenshots`). Both are published by `.github/workflows/docs.yml`.
+
 ## Layout
 
 | Project | Purpose |
@@ -56,6 +60,23 @@ Production deploys apply migrations as their own step, then start the host:
 ```bash
 dotnet Workbench.Web.dll --migrate
 ```
+
+To install it on a server in one command (PostgreSQL, HTTPS and built-in accounts), see [`docs/quick-start.md`](docs/quick-start.md):
+`scripts/install.sh --domain workbench.example.com --admin you@example.com`.
+
+## Self-host in 5 minutes
+
+You need a Linux server (or any machine) with Docker. Point a domain at it and open ports 80 and 443, then:
+
+```bash
+curl -fsSL https://github.com/finepointcgi/workbench/releases/latest/download/install.sh | bash -s -- \
+  --domain workbench.example.com --admin you@example.com
+```
+
+It downloads the release's `docker-compose.yml`, creates the passwords and keys, starts PostgreSQL, Workbench and an HTTPS
+proxy, and prints a link where you choose your password. Use `--domain localhost` to try it on your own machine. To
+upgrade, run `./upgrade.sh` in the install folder. The release page also has the compose file and a zip if you prefer
+to run `docker compose up -d` yourself.
 
 Production runs from the container image (`Dockerfile`; `docker-compose.prod.yml` is a complete single-host example
 with PostgreSQL, the migrate job and a TLS proxy). Deployment, every configuration setting, key encryption, backups,
@@ -141,3 +162,9 @@ validate, dry run, import; each job can be rolled back. Sample files and expecte
   `docs/operations/backup-restore.md`; run `scripts/test-backup-restore.sh` locally.
 - `SECURITY.md` (reporting vulnerabilities), `docs/security/threat-model.md`, and the ISMS templates in `docs/iso/`
   (start with `docs/iso/README.md`).
+
+## License
+
+Workbench is source-available under the [Functional Source License, Version 1.1, ALv2 Future License](LICENSE.md)
+(FSL-1.1-ALv2). You can use, change and self-host it for any purpose except offering a competing product or service.
+Each version becomes available under the Apache License 2.0 two years after it's released.

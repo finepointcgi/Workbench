@@ -138,7 +138,7 @@ public sealed class ReconciliationServiceTests
         await using var host = await ImportHost.CreateAsync();
         var migration = host.Get<IMigrationService>();
         var empty = await migration.GetChecklistAsync();
-        Assert.Equal(["accounts", "orgs", "people", "customers", "contracts", "projects", "open-items", "opening-balances", "fixed-assets", "smartsheet", "parallel"],
+        Assert.Equal(["accounts", "orgs", "people", "customers", "contracts", "projects", "indirect", "open-items", "opening-balances", "fixed-assets", "smartsheet", "parallel"],
             empty.Steps.Select(s => s.Key));
         Assert.Equal(MigrationStepStatus.NotStarted, empty.Steps.Single(s => s.Key == "accounts").Status);
         var people = empty.Steps.Single(s => s.Key == "people");

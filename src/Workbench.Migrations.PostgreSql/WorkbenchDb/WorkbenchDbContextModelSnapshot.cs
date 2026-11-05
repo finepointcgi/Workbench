@@ -11132,6 +11132,389 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                     b.ToTable("IntegrationOutboxEvents", (string)null);
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Integrations.Jira.JiraConnection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AccountEmail")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .UseCollation("C");
+
+                    b.Property<string>("ConnectedAsAccountId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .UseCollation("C");
+
+                    b.Property<string>("ConnectedAsName")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .UseCollation("C");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .UseCollation("C");
+
+                    b.Property<string>("Flavor")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("LastTestMessage")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .UseCollation("C");
+
+                    b.Property<bool?>("LastTestOk")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("LastTestedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("SiteUrl")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .UseCollation("C");
+
+                    b.Property<string>("TokenHint")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)")
+                        .UseCollation("C");
+
+                    b.Property<string>("TokenProtected")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)")
+                        .UseCollation("C");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .UseCollation("C");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("JiraConnections", (string)null);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Integrations.Jira.JiraItemLink", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BaseAssigneeAccountId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .UseCollation("C");
+
+                    b.Property<string>("BaseAssigneeEmail")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .UseCollation("C");
+
+                    b.Property<bool>("BaseJiraDone")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateOnly?>("BaseJiraDue")
+                        .HasColumnType("date");
+
+                    b.Property<string>("BaseTitle")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .UseCollation("C");
+
+                    b.Property<bool>("BaseWorkbenchDone")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateOnly?>("BaseWorkbenchDue")
+                        .HasColumnType("date");
+
+                    b.Property<decimal?>("EstimateHours")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.Property<bool>("IsRemoved")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("IssueId")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .UseCollation("C");
+
+                    b.Property<string>("IssueKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
+
+                    b.Property<Guid>("ItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("JiraStatus")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .UseCollation("C");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .UseCollation("C");
+
+                    b.Property<DateTime?>("LastSyncedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("LinkId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("WebUrl")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .UseCollation("C");
+
+                    b.Property<DateTime?>("WorkbenchModifiedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ItemId")
+                        .IsUnique();
+
+                    b.HasIndex("LinkId", "IssueId")
+                        .IsUnique();
+
+                    b.ToTable("JiraItemLinks", (string)null);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Integrations.Jira.JiraProjectLink", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("CreateIssuesForNewTasks")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .UseCollation("C");
+
+                    b.Property<string>("DateWinner")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("EpicKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
+
+                    b.Property<string>("IssueType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
+
+                    b.Property<string>("JiraProjectKey")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .UseCollation("C");
+
+                    b.Property<string>("JiraProjectName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .UseCollation("C");
+
+                    b.Property<string>("JiraProjectUrl")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .UseCollation("C");
+
+                    b.Property<string>("Jql")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .UseCollation("C");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .UseCollation("C");
+
+                    b.Property<string>("LastErrorHint")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .UseCollation("C");
+
+                    b.Property<DateTime?>("LastReconcileAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("LastSyncedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SheetId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .UseCollation("C");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("WebhookSecretProtected")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .UseCollation("C");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId")
+                        .IsUnique();
+
+                    b.HasIndex("SheetId");
+
+                    b.ToTable("JiraProjectLinks", (string)null);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Integrations.Jira.JiraSyncNote", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Field")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .UseCollation("C");
+
+                    b.Property<string>("Hint")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .UseCollation("C");
+
+                    b.Property<bool>("IsError")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsOpen")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("IssueKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
+
+                    b.Property<Guid?>("ItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("LinkId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .UseCollation("C");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ItemId", "Field", "IsOpen");
+
+                    b.HasIndex("LinkId", "IsOpen", "CreatedAtUtc");
+
+                    b.ToTable("JiraSyncNotes", (string)null);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Integrations.Jira.JiraWebhookReceipt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("DedupKey")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .UseCollation("C");
+
+                    b.Property<string>("EventKind")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
+
+                    b.Property<Guid>("LinkId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Outcome")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .UseCollation("C");
+
+                    b.Property<DateTime>("ReceivedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ReceivedAtUtc");
+
+                    b.HasIndex("LinkId", "DedupKey")
+                        .IsUnique();
+
+                    b.ToTable("JiraWebhookReceipts", (string)null);
+                });
+
             modelBuilder.Entity("Workbench.Domain.Integrations.WebhookEndpoint", b =>
                 {
                     b.Property<Guid>("Id")
@@ -11550,6 +11933,30 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                     b.HasIndex("RequestId");
 
                     b.ToTable("LeaveRequestDay");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Licensing.LicenseSettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("ActivatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ActivatedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .UseCollation("C");
+
+                    b.Property<string>("Key")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)")
+                        .UseCollation("C");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("LicenseSettings");
                 });
 
             modelBuilder.Entity("Workbench.Domain.Materials.BackflushSetting", b =>
@@ -14645,6 +15052,87 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                         .IsUnique();
 
                     b.ToTable("NotificationPreference");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Notifications.ReminderLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .UseCollation("C");
+
+                    b.Property<DateTime>("SentAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateOnly>("SentOn")
+                        .HasColumnType("date");
+
+                    b.Property<string>("UserEmail")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .UseCollation("C");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserEmail", "Kind", "Key")
+                        .IsUnique();
+
+                    b.HasIndex("UserEmail", "Kind", "SentOn");
+
+                    b.ToTable("ReminderLog");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Notifications.ReminderPreference", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("ApprovalsEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<int?>("QuietEndHour")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("QuietStartHour")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("TimesheetEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("UserEmail")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .UseCollation("C");
+
+                    b.Property<bool>("ViaEmail")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("ViaSlack")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("ViaTeams")
+                        .HasColumnType("boolean");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserEmail")
+                        .IsUnique();
+
+                    b.ToTable("ReminderPreference");
                 });
 
             modelBuilder.Entity("Workbench.Domain.Payroll.EmployeePayProfile", b =>
@@ -21778,6 +22266,44 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                     b.ToTable("SavedReports", (string)null);
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Resourcing.EmployeeSkill", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Level")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("SkillId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .UseCollation("C");
+
+                    b.Property<decimal?>("Years")
+                        .HasPrecision(4, 1)
+                        .HasColumnType("numeric(4,1)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SkillId");
+
+                    b.HasIndex("EmployeeId", "SkillId")
+                        .IsUnique();
+
+                    b.ToTable("EmployeeSkill");
+                });
+
             modelBuilder.Entity("Workbench.Domain.Resourcing.ResourceAllocation", b =>
                 {
                     b.Property<Guid>("Id")
@@ -21853,6 +22379,31 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                     b.HasIndex("ProjectId", "WeekStart");
 
                     b.ToTable("ResourceAllocation");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Resourcing.Skill", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Category")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .UseCollation("C");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .UseCollation("C");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("Skill");
                 });
 
             modelBuilder.Entity("Workbench.Domain.Resourcing.StaffingAssignment", b =>
@@ -25980,6 +26531,42 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Integrations.Jira.JiraItemLink", b =>
+                {
+                    b.HasOne("Workbench.Domain.Integrations.Jira.JiraProjectLink", null)
+                        .WithMany()
+                        .HasForeignKey("LinkId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Integrations.Jira.JiraProjectLink", b =>
+                {
+                    b.HasOne("Workbench.Domain.ProjectAccounting.Project", null)
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Integrations.Jira.JiraSyncNote", b =>
+                {
+                    b.HasOne("Workbench.Domain.Integrations.Jira.JiraProjectLink", null)
+                        .WithMany()
+                        .HasForeignKey("LinkId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Integrations.Jira.JiraWebhookReceipt", b =>
+                {
+                    b.HasOne("Workbench.Domain.Integrations.Jira.JiraProjectLink", null)
+                        .WithMany()
+                        .HasForeignKey("LinkId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Workbench.Domain.Item", b =>
                 {
                     b.HasOne("Workbench.Domain.Sheet", null)
@@ -28634,6 +29221,21 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                         .WithMany()
                         .HasForeignKey("SavedReportId")
                         .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Resourcing.EmployeeSkill", b =>
+                {
+                    b.HasOne("Workbench.Domain.ProjectAccounting.Employee", null)
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.Resourcing.Skill", null)
+                        .WithMany()
+                        .HasForeignKey("SkillId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 

@@ -83,7 +83,7 @@ assets). Attach the diagram as Figure 1.*
 
 ## 3. Requirement implementation
 
-*One entry per requirement (all 110 below). The Workbench part is copied from [control-mapping.md](control-mapping.md);
+*One entry per requirement (all 110 below). The Workbench part is copied from [NIST SP 800-171 Rev. 2 / CMMC Level 2: control mapping](control-mapping.md);
 describe the customer and hosting parts as you implement them. Status: Implemented, Partially
 implemented (with a POA&M item), Planned, Not applicable (with justification; rare at Level 2), Inherited (from a
 FedRAMP-authorized provider, cite the package).*
@@ -233,7 +233,7 @@ FedRAMP-authorized provider, cite the package).*
 | 3.12.1 | Periodically assess security controls for effectiveness | `<>` | Workbench: Evidence catalog; access reviews. Customer/hosting: `<C: yearly self-assessment (SPRS score)>` | `<>` | `<>` | |
 | 3.12.2 | Develop and implement plans of action (POA&M) | `<>` | Customer/hosting: `<C: POA&M in the SSP>` | `<>` | `<>` | |
 | 3.12.3 | Monitor security controls on an ongoing basis | `<>` | Workbench: Security event log, health and telemetry. Customer/hosting: `<C: continuous monitoring>` | `<>` | `<>` | |
-| 3.12.4 | Develop, document and update a system security plan | `<>` | Workbench: SSP template. Customer/hosting: `<C: [system-security-plan.md](system-security-plan.md)>` | `<>` | `<>` | |
+| 3.12.4 | Develop, document and update a system security plan | `<>` | Workbench: SSP template. Customer/hosting: `<C: [System Security Plan (SSP)](system-security-plan.md)>` | `<>` | `<>` | |
 
 ### 3.13 System and Communications Protection
 
@@ -249,7 +249,7 @@ FedRAMP-authorized provider, cite the package).*
 | 3.13.8 | Implement cryptographic mechanisms to prevent unauthorized disclosure of CUI during transmission | `<>` | Workbench: HSTS, Secure cookies, HTTPS-only IdP metadata. Customer/hosting: `<H: TLS 1.2+ (FIPS-validated), TLS to DB>` | `<>` | `<>` | |
 | 3.13.9 | Terminate network connections at the end of sessions or after inactivity | `<>` | Workbench: Sessions end on idle/absolute limit; Blazor circuits re-validate. Customer/hosting: `<H: LB idle timeouts>` | `<>` | `<>` | |
 | 3.13.10 | Establish and manage cryptographic keys | `<>` | Workbench: Data Protection key ring (90-day rotation, certificate-encrypted). Customer/hosting: `<C/H: `../../iso/cryptography-policy.md`>` | `<>` | `<>` | |
-| 3.13.11 | Employ FIPS-validated cryptography to protect CUI | `<>` | Workbench: .NET uses the OS crypto provider. Customer/hosting: `<H: FIPS mode OS / validated modules ([gaps.md](gaps.md))>` | `<>` | `<>` | |
+| 3.13.11 | Employ FIPS-validated cryptography to protect CUI | `<>` | Workbench: .NET uses the OS crypto provider. Customer/hosting: `<H: FIPS mode OS / validated modules ([Gaps: Workbench and the hosted SaaS for CUI](https://github.com/finepointcgi/Workbench/blob/master/docs/compliance/nist-800-171/gaps.md))>` | `<>` | `<>` | |
 | 3.13.12 | Prohibit remote activation of collaborative computing devices | `<>` | Customer/hosting: `<C>` | `<>` | `<>` | |
 | 3.13.13 | Control and monitor the use of mobile code | `<>` | Workbench: CSP `script-src 'self'`, no inline scripts or `eval`. Customer/hosting: `<C: browser policies>` | `<>` | `<>` | |
 | 3.13.14 | Control and monitor the use of VoIP | `<>` | Customer/hosting: `<C>` | `<>` | `<>` | |
@@ -280,7 +280,7 @@ days. Check the current rule (32 CFR part 170) for which ones.*
 ## 5. Related documents
 
 Policies: `../../iso/` (access control, cryptography, logging and monitoring, incident response, supplier security,
-asset management, business continuity, backup, secure development). Gaps of the hosted service: [gaps.md](gaps.md).
+asset management, business continuity, backup, secure development). Gaps of the hosted service: [Gaps: Workbench and the hosted SaaS for CUI](https://github.com/finepointcgi/Workbench/blob/master/docs/compliance/nist-800-171/gaps.md).
 
 ## 6. Approval and review
 

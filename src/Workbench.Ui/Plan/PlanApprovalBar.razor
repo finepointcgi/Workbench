@@ -11,14 +11,23 @@
 
 @if (_plan is { } plan)
 {
+    @if (Part == PlanApprovalPart.Bar)
+    {
     <div class="wb-approval" data-testid="plan-approval">
         <div class="wb-approval-row">
             <MudChip T="string" Size="Size.Small" Color="@StatusColor(plan)" Variant="Variant.Filled" data-testid="plan-approval-status">@StatusText(plan)</MudChip>
             <span class="wb-approval-text">@Explain(plan)</span>
-            <MudSpacer />
+            <span class="wb-approval-actions">
             @if (plan.CanSubmit && !_reviewing)
             {
-                <input class="wb-approval-note" placeholder="Note for Finance (optional)" aria-label="Note for Finance" @bind="_note" />
+                @if (_noteOpen || !string.IsNullOrEmpty(_note))
+                {
+                    <input class="wb-approval-note" placeholder="Note for Finance (optional)" aria-label="Note for Finance" @bind="_note" />
+                }
+                else
+                {
+                    <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => _noteOpen = true" data-testid="plan-note-add">Add a note</MudButton>
+                }
                 <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Send" OnClick="SubmitAsync" Disabled="@(_busy || !plan.SetupDone)"
                            data-testid="plan-submit">@(plan.Status == PlanApprovalStatus.Approved ? "Submit the changes" : "Submit plan for approval")</MudButton>
             }
@@ -29,22 +38,8 @@
                 <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.Check" OnClick="ApproveAsync" Disabled="_busy"
                            data-testid="plan-approve">Approve</MudButton>
             }
+            </span>
         </div>
-
-        @if (plan.Steps is { Count: > 0 } steps && steps.Any(s => !s.Done))
-        {
-            @* Where the project is in its life, and the one step that's next. *@
-            <ol class="wb-approval-steps" data-testid="plan-steps" aria-label="Project steps">
-                @foreach (var step in steps)
-                {
-                    <li class="@(step.Done ? "wb-step-done" : step.Current ? "wb-step-current" : "wb-step-todo")" aria-current="@(step.Current ? "step" : null)">
-                        <MudIcon Icon="@(step.Done ? Icons.Material.Filled.CheckCircle : step.Current ? Icons.Material.Filled.RadioButtonChecked : Icons.Material.Outlined.RadioButtonUnchecked)"
-                                 Size="Size.Small" Color="@(step.Done ? Color.Success : step.Current ? Color.Primary : Color.Default)" />
-                        <span><strong>@step.Label</strong>@(step.Detail is { } d ? $" · {d}" : "")</span>
-                    </li>
-                }
-            </ol>
-        }
 
         @if (plan.Status == PlanApprovalStatus.Returned && plan.ReviewComment is { } why)
         {
@@ -74,52 +69,84 @@
             </table>
         }
 
-        <div class="wb-approval-terms" data-testid="plan-terms">
-            <span>
-                @plan.Terms.PricingLabel@(plan.Terms.ContractNumber is { } c ? $" · contract {c}" : "")@(plan.Terms.FeeRate > 0 ? $" · {Percent(plan.Terms.FeeRate)} fee" : "")
-                @(plan.Terms.Start is { } s && plan.Terms.Finish is { } f ? $" · {PlanPeopleFormat.Range(s, f)}" : "")
-            </span>
-            @if (plan.CanEditTerms)
-            {
-                <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => _editing = !_editing" data-testid="plan-terms-edit">@(_editing ? "Close" : "Change the ceiling or funding")</MudButton>
-                <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => _editingCategories = !_editingCategories" data-testid="plan-categories-edit">@(_editingCategories ? "Close" : "Labor categories")</MudButton>
-            }
+    </div>
+    }
+    else
+    {
+    <div class="wb-approval wb-approval-details" data-testid="plan-details">
+        <div class="wb-approval-row">
+            <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@(_detailsOpen ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)"
+                       OnClick="() => _detailsOpen = !_detailsOpen" aria-expanded="@(_detailsOpen ? "true" : "false")" data-testid="plan-details-toggle">Plan details</MudButton>
+            <span class="wb-approval-text">@DetailsHint(plan)</span>
         </div>
-        @if (plan.Categories?.Where(c => c.Selected).ToList() is { Count: > 0 } picked)
+        @if (_detailsOpen)
         {
-            <div class="wb-approval-terms" data-testid="plan-categories">
-                <span>Plan with: @string.Join(", ", picked.Select(c => c.Label))</span>
-            </div>
+        @if (plan.Steps is { Count: > 0 } steps && steps.Any(s => !s.Done))
+        {
+            @* Where the project is in its life, and the one step that's next. *@
+            <ol class="wb-approval-steps" data-testid="plan-steps" aria-label="Project steps">
+                @foreach (var step in steps)
+                {
+                    <li class="@(step.Done ? "wb-step-done" : step.Current ? "wb-step-current" : "wb-step-todo")" aria-current="@(step.Current ? "step" : null)">
+                        <MudIcon Icon="@(step.Done ? Icons.Material.Filled.CheckCircle : step.Current ? Icons.Material.Filled.RadioButtonChecked : Icons.Material.Outlined.RadioButtonUnchecked)"
+                                 Size="Size.Small" Color="@(step.Done ? Color.Success : step.Current ? Color.Primary : Color.Default)" />
+                        <span><strong>@step.Label</strong>@(step.Detail is { } d ? $" · {d}" : "")</span>
+                    </li>
+                }
+            </ol>
         }
-        @if (_editingCategories && plan.Categories is { } all)
-        {
-            <div class="wb-approval-row mt-1" data-testid="plan-categories-form">
-                <MudSelect T="Guid" SelectedValues="_categoryIds" SelectedValuesChanged="values => _categoryIds = values.ToHashSet()" MultiSelection="true"
-                           Label="Labor categories" Margin="Margin.Dense" Variant="Variant.Outlined" Style="max-width:420px">
-                    @foreach (var c in all)
-                    {
-                        <MudSelectItem T="Guid" Value="c.Id">@c.Label@(c.OnContract ? " · on the contract" : "")</MudSelectItem>
-                    }
-                </MudSelect>
-                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveCategoriesAsync" Disabled="_busy" data-testid="plan-categories-save">Save</MudButton>
-                <span class="wb-approval-text">The project manager plans with these. Leave it empty to allow any.</span>
+
+        <div class="wb-approval-terms" data-testid="plan-terms">
+                <span>
+                    @plan.Terms.PricingLabel@(plan.Terms.ContractNumber is { } c ? $" · contract {c}" : "")@(plan.Terms.FeeRate > 0 ? $" · {Percent(plan.Terms.FeeRate)} fee" : "")
+                    @(plan.Terms.Start is { } s && plan.Terms.Finish is { } f ? $" · {PlanPeopleFormat.Range(s, f)}" : "")
+                </span>
+                @if (plan.CanEditTerms)
+                {
+                    <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => _editing = !_editing" data-testid="plan-terms-edit">@(_editing ? "Close" : "Change the ceiling or funding")</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => _editingCategories = !_editingCategories" data-testid="plan-categories-edit">@(_editingCategories ? "Close" : "Labor categories")</MudButton>
+                }
             </div>
-        }
-        @if (_editing)
-        {
-            <div class="wb-approval-row mt-1" data-testid="plan-terms-form">
-                <MudNumericField T="decimal?" @bind-Value="_ceiling" Label="Ceiling ($)" Format="N0" Min="0" Style="max-width:170px" Margin="Margin.Dense" Variant="Variant.Outlined" />
-                <MudNumericField T="decimal?" @bind-Value="_funded" Label="Funded ($)" Format="N0" Min="0" Style="max-width:170px" Margin="Margin.Dense" Variant="Variant.Outlined" />
-                <MudNumericField T="decimal?" @bind-Value="_fee" Label="Fee (%)" Min="0" Max="99" Style="max-width:110px" Margin="Margin.Dense" Variant="Variant.Outlined" />
-                <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveTermsAsync" Disabled="_busy">Save</MudButton>
-                <span class="wb-approval-text">Leave a box as the contract says to keep following it.</span>
-            </div>
+            @if (plan.Categories?.Where(c => c.Selected).ToList() is { Count: > 0 } picked)
+            {
+                <div class="wb-approval-terms" data-testid="plan-categories">
+                    <span>Plan with: @string.Join(", ", picked.Select(c => c.Label))</span>
+                </div>
+            }
+            @if (_editingCategories && plan.Categories is { } all)
+            {
+                <div class="wb-approval-row mt-1" data-testid="plan-categories-form">
+                    <MudSelect T="Guid" SelectedValues="_categoryIds" SelectedValuesChanged="values => _categoryIds = values.ToHashSet()" MultiSelection="true"
+                               Label="Labor categories" Margin="Margin.Dense" Variant="Variant.Outlined" Style="max-width:420px">
+                        @foreach (var c in all)
+                        {
+                            <MudSelectItem T="Guid" Value="c.Id">@c.Label@(c.OnContract ? " · on the contract" : "")</MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveCategoriesAsync" Disabled="_busy" data-testid="plan-categories-save">Save</MudButton>
+                    <span class="wb-approval-text">The project manager plans with these. Leave it empty to allow any.</span>
+                </div>
+            }
+            @if (_editing)
+            {
+                <div class="wb-approval-row mt-1" data-testid="plan-terms-form">
+                    <MudNumericField T="decimal?" @bind-Value="_ceiling" Label="Ceiling ($)" Format="N0" Min="0" Style="max-width:170px" Margin="Margin.Dense" Variant="Variant.Outlined" />
+                    <MudNumericField T="decimal?" @bind-Value="_funded" Label="Funded ($)" Format="N0" Min="0" Style="max-width:170px" Margin="Margin.Dense" Variant="Variant.Outlined" />
+                    <MudNumericField T="decimal?" @bind-Value="_fee" Label="Fee (%)" Min="0" Max="99" Style="max-width:110px" Margin="Margin.Dense" Variant="Variant.Outlined" />
+                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveTermsAsync" Disabled="_busy">Save</MudButton>
+                    <span class="wb-approval-text">Leave a box as the contract says to keep following it.</span>
+                </div>
+            }
         }
     </div>
+    }
 }
 
 @code {
     [Parameter, EditorRequired] public Guid ProjectId { get; set; }
+
+    /// <summary>The bar (status, next step, Submit or Approve) sits above the WBS grid; the details (steps, terms) below it.</summary>
+    [Parameter] public PlanApprovalPart Part { get; set; } = PlanApprovalPart.Bar;
 
     /// <summary>Changes when the plan changes, so "changed since approval" is fresh.</summary>
     [Parameter] public int Version { get; set; }
@@ -133,6 +160,8 @@
     private string? _comment;
     private bool _busy;
     private bool _editing;
+    private bool _detailsOpen;
+    private bool _noteOpen;
     private bool _editingCategories;
     private IReadOnlyCollection<Guid> _categoryIds = new HashSet<Guid>();
     private bool _reviewing;
@@ -170,6 +199,8 @@
 
     private void Set(ProjectPlanDto plan)
     {
+        // Open the first time only, and only for a plan that still has steps to do; after that it stays as the person left it.
+        _detailsOpen = _plan is null ? plan.Status is PlanApprovalStatus.Draft or PlanApprovalStatus.Returned && plan.Steps?.Any(x => !x.Done) == true : _detailsOpen;
         _plan = plan;
         (_ceiling, _funded, _fee) = (plan.Terms.Ceiling, plan.Terms.Funded, Math.Round(plan.Terms.FeeRate * 100, 2));
         _categoryIds = (plan.Categories ?? []).Where(c => c.Selected).Select(c => c.Id).ToHashSet();
@@ -269,7 +300,7 @@
         try
         {
             Set(await action(plans));
-            (_note, _comment, _editing, _editingCategories) = (null, null, false, false);
+            (_note, _comment, _editing, _editingCategories, _noteOpen) = (null, null, false, false, false);
             Snackbar.Add(done, Severity.Success);
             await Changed.InvokeAsync();
         }
@@ -311,6 +342,11 @@
         _ when !plan.SetupDone => "Plan it now. You can submit it once Finance has added the project's funding and labor categories.",
         _ => "Build the WBS and assign people, then submit the plan to Finance.",
     };
+
+    private static string DetailsHint(ProjectPlanDto plan) =>
+        plan.Steps?.Count(x => !x.Done) is > 0 and var todo
+            ? $"{todo} step{(todo == 1 ? "" : "s")} to go, and the contract's terms"
+            : "The contract's terms and where the project is in its life";
 
     private static string When(DateTime? utc) => utc is { } t ? $" on {t:MMM d}" : "";
 

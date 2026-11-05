@@ -83,6 +83,12 @@ public sealed class HttpInviteService(HttpClient http) : IInviteService
         using var response = await http.PostAsync($"api/v1/admin/invites/{inviteId}/revoke", null, cancellationToken);
         return await response.ReadAsync<InviteDto>(cancellationToken);
     }
+
+    public async Task<InviteLinkDto> GetLinkAsync(Guid inviteId, CancellationToken cancellationToken = default)
+    {
+        using var response = await http.PostAsync($"api/v1/admin/invites/{inviteId}/link", null, cancellationToken);
+        return await response.ReadAsync<InviteLinkDto>(cancellationToken);
+    }
 }
 
 public sealed class HttpAccessReviewService(HttpClient http) : IAccessReviewService

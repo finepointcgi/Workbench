@@ -7,7 +7,7 @@ namespace Workbench.ApiClient;
 internal static class ApiResponses
 {
     /// <summary>
-    /// Maps 404 to <see cref="WorkbenchNotFoundException"/>, 403 to <see cref="WorkbenchForbiddenException"/> and 400 to
+    /// Maps 402 to <see cref="WorkbenchEditionException"/>, 404 to <see cref="WorkbenchNotFoundException"/>, 403 to <see cref="WorkbenchForbiddenException"/> and 400 to
     /// <see cref="ArgumentException"/>, like the in-process services.
     /// </summary>
     public static async Task EnsureOkAsync(this HttpResponseMessage response, CancellationToken cancellationToken)
@@ -20,6 +20,7 @@ internal static class ApiResponses
         var detail = await response.Content.ReadAsStringAsync(cancellationToken);
         throw response.StatusCode switch
         {
+            HttpStatusCode.PaymentRequired => new WorkbenchEditionException(detail),
             HttpStatusCode.NotFound => new WorkbenchNotFoundException(detail),
             HttpStatusCode.Forbidden => new WorkbenchForbiddenException(string.IsNullOrWhiteSpace(detail) ? "You don't have permission to do that." : detail),
             HttpStatusCode.BadRequest => new ArgumentException(detail),

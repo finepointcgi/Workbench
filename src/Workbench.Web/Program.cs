@@ -52,6 +52,9 @@ builder.Services.AddMudServices();
 builder.Services.AddProblemDetails();
 
 builder.Services.AddWorkbenchApplication();
+var licenseOptions = new Workbench.Application.Licensing.LicenseOptions();
+builder.Configuration.GetSection(Workbench.Application.Licensing.LicenseOptions.SectionName).Bind(licenseOptions);
+Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.Replace(builder.Services, ServiceDescriptor.Singleton(licenseOptions)); // License:EditionOverride turns Business on for the demo; License:PublicKeyPem replaces the built-in public key.
 builder.Services.AddWorkbenchInfrastructure(builder.Configuration);
 
 // Authentication registers ICurrentUser, which the notifications/automation hosting decorates, so it comes first.
@@ -130,6 +133,7 @@ app.MapWorkbenchCustomerView(); // Customer links /c/{token}: one contract's fun
 app.MapWorkbenchLiveUpdatesHub();
 app.MapWorkbenchNotificationsHub();
 app.MapWorkbenchEmailEvents(); // Bounce and complaint webhooks from SendGrid and SES (docs/operations/email.md).
+app.MapWorkbenchJiraWebhooks(); // Jira issue webhooks for linked projects (docs/integrations/jira.md).
 app.MapWorkbenchGitLabWebhooks(); // GitLab issue, epic and milestone webhooks for linked projects (docs/integrations/gitlab.md).
 app.MapWorkbenchCalendarFeed(); // Read-only per-person .ics feeds behind a private token.
 app.MapRazorComponents<App>()

@@ -12,6 +12,8 @@ public enum ImportSource
     /// <summary>A Smartsheet sheet exported to .xlsx.</summary>
     SmartsheetExcel,
 
+    /// <summary>CSV or Excel exports of Unanet reports and lists.</summary>
+    Unanet,
     /// <summary>Excel or CSV exports of Capture Exec companies, contacts and opportunities.</summary>
     CaptureExec,
 }
@@ -39,6 +41,13 @@ public enum ImportKind
     OpenArInvoices,
     OpenApBills,
 
+    // Unanet migration: who may charge what, and approved time carried over as history.
+    Assignments,
+    Timesheets,
+    // Costpoint integration: fiscal calendar and indirect rate structure.
+    FiscalCalendar,
+    IndirectRates,
+    IndirectPools,
     // Business development (Capture Exec): companies → accounts, contacts, opportunities.
     CrmAccounts,
     CrmContacts,

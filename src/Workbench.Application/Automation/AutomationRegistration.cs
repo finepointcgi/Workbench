@@ -26,6 +26,8 @@ public static class AutomationRegistration
         services.AddSingleton<Notifier>();
         services.AddSingleton<INotificationPublisher>(sp => sp.GetRequiredService<Notifier>());
         services.AddSingleton<DigestSender>();
+        services.AddScoped<ReminderGate>();
+        services.AddScoped<IReminderSettingsService, ReminderSettingsService>();
         services.AddSingleton<SheetAutomationRuntime>();
         services.AddScoped<AutomationItemServiceAccessor>();
         services.AddScoped<SheetAutomations>();

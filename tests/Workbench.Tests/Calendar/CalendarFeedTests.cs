@@ -50,7 +50,27 @@ public sealed class CalendarFeedTests
         }
 
         var pto = (await new HttpLeaveBalanceService(employee).GetMyBalancesAsync()).First(b => b.Type == LeaveTypeKind.Pto);
-        var asked = await new HttpLeaveRequestService(employee).CreateAsync(new CreateLeaveRequest(pto.PolicyId, day, day, null, "Long weekend"));
+        // Skip holidays too: the request is refused for a day that isn't a working day.
+        LeaveRequestDto? asked = null;
+        var leaveDay = day;
+        for (var tries = 0; asked is null && tries < 14; tries++, day = day.AddDays(1))
+        {
+            if (day.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday)
+            {
+                continue;
+            }
+
+            try
+            {
+                asked = await new HttpLeaveRequestService(employee).CreateAsync(new CreateLeaveRequest(pto.PolicyId, day, day, null, "Long weekend"));
+                leaveDay = day;
+            }
+            catch (ArgumentException)
+            {
+            }
+        }
+
+        Assert.NotNull(asked);
         var before = await anonymous.GetAsync("/" + on.Url);
         Assert.DoesNotContain("SUMMARY:Out: ", await before.Content.ReadAsStringAsync()); // pending leave isn't on the calendar
         await new HttpLeaveRequestService(finance).ApproveAsync(asked.Id, new DecideLeaveRequest("Enjoy"));
@@ -61,7 +81,7 @@ public sealed class CalendarFeedTests
         Assert.StartsWith("text/calendar", response.Content.Headers.ContentType!.ToString());
         var ics = await response.Content.ReadAsStringAsync();
         Assert.StartsWith("BEGIN:VCALENDAR", ics);
-        Assert.Contains($"DTSTART;VALUE=DATE:{day:yyyyMMdd}", ics);
+        Assert.Contains($"DTSTART;VALUE=DATE:{leaveDay:yyyyMMdd}", ics);
         Assert.Contains("SUMMARY:Out: ", ics);
         Assert.Contains("SUMMARY:Timesheet due", ics);
         Assert.DoesNotContain("alex", ics, StringComparison.OrdinalIgnoreCase); // only the person's own entries; no addresses in it

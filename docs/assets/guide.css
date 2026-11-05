@@ -1,0 +1,85 @@
+/* Screenshots: a light frame so white pages don't melt into the background. */
+.md-typeset img.shot {
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 6px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+}
+
+.md-typeset figure {
+  margin: 1.2em 0 1.6em;
+}
+
+.md-typeset figcaption {
+  font-size: 0.72rem;
+  color: var(--md-default-fg-color--light);
+  max-width: 100%;
+}
+
+/* Role badges used at the top of pages ("Who uses this"). */
+.md-typeset .roles {
+  font-size: 0.72rem;
+  color: var(--md-default-fg-color--light);
+  margin-top: -0.6em;
+}
+
+/* Phone screenshots stay phone-sized. */
+.md-typeset img.phone {
+  max-width: 320px;
+}
+
+/* Home page cards. */
+.md-typeset .grid.cards > ul > li {
+  border-radius: 8px;
+}
+
+/* Brand: the app's accent (Workbench.Ui WorkbenchTheme) and a light header like the app bar, so the orange logo shows. */
+:root, [data-md-color-scheme="default"] {
+  --md-primary-fg-color: #c2410c;
+  --md-primary-fg-color--light: #ea580c;
+  --md-primary-fg-color--dark: #9a3412;
+  --md-accent-fg-color: #9a3412;
+  --wb-header-bg: #f9f9ff;
+  --wb-header-fg: #191c20;
+}
+
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #ffb59a;
+  --md-primary-fg-color--light: #ffcbb6;
+  --md-primary-fg-color--dark: #c2410c;
+  --md-accent-fg-color: #ffcbb6;
+  --md-typeset-a-color: #ffb59a;
+  --wb-header-bg: #111318;
+  --wb-header-fg: #e2e2e9;
+}
+
+.md-header,
+.md-tabs {
+  background-color: var(--wb-header-bg);
+  color: var(--wb-header-fg);
+}
+
+.md-header {
+  box-shadow: 0 1px 0 var(--md-default-fg-color--lightest);
+}
+
+.md-header__button.md-logo img {
+  height: 1.4rem;
+  width: auto;
+}
+
+.md-search__input {
+  background-color: var(--md-default-fg-color--lightest);
+  color: var(--wb-header-fg);
+}
+
+.md-search__input::placeholder,
+.md-search__icon {
+  color: var(--md-default-fg-color--light);
+}
+
+/* Setting names and other identifiers in tables: don't split them mid-word; the table scrolls instead. */
+.md-typeset td code {
+  word-break: keep-all;
+  overflow-wrap: normal;
+  white-space: nowrap;
+}

@@ -169,7 +169,12 @@ public sealed record OpenDemandDto(
     decimal AllocatedHours,
     decimal OpenHours);
 
-public sealed record FindPeopleQuery(DateOnly From, DateOnly To, Guid? LaborCategoryId = null, decimal MinAvailableHours = 1);
+/// <summary>
+/// Who is free between two dates. <see cref="SkillIds"/> keeps only people who have every one of those skills at
+/// <see cref="MinSkillLevel"/> or better.
+/// </summary>
+public sealed record FindPeopleQuery(DateOnly From, DateOnly To, Guid? LaborCategoryId = null, decimal MinAvailableHours = 1,
+    IReadOnlyList<Guid>? SkillIds = null, SkillLevel MinSkillLevel = SkillLevel.Working);
 
 public sealed record AvailableWeekDto(DateOnly WeekStart, decimal Capacity, decimal Allocated, decimal Available);
 
@@ -181,7 +186,8 @@ public sealed record AvailablePersonDto(
     decimal CapacityHours,
     decimal AllocatedHours,
     decimal AvailableHours,
-    IReadOnlyList<AvailableWeekDto> Weeks);
+    IReadOnlyList<AvailableWeekDto> Weeks,
+    IReadOnlyList<EmployeeSkillDto>? Skills = null);
 
 /// <summary>Capacity and load views over allocations, budgets and approved time.</summary>
 public interface IResourcePlanningService

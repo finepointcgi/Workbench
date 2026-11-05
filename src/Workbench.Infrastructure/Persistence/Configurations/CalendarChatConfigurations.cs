@@ -40,3 +40,24 @@ internal sealed class ChatNotificationChoiceConfiguration : IEntityTypeConfigura
         b.HasIndex(c => new { c.UserEmail, c.ChannelKind, c.Group }).IsUnique();
     }
 }
+
+internal sealed class ReminderPreferenceConfiguration : IEntityTypeConfiguration<ReminderPreference>
+{
+    public void Configure(EntityTypeBuilder<ReminderPreference> b)
+    {
+        b.Property(p => p.UserEmail).HasMaxLength(320);
+        b.HasIndex(p => p.UserEmail).IsUnique();
+    }
+}
+
+internal sealed class ReminderLogConfiguration : IEntityTypeConfiguration<ReminderLog>
+{
+    public void Configure(EntityTypeBuilder<ReminderLog> b)
+    {
+        b.Property(l => l.UserEmail).HasMaxLength(320);
+        b.Property(l => l.Kind).HasMaxLength(32);
+        b.Property(l => l.Key).HasMaxLength(64);
+        b.HasIndex(l => new { l.UserEmail, l.Kind, l.Key }).IsUnique();
+        b.HasIndex(l => new { l.UserEmail, l.Kind, l.SentOn });
+    }
+}

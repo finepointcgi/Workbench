@@ -55,6 +55,7 @@ public static class WorkbenchApi
         v1.MapProjectHubEndpoints();
         v1.MapMyTodoEndpoints();
         v1.MapSignInSettingsEndpoints();
+        v1.MapLicenseEndpoints();
         v1.MapSupportEndpoints();
         v1.MapMigrationEndpoints();
         v1.MapTaskEndpoints();
@@ -76,6 +77,7 @@ public static class WorkbenchApi
         v1.MapBankFileEndpoints();
         v1.MapSalesTaxEndpoints();
         v1.MapIntegrationEndpoints();
+        v1.MapJiraEndpoints(); // Jira sync: connection and project links (under /integrations).
         v1.MapGitLabEndpoints(); // GitLab sync: connection and project links (under /integrations).
         v1.MapComplianceEndpoints();
         v1.MapReceiptEndpoints();
@@ -93,6 +95,10 @@ public static class WorkbenchApi
         try
         {
             return await next(context);
+        }
+        catch (WorkbenchEditionException ex)
+        {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status402PaymentRequired);
         }
         catch (WorkbenchForbiddenException ex)
         {

@@ -8,11 +8,12 @@
     <DialogContent>
         <MudStack Spacing="2">
             <MudAutocomplete T="StaffingCandidateDto" Label="Person" Value="_person" ValueChanged="OnPersonChangedAsync" SearchFunc="SearchPeople"
-                             ToStringFunc="@(c => c?.Name ?? "")" Required="true" ResetValueOnEmptyText="true" CoerceText="true" MaxItems="50"
+                             ToStringFunc="@(c => c?.Name ?? "")" Required="true" ResetValueOnEmptyText="true" CoerceText="true" MaxItems="50" HelperText="Type a name or a skill, like C# or cost accounting."
                              Disabled="@(Existing is not null)" data-testid="assign-person" AutoFocus="@(Existing is null && (Start?.EmployeeId ?? Guid.Empty) == Guid.Empty)">
                 <ItemTemplate Context="c">
                     <span>@c.Name</span>
                     <span class="mud-text-secondary"> · @ResourcingFormat.Hours(c.BookedHoursPerWeek) of @ResourcingFormat.Hours(c.StandardHoursPerWeek) h a week booked</span>
+                    <div><SkillChips Skills="c.Skills" Max="5" /></div>
                 </ItemTemplate>
             </MudAutocomplete>
             <MudSelect T="Guid?" Label="Task" Value="_wbsId" ValueChanged="OnTaskChangedAsync" data-testid="assign-task"
@@ -151,7 +152,8 @@
     private Task<IEnumerable<StaffingCandidateDto>> SearchPeople(string? text, CancellationToken _) =>
         Task.FromResult(string.IsNullOrWhiteSpace(text)
             ? _candidates.AsEnumerable()
-            : _candidates.Where(c => c.Name.Contains(text.Trim(), StringComparison.OrdinalIgnoreCase)));
+            : _candidates.Where(c => c.Name.Contains(text.Trim(), StringComparison.OrdinalIgnoreCase)
+                || (c.Skills ?? []).Any(s => s.Name.Contains(text.Trim(), StringComparison.OrdinalIgnoreCase))));
 
     private async Task OnPersonChangedAsync(StaffingCandidateDto? person)
     {

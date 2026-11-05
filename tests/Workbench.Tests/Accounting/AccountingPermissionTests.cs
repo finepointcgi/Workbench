@@ -60,6 +60,7 @@ public sealed class AccountingPermissionTests
         services.AddSingleton<ICurrentUser>(user);
         services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         services.AddWorkbenchApplication();
+        services.UseBusinessEdition();
         await using var provider = services.BuildServiceProvider();
         await using var scope = provider.CreateAsyncScope();
         T Get<T>() where T : notnull => scope.ServiceProvider.GetRequiredService<T>();

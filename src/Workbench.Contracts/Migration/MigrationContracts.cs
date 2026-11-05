@@ -77,7 +77,7 @@ public interface IMigrationService
 
 // ---- Parallel-run reconciliation ----
 
-public enum ReconReportKind { TrialBalance, ProjectCost, LaborHours, ArAging, ApAging, RevenueByProject, IndirectRates }
+public enum ReconReportKind { TrialBalance, ProjectCost, LaborHours, ArAging, ApAging, RevenueByProject, IndirectRates, UnanetTimesheets, UnanetProjectCost }
 
 public enum ReconValueFormat { Money, Hours, Rate }
 
@@ -111,7 +111,8 @@ public sealed record ReconReportDto(
     string? SampleFile,
     bool UsesRange,
     bool UsesAsOf,
-    ReconRange DefaultRange);
+    ReconRange DefaultRange,
+    string Source = "Costpoint");
 
 /// <summary>
 /// Where a field comes from in the Costpoint file. A measure is <see cref="Column"/> − <see cref="MinusColumn"/>
@@ -176,7 +177,7 @@ public sealed record ReconValueDto(string Field, decimal Costpoint, decimal Work
 }
 
 /// <summary>One compared key. <see cref="SourceRows"/> are the Costpoint file rows added into it.</summary>
-public sealed record ReconRowDto(string Key, IReadOnlyList<string> KeyParts, string? Label, ReconRowStatus Status, IReadOnlyList<ReconValueDto> Values, IReadOnlyList<int> SourceRows);
+public sealed record ReconRowDto(string Key, IReadOnlyList<string> KeyParts, string? Label, ReconRowStatus Status, IReadOnlyList<ReconValueDto> Values, IReadOnlyList<int> SourceRows, string? Cause = null);
 
 /// <summary>A file row that couldn't be read (bad number, missing key).</summary>
 public sealed record ReconProblemDto(int Row, string Message);

@@ -83,7 +83,7 @@ internal static class PurchasingSeed
 
         var user = new SeedUser();
         var kit = new Kit(services, user);
-        var today = DateOnly.FromDateTime(now);
+        var today = DateOnly.FromDateTime(DateTime.Now);
         var period = await db.Set<FiscalPeriod>().AsNoTracking().FirstOrDefaultAsync(p => p.Start <= today && p.End >= today && p.Status == PeriodStatus.Open, cancellationToken);
         if (period is null)
         {

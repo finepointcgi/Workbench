@@ -18,7 +18,7 @@ internal static class ProjectAccountingSeed
             return;
         }
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = DateOnly.FromDateTime(DateTime.Now);
         var fyStart = new DateOnly(today.Month >= 10 ? today.Year : today.Year - 1, 10, 1);
 
         // Fiscal years run October to September (the federal fiscal year); the current and next one.

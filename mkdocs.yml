@@ -1,0 +1,220 @@
+# The Workbench user and administrator guide, published to GitHub Pages by .github/workflows/docs.yml.
+# Preview locally:  pip install -r docs/requirements.txt && mkdocs serve
+# Screenshots come from tools/docs-screenshots (see its README).
+site_name: Workbench Guide
+site_description: User and administrator guide for Workbench, the project ERP and work-management system for government contractors.
+site_url: https://finepointcgi.github.io/Workbench/guide/
+repo_url: https://github.com/finepointcgi/Workbench
+repo_name: finepointcgi/Workbench
+edit_uri: edit/master/docs/
+docs_dir: docs
+site_dir: build/guide
+copyright: Workbench
+
+theme:
+  name: material
+  language: en
+  logo: assets/logo.svg
+  icon:
+    repo: fontawesome/brands/github
+  favicon: assets/logo.svg
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.indexes
+    - navigation.footer
+    - search.suggest
+    - search.highlight
+    - content.action.edit
+    - toc.follow
+
+extra_css:
+  - assets/guide.css
+
+plugins:
+  - search
+  - glightbox:
+      zoomable: true
+      draggable: false
+      skip_classes:
+        - no-lightbox
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.keys
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+# Developer notes and internal ISMS records stay in the repository but aren't published.
+exclude_docs: |
+  CONVENTIONS.md
+  ux/
+  iso/
+  feature-coverage.md
+  integrations/unanet-api-sync-design.md
+  security/threat-model.md
+  compliance/nist-800-171/gaps.md
+  requirements.txt
+  .DS_Store
+
+not_in_nav: |
+  /training/agenda-*.md
+  /training/exercise-script.md
+  /training/lifecycle-demo.md
+
+validation:
+  links:
+    not_found: info
+    absolute_links: info
+    unrecognized_links: info
+    anchors: info
+
+nav:
+  - Home: index.md
+  - Getting started:
+      - getting-started/index.md
+      - Signing in and your home page: getting-started/signing-in.md
+      - Finding your way around: getting-started/getting-around.md
+      - Help, notifications and feedback: getting-started/help.md
+      - Workbench on your phone: getting-started/mobile.md
+  - User guide:
+      - user-guide/index.md
+      - My work:
+          - Timesheets: user-guide/time.md
+          - Expenses, receipts and travel: user-guide/expenses.md
+          - Leave: user-guide/leave.md
+          - Purchase requests and receiving: user-guide/requisitions.md
+      - Approvals: user-guide/approvals.md
+      - Projects:
+          - Projects and the project page: user-guide/projects.md
+          - Planning a project: user-guide/project-plan.md
+          - Resourcing: user-guide/resourcing.md
+          - Project costs (ODCs): user-guide/project-costs.md
+          - Proposal pricing: user-guide/pricing.md
+      - Sheets and dashboards:
+          - Sheets: user-guide/sheets.md
+          - Dashboards: user-guide/dashboards.md
+      - People and HR: user-guide/people.md
+      - Business development: user-guide/business-development.md
+      - Reports: user-guide/reports.md
+  - Finance guide:
+      - finance/index.md
+      - Accounting and period close: finance/accounting.md
+      - Billing and receivables: finance/billing.md
+      - Payables and purchasing: finance/payables.md
+      - Cash, banks and cards: finance/cash.md
+      - Fixed assets: finance/assets.md
+      - Payroll: finance/payroll.md
+      - Revenue and compliance: finance/revenue.md
+      - Corporate budgets: finance/planning.md
+  - Materials guide:
+      - materials/index.md
+      - Parts and inventory: materials/inventory.md
+      - Manufacturing: materials/manufacturing.md
+      - Quality and engineering: materials/quality.md
+      - Sales orders and shipping: materials/shipping.md
+  - Admin guide:
+      - admin-guide/index.md
+      - Setup checklist: admin-guide/setup.md
+      - Organization and calendars: admin-guide/organization.md
+      - Customers, contracts and projects: admin-guide/contracts-projects.md
+      - Users, roles and sign-in: admin-guide/users-and-access.md
+      - Approval workflows: admin-guide/approval-workflows.md
+      - Customization and layouts: admin-guide/customization.md
+      - Automation: admin-guide/automation.md
+      - Importing and go-live: admin-guide/import-and-migration.md
+      - Integrations: admin-guide/integrations.md
+      - Compliance readiness: admin-guide/compliance.md
+      - AI assistant: admin-guide/assistant.md
+      - Audit log and support requests: admin-guide/audit-and-support.md
+      - Multiple companies: admin-guide/companies.md
+      - Hosting and operations: admin-guide/hosting.md
+  - Reference:
+      - Quick start: quick-start.md
+      - Editions: editions.md
+      - Glossary of terms: reference/glossary.md
+      - Sheet formulas: sheets/formulas.md
+      - Training:
+          - training/README.md
+          - Employee card: training/card-employee.md
+          - Manager card: training/card-manager.md
+          - Finance card: training/card-finance.md
+          - Admin card: training/card-admin.md
+      - Operations:
+          - operations/README.md
+          - Deployment: operations/deployment.md
+          - Configuration: operations/configuration.md
+          - Email: operations/email.md
+          - Backup and restore: operations/backup-restore.md
+          - Data protection keys: operations/data-protection-keys.md
+          - Object storage: operations/object-storage.md
+          - Monitoring: operations/monitoring.md
+          - Alerts: operations/alerts.md
+          - Performance: operations/performance.md
+          - Runbooks: operations/runbooks.md
+          - Incident response: operations/incident-response.md
+          - Public demo: demo-hosting.md
+      - Security:
+          - Security configuration: security/configuration.md
+          - Built-in accounts: security/built-in-accounts.md
+          - Single sign-on with Entra ID: security/sso-entra.md
+          - Single sign-on with Okta: security/sso-okta.md
+          - Permissions: security/permissions.md
+          - Customer view: security/customer-view.md
+          - Supplier portal: security/supplier-portal.md
+          - AI assistant: security/ai-assistant.md
+      - Integrations:
+          - API keys: integrations/api-keys.md
+          - Webhooks: integrations/webhooks.md
+          - Connectors: integrations/connectors.md
+          - Calendar and Teams: integrations/calendar-and-teams.md
+          - GitLab: integrations/gitlab.md
+          - Jira: integrations/jira.md
+          - Chat: integrations/chat.md
+          - Costpoint: integrations/costpoint.md
+          - Unanet: integrations/unanet.md
+      - Technical notes:
+          - Customization internals: customization.md
+          - Automation internals: automation.md
+          - Multiple companies: multicompany.md
+          - Project visibility: project-visibility.md
+          - Costpoint cutover: migration/costpoint-cutover.md
+      - Compliance:
+          - compliance/README.md
+          - DCAA SF 1408: compliance/dcaa/sf1408.md
+          - NIST SP 800-171: compliance/nist-800-171/README.md
+          - NIST control mapping: compliance/nist-800-171/control-mapping.md
+          - System security plan: compliance/nist-800-171/system-security-plan.md
+          - Accessibility statement: compliance/accessibility/statement.md
+          - VPAT: compliance/accessibility/vpat.md

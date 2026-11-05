@@ -8,6 +8,18 @@
       "port": 5104
     },
     {
+      "name": "workbench-docs",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "ASPNETCORE_ENVIRONMENT=Development",
+        "ASPNETCORE_URLS=http://localhost:5210",
+        "ConnectionStrings__Workbench=Data Source=/Users/finepointcgi/CostpointSmartsheets/tools/docs-screenshots/docs.db",
+        "Email__PickupFolder=/Users/finepointcgi/CostpointSmartsheets/tools/docs-screenshots/mail",
+        "dotnet", "run", "--project", "src/Workbench.Web", "--no-launch-profile"
+      ],
+      "port": 5210
+    },
+    {
       "name": "workbench-multitenant-postgres",
       "runtimeExecutable": "env",
       "runtimeArgs": [

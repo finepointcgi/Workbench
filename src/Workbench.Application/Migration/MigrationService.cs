@@ -68,6 +68,13 @@ public sealed class MigrationService(
                 new(DomainSource.Costpoint, nameof(DomainKind.Projects), "Projects and WBS"),
                 new(DomainSource.Costpoint, nameof(DomainKind.Budgets), "Budgets", Required: false),
             ]),
+        new("indirect", "Fiscal calendar and indirect rates",
+            "Costpoint's fiscal years and periods, the indirect pool structure (which accounts feed fringe, overhead and G&A, and the base of each) and the provisional, actual and forward-pricing rates. Skip what Workbench already has set up.",
+            ["accounts"], [
+                new(DomainSource.Costpoint, nameof(DomainKind.FiscalCalendar), "Fiscal calendar", Required: false),
+                new(DomainSource.Costpoint, nameof(DomainKind.IndirectPools), "Indirect pools and bases", Required: false),
+                new(DomainSource.Costpoint, nameof(DomainKind.IndirectRates), "Indirect rates", Required: false),
+            ], AnyOneImport: true),
         new("open-items", "Open AP and AR",
             "Vendors, then unpaid vendor invoices and customer invoices at cut-over. They're not posted: their balances come in with the opening balances.",
             ["accounts", "orgs", "contracts", "projects"], [

@@ -56,13 +56,13 @@ internal static class LayoutsSeed
                 DashboardId = home.Id, Type = type, Title = title, Order = home.Widgets.Count, Width = width,
                 Height = Model.WidgetHeight.Medium, ConfigJson = JsonSerializer.Serialize(config, Json),
             });
+        Add(Model.WidgetType.MyTodo, "To do", 8, new(Pinned: true));
+        Add(Model.WidgetType.WaitingOnYou, "Waiting on you", 4, new());
         Add(Model.WidgetType.Announcement, "Month-end close", 12, new(Markdown: "October close starts on the **3rd business day**: approve timesheets and AP bills by then. Questions? Ask Finance.", Pinned: true));
         Add(Model.WidgetType.Kpi, "Funding remaining", 3, new(Kpi: Dash.KpiKind.FundingRemaining, Pinned: true));
         Add(Model.WidgetType.Kpi, "AR aging", 3, new(Kpi: Dash.KpiKind.ArAging));
         Add(Model.WidgetType.Kpi, "Open POs", 3, new(Kpi: Dash.KpiKind.OpenPurchaseOrders));
         Add(Model.WidgetType.Kpi, "Utilization", 3, new(Kpi: Dash.KpiKind.Utilization));
-        Add(Model.WidgetType.MyTodo, "To do", 8, new(Pinned: true));
-        Add(Model.WidgetType.WaitingOnYou, "Waiting on you", 4, new());
         Add(Model.WidgetType.Shortcuts, "Shortcuts", 8, new(Shortcuts:
         [
             new("New bill", "purchasing/bills/new", "add"),

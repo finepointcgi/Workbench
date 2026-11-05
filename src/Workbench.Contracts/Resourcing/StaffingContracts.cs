@@ -150,7 +150,10 @@ public sealed record StaffingCandidateDto(
     decimal StandardHoursPerWeek,
 
     /// <summary>Average hours a week they're already staffed (all projects) over the next four weeks.</summary>
-    decimal BookedHoursPerWeek);
+    decimal BookedHoursPerWeek,
+
+    /// <summary>What they can do, best first, so the person assigning can see who fits the work.</summary>
+    IReadOnlyList<EmployeeSkillDto>? Skills = null);
 
 /// <summary>
 /// Staffing a project against its labor budget. Finance, administrators, resource managers and the project's manager.

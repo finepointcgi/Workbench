@@ -5,7 +5,7 @@ using ImportKind = Workbench.Domain.Imports.ImportKind;
 namespace Workbench.Application.Imports.Costpoint;
 
 /// <summary>Costpoint organizations (Organizations screen / ORG export) → org units, matched on the org id.</summary>
-public sealed class OrgUnitImporter : CostpointImporter
+public class OrgUnitImporter : CostpointImporter
 {
     public override ImportKind Kind => ImportKind.OrgUnits;
     public override string Title => "Organizations";
@@ -77,7 +77,7 @@ public sealed class OrgUnitImporter : CostpointImporter
 }
 
 /// <summary>Costpoint project labor categories (PLCs) → labor categories, matched on the PLC code.</summary>
-public sealed class LaborCategoryImporter : CostpointImporter
+public class LaborCategoryImporter : CostpointImporter
 {
     public override ImportKind Kind => ImportKind.LaborCategories;
     public override string Title => "Labor categories (PLCs)";
@@ -137,7 +137,7 @@ public sealed class LaborCategoryImporter : CostpointImporter
 /// Costpoint employees (Employee Basic Info / employee export) → employees, matched on the employee id. A PLC column
 /// sets the default labor category (creating missing PLCs), and an hourly rate column adds an effective-dated cost rate.
 /// </summary>
-public sealed class EmployeeImporter : CostpointImporter
+public class EmployeeImporter : CostpointImporter
 {
     public override ImportKind Kind => ImportKind.Employees;
     public override string Title => "Employees";
@@ -323,7 +323,7 @@ public sealed class EmployeeImporter : CostpointImporter
 }
 
 /// <summary>Costpoint employee salary/rate history → effective-dated cost rates, matched on employee + effective date.</summary>
-public sealed class CostRateImporter : CostpointImporter
+public class CostRateImporter : CostpointImporter
 {
     public override ImportKind Kind => ImportKind.CostRates;
     public override string Title => "Employee cost rates";
@@ -399,7 +399,7 @@ internal static class CostRates
         }
 
         await context.Run.CreateAsync(row.FileName, row.Number, typeof(EmployeeCostRate), "Cost rate", key, $"{hourly:0.00}/h from {from:yyyy-MM-dd}",
-            async () => (await people.AddCostRateAsync(employeeId, new AddCostRateRequest(from, hourly, reason ?? $"Imported from Costpoint (import job {context.Job.Id.ToString()[..8]})"), cancellationToken)).Id,
+            async () => (await people.AddCostRateAsync(employeeId, new AddCostRateRequest(from, hourly, reason ?? $"Imported from {CostpointImporter.SourceName(context)} (import job {context.Job.Id.ToString()[..8]})"), cancellationToken)).Id,
             cancellationToken);
     }
 }
