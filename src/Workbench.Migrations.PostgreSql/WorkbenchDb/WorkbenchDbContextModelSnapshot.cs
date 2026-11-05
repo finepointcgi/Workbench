@@ -5772,6 +5772,11 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                         .HasMaxLength(16)
                         .HasColumnType("character varying(16)");
 
+                    b.Property<string>("SourceId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .UseCollation("C");
+
                     b.Property<string>("SourceUrl")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)")
@@ -5812,6 +5817,8 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                     b.HasIndex("SolicitationKey");
 
                     b.HasIndex("Stage");
+
+                    b.HasIndex("Source", "SourceId");
 
                     b.ToTable("Opportunity");
                 });
@@ -6080,6 +6087,156 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                     b.HasIndex("Status");
 
                     b.ToTable("OpportunityLead");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Crm.OpportunityMilestone", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("CompletedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .UseCollation("C");
+
+                    b.Property<DateOnly>("DueOn")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("IsDone")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .UseCollation("C");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .UseCollation("C");
+
+                    b.Property<Guid>("OpportunityId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("OwnerEmail")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .UseCollation("C");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OpportunityId");
+
+                    b.HasIndex("IsDone", "DueOn");
+
+                    b.ToTable("OpportunityMilestone");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Crm.OpportunityPlanItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .UseCollation("C");
+
+                    b.Property<string>("Detail")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .UseCollation("C");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<Guid>("OpportunityId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .UseCollation("C");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OpportunityId");
+
+                    b.ToTable("OpportunityPlanItem");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Crm.OpportunityPwinAssessment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("AssessedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("AssessedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .UseCollation("C");
+
+                    b.Property<int>("CompetitivePosition")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("CustomerRelationship")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .UseCollation("C");
+
+                    b.Property<Guid>("OpportunityId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("PastPerformance")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("PriceToWin")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SolutionFit")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Teaming")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OpportunityId")
+                        .IsUnique();
+
+                    b.ToTable("OpportunityPwinAssessment");
                 });
 
             modelBuilder.Entity("Workbench.Domain.Crm.OpportunityStageChange", b =>
@@ -25172,6 +25329,33 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                         .WithMany()
                         .HasForeignKey("SavedSearchId")
                         .OnDelete(DeleteBehavior.SetNull);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Crm.OpportunityMilestone", b =>
+                {
+                    b.HasOne("Workbench.Domain.Crm.Opportunity", null)
+                        .WithMany()
+                        .HasForeignKey("OpportunityId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Crm.OpportunityPlanItem", b =>
+                {
+                    b.HasOne("Workbench.Domain.Crm.Opportunity", null)
+                        .WithMany()
+                        .HasForeignKey("OpportunityId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Crm.OpportunityPwinAssessment", b =>
+                {
+                    b.HasOne("Workbench.Domain.Crm.Opportunity", null)
+                        .WithMany()
+                        .HasForeignKey("OpportunityId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Workbench.Domain.Crm.OpportunityStageChange", b =>

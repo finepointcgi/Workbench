@@ -12,7 +12,7 @@ namespace Workbench.Application.Imports.Costpoint;
 /// </summary>
 public abstract class CostpointImporter : IImporter
 {
-    public ImportSource Source => ImportSource.Costpoint;
+    public virtual ImportSource Source => ImportSource.Costpoint;
     public abstract ImportKind Kind { get; }
     public abstract string Title { get; }
     public abstract string Description { get; }

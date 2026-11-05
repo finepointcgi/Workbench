@@ -11,6 +11,9 @@ public enum ImportSource
 
     /// <summary>A Smartsheet sheet exported to .xlsx.</summary>
     SmartsheetExcel,
+
+    /// <summary>Excel or CSV exports of Capture Exec companies, contacts and opportunities.</summary>
+    CaptureExec,
 }
 
 /// <summary>What an import creates or updates.</summary>
@@ -35,6 +38,11 @@ public enum ImportKind
     OpeningBalances,
     OpenArInvoices,
     OpenApBills,
+
+    // Business development (Capture Exec): companies → accounts, contacts, opportunities.
+    CrmAccounts,
+    CrmContacts,
+    Opportunities,
 }
 
 public enum ImportJobStatus
