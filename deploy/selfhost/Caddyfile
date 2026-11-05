@@ -1,0 +1,17 @@
+# TLS-terminating reverse proxy for Workbench (docker-compose.prod.yml). Caddy obtains and renews certificates,
+# replaces any X-Forwarded-* headers a client sends, and proxies WebSockets (Blazor Server) as-is.
+# MultiTenant: serve the base domain and *.base-domain; a wildcard certificate needs a DNS challenge
+# (docs/operations/deployment.md).
+
+{$WORKBENCH_DOMAIN} {
+	tls {$WORKBENCH_TLS}
+	encode zstd gzip
+	reverse_proxy web:8080 {
+		health_uri /health/live
+		health_interval 15s
+	}
+	log {
+		output stdout
+		format json
+	}
+}
