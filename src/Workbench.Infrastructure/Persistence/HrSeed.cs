@@ -27,7 +27,7 @@ internal static class HrSeed
         }
 
         var now = DateTime.UtcNow;
-        var today = DateOnly.FromDateTime(now);
+        var today = DateOnly.FromDateTime(DateTime.Now);
         const string by = "seed@workbench.local";
         var units = await db.Set<OrgUnit>().ToDictionaryAsync(u => u.Code, cancellationToken);
         var categories = await db.Set<LaborCategory>().ToDictionaryAsync(c => c.Code, cancellationToken);

@@ -1,0 +1,234 @@
+@page "/setup/migration/parallel-run"
+@inject IParallelRunService Parallel
+@inject IFiscalCalendarService Calendar
+@inject ISnackbar Snackbar
+
+<PageTitle>Costpoint parallel run · Go-live migration · Workbench</PageTitle>
+
+<SetupHeader Title="Costpoint parallel run" Subtitle="Once Costpoint has closed the month, upload its trial balance and project cost report. Workbench compares them with its own books and says, for every difference, what most likely caused it.">
+    <MudButton Href="setup/migration" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Checklist">Checklist</MudButton>
+    <MudButton Href="setup/migration/reconcile" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.CompareArrows">All reports and sign-off</MudButton>
+</SetupHeader>
+
+@if (_run is null)
+{
+    @if (_error is not null)
+    {
+        <MudAlert Severity="Severity.Warning" Class="mb-3" data-testid="parallel-error">@_error</MudAlert>
+    }
+    else
+    {
+        <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+    }
+    return;
+}
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-3">
+    <MudSelect T="Guid" Label="Month" Value="_run.Period.Id" ValueChanged="PeriodChanged" Style="max-width:320px" data-testid="parallel-period">
+        @foreach (var p in _periods)
+        {
+            <MudSelectItem T="Guid" Value="p.Id">@p.Name (@p.Start.ToString("MMM d") – @p.End.ToString("MMM d, yyyy"))</MudSelectItem>
+        }
+    </MudSelect>
+    @if (_run.IsParallelMonth)
+    {
+        <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined">Parallel month</MudChip>
+    }
+</MudStack>
+
+<MudAlert Severity="@VerdictSeverity" Variant="Variant.Outlined" Class="mb-3" data-testid="parallel-verdict">@_run.Verdict</MudAlert>
+
+@if (!_run.Health.IsClean)
+{
+    <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3" data-testid="parallel-health">
+        Still open in Workbench for this month:
+        @Open(_run.Health.DraftJournalEntries, "draft journal entry", "draft journal entries"),
+        @Open(_run.Health.UnapprovedTimesheets, "timesheet not approved", "timesheets not approved"),
+        @Open(_run.Health.UnpostedBills, "vendor bill not posted", "vendor bills not posted").
+        Finish these before comparing: each one makes the books differ from Costpoint's.
+    </MudAlert>
+}
+
+@if (_busy)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-2" />
+}
+
+@foreach (var report in _run.Reports)
+{
+    <MudPaper Outlined="true" Class="pa-4 mb-4" data-report="@report.Kind">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Wrap="Wrap.Wrap" Spacing="2">
+            <div>
+                <MudText Typo="Typo.h6" HtmlTag="h2">@report.Title</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">From Costpoint: @report.CostpointReport (.csv or .xlsx)</MudText>
+            </div>
+            <label class="mud-button-root mud-button mud-button-outlined mud-button-outlined-primary mud-button-outlined-size-medium mud-ripple" style="cursor:pointer">
+                <MudIcon Icon="@Icons.Material.Filled.UploadFile" Class="mr-2" /> @(report.Latest is null ? "Upload Costpoint's file" : "Upload a newer file")
+                <InputFile OnChange="@(e => UploadAsync(report.Kind, e))" accept=".csv,.xlsx,.xlsm,.txt" style="display:none" data-testid="@($"parallel-file-{report.Kind}")" />
+            </label>
+        </MudStack>
+
+        @if (report.Latest is { } latest)
+        {
+            <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Class="mt-2" Wrap="Wrap.Wrap">
+                @if (latest.Outcome == ReconRunOutcome.Matched)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Text">Matches to the penny (@latest.Keys rows)</MudChip>
+                }
+                else
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Text">@(latest.Different + latest.OnlyInCostpoint + latest.OnlyInWorkbench) of @latest.Keys rows differ</MudChip>
+                }
+                @if (latest.IsSignedOff)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Outlined" Icon="@Icons.Material.Filled.Verified">Signed off by @latest.SignedOffBy</MudChip>
+                }
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">@latest.FileName · @MigrationFormat.When(latest.RunAtUtc) · @latest.RunBy</MudText>
+                <MudButton Size="Size.Small" Variant="Variant.Text" Href="@($"setup/migration/reconcile/{latest.Id}")">Open entries and sign off</MudButton>
+            </MudStack>
+
+            @if (latest.Problems > 0)
+            {
+                <MudText Typo="Typo.body2" Class="mud-text-warning mt-1">@latest.Problems row(s) of the file couldn't be read; they're listed on the full comparison.</MudText>
+            }
+
+            @if (report.Causes.Count > 0)
+            {
+                <MudList T="string" Dense="true" Class="mt-2" data-testid="@($"causes-{report.Kind}")">
+                    @foreach (var cause in report.Causes.OrderByDescending(c => Math.Abs(c.Difference)).Take(50))
+                    {
+                        <MudListItem T="string">
+                            <div data-cause="@cause.Key">
+                                <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center">
+                                    <MudChip T="string" Size="Size.Small" Color="@CauseColor(cause.Kind)" Variant="Variant.Text">@CauseLabel(cause.Kind)</MudChip>
+                                    <MudText Typo="Typo.body2"><b>@cause.Key</b> @cause.Label</MudText>
+                                    <MudText Typo="Typo.body2" Class="mud-text-secondary">@(cause.Difference >= 0 ? "+" : "")@cause.Difference.ToString("N2", System.Globalization.CultureInfo.InvariantCulture) in Workbench</MudText>
+                                </MudStack>
+                                <MudText Typo="Typo.body2">@cause.Summary</MudText>
+                                @if (cause.NextStep is { } next)
+                                {
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Next: @next</MudText>
+                                }
+                            </div>
+                        </MudListItem>
+                    }
+                </MudList>
+                @if (report.Causes.Count > 50)
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Showing the 50 largest of @report.Causes.Count differences; the full comparison has them all.</MudText>
+                }
+            }
+        }
+    </MudPaper>
+}
+
+@if (_run.Months.Count > 0)
+{
+    <MudPaper Outlined="true" Class="pa-4" data-testid="parallel-months">
+        <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Months compared so far</MudText>
+        <MudSimpleTable Dense="true" Elevation="0">
+            <thead><tr><th>Month</th><th>Result</th><th></th></tr></thead>
+            <tbody>
+                @foreach (var m in _run.Months)
+                {
+                    <tr>
+                        <td>@m.PeriodName</td>
+                        <td>@MonthText(m)</td>
+                        <td style="text-align:right"><MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => PeriodChanged(m.PeriodId)">Open</MudButton></td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+    </MudPaper>
+}
+
+@code {
+    private ParallelRunDto? _run;
+    private IReadOnlyList<FiscalPeriodDto> _periods = [];
+    private string? _error;
+    private bool _busy;
+
+    private Severity VerdictSeverity => _run!.State switch
+    {
+        ParallelState.Matched or ParallelState.SignedOff => Severity.Success,
+        ParallelState.Differences => Severity.Warning,
+        _ => Severity.Info,
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _periods = await Calendar.ListPeriodsAsync();
+            _run = await Parallel.GetAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = SetupFormat.Error(ex);
+        }
+    }
+
+    private async Task PeriodChanged(Guid id)
+    {
+        try
+        {
+            _run = await Parallel.GetAsync(id);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task UploadAsync(ReconReportKind kind, InputFileChangeEventArgs e)
+    {
+        _busy = true;
+        try
+        {
+            await using var stream = e.File.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024);
+            using var buffer = new MemoryStream();
+            await stream.CopyToAsync(buffer);
+            _run = await Parallel.UploadAsync(new UploadParallelReportRequest(_run!.Period.Id, kind, e.File.Name, buffer.ToArray()));
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(SetupFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string Open(int n, string one, string many) => $"{n} {(n == 1 ? one : many)}";
+
+    private static string MonthText(ParallelMonthDto m) => m.State switch
+    {
+        ParallelState.SignedOff => "Signed off",
+        ParallelState.Matched => "Matched, not signed off",
+        ParallelState.Differences => $"{m.Differences} difference(s)",
+        _ => "One report still to upload",
+    };
+
+    private static string CauseLabel(ParallelCauseKind kind) => kind switch
+    {
+        ParallelCauseKind.Rounding => "Rounding",
+        ParallelCauseKind.CarriedOver => "From an earlier month",
+        ParallelCauseKind.Unposted => "Not posted yet",
+        ParallelCauseKind.Timing => "Timing",
+        ParallelCauseKind.SingleEntry => "One entry",
+        ParallelCauseKind.RateDifference => "Rate difference",
+        ParallelCauseKind.Hours => "Hours or rates",
+        ParallelCauseKind.MissingInWorkbench => "Missing in Workbench",
+        ParallelCauseKind.MissingInCostpoint => "Missing in Costpoint",
+        _ => "Needs a look",
+    };
+
+    private static Color CauseColor(ParallelCauseKind kind) => kind switch
+    {
+        ParallelCauseKind.Rounding => Color.Default,
+        ParallelCauseKind.Other => Color.Error,
+        ParallelCauseKind.MissingInWorkbench or ParallelCauseKind.MissingInCostpoint => Color.Warning,
+        _ => Color.Info,
+    };
+}

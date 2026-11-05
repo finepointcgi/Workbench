@@ -33,8 +33,9 @@ internal static class GovernmentBillingSeed
             return;
         }
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        var periods = (await db.Set<FiscalPeriod>().AsNoTracking().ToListAsync(cancellationToken)).OrderBy(p => p.Start).ToList();
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        // Needs the current period and the two before it; early in the first fiscal year that means adding the year before.
+        var periods = await FinancialsSeed.EnsurePreviousFiscalYearAsync(db, today.AddMonths(-3), cancellationToken);
         var current = periods.LastOrDefault(p => p.Start <= today);
         var previous = current is null ? null : periods.LastOrDefault(p => p.End < current.Start);
         var before = previous is null ? null : periods.LastOrDefault(p => p.End < previous.Start);

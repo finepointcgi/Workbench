@@ -35,6 +35,8 @@ public enum ReconciliationReport
     ApAging,
     RevenueByProject,
     IndirectRates,
+    UnanetTimesheets,
+    UnanetProjectCost,
 }
 
 /// <summary>A saved column mapping and tolerances for one kind of Costpoint report (JSON), reused every parallel month.</summary>

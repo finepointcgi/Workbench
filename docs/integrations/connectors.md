@@ -21,7 +21,7 @@ SFTP passwords and keys) are encrypted at rest and never shown again; leave them
 - The URLs are checked like webhook endpoints: `https://`, public addresses only. The delivery and run logs show the URL's host,
   never its secret path.
 
-(Posting people's own notifications to a channel is separate: see [calendar-and-teams.md](calendar-and-teams.md).)
+(Posting people's own notifications to a channel is separate: see [Chat notifications: Teams and Slack](chat.md).)
 
 ## File exports
 

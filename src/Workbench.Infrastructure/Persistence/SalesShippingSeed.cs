@@ -22,7 +22,7 @@ internal static class SalesShippingSeed
 {
     public static async Task SeedAsync(WorkbenchDbContext db, IServiceProvider services, CancellationToken cancellationToken)
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = DateOnly.FromDateTime(DateTime.Now);
         if (await db.Set<SalesOrder>().AnyAsync(cancellationToken)
             || await db.Set<Project>().FirstOrDefaultAsync(p => p.Code == "3001", cancellationToken) is not { } project
             || project.ContractId is not { } contractId

@@ -27,7 +27,8 @@ printf 'replace-with-the-client-secret-from-your-identity-provider' > "$dir/Auth
 # the old certificate is listed under DataProtection:PreviousCertificates).
 dp_password="$(rand 32)"
 printf '%s' "$dp_password" > "$dir/DataProtection__CertificatePassword"
-tmp="$(mktemp -d)"
+# A short path: gpg-agent's socket lives inside GNUPGHOME and fails when the path is long (macOS temp folders are).
+tmp="$(mktemp -d /tmp/wbsec.XXXXXX)"
 trap 'rm -rf "$tmp"' EXIT
 openssl req -x509 -newkey rsa:3072 -sha256 -days 1825 -nodes -subj "/CN=Workbench Data Protection" \
   -addext "keyUsage=keyEncipherment,dataEncipherment" -keyout "$tmp/dp.key" -out "$tmp/dp.crt" 2>/dev/null
@@ -36,16 +37,20 @@ openssl pkcs12 -export -inkey "$tmp/dp.key" -in "$tmp/dp.crt" -out "$dir/datapro
 chmod 644 "$dir/dataprotection.pfx"
 
 # Backup encryption key pair. The public key stays with the backup job; the private key belongs in the vault.
-gpg_cmd=(gpg)
-if ! command -v gpg >/dev/null; then
-  docker build -q -t workbench-backup:local "$(dirname "$0")/../../deploy/backup" >/dev/null
-  gpg_cmd=(docker run --rm -v "$tmp:/work" -e GNUPGHOME=/work/gnupg workbench-backup:local gpg)
-fi
-mkdir -p "$tmp/gnupg" && chmod 700 "$tmp/gnupg"
-export GNUPGHOME="$tmp/gnupg"
-"${gpg_cmd[@]}" --batch --pinentry-mode loopback --passphrase '' --quick-gen-key "Workbench backups <backups@workbench.invalid>" rsa4096 encr never 2>/dev/null
-"${gpg_cmd[@]}" --batch --armor --export "backups@workbench.invalid" > "$dir/backup_public_key.asc"
-(umask 077; "${gpg_cmd[@]}" --batch --armor --export-secret-keys "backups@workbench.invalid" > "$dir/backup_private_key.asc")
+# Run gpg from the backup image rather than the host's, so a missing or misconfigured gpg-agent can't stop the install.
+# The key ring lives inside the container (gpg-agent's socket can't be created on a folder shared from macOS); only the
+# two exported key files come out.
+docker build -q -t workbench-backup:local "$(dirname "$0")/../../deploy/backup" >/dev/null
+mkdir -p "$tmp/out" && chmod 777 "$tmp/out"
+docker run --rm -v "$tmp/out:/out" workbench-backup:local sh -c '
+  set -e
+  export GNUPGHOME=/tmp/gnupg; mkdir -m 700 "$GNUPGHOME"
+  gpg --batch --pinentry-mode loopback --passphrase "" --quick-gen-key "Workbench backups <backups@workbench.invalid>" rsa4096 encr never 2>/dev/null
+  gpg --batch --armor --export backups@workbench.invalid > /out/public.asc
+  gpg --batch --pinentry-mode loopback --passphrase "" --armor --export-secret-keys backups@workbench.invalid > /out/private.asc'
+cp "$tmp/out/public.asc" "$dir/backup_public_key.asc"
+(umask 077; cp "$tmp/out/private.asc" "$dir/backup_private_key.asc")
+[[ -s "$dir/backup_public_key.asc" && -s "$dir/backup_private_key.asc" ]] || { echo "Could not create the backup key pair." >&2; exit 1; }
 
 cat <<MSG
 Secrets written to $dir.

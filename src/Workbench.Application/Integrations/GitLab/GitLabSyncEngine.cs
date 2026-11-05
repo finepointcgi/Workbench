@@ -882,7 +882,7 @@ public sealed class GitLabSyncEngine(
                     conflicts++;
                     ctx.Note(item.Id, link, GitLabConflictKind.WorkbenchOwns, "estimate", Hours(hours), Hours(glHours),
                         $"The estimate of {label} was changed in GitLab to {Hours(glHours)}. Workbench owns hours (from Assign people), so it's {Hours(hours)} again.",
-                        "Change the hours in Budget & staffing › Assign people.");
+                        "Change the hours in the project's Plan tab.");
                 }
 
                 await ctx.Client.SetTimeEstimateAsync(ctx.Link.GitLabProjectId, issue.Iid, hours, ct);
@@ -1165,7 +1165,7 @@ public sealed class GitLabSyncEngine(
                 conflicts++;
                 ctx.Note(item.Id, link, GitLabConflictKind.WorkbenchOwns, "assignees", ctx.NameOf(email), null,
                     $"{ctx.NameOf(email)} was unassigned from {label} in GitLab, but they're staffed on this task in Assign people, so Workbench assigned them again.",
-                    "Remove them from the task in Budget & staffing › Assign people.");
+                    "Remove them from the task in the project's Plan tab.");
             }
 
             var desired = ctx.Desired(item, GitLabObjectKind.Issue).AssigneeIds;

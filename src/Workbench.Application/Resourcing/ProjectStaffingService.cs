@@ -404,7 +404,7 @@ public static class SetupSteps
                 !hasBudget ? (assigned > 0 ? $"{H(assigned)} hours assigned from this week on; they're the plan until there's a budget" : "Nobody assigned yet")
                     : staffedDone ? $"{H(staffed)} of {H(left)} hours left are staffed"
                     : $"{H(staffed)} of {H(left)} hours left are staffed; {H(unstaffed.Sum(c => c.Gap))} have nobody yet",
-                "staffing/staff", "Assign people"),
+                "plan", "Assign people"),
         ]);
     }
 }

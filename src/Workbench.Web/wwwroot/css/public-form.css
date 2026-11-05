@@ -1,18 +1,18 @@
 /* Public forms (/f/{token}): plain, accessible pages (WCAG 2.1 AA contrast in both schemes). */
+/* Colors are the Material 3 roles from m3-tokens.css (generated from Workbench.Ui.Theme.M3Tokens; light/dark follows the system), under the short names this page uses. */
 :root {
-    --bg: #f5f6f8; --surface: #ffffff; --text: #1f2328; --muted: #4b5563; --line: #d0d7de;
-    --accent: #c2410c; --accent-text: #ffffff; --link: #0b57d0; --focus: #c2410c;
-    --ok-bg: #e7f5ec; --ok-text: #14532d; --err-bg: #fdecec; --err-text: #8a1c1c;
+    --bg: var(--md-sys-color-surface); --surface: var(--md-sys-color-surface-container-low); --text: var(--md-sys-color-on-surface);
+    --muted: var(--md-sys-color-on-surface-variant); --line: var(--md-sys-color-outline-variant); --outline: var(--md-sys-color-outline);
+    --accent: var(--md-sys-color-primary); --accent-text: var(--md-sys-color-on-primary); --link: var(--md-sys-color-primary); --focus: var(--md-sys-color-primary);
+    --ok-bg: #e7f5ec; --ok-text: #14532d;
+    --err-bg: var(--md-sys-color-error-container); --err-text: var(--md-sys-color-on-error-container);
+    --radius: 12px;
 }
 @media (prefers-color-scheme: dark) {
-    :root {
-        --bg: #0f1216; --surface: #171b21; --text: #e6e9ee; --muted: #b3bac4; --line: #2f3742;
-        --accent: #ffb59a; --accent-text: #3a1200; --link: #8ab4f8; --focus: #ffb59a;
-        --ok-bg: #12301f; --ok-text: #b7ebc8; --err-bg: #3a1515; --err-text: #ffc9c9;
-    }
+    :root { --ok-bg: #12301f; --ok-text: #b7ebc8; }
 }
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 "Roboto Flex", Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", "Helvetica Neue", Arial, sans-serif; }
 a { color: var(--link); }
 :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .skip { position: absolute; left: -9999px; top: 0; background: var(--surface); padding: 8px 12px; z-index: 10; }
@@ -23,17 +23,17 @@ h1 { font-size: 1.6rem; margin: 8px 0 12px; }
 .lead { font-size: 1.05rem; }
 .pre { white-space: pre-wrap; }
 .hint { color: var(--muted); font-size: .92rem; margin: 4px 0 0; }
-.notice, .error { padding: 10px 12px; border-radius: 6px; }
+.notice, .error { padding: 10px 12px; border-radius: 12px; }
 .notice { background: var(--ok-bg); color: var(--ok-text); }
 .error { background: var(--err-bg); color: var(--err-text); }
-.card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 16px; margin: 16px 0; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; margin: 16px 0; }
 .field { margin: 0 0 16px; }
 label { display: block; margin: 0 0 4px; font-weight: 500; }
 label.inline { display: inline-flex; gap: 8px; align-items: center; font-weight: 400; }
 .req { color: var(--err-text); }
-input, textarea, select { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 8px; width: 100%; }
+input, textarea, select { font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--outline); border-radius: 4px; padding: 8px; width: 100%; }
 input[type="checkbox"] { width: auto; }
-button { font: inherit; cursor: pointer; padding: 10px 18px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--text); }
+button { font: inherit; cursor: pointer; padding: 10px 24px; border-radius: 999px; border: 1px solid var(--outline); background: var(--surface); color: var(--text); }
 button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
 .trap { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
 .foot { max-width: 640px; margin: 8px auto 24px; padding: 0 16px; color: var(--muted); font-size: .9rem; }

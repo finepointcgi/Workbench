@@ -38,7 +38,7 @@ internal static class MaterialsSeed
             return;
         }
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = DateOnly.FromDateTime(DateTime.Now);
         var open = await db.Set<FiscalPeriod>().AsNoTracking()
             .AnyAsync(p => p.Start <= today && p.End >= today && p.Status == PeriodStatus.Open, cancellationToken);
 

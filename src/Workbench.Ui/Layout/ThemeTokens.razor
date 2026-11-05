@@ -1,0 +1,7 @@
+@* The Material 3 color roles as CSS variables for the current mode (see Theme/M3Tokens.cs); theme.css builds on them.
+   Rendered beside MudThemeProvider, which maps the same roles into --mud-palette-*. *@
+<style>@((MarkupString)M3Tokens.ToCss(Dark))</style>
+
+@code {
+    [Parameter] public bool Dark { get; set; }
+}

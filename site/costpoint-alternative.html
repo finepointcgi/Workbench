@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Costpoint Alternative for Small Government Contractors | Workbench</title>
+<meta name="description" content="Workbench is a simpler Costpoint alternative: general ledger, billing, timekeeping, indirect rates and DCAA readiness in one tool. Free to self-host.">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml"><script defer data-domain="REPLACE-WITH-DOMAIN" src="https://plausible.io/js/script.js"></script><link rel="canonical" href="https://REPLACE-WITH-DOMAIN/costpoint-alternative.html">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta property="og:type" content="article"><meta property="og:site_name" content="Workbench"><meta property="og:title" content="Costpoint Alternative for Small Government Contractors | Workbench">
+<meta property="og:description" content="Workbench is a simpler Costpoint alternative: general ledger, billing, timekeeping, indirect rates and DCAA readiness in one tool. Free to self-host."><meta property="og:url" content="https://REPLACE-WITH-DOMAIN/costpoint-alternative.html"><meta property="og:image" content="https://REPLACE-WITH-DOMAIN/img/plan.jpg">
+<meta name="twitter:card" content="summary_large_image"><meta name="theme-color" content="#c2410c">
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "Can Workbench replace Costpoint?", "acceptedAnswer": {"@type": "Answer", "text": "For many small and mid-size contractors it can cover the accounting, billing and timekeeping they use, but check your own list. Try the demo and the Costpoint importer on a copy of your data, and compare against what you rely on today."}}, {"@type": "Question", "name": "How much does it cost?", "acceptedAnswer": {"@type": "Answer", "text": "Community is free to self-host. Business is $10 per person per month. Every active person is one seat, whatever their role."}}, {"@type": "Question", "name": "Is it DCAA compliant?", "acceptedAnswer": {"@type": "Answer", "text": "No software makes a company compliant. Workbench has an audit log, daily time entry with certification and readiness pages for DCAA, CAS and CPSR that help you prepare. Whether your company passes depends on your own policies and practice."}}, {"@type": "Question", "name": "Can I host it myself?", "acceptedAnswer": {"@type": "Answer", "text": "Yes. It runs on your own server with PostgreSQL, and a self-hosted install never contacts us. We can also host it for you on the Business plan."}}]}</script>
+<style>
+  :root {
+    --bg: #fbfaf7; --surface: #ffffff; --ink: #1c2420; --muted: #5b665f; --line: #e3e1d9;
+    --accent: #c2410c; --accent-ink: #ffffff; --accent-soft: #fff1ea; --warn-soft: #f6efe0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #121714; --surface: #1a211d; --ink: #eaeee9; --muted: #9ba89f; --line: #2b352f;
+      --accent: #ffb59a; --accent-ink: #3a1200; --accent-soft: #3a2118; --warn-soft: #2a261a;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--ink); line-height: 1.55;
+    font: 17px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  a { color: var(--accent); }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px; }
+  header { border-bottom: 1px solid var(--line); }
+  nav { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 0; flex-wrap: wrap; }
+  .brand { font-weight: 700; font-size: 1.15rem; letter-spacing: -.01em; color: var(--ink); text-decoration: none; }
+  nav .links { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+  nav .links a { color: var(--muted); text-decoration: none; font-size: .95rem; }
+  nav .links a:hover { color: var(--ink); }
+  .btn { display: inline-block; padding: 12px 20px; border-radius: 8px; font-weight: 600; text-decoration: none;
+    background: var(--accent); color: var(--accent-ink) !important; border: 1px solid var(--accent); }
+  .btn.ghost { background: transparent; color: var(--ink) !important; border-color: var(--line); }
+  .btn.small { padding: 8px 14px; font-size: .92rem; }
+  .hero { padding: 72px 0 56px; }
+  h1 { font-size: clamp(2rem, 5.4vw, 3.4rem); line-height: 1.1; letter-spacing: -.025em; margin: 0 0 18px; max-width: 18ch; }
+  .lede { font-size: 1.2rem; color: var(--muted); max-width: 40rem; margin: 0 0 28px; }
+  .cta { display: flex; gap: 12px; flex-wrap: wrap; }
+  .note { color: var(--muted); font-size: .9rem; margin-top: 14px; }
+  section { padding: 56px 0; border-top: 1px solid var(--line); }
+  h2 { font-size: clamp(1.5rem, 3.4vw, 2.1rem); letter-spacing: -.02em; line-height: 1.2; margin: 0 0 12px; }
+  .sub { color: var(--muted); max-width: 40rem; margin: 0 0 32px; }
+  .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .grid.two { grid-template-columns: repeat(2, 1fr); }
+  .grid.four, .replace { grid-template-columns: repeat(2, 1fr); }
+  @media (min-width: 960px) { .grid.four, .replace { grid-template-columns: repeat(4, 1fr); } }
+  @media (max-width: 560px) { .grid.two, .grid.four, .replace { grid-template-columns: 1fr; } }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 22px; }
+  .card h3 { margin: 0 0 8px; font-size: 1.05rem; }
+  .card p { margin: 0; color: var(--muted); font-size: .97rem; }
+  .replace { display: grid; gap: 16px; }
+  .replace .card h3 { font-size: 1rem; }
+  .tag { display: inline-block; font-size: .75rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+    color: var(--accent); background: var(--accent-soft); padding: 3px 9px; border-radius: 99px; margin-bottom: 10px; }
+  .plans { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); align-items: stretch; }
+  .plan { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 28px; display: flex; flex-direction: column; }
+  .plan.featured { border: 2px solid var(--accent); }
+  .plan h3 { margin: 0; font-size: 1.25rem; }
+  .price { font-size: 2.3rem; font-weight: 700; letter-spacing: -.02em; margin: 10px 0 2px; }
+  .price small { font-size: 1rem; font-weight: 500; color: var(--muted); letter-spacing: 0; }
+  .plan ul { list-style: none; padding: 0; margin: 18px 0 24px; flex: 1; }
+  .plan li { padding: 6px 0 6px 26px; position: relative; font-size: .97rem; }
+  .plan li::before { content: ""; position: absolute; left: 4px; top: 13px; width: 10px; height: 6px;
+    border-left: 2px solid var(--accent); border-bottom: 2px solid var(--accent); transform: rotate(-45deg); }
+  .callout { background: var(--accent-soft); border-radius: 12px; padding: 18px 22px; margin-top: 24px; }
+  .callout p { margin: 0; }
+  .honest { background: var(--warn-soft); border-radius: 12px; padding: 18px 22px; }
+  .honest h3 { margin: 0 0 8px; font-size: 1rem; }
+  .honest ul { margin: 0; padding-left: 20px; color: var(--muted); font-size: .97rem; }
+  details { border-bottom: 1px solid var(--line); padding: 16px 0; }
+  summary { font-weight: 600; cursor: pointer; }
+  details p { color: var(--muted); margin: 10px 0 0; max-width: 42rem; }
+  footer { border-top: 1px solid var(--line); padding: 32px 0 48px; color: var(--muted); font-size: .92rem; }
+  footer .row { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .shot { margin: 40px 0 0; } .shot img { width: 100%; height: auto; display: block; border-radius: 14px; box-shadow: 0 10px 30px rgba(0,0,0,.08); }
+  .shot figcaption { color: var(--muted); font-size: .88rem; margin-top: 10px; }
+  .split { display: flex; gap: 40px; align-items: center; margin-bottom: 32px; }
+  .split img { width: 220px; height: auto; flex: none; }
+  .split img.phone { border: 6px solid #1c2420; border-radius: 28px; box-shadow: 0 10px 30px rgba(0,0,0,.15); }
+  .shot img { border: 1px solid var(--line); }
+  @media (max-width: 640px) { .split { flex-direction: column; align-items: flex-start; } }
+  table.cmp{width:100%;border-collapse:collapse;font-size:.95rem} table.cmp th,table.cmp td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top} table.cmp th{color:var(--muted);font-size:.8rem;text-transform:uppercase;letter-spacing:.05em} .tablewrap{overflow-x:auto}
+  form.contact{display:grid;gap:12px;max-width:34rem} form.contact label{font-weight:600;font-size:.92rem} form.contact input,form.contact textarea,form.contact select{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font:inherit} form.contact button{justify-self:start;cursor:pointer;font:inherit}
+  .hp{position:absolute;left:-9999px}
+  ol.steps { padding-left: 20px; max-width: 42rem; } ol.steps li { margin-bottom: 10px; }
+</style>
+<style>.prose p,.prose ul{max-width:42rem} .prose ul{padding-left:20px;color:var(--ink)} .prose li{margin-bottom:8px} .prose p{color:var(--ink)}
+table.cmp{width:100%;border-collapse:collapse;font-size:.95rem;margin-top:12px} table.cmp th,table.cmp td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top} table.cmp th{color:var(--muted);font-size:.8rem;text-transform:uppercase;letter-spacing:.05em}
+.tablewrap{overflow-x:auto} pre{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow-x:auto;max-width:42rem;font-size:.9rem} code{font-family:ui-monospace,Menlo,monospace}</style>
+</head><body>
+<header><div class="wrap"><nav aria-label="Main"><a class="brand" href="/"><img src="/logo.svg" alt="" width="50" height="22" style="vertical-align:-4px;margin-right:8px">Workbench</a><div class="links">
+<a href="/#replaces">What it replaces</a><a href="/#pricing">Pricing</a><a href="/docs.html">Docs</a><a href="/#faq">Questions</a>
+<a class="btn small" href="https://REPLACE-WITH-DEMO-URL">Try the demo</a></div></nav></div></header>
+<main>
+<div class="wrap hero" style="padding-bottom:32px"><h1 style="max-width:24ch">A simpler alternative to Costpoint</h1><p class="lede">Workbench covers the project accounting a small or mid-size government contractor needs from Costpoint (time, billing, the general ledger, indirect rates, purchasing and the audit trail) in one tool that you can run yourself and learn in an afternoon.</p>
+<div class="cta"><a class="btn" href="https://REPLACE-WITH-DEMO-URL">Try the live demo</a><a class="btn ghost" href="/#pricing">See pricing</a></div></div>
+<section><div class="wrap prose"><h2>What you get</h2><p>The same jobs, in a tool that does not need a consultant to set up. The parts a contractor uses every day are all here:</p><ul><li><strong>Time and expenses</strong> with daily entry, a phone app, approvals and a full audit trail.</li><li><strong>Project and contract setup</strong> with funding, ceilings, CLINs, encumbrances and alerts before a project runs out of money.</li><li><strong>Billing</strong> for time-and-materials, cost-plus, fixed-price and progress payments, including SF 1443 support.</li><li><strong>General ledger</strong> with journals, close, payables, receivables, cash and bank reconciliation, fixed assets and multicurrency.</li><li><strong>Indirect rates and incurred cost</strong> including an incurred cost submission package.</li><li><strong>Purchasing and a supplier portal</strong>, subcontracts, inventory and manufacturing.</li><li><strong>HR</strong> with leave, benefits, onboarding, per diem and travel, and payroll provider integration.</li></ul></div></section>
+<section><div class="wrap prose"><h2>Bringing your data across</h2><p>Workbench has an importer for Costpoint exports, with a cut-over checklist, so you are not retyping your chart of accounts, projects and history. Try it on a copy of your data first and check that the balances agree before you commit to anything.</p></div></section>
+<section><div class="wrap prose"><h2>Why it is simpler</h2><p>Most of your people only enter their time, and they get a phone app and nothing else to learn. Everyone else sees only the menus their role allows. Setup is a checklist that tells you the next thing to do. There is one price per person, and the free edition is a complete system for one company.</p></div></section>
+
+<section><div class="wrap"><div class="honest"><h3>Where Costpoint is ahead today</h3><ul><li>Costpoint has a long track record and a large community of consultants and trained staff. Workbench is new and is not yet used by a customer.</li><li>Workbench produces the WAWF/PIEE invoice files for you to upload yourself; it does not submit them electronically for you. Service Contract Act and Davis-Bacon wage determinations are not built yet.</li><li>Workbench is in English only.</li><li>If your team already runs Costpoint well and is happy, there may be no reason to move.</li></ul></div></div></section>
+<section id="faq"><div class="wrap"><h2>Questions</h2><details><summary>Can Workbench replace Costpoint?</summary><p>For many small and mid-size contractors it can cover the accounting, billing and timekeeping they use, but check your own list. Try the demo and the Costpoint importer on a copy of your data, and compare against what you rely on today.</p></details><details><summary>How much does it cost?</summary><p>Community is free to self-host. Business is $10 per person per month. Every active person is one seat, whatever their role.</p></details><details><summary>Is it DCAA compliant?</summary><p>No software makes a company compliant. Workbench has an audit log, daily time entry with certification and readiness pages for DCAA, CAS and CPSR that help you prepare. Whether your company passes depends on your own policies and practice.</p></details><details><summary>Can I host it myself?</summary><p>Yes. It runs on your own server with PostgreSQL, and a self-hosted install never contacts us. We can also host it for you on the Business plan.</p></details></div></section>
+<section><div class="wrap"><h2>Price</h2><p class="sub" style="margin:0 0 16px">Community is free to run on your own server, for one company, with unlimited people. Business is $10 per person per month and adds more than one company, single sign-on, integrations, customer links, the supplier portal, custom approval workflows and incurred cost submission.</p>
+<div class="cta"><a class="btn" href="https://github.com/finepointcgi/workbench">Get Community</a><a class="btn ghost" href="mailto:REPLACE-WITH-SALES-EMAIL">Ask for a Business key</a></div>
+<p class="note">Related: <a href="/dcaa-timekeeping.html">DCAA timekeeping</a> &middot; <a href="/smartsheet-alternative.html">Smartsheet alternative</a> &middot; <a href="/ms-project-alternative.html">MS Project alternative</a></p></div></section>
+</main>
+<footer><div class="wrap row"><div>Workbench</div><div>
+<a href="/costpoint-alternative.html">Costpoint alternative</a> &middot; <a href="/smartsheet-alternative.html">Smartsheet alternative</a> &middot;
+<a href="/ms-project-alternative.html">MS Project alternative</a> &middot; <a href="/dcaa-timekeeping.html">DCAA timekeeping</a> &middot; <a href="/self-host.html">Self-host</a> &middot; <a href="/docs.html">Documentation</a> &middot;
+<a href="mailto:REPLACE-WITH-SALES-EMAIL">Contact</a></div></div></footer>
+</body></html>

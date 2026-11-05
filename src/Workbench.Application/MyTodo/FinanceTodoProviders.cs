@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Workbench.Contracts.Accounting;
+using Workbench.Contracts.Billing;
 using Workbench.Contracts.Identity;
 using Workbench.Contracts.MyTodo;
 using Workbench.Contracts.Payroll;
@@ -120,5 +121,37 @@ public sealed class PayrollTodoProvider : IMyTodoProvider
         return title is null
             ? null
             : new MyTodoItem($"payroll:{run.Id}:{run.Status}", TodoCategories.Finance, title, reason!, context.UrgencyFor(due), due, $"payroll/runs/{run.Id}", "Open payroll run", Priority: 4);
+    }
+}
+
+/// <summary>One to-do for Finance when contracts have approved work nobody has billed: the count and total, linking to the Ready to bill list.</summary>
+public sealed class ReadyToBillTodoProvider : IMyTodoProvider
+{
+    public string Name => "Ready to bill";
+
+    public async Task<IReadOnlyList<MyTodoItem>> GetAsync(MyTodoContext context, CancellationToken cancellationToken)
+    {
+        if (!context.User.Can(Permission.BillingInvoicesManage) || context.Service<IInvoiceService>() is not { } invoices)
+        {
+            return [];
+        }
+
+        return For(await invoices.GetReadyToBillAsync(cancellationToken), context) is { } item ? [item] : [];
+    }
+
+    public static MyTodoItem? For(ReadyToBillDto ready, MyTodoContext context)
+    {
+        if (ready.Rows.Count == 0)
+        {
+            return null;
+        }
+
+        var oldest = ready.Rows.Min(r => r.OldestWorkDate);
+        var count = ready.Rows.Count;
+        return new MyTodoItem(
+            "billing:ready", TodoCategories.Finance,
+            $"{count} contract{(count == 1 ? " has" : "s have")} work ready to bill",
+            $"{ReceivingTodoProvider.Money(ready.Total)} approved and not yet invoiced{(oldest is { } d ? $", the oldest from {d:MMM d}" : "")}.",
+            context.UrgencyFor(context.Today), context.Today, "billing/ready", "Ready to bill", Priority: 3);
     }
 }

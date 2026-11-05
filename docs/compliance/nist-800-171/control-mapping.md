@@ -8,13 +8,13 @@ meets each one when Workbench is part of the system that processes CUI.
 - **W** = Workbench: a product feature does it (named, with where to find it).
 - **C** = Customer: the contractor's own policy, people or process (also for a self-hosted Workbench).
 - **H** = Hosting: the infrastructure Workbench runs on. *Self-hosted*: the customer's data centre or cloud tenant.
-  *Workbench SaaS*: the Workbench operator and its cloud provider (see [gaps.md](gaps.md) before relying on it for CUI).
+  *Workbench SaaS*: the Workbench operator and its cloud provider (see [Gaps: Workbench and the hosted SaaS for CUI](https://github.com/finepointcgi/Workbench/blob/master/docs/compliance/nist-800-171/gaps.md) before relying on it for CUI).
 
 **Status for Workbench** is about the product only: `Met` (the feature fully covers the W part), `Partial` (it helps;
-something else is needed), `—` (no product part). Your SSP ([system-security-plan.md](system-security-plan.md)) records
+something else is needed), `—` (no product part). Your SSP ([System Security Plan (SSP)](system-security-plan.md)) records
 your own implementation status for every requirement; Workbench being "Met" doesn't make the requirement met for you.
 
-Evidence references E1–E13 are listed in [../../iso/evidence-catalog.md](../../iso/evidence-catalog.md).
+Evidence references E1–E13 are listed in [Evidence catalog](https://github.com/finepointcgi/Workbench/blob/master/docs/iso/evidence-catalog.md).
 
 ## 3.1 Access Control (22)
 
@@ -161,7 +161,7 @@ Evidence references E1–E13 are listed in [../../iso/evidence-catalog.md](../..
 | 3.12.1 | Periodically assess security controls for effectiveness | C | Evidence catalog; access reviews | — | C: yearly self-assessment (SPRS score) |
 | 3.12.2 | Develop and implement plans of action (POA&M) | C | — | — | C: POA&M in the SSP |
 | 3.12.3 | Monitor security controls on an ongoing basis | C W | Security event log, health and telemetry | Partial | C: continuous monitoring |
-| 3.12.4 | Develop, document and update a system security plan | C | SSP template | — | C: [system-security-plan.md](system-security-plan.md) |
+| 3.12.4 | Develop, document and update a system security plan | C | SSP template | — | C: [System Security Plan (SSP)](system-security-plan.md) |
 
 ## 3.13 System and Communications Protection (16)
 
@@ -177,7 +177,7 @@ Evidence references E1–E13 are listed in [../../iso/evidence-catalog.md](../..
 | 3.13.8 | Implement cryptographic mechanisms to prevent unauthorized disclosure of CUI during transmission | H W | HSTS, Secure cookies, HTTPS-only IdP metadata | Partial | H: TLS 1.2+ (FIPS-validated), TLS to DB |
 | 3.13.9 | Terminate network connections at the end of sessions or after inactivity | W H | Sessions end on idle/absolute limit; Blazor circuits re-validate | Partial | H: LB idle timeouts |
 | 3.13.10 | Establish and manage cryptographic keys | W C H | Data Protection key ring (90-day rotation, certificate-encrypted) | Partial | C/H: `../../iso/cryptography-policy.md` |
-| 3.13.11 | Employ FIPS-validated cryptography to protect CUI | H C | .NET uses the OS crypto provider | Partial | H: FIPS mode OS / validated modules ([gaps.md](gaps.md)) |
+| 3.13.11 | Employ FIPS-validated cryptography to protect CUI | H C | .NET uses the OS crypto provider | Partial | H: FIPS mode OS / validated modules ([Gaps: Workbench and the hosted SaaS for CUI](https://github.com/finepointcgi/Workbench/blob/master/docs/compliance/nist-800-171/gaps.md)) |
 | 3.13.12 | Prohibit remote activation of collaborative computing devices | C | — | — | C |
 | 3.13.13 | Control and monitor the use of mobile code | W C | CSP `script-src 'self'`, no inline scripts or `eval` | Met | C: browser policies |
 | 3.13.14 | Control and monitor the use of VoIP | C | — | — | C |

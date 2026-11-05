@@ -38,6 +38,7 @@ public static class DependencyInjection
 
             services.AddDbContextFactory<CatalogDbContext>(o => o.Use(provider, catalogConnection));
             services.AddSingleton<TenantCatalog>();
+            services.AddSingleton<Workbench.Application.Licensing.IHostedPlanSource, TenantPlanSource>(); // The tenant's plan decides its edition.
             services.AddSingleton<TenantProvisioner>();
             services.AddSingleton<IWorkbenchConnectionResolver, TenantConnectionResolver>();
             services.Replace(ServiceDescriptor.Singleton<ITenantJobRunner, MultiTenantJobRunner>());

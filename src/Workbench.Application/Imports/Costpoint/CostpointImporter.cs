@@ -60,7 +60,10 @@ public abstract class CostpointImporter : IImporter
 
     protected static T Service<T>(ImportContext context) where T : notnull => context.Services.GetRequiredService<T>();
 
-    protected static string Reason(ImportContext context) => $"Imported from Costpoint (import job {context.Job.Id.ToString()[..8]})";
+    protected static string Reason(ImportContext context) => $"Imported from {SourceName(context)} (import job {context.Job.Id.ToString()[..8]})";
+
+    /// <summary>"Costpoint" or "Unanet": the system the job's data comes from, for audit text.</summary>
+    internal static string SourceName(ImportContext context) => context.Job.Source == ImportSource.Unanet ? "Unanet" : "Costpoint";
 
     /// <summary>Names of the fields whose values differ, for "update" summaries. Empty when nothing changed.</summary>
     protected static List<string> Changed(params (string Name, object? Old, object? New)[] fields) =>

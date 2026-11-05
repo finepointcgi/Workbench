@@ -55,7 +55,7 @@ internal static class CrmSeed
 
         var user = new SeedUser { Email = BdEmail };
         var kit = new Kit(services, user);
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = DateOnly.FromDateTime(DateTime.Now);
 
         // ---- Accounts and contacts ----
         async Task<Guid> Account(string name, CrmAccountKind kind, string? acronym = null, Guid? parent = null, string? notes = null) =>

@@ -496,3 +496,6 @@ App_Data/
 
 # Local database backups
 src/Workbench.Web/workbench.db.*
+
+# MkDocs guide build output
+/build/guide/

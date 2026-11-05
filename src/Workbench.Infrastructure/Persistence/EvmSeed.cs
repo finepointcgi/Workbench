@@ -35,7 +35,7 @@ internal static class EvmSeed
             return;
         }
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = DateOnly.FromDateTime(DateTime.Now);
         var periods = (await db.Set<FiscalPeriod>().ToListAsync(cancellationToken)).OrderBy(p => p.Start).ToList();
         var current = periods.LastOrDefault(p => p.Start <= today);
         var previous = current is null ? null : periods.LastOrDefault(p => p.End < current.Start);

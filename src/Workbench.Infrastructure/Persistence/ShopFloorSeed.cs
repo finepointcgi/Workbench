@@ -28,7 +28,7 @@ internal static class ShopFloorSeed
             return;
         }
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = DateOnly.FromDateTime(DateTime.Now);
         var open = await db.Set<FiscalPeriod>().AsNoTracking().AnyAsync(p => p.Start <= today && p.End >= today && p.Status == PeriodStatus.Open, cancellationToken);
         var parts = await db.Set<Part>().AsNoTracking().ToDictionaryAsync(p => p.Number, cancellationToken);
         var main = await db.Set<Warehouse>().AsNoTracking().FirstAsync(w => w.Code == "MAIN", cancellationToken);

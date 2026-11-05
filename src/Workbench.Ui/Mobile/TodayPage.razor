@@ -75,7 +75,7 @@ else
                         @onclick="() => Step(row, -Increment)">−</button>
                 <input class="wb-m-input" inputmode="decimal" autocomplete="off" aria-label="@($"Hours on {RowLabel(row)}")"
                        value="@row.Text" disabled="@(!CanEdit)" data-testid="@($"hours-{row.Code}")"
-                       @onchange="e => Type(row, e.Value?.ToString())" />
+                       @oninput="e => Preview(row, e.Value?.ToString())" @onchange="e => Type(row, e.Value?.ToString())" />
                 <button type="button" class="wb-m-step" aria-label="@($"More time on {RowLabel(row)}")" disabled="@(!CanEdit || row.Hours >= 24)"
                         @onclick="() => Step(row, Increment)">+</button>
             </div>
@@ -254,6 +254,15 @@ else
 
     private static void Step(Row row, decimal delta) => row.Set(Math.Clamp((row.Invalid ? 0 : row.Hours) + delta, 0, 24));
 
+    /// <summary>While typing: the total and Save follow the number without rewriting what's in the box (that waits for leaving it).</summary>
+    private static void Preview(Row row, string? text)
+    {
+        if (MobileFormat.ParseHours(text) is { } hours)
+        {
+            row.Preview(hours);
+        }
+    }
+
     private static void Type(Row row, string? text)
     {
         if (MobileFormat.ParseHours(text) is { } hours)
@@ -365,6 +374,12 @@ else
         public decimal Hours { get; private set; } = hours;
         public string Text { get; set; } = hours == 0 ? "" : MobileFormat.Hours(hours);
         public bool Invalid { get; set; }
+
+        public void Preview(decimal value)
+        {
+            Hours = value;
+            Invalid = false;
+        }
 
         public void Set(decimal value)
         {

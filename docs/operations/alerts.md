@@ -6,7 +6,7 @@ metrics as a Prometheus-compatible backend names them (dots become underscores, 
 are starting points: tune them after a few weeks of real traffic.
 
 Severity: **page** = someone acts now, 24/7 for the SaaS; **ticket** = next business day. Every page that turns out to
-be a security event becomes an incident ([incident-response.md](incident-response.md)).
+be a security event becomes an incident ([Incident response: technical steps](incident-response.md)).
 
 | Alert | Condition | Severity |
 | --- | --- | --- |
@@ -67,7 +67,7 @@ sum(db_client_connections_usage{state="used"}) / sum(db_client_connections_max) 
    storage? Managed service status page? Failover in progress? Fix the database; the app recovers by itself.
 3. Replicas crash-looping right after a deploy: read the first log lines. A startup-check failure lists every
    configuration problem ("refuses to start in Production with a weak configuration") — fix the configuration or roll
-   back ([runbooks.md](runbooks.md#roll-back)). Migration not run: run the migrate job.
+   back ([Runbooks](runbooks.md#roll-back)). Migration not run: run the migrate job.
 4. Proxy: certificate valid? Proxy healthy? Its upstream health check (`/health/live`)?
 
 ### Server errors / latency
@@ -111,11 +111,11 @@ sum(db_client_connections_usage{state="used"}) / sum(db_client_connections_max) 
    `MessageRejected` (sender not verified / account in sandbox / suppressed recipient).
 2. Notifications are still saved and shown in the app; emails that failed are not retried automatically, so tell users
    if an outage lasted long (approvals may be waiting).
-3. See [email.md](email.md) for bounces and suppression.
+3. See [Email](email.md) for bounces and suppression.
 
 ### Certificates
 
 - TLS: Caddy/cert-manager renew automatically; an expiring certificate means renewal is failing (DNS challenge
   credentials, rate limits). Check the proxy's logs.
-- Key-encryption certificate: rotate it ([data-protection-keys.md](data-protection-keys.md#rotation)). Expiry doesn't
+- Key-encryption certificate: rotate it ([Data Protection keys](data-protection-keys.md#rotation)). Expiry doesn't
   break decryption, but rotate on schedule.

@@ -74,7 +74,7 @@ public static class DatabaseInitializer
         var budget = new Column { Name = "Budget", Type = ColumnType.Currency, Order = 1, IsRestricted = true };
         schedule.Columns.AddRange([status, budget]);
 
-        var today = DateOnly.FromDateTime(now);
+        var today = DateOnly.FromDateTime(DateTime.Now);
         var phase = new Item { Title = "Phase 1: Planning", Order = 0, Start = today, Finish = today.AddDays(20), CostpointWbsId = "1001.01.01" };
         schedule.Items.AddRange(
         [

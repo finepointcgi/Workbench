@@ -29,7 +29,7 @@ internal static class TotalTimeSeed
         }
 
         var now = DateTime.UtcNow;
-        var today = DateOnly.FromDateTime(now);
+        var today = DateOnly.FromDateTime(DateTime.Now);
         var thisMonday = today.AddDays(-(((int)today.DayOfWeek + 6) % 7));
         var lastWeek = thisMonday.AddDays(-7);
         var weekBefore = thisMonday.AddDays(-14);

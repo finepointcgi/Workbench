@@ -19,6 +19,11 @@
     top: 8px;
 }
 
+/* The page title takes focus after a navigation (FocusOnNavigate) for screen readers; it isn't operable, so no ring. */
+html body h1[tabindex="-1"]:focus-visible {
+    outline: none;
+}
+
 /* The main landmark takes focus from the skip link; it needs no ring of its own. */
 .wb-main:focus {
     outline: none;
@@ -28,7 +33,7 @@
    enough contrast; give every focusable control a 2px ring that shows on light and dark surfaces. "html body" outranks
    MudBlazor's "button:focus { outline: none }". */
 html body :focus-visible {
-    outline: 2px solid var(--mud-palette-primary, #C2410C);
+    outline: 2px solid var(--mud-palette-primary, #B33C0B);
     outline-offset: 2px;
 }
 
