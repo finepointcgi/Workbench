@@ -39,6 +39,7 @@ internal sealed class ImportHost : IAsyncDisposable
         services.AddSingleton<Microsoft.Extensions.Configuration.IConfiguration>(new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
         services.AddLogging();
         services.AddWorkbenchApplication();
+        services.UseBusinessEdition();
         services.AddSingleton<ISmartsheetClient>(_ => new SmartsheetApiClient(
             new HttpClient(Smartsheet) { BaseAddress = SmartsheetApiClient.DefaultBaseAddress }, null, new NoWaitRetry()));
         _provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });

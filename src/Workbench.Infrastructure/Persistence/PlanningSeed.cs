@@ -46,7 +46,7 @@ internal static class PlanningSeed
             return;
         }
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = DateOnly.FromDateTime(DateTime.Now);
         var years = await db.Set<FiscalYear>().AsNoTracking().OrderBy(y => y.Start).ToListAsync(cancellationToken);
         var current = years.FirstOrDefault(y => y.Start <= today && today <= y.End);
         var next = current is null ? null : years.FirstOrDefault(y => y.Year == current.Year + 1);

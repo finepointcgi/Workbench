@@ -399,6 +399,12 @@ public sealed class CompanyScopedInvoiceService(IInvoiceService inner, CompanyGu
         return await guard.FilterAsync<Contract, BillingContractDto>(await inner.ListBillingContractsAsync(cancellationToken), c => c.Id, cancellationToken);
     }
 
+    public async Task<ReadyToBillDto> GetReadyToBillAsync(CancellationToken cancellationToken = default)
+    {
+        var list = await inner.GetReadyToBillAsync(cancellationToken);
+        return list with { Rows = await guard.FilterAsync<Contract, ReadyToBillRowDto>(list.Rows, r => r.ContractId, cancellationToken) };
+    }
+
     public async Task<InvoicePreviewDto> PreviewAsync(GenerateInvoiceRequest request, CancellationToken cancellationToken = default)
     {
         await guard.EnsureAsync<Contract>(request.ContractId, "Contract", cancellationToken);

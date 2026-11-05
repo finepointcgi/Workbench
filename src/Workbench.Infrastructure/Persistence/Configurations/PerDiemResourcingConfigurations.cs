@@ -134,3 +134,26 @@ internal sealed class StaffingAssignmentConfiguration : IEntityTypeConfiguration
         b.HasOne<LaborCategory>().WithMany().HasForeignKey(x => x.LaborCategoryId).OnDelete(DeleteBehavior.Restrict);
     }
 }
+
+internal sealed class SkillConfiguration : IEntityTypeConfiguration<Skill>
+{
+    public void Configure(EntityTypeBuilder<Skill> b)
+    {
+        b.Property(x => x.Name).HasMaxLength(80);
+        b.Property(x => x.Category).HasMaxLength(80);
+        b.HasIndex(x => x.Name).IsUnique();
+    }
+}
+
+internal sealed class EmployeeSkillConfiguration : IEntityTypeConfiguration<EmployeeSkill>
+{
+    public void Configure(EntityTypeBuilder<EmployeeSkill> b)
+    {
+        b.Property(x => x.Years).HasPrecision(4, 1);
+        b.Property(x => x.UpdatedBy).HasMaxLength(320);
+        b.HasIndex(x => new { x.EmployeeId, x.SkillId }).IsUnique();
+        b.HasIndex(x => x.SkillId);
+        b.HasOne<Employee>().WithMany().HasForeignKey(x => x.EmployeeId).OnDelete(DeleteBehavior.Cascade);
+        b.HasOne<Skill>().WithMany().HasForeignKey(x => x.SkillId).OnDelete(DeleteBehavior.Cascade);
+    }
+}

@@ -108,6 +108,12 @@ public sealed class PermissionCheckingInvoiceService(IInvoiceService inner, Bill
         return readable is null ? all : all.Where(c => readable.Contains(c.Id)).ToList();
     }
 
+    public async Task<ReadyToBillDto> GetReadyToBillAsync(CancellationToken cancellationToken = default)
+    {
+        await access.RequireAsync(Permission.BillingInvoicesManage, cancellationToken);
+        return await inner.GetReadyToBillAsync(cancellationToken);
+    }
+
     public async Task<InvoicePreviewDto> PreviewAsync(GenerateInvoiceRequest request, CancellationToken cancellationToken = default)
     {
         await access.RequireAsync(Permission.BillingInvoicesManage, cancellationToken);

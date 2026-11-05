@@ -147,7 +147,10 @@ public sealed class SlackConnector(IOutboundTransport transport, OutboundUrlGuar
     public override string Description => "Posts the events you choose (approvals, payments, period close) to a Slack channel.";
     protected override string UrlHelp => "In Slack, create an app with Incoming Webhooks turned on, add a webhook for the channel and paste its URL.";
 
-    protected override JsonObject Format(ChatMessage message)
+    protected override JsonObject Format(ChatMessage message) => Message(message);
+
+    /// <summary>The Slack message for <paramref name="message"/>: a Block Kit section with its facts and an "Open in Workbench" button. User text is escaped, so it can't make links or mentions.</summary>
+    public static JsonObject Message(ChatMessage message)
     {
         var facts = string.Join("\n", message.Facts.Select(f => $"*{Escape(f.Label)}:* {Escape(f.Value)}"));
         var blocks = new JsonArray
@@ -163,9 +166,9 @@ public sealed class SlackConnector(IOutboundTransport transport, OutboundUrlGuar
             });
         }
 
-        return new JsonObject { ["text"] = message.Title, ["blocks"] = blocks };
+        return new JsonObject { ["text"] = Escape(message.Title), ["blocks"] = blocks };
     }
 
-    // Slack mrkdwn: &, < and > must be escaped; everything else is literal.
+    // Slack mrkdwn: &, < and > must be escaped (they start links and <!channel>-style mentions); everything else is literal.
     private static string Escape(string text) => text.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
 }

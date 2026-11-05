@@ -1,0 +1,161 @@
+@* A person's skills and how well they do each. Type a skill to add it: new ones join the company list, so there is nothing
+   to set up first. Staffing roles search this list under Resourcing › Find available people. *@
+@inject ISkillService Skills
+@inject ISnackbar Snackbar
+
+<section aria-labelledby="skills-heading" data-testid="skills-panel">
+    <MudText Typo="Typo.h6" HtmlTag="h2" id="skills-heading" Class="mb-1">Skills</MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3" Style="max-width: 76ch">
+        What @(CanEdit ? "this person" : "they") can do, so project and resource managers can find the right people for the work.
+    </MudText>
+
+    @if (_mine is null)
+    {
+        <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+    }
+    else
+    {
+        <MudTable T="EmployeeSkillDto" Items="_mine" Dense="true" Class="mb-3" aria-label="Skills" data-testid="skills-table">
+            <HeaderContent>
+                <MudTh>Skill</MudTh><MudTh>Level</MudTh><MudTh>Years</MudTh>@if (CanEdit) { <MudTh><span class="wb-sr-only">Actions</span></MudTh> }
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd DataLabel="Skill">@context.Name@if (context.Category is { Length: > 0 }) { <span class="mud-text-secondary"> · @context.Category</span> }</MudTd>
+                <MudTd DataLabel="Level">
+                    @if (CanEdit)
+                    {
+                        <MudSelect T="SkillLevel" Value="context.Level" ValueChanged="v => ChangeLevelAsync(context, v)" Dense="true" Margin="Margin.Dense" Variant="Variant.Outlined"
+                                   aria-label="@($"Level in {context.Name}")" Style="max-width:160px">
+                            @foreach (var l in Enum.GetValues<SkillLevel>())
+                            {
+                                <MudSelectItem T="SkillLevel" Value="l">@SkillLabels.Label(l)</MudSelectItem>
+                            }
+                        </MudSelect>
+                    }
+                    else
+                    {
+                        @SkillLabels.Label(context.Level)
+                    }
+                </MudTd>
+                <MudTd DataLabel="Years">@(context.Years is { } y ? ResourcingFormat.Hours(y) : "")</MudTd>
+                @if (CanEdit)
+                {
+                    <MudTd><MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" aria-label="@($"Remove {context.Name}")" OnClick="() => RemoveAsync(context)" /></MudTd>
+                }
+            </RowTemplate>
+            <NoRecordsContent><MudText Class="mud-text-secondary">No skills yet.@(CanEdit ? " Add the first one below." : "")</MudText></NoRecordsContent>
+        </MudTable>
+
+        @if (CanEdit)
+        {
+            <MudPaper Outlined="true" Class="pa-4" Style="max-width:960px">
+                <MudText Typo="Typo.subtitle1" Class="mb-2">Add a skill</MudText>
+                <MudStack Row="true" Spacing="2" AlignItems="AlignItems.End" Wrap="Wrap.Wrap">
+                    <MudAutocomplete T="string" @bind-Value="_name" @bind-Text="_text" SearchFunc="SearchAsync" CoerceValue="true" ResetValueOnEmptyText="true" DebounceInterval="0"
+                                     Label="Skill" Placeholder="C#, Cost accounting, DCAA audits…" Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width:260px"
+                                     MaxLength="@SkillMaxLength" data-testid="skill-name" />
+                    <MudSelect T="SkillLevel" @bind-Value="_level" Label="Level" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:170px" data-testid="skill-level">
+                        @foreach (var l in Enum.GetValues<SkillLevel>())
+                        {
+                            <MudSelectItem T="SkillLevel" Value="l">@SkillLabels.Describe(l)</MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudNumericField T="decimal?" @bind-Value="_years" Label="Years" Min="0" Max="60" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:110px" />
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="AddAsync" data-testid="add-skill">Add</MudButton>
+                </MudStack>
+            </MudPaper>
+        }
+    }
+</section>
+
+@code {
+    private const int SkillMaxLength = 80;
+
+    [Parameter, EditorRequired] public Guid EmployeeId { get; set; }
+
+    /// <summary>Your own skills, or anyone's for resource managers and HR (the server decides).</summary>
+    [Parameter] public bool CanEdit { get; set; } = true;
+
+    private List<EmployeeSkillDto>? _mine;
+    private IReadOnlyList<SkillDto> _catalog = [];
+    private string? _name;
+    private string? _text;
+    private SkillLevel _level = SkillLevel.Working;
+    private decimal? _years;
+    private bool _busy;
+    private Guid _loadedFor;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedFor == EmployeeId)
+        {
+            return;
+        }
+
+        _loadedFor = EmployeeId;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _catalog = await Skills.ListSkillsAsync();
+            _mine = (await Skills.GetEmployeeSkillsAsync(EmployeeId)).ToList();
+        }
+        catch (Exception ex) when (ResourcingFormat.IsExpected(ex))
+        {
+            Snackbar.Add($"Couldn't load skills: {ex.Message}", Severity.Error);
+            _mine ??= [];
+        }
+    }
+
+    private Task<IEnumerable<string>> SearchAsync(string? text, CancellationToken ct)
+    {
+        var have = (_mine ?? []).Select(s => s.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var names = _catalog.Select(s => s.Name).Where(n => !have.Contains(n))
+            .Where(n => string.IsNullOrWhiteSpace(text) || n.Contains(text.Trim(), StringComparison.OrdinalIgnoreCase));
+        return Task.FromResult(names.Take(12));
+    }
+
+    private Task AddAsync() => SaveAsync(string.IsNullOrWhiteSpace(_text) ? _name ?? "" : _text, _level, _years, clear: true);
+
+    private Task ChangeLevelAsync(EmployeeSkillDto skill, SkillLevel level) => SaveAsync(skill.Name, level, skill.Years, clear: false);
+
+    private async Task SaveAsync(string name, SkillLevel level, decimal? years, bool clear)
+    {
+        _busy = true;
+        try
+        {
+            await Skills.SetEmployeeSkillAsync(EmployeeId, new SetEmployeeSkillRequest(name, level, years));
+            if (clear)
+            {
+                (_name, _text, _level, _years) = (null, null, SkillLevel.Working, null);
+            }
+
+            await LoadAsync();
+        }
+        catch (Exception ex) when (ResourcingFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task RemoveAsync(EmployeeSkillDto skill)
+    {
+        try
+        {
+            await Skills.RemoveEmployeeSkillAsync(EmployeeId, skill.SkillId);
+            Snackbar.Add($"Removed {skill.Name}", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex) when (ResourcingFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+}

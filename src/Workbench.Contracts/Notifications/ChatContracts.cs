@@ -1,9 +1,10 @@
 namespace Workbench.Contracts.Notifications;
 
-/// <summary>Chat products notifications can also be posted to. Slack can be added next without changing callers.</summary>
+/// <summary>Chat products notifications can also be posted to.</summary>
 public static class ChatChannelKinds
 {
     public const string Teams = "teams";
+    public const string Slack = "slack";
 }
 
 /// <summary>The few groups people choose from, instead of one switch per kind of notification.</summary>
@@ -28,7 +29,7 @@ public static class NotificationGroups
     public static string For(string kind)
     {
         var k = kind.ToLowerInvariant();
-        if (k.StartsWith("timesheet.missing", StringComparison.Ordinal) || k.StartsWith("timesheet.reopened", StringComparison.Ordinal))
+        if (k.StartsWith("reminder.timesheet", StringComparison.Ordinal) || k.StartsWith("timesheet.missing", StringComparison.Ordinal) || k.StartsWith("timesheet.reopened", StringComparison.Ordinal))
         {
             return Timesheets;
         }
@@ -62,19 +63,22 @@ public sealed record ChatChannelDto(string Kind, bool Connected, bool IsActive, 
 /// <summary>A person's choice for one group.</summary>
 public sealed record ChatGroupChoiceDto(string Group, string Label, string Hint, bool Enabled);
 
-/// <summary>The signed-in person's Teams choices. <see cref="Available"/> is false until an administrator connects a channel.</summary>
+/// <summary>The signed-in person's choices for one chat product. <see cref="Available"/> is false until an administrator connects a channel.</summary>
 public sealed record ChatChoicesDto(bool Available, IReadOnlyList<ChatGroupChoiceDto> Groups);
 
 public sealed record ConnectChatChannelRequest(string WebhookUrl);
 
 public sealed record SaveChatChoicesRequest(IReadOnlyList<string> Groups);
 
-/// <summary>Connect a Teams channel (administrators) and choose what also goes there (everyone).</summary>
-public interface ITeamsNotificationService
+/// <summary>Connect a chat channel (administrators) and choose what also goes there (everyone). One implementation per product: <see cref="ITeamsNotificationService"/>, <see cref="ISlackNotificationService"/>.</summary>
+public interface IChatNotificationService
 {
+    /// <summary>The <see cref="ChatChannelKinds"/> value this service connects.</summary>
+    string Kind { get; }
+
     Task<ChatChannelDto> GetChannelAsync(CancellationToken cancellationToken = default);
 
-    /// <summary>Saves the channel's incoming-webhook address after checking it points at a Microsoft host.</summary>
+    /// <summary>Saves the channel's incoming-webhook address after checking it points at the product's own hosts.</summary>
     Task<ChatChannelDto> ConnectAsync(ConnectChatChannelRequest request, CancellationToken cancellationToken = default);
 
     Task DisconnectAsync(CancellationToken cancellationToken = default);
@@ -86,3 +90,7 @@ public interface ITeamsNotificationService
 
     Task<ChatChoicesDto> SetMineAsync(SaveChatChoicesRequest request, CancellationToken cancellationToken = default);
 }
+
+public interface ITeamsNotificationService : IChatNotificationService;
+
+public interface ISlackNotificationService : IChatNotificationService;

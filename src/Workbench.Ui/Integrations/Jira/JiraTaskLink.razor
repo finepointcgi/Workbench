@@ -1,0 +1,56 @@
+@* "Linked to Jira RAD-12" on a task's details, with when it last synced. Shows nothing for tasks that aren't linked. *@
+@inject IServiceProvider Services
+
+@if (_status is { } s)
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="mb-2" data-testid="jira-task-link">
+        <MudIcon Icon="@Icons.Material.Filled.Link" Size="Size.Small" />
+        <MudText Typo="Typo.body2">
+            @if (s.IsRemoved)
+            {
+                <span>Was linked to Jira <MudLink Href="@s.WebUrl" Target="_blank" rel="noopener">@s.IssueKey</MudLink> (deleted in Jira)</span>
+            }
+            else
+            {
+                <span>Linked to Jira <MudLink Href="@s.WebUrl" Target="_blank" rel="noopener">@s.IssueKey</MudLink>@(s.JiraStatus is { } status ? $" · {status}" : "")</span>
+                <span class="mud-text-secondary"> · synced @JiraProjectPanel.Ago(s.LastSyncedAtUtc)</span>
+            }
+        </MudText>
+    </MudStack>
+    @if (s.LastError is { } error)
+    {
+        <MudText Typo="Typo.caption" Color="Color.Error" Class="d-block mb-2">@error See the project's Setup tab › Jira.</MudText>
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid SheetId { get; set; }
+    [Parameter, EditorRequired] public Guid ItemId { get; set; }
+
+    private JiraTaskStatusDto? _status;
+    private Guid _loadedFor;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedFor == ItemId)
+        {
+            return;
+        }
+
+        _loadedFor = ItemId;
+        // Optional: hosts (and tests) without the Jira sync simply show nothing.
+        if (Services.GetService(typeof(IJiraProjectSyncService)) is not IJiraProjectSyncService sync)
+        {
+            return;
+        }
+
+        try
+        {
+            _status = await sync.GetTaskStatusAsync(SheetId, ItemId);
+        }
+        catch (Exception ex) when (ex is WorkbenchForbiddenException or HttpRequestException or InvalidOperationException or ArgumentException)
+        {
+            _status = null; // not linked, or not for this reader
+        }
+    }
+}

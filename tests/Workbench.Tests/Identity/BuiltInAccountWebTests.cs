@@ -68,6 +68,36 @@ public sealed class BuiltInAccountWebTests
     }
 
     [Fact]
+    public async Task An_administrator_can_hand_over_the_invite_link_without_any_email()
+    {
+        await using var web = await AccountWeb.CreateAsync();
+        using var admin = web.Api(Admin);
+        using var created = await admin.PostAsJsonAsync("/api/v1/admin/invites", new CreateInviteRequest(Pat, "Pat Doe", OrgRoles.Timekeeper));
+        var invite = (await created.Content.ReadFromJsonAsync<InviteDto>())!;
+
+        using var made = await admin.PostAsync($"/api/v1/admin/invites/{invite.Id}/link", null);
+        Assert.Equal(HttpStatusCode.OK, made.StatusCode);
+        var url = (await made.Content.ReadFromJsonAsync<InviteLinkDto>())!.Url;
+        Assert.Contains("/account/accept-invite?token=", url);
+
+        // Pat opens the link given to them, chooses a password and is in; nobody read an email.
+        using var browser = web.Browser();
+        Assert.Contains("Welcome, Pat Doe", await browser.GetStringAsync(url));
+        using var accepted = await web.PostFormAsync(browser, url, new() { ["token"] = Token(url), ["password"] = GoodPassword, ["confirm"] = GoodPassword });
+        using var me = await browser.GetAsync("/api/v1/users/me/context");
+        Assert.Equal(HttpStatusCode.Redirect, accepted.StatusCode);
+        Assert.Contains(Pat, await me.Content.ReadAsStringAsync());
+        Assert.True((await web.RolesAsync(Pat)).HasFlag(OrgRoles.Timekeeper));
+
+        // Once accepted there is nothing left to hand over, and only administrators can ask.
+        using var after = await admin.PostAsync($"/api/v1/admin/invites/{invite.Id}/link", null);
+        Assert.Equal(HttpStatusCode.BadRequest, after.StatusCode);
+        using var notAdmin = web.Api(Pat);
+        using var refused = await notAdmin.PostAsync($"/api/v1/admin/invites/{invite.Id}/link", null);
+        Assert.Equal(HttpStatusCode.Forbidden, refused.StatusCode);
+    }
+
+    [Fact]
     public async Task Wrong_passwords_lock_the_account_for_a_while()
     {
         await using var web = await AccountWeb.CreateAsync();

@@ -61,7 +61,7 @@ internal static class CompanySeed
             new IntercompanyAccount { CompanyId = main.Id, CounterpartyCompanyId = fed.Id, DueFromAccountId = dueFrom.Id, DueToAccountId = dueTo.Id, UpdatedBy = Actor, UpdatedAtUtc = DateTime.UtcNow },
             new IntercompanyAccount { CompanyId = fed.Id, CounterpartyCompanyId = main.Id, DueFromAccountId = dueFrom.Id, DueToAccountId = dueTo.Id, UpdatedBy = Actor, UpdatedAtUtc = DateTime.UtcNow });
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = DateOnly.FromDateTime(DateTime.Now);
         var fyStart = await db.Set<FiscalYear>().Where(y => y.Start <= today && y.End >= today).Select(y => (DateOnly?)y.Start).FirstOrDefaultAsync(cancellationToken)
             ?? new DateOnly(today.Month >= 10 ? today.Year : today.Year - 1, 10, 1);
         var category = await db.Set<LaborCategory>().FirstOrDefaultAsync(c => c.Code == "SE2", cancellationToken)

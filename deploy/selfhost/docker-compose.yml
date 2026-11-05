@@ -1,0 +1,111 @@
+# Workbench on one machine: PostgreSQL, the database migration, the web app and Caddy (automatic HTTPS).
+# Everything is configured by .env, which install.sh writes for you. Start:  docker compose up -d
+# Upgrade:  ./upgrade.sh     Docs: https://github.com/finepointcgi/workbench/tree/master/docs/operations
+name: workbench
+
+x-workbench: &workbench
+  image: ghcr.io/finepointcgi/workbench:${WORKBENCH_VERSION:-latest}
+  environment:
+    ASPNETCORE_ENVIRONMENT: Production
+    Database__Provider: PostgreSQL
+    Database__MigrateOnStartup: "false"
+    ConnectionStrings__Workbench: Host=postgres;Port=5432;Database=workbench;Username=workbench;Password=${POSTGRES_PASSWORD:?run install.sh first};Maximum Pool Size=50
+    Security__TlsTerminatedByProxy: "true"
+    ForwardedHeaders__KnownProxies__0: 172.28.0.10
+    Notifications__PublicBaseUrl: https://${WORKBENCH_DOMAIN:?run install.sh first}${PUBLIC_PORT_SUFFIX:-}
+    Scim__BearerToken: ${SCIM_TOKEN:?run install.sh first}
+    Authentication__Admins__0: ${WORKBENCH_BOOTSTRAP_ADMIN:?run install.sh first}
+    Authentication__Oidc__Authority: ${OIDC_AUTHORITY:-}
+    Authentication__Oidc__ClientId: ${OIDC_CLIENT_ID:-workbench}
+    Authentication__Oidc__ClientSecret: ${OIDC_CLIENT_SECRET:-}
+    DataProtection__Store: Database
+    DataProtection__KeyEncryption: Certificate
+    DataProtection__CertificatePath: /run/dataprotection.pfx
+    DataProtection__CertificatePassword: ${DATAPROTECTION_PASSWORD:?run install.sh first}
+    Email__Mode: ${EMAIL_MODE:-Pickup}
+    Email__From: ${EMAIL_FROM:-workbench@localhost}
+    Email__Smtp__Host: ${SMTP_HOST:-}
+    Email__Smtp__Port: ${SMTP_PORT:-587}
+    Logging__Console__FormatterName: workbench-json
+  volumes:
+    - ./secrets/dataprotection.pfx:/run/dataprotection.pfx:ro
+  read_only: true
+  tmpfs: [/tmp]
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  networks: [internal]
+
+services:
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: workbench
+      POSTGRES_DB: workbench
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?run install.sh first}
+      POSTGRES_INITDB_ARGS: --data-checksums
+    volumes: [postgres-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U workbench -d workbench"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [internal]
+
+  migrate:
+    <<: *workbench
+    command: ["--migrate"]
+    restart: "no"
+    healthcheck:
+      disable: true
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  web:
+    <<: *workbench
+    restart: unless-stopped
+    volumes:
+      - ./secrets/dataprotection.pfx:/run/dataprotection.pfx:ro
+      - blobs:/data/blobs
+      - mail:/data/mail
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    healthcheck:
+      test: ["CMD", "dotnet", "/app/Workbench.Web.dll", "--health-check"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+
+  proxy:
+    image: caddy:2.10
+    restart: unless-stopped
+    environment:
+      WORKBENCH_DOMAIN: ${WORKBENCH_DOMAIN}
+      # "internal" = a local test certificate; an email address = a real Let's Encrypt certificate.
+      WORKBENCH_TLS: ${WORKBENCH_TLS:-internal}
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      web: { condition: service_healthy }
+    networks:
+      internal:
+        ipv4_address: 172.28.0.10
+
+networks:
+  internal:
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24
+
+volumes:
+  postgres-data:
+  blobs:
+  mail:
+  caddy-data:
+  caddy-config:

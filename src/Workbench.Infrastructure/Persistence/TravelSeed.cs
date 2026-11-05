@@ -36,7 +36,7 @@ internal static class TravelSeed
         }
 
         var now = DateTime.UtcNow;
-        var today = DateOnly.FromDateTime(now);
+        var today = DateOnly.FromDateTime(DateTime.Now);
         var pm = await db.Set<Employee>().AsNoTracking().FirstOrDefaultAsync(e => e.Id == analyst.SupervisorId, cancellationToken);
 
         // The approved trip, priced from the per diem tables, with the per diem seed's report as its expense report.

@@ -23,7 +23,7 @@ internal static class PayrollSeed
         }
 
         var now = DateTime.UtcNow;
-        var today = DateOnly.FromDateTime(now);
+        var today = DateOnly.FromDateTime(DateTime.Now);
         var lastWeek = PayrollHours.WeekStart(today).AddDays(-7);
         var group = new PayGroup
         {

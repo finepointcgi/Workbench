@@ -65,7 +65,7 @@ public sealed class ProjectHubPageTests
         var page = ctx.Render<ProjectHubPage>(p => p.Add(c => c.ProjectId, ProjectId));
 
         // The everyday tabs; the occasional ones wait under More.
-        page.WaitForAssertion(() => Assert.Equal(["Overview", "Budget & staffing", "Financials"], TabLabels(page)));
+        page.WaitForAssertion(() => Assert.Equal(["Overview", "Budget", "Financials"], TabLabels(page)));
         Assert.NotEmpty(page.FindAll("[data-testid=project-more]"));
         foreach (var label in new[] { "Spent so far", "Budget", "Forecast at completion", "Funding left" })
         {
@@ -74,6 +74,40 @@ public sealed class ProjectHubPageTests
 
         Assert.Contains("$110,000", page.Markup);
         Assert.Contains("See Financials", page.Find("[data-testid=project-alerts]").TextContent);
+    }
+
+    private static Workbench.Contracts.Contracts.ClinFundingStatusDto Clin(decimal funded, decimal incurred, DateOnly? runOut, Workbench.Contracts.Contracts.FundingLevel level) =>
+        new(Guid.NewGuid(), "0001", "Labor", false, true, new DateOnly(2026, 1, 1), new DateOnly(2027, 1, 1), funded, funded, incurred, 0m, funded - incurred, incurred / funded, incurred / funded, 100m, runOut, level);
+
+    private static Action<IServiceCollection> Funding(Workbench.Contracts.Contracts.ClinFundingStatusDto clin) => services =>
+        services.AddSingleton(Workbench.Tests.Navigation.Stub<Workbench.Contracts.Contracts.IFundingService>.Create(("GetProjectFundingStatusAsync",
+            _ => Task.FromResult<Workbench.Contracts.Contracts.ContractFundingStatusDto?>(new(Guid.NewGuid(), "C1", new DateOnly(2026, 10, 18), false, 0.75m, 0.9m, [clin], [])))));
+
+    [Fact]
+    public async Task A_pm_sees_how_long_the_funding_lasts_and_what_to_do_when_it_is_short()
+    {
+        await using var ctx = NewContext(Hub(Money, Tabs(money: true, setup: false)),
+            configure: Funding(Clin(500_000m, 400_000m, new DateOnly(2026, 12, 6), Workbench.Contracts.Contracts.FundingLevel.Warning)));
+
+        var page = ctx.Render<ProjectHubPage>(p => p.Add(c => c.ProjectId, ProjectId));
+
+        var line = page.WaitForElement("[data-testid=funding-line]");
+        Assert.Contains("Funded $500,000, spent/billed $400,000, about 7 weeks of funding left at the current pace", line.TextContent);
+        Assert.Contains("Slow spending or ask Finance to request incremental funding.", line.TextContent);
+        Assert.Contains("warning", line.ClassName); // warning colour
+    }
+
+    [Fact]
+    public async Task Healthy_funding_is_a_calm_line_with_no_call_to_action()
+    {
+        await using var ctx = NewContext(Hub(Money, Tabs(money: true, setup: false)),
+            configure: Funding(Clin(500_000m, 50_000m, new DateOnly(2027, 8, 1), Workbench.Contracts.Contracts.FundingLevel.Ok)));
+
+        var page = ctx.Render<ProjectHubPage>(p => p.Add(c => c.ProjectId, ProjectId));
+
+        var line = page.WaitForElement("[data-testid=funding-line]");
+        Assert.Contains("of funding left at the current pace", line.TextContent);
+        Assert.DoesNotContain("Slow spending", line.TextContent);
     }
 
     [Fact]
@@ -123,7 +157,7 @@ public sealed class ProjectHubPageTests
 
         var page = ctx.Render<ProjectHubPage>(p => p.Add(c => c.ProjectId, ProjectId).Add(c => c.Tab, "ceilings"));
 
-        page.WaitForAssertion(() => Assert.Equal(["Overview", "Budget & staffing", "Financials", "Ceilings & closeout"], TabLabels(page)));
+        page.WaitForAssertion(() => Assert.Equal(["Overview", "Budget", "Financials", "Ceilings & closeout"], TabLabels(page)));
     }
 
     [Theory]

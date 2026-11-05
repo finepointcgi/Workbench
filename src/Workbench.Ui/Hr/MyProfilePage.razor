@@ -66,6 +66,9 @@ else
             <CredentialsPanel EmployeeId="_record.Summary.EmployeeId" Credentials="_record.Credentials ?? []" />
             <MudText Typo="Typo.body2" Class="mud-text-secondary mt-2">Send HR a copy when you earn or renew a certification or clearance.</MudText>
         </MudTabPanel>
+        <MudTabPanel Text="Skills" data-testid="tab-skills">
+            <Workbench.Ui.Resourcing.SkillsPanel EmployeeId="_record.Summary.EmployeeId" />
+        </MudTabPanel>
         <MudTabPanel Text="Documents">
             <DocumentsPanel EmployeeId="_record.Summary.EmployeeId" Documents="_record.Documents ?? []" />
         </MudTabPanel>

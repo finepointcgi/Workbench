@@ -42,7 +42,7 @@ internal static class CashSeed
         }
 
         var now = DateTime.UtcNow;
-        var today = DateOnly.FromDateTime(now);
+        var today = DateOnly.FromDateTime(DateTime.Now);
         var monthStart = new DateOnly(today.Year, today.Month, 1);
         var protector = new BankAccountNumberProtector(services.GetRequiredService<IDataProtectionProvider>());
         var account = new BankAccount

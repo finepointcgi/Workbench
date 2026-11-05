@@ -1,0 +1,55 @@
+@* How Unanet's words become Workbench's, shown before an import is committed. The row for the kind being imported is highlighted. *@
+
+<MudPaper Outlined="true" Class="pa-3 mb-3" data-testid="unanet-guide">
+    <MudText Typo="Typo.subtitle1" Class="mb-1"><b>How Unanet maps to Workbench</b></MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
+        Unanet keeps a customer agreement and the place time is charged together in one "project". Workbench keeps them apart: a <b>contract</b>
+        (type, dates, value, funding) and a <b>project</b> with a <b>WBS</b> (what people charge time to). The same Unanet projects export feeds both.
+    </MudText>
+    <MudSimpleTable Dense="true">
+        <thead><tr><th>In Unanet</th><th>Becomes in Workbench</th><th>Import step</th></tr></thead>
+        <tbody>
+            @foreach (var row in Rows)
+            {
+                <tr style="@(IsCurrent(row) ? "background:var(--mud-palette-action-default-hover);font-weight:600" : null)" data-testid="@($"unanet-map-{row.Kind}")">
+                    <td>@row.Unanet</td>
+                    <td>@row.Workbench</td>
+                    <td>@row.Step</td>
+                </tr>
+            }
+        </tbody>
+    </MudSimpleTable>
+    <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2">
+        Not brought over on purpose: Unanet's ledger history (load the trial balance instead), unapproved time, workflow history, and passwords or roles.
+        Approved time comes in as history only: nothing is posted and nobody has to approve it again.
+    </MudText>
+</MudPaper>
+
+@code {
+    private sealed record Map(string Kind, string Unanet, string Workbench, string Step);
+
+    private static readonly Map[] Rows =
+    [
+        new("OrgUnits", "Organization", "Org unit (the parent organization is the parent org unit)", "Organizations"),
+        new("LaborCategories", "Labor category", "Labor category", "Labor categories"),
+        new("Employees", "Person", "Employee, with their labor category, supervisor and current cost rate. Email is needed to link their sign-in.", "People"),
+        new("CostRates", "Person's cost rate history", "Effective-dated employee cost rate (never changed in place)", "Cost rate history"),
+        new("Customers", "Customer", "Customer", "Customers"),
+        new("Contracts", "Project (customer agreement part)", "Contract: type, period of performance, value, funding. Overhead and other internal projects get none.", "Projects → contracts"),
+        new("Clins", "Contract line", "CLIN or SLIN", "Contract lines"),
+        new("Projects", "Project and its tasks", "Project, with each task as a WBS element (PROJECT.TASK). A project without tasks gets one general charge code (PROJECT.00).", "Projects and tasks"),
+        new("BillRates", "Project labor category bill rate", "Bill rate on the contract, by effective date", "Bill rates"),
+        new("Budgets", "Project / task budget", "Budget lines by WBS element and labor category", "Budgets"),
+        new("Assignments", "Project or task assignment", "Charge assignment: who may charge it, and as which labor category", "Assignments"),
+        new("Timesheets", "Approved timesheet", "Approved timesheet and time entries, regrouped into Workbench's timesheet periods (history only)", "Timesheets"),
+        new("Vendors", "Vendor", "Vendor", "Vendors"),
+        new("OpenApBills", "Unpaid AP invoice", "Open AP bill (not posted; the balance comes with the opening balances)", "Open AP invoices"),
+        new("OpenArInvoices", "Unpaid AR invoice", "Open AR invoice (not posted; the balance comes with the opening balances)", "Open AR invoices"),
+    ];
+
+    /// <summary>Name of the import kind being imported, to highlight its row.</summary>
+    [Parameter]
+    public string? Kind { get; set; }
+
+    private bool IsCurrent(Map row) => Kind is not null && (row.Kind == Kind || (row.Kind == "Contracts" && Kind == "Projects"));
+}

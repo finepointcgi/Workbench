@@ -14,13 +14,13 @@
 - **One image** (`Dockerfile`): .NET 10 on Ubuntu chiseled (no shell, no package manager), runs as the non-root
   `app` user (UID 1654), listens on 8080, has a `HEALTHCHECK`, and works with a read-only root filesystem
   (mount `/tmp` as tmpfs and a volume at `/data/blobs`).
-- **Web hosts are stateless** once files are in a bucket (`Storage:Provider=Gcs` or `S3`, [object-storage.md](object-storage.md)); with the default `Local` they're in `/data/blobs`. Data Protection keys,
+- **Web hosts are stateless** once files are in a bucket (`Storage:Provider=Gcs` or `S3`, [Object storage for files](object-storage.md)); with the default `Local` they're in `/data/blobs`. Data Protection keys,
   sessions and everything else are in PostgreSQL, so you can run several replicas behind the proxy. Blazor Server
   keeps a WebSocket per user: enable **sticky sessions** (cookie or source-IP affinity) on the load balancer when
   running more than one replica, and allow WebSockets with an idle timeout of at least 100 seconds.
 - **Files go in a bucket when there's more than one replica**: Google Cloud Storage or S3/MinIO, private, encrypted,
   with the platform's identity (Cloud Run service account, IAM role) instead of keys. `--copy-blobs` moves an existing
-  `/data/blobs` folder into the bucket ([object-storage.md](object-storage.md)).
+  `/data/blobs` folder into the bucket ([Object storage for files](object-storage.md)).
 - **Migrations are a separate step**: `Database:MigrateOnStartup` is false outside Development, so a deploy runs the
   image once with `--migrate` (a Kubernetes Job, an ECS task, a compose one-shot service) and only then rolls out the
   web hosts. For zero-downtime rollouts, migrations must leave the schema usable by the previous version
@@ -32,27 +32,27 @@
 ## Before the first deployment
 
 1. **PostgreSQL 17** (managed: Azure Database for PostgreSQL Flexible Server, Amazon RDS/Aurora, Cloud SQL; or your
-   own). Turn on point-in-time recovery (see [backup-restore.md](backup-restore.md)). Create a `workbench` login.
+   own). Turn on point-in-time recovery (see [Backup and restore](backup-restore.md)). Create a `workbench` login.
    SingleTenant: one database it owns. MultiTenant: the catalog database, and give the login `CREATEDB` so tenant
    provisioning can create `workbench_<tenant>` databases.
 2. **An OIDC identity provider** (Entra ID, Okta, Keycloak, Login.gov for some users): register the app with redirect
    URI `https://<host>/signin-oidc` (MultiTenant: one per tenant subdomain, or a wildcard if the IdP allows it).
 3. **Key encryption** for the Data Protection key ring: a certificate, an Azure Key Vault key or an AWS KMS key.
-   Production refuses to start without one. See [data-protection-keys.md](data-protection-keys.md).
-4. **Email**: SMTP relay with TLS, SendGrid or SES ([email.md](email.md)), and SPF/DKIM/DMARC for the sender domain.
+   Production refuses to start without one. See [Data Protection keys](data-protection-keys.md).
+4. **Email**: SMTP relay with TLS, SendGrid or SES ([Email](email.md)), and SPF/DKIM/DMARC for the sender domain.
 5. **Secrets** in your vault, delivered as environment variables or files (below): the database connection string,
    the OIDC client secret, the SCIM token, the key-encryption certificate password (or none with Key Vault/KMS), email
    credentials, the OTLP header if your telemetry backend needs one.
 6. **DNS and certificates**: SingleTenant `workbench.example.com`. MultiTenant: the base domain and `*.base-domain`;
    a wildcard certificate needs a DNS-01 ACME challenge (Caddy and cert-manager both support it with a DNS-provider
    plugin) or a certificate from your CA.
-7. **Telemetry**: an OpenTelemetry Collector (or a vendor OTLP endpoint) and the alerts in [alerts.md](alerts.md).
+7. **Telemetry**: an OpenTelemetry Collector (or a vendor OTLP endpoint) and the alerts in [Alerts and runbook](alerts.md).
 8. **Backups**: the backup job, an off-site immutable bucket, and a scheduled restore test.
 
 ## Configuration and secrets
 
 Configuration is ASP.NET Core's: `appsettings.json`, then environment variables (`Section__Key`), then the command
-line. Every key is in [configuration.md](configuration.md). Never bake secrets into the image.
+line. Every key is in [Configuration reference](configuration.md). Never bake secrets into the image.
 
 **Secret files.** Set `SecretsDirectory` (the image sets `/run/secrets`) and mount one file per key whose name is
 the configuration key with `__` for `:` — `ConnectionStrings__Workbench`, `Scim__BearerToken`,
@@ -130,7 +130,7 @@ trusted from Caddy only), the key ring in `DataProtectionKeys` is stored as `enc
 ## Upgrades
 
 1. Read the release notes for configuration changes; check `docs/operations/configuration.md`.
-2. Make sure last night's backup succeeded (or take one: [backup-restore.md](backup-restore.md)). PITR covers the rest.
+2. Make sure last night's backup succeeded (or take one: [Backup and restore](backup-restore.md)). PITR covers the rest.
 3. Run the migrate job with the new image and wait for it to finish. It logs each migration it applies. On first
    install EF Core logs one error for the missing `__EFMigrationsHistory` table before creating it; that is expected.
 4. Roll out the web hosts (rolling update). Watch `/health/ready`, the error rate and the job-failure metric.
@@ -150,7 +150,7 @@ trusted from Caddy only), the key ring in `DataProtectionKeys` is stored as `enc
 - [ ] Database over TLS (`SSL Mode=VerifyFull` in the connection string) unless it is on a private network in the same host
 - [ ] Only the proxy's address in `ForwardedHeaders:KnownProxies`/`KnownNetworks`
 - [ ] Container: non-root, read-only root, capabilities dropped, no host networking, image scanned and pinned by digest
-- [ ] Telemetry flowing and alerts from [alerts.md](alerts.md) enabled; logs shipped off the host and retained ≥ 1 year
+- [ ] Telemetry flowing and alerts from [Alerts and runbook](alerts.md) enabled; logs shipped off the host and retained ≥ 1 year
 - [ ] Backups encrypted, copied off-site to immutable storage, restore test scheduled
 - [ ] Email over TLS with SPF, DKIM and DMARC
 

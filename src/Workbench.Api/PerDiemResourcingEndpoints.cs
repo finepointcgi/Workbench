@@ -50,6 +50,21 @@ internal static class PerDiemResourcingEndpoints
         res.MapGet("/projects/{projectId:guid}/staffing", (Guid projectId, IResourcePlanningService s, CancellationToken ct) => s.GetProjectStaffingAsync(projectId, ct));
         res.MapGet("/utilization", (DateOnly from, DateOnly to, IResourcePlanningService s, CancellationToken ct) => s.GetUtilizationAsync(from, to, ct));
         res.MapGet("/open-demand", (Guid? projectId, IResourcePlanningService s, CancellationToken ct) => s.ListOpenDemandAsync(projectId, ct));
+        res.MapGet("/people-skills", (ISkillService s, CancellationToken ct) => s.ListPeopleSkillsAsync(ct));
+        res.MapGet("/skills", (ISkillService s, CancellationToken ct) => s.ListSkillsAsync(ct));
+        res.MapPut("/skills/{skillId:guid}", (Guid skillId, RenameSkillRequest r, ISkillService s, CancellationToken ct) => s.RenameSkillAsync(skillId, r, ct));
+        res.MapDelete("/skills/{skillId:guid}", async (Guid skillId, ISkillService s, CancellationToken ct) =>
+        {
+            await s.DeleteSkillAsync(skillId, ct);
+            return Results.NoContent();
+        });
+        res.MapGet("/employees/{employeeId:guid}/skills", (Guid employeeId, ISkillService s, CancellationToken ct) => s.GetEmployeeSkillsAsync(employeeId, ct));
+        res.MapPut("/employees/{employeeId:guid}/skills", (Guid employeeId, SetEmployeeSkillRequest r, ISkillService s, CancellationToken ct) => s.SetEmployeeSkillAsync(employeeId, r, ct));
+        res.MapDelete("/employees/{employeeId:guid}/skills/{skillId:guid}", async (Guid employeeId, Guid skillId, ISkillService s, CancellationToken ct) =>
+        {
+            await s.RemoveEmployeeSkillAsync(employeeId, skillId, ct);
+            return Results.NoContent();
+        });
         res.MapPost("/find-people", (FindPeopleQuery q, IResourcePlanningService s, CancellationToken ct) => s.FindAvailablePeopleAsync(q, ct));
 
         res.MapGet("/projects/{projectId:guid}/staffing-plan", (Guid projectId, IProjectStaffingService s, CancellationToken ct) => s.GetPlanAsync(projectId, ct));

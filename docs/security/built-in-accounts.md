@@ -2,7 +2,7 @@
 
 Workbench has its own accounts for organizations without single sign-on, and as a fallback next to it. People sign in
 with their email and a password, plus a code from an authenticator app when two-step verification is on or required.
-Organization SSO ([sso-entra.md](sso-entra.md), [sso-okta.md](sso-okta.md)) keeps working the same way, and an
+Organization SSO ([Single sign-on with Microsoft Entra ID](sso-entra.md), [Single sign-on with Okta](sso-okta.md)) keeps working the same way, and an
 organization can require it instead.
 
 ## Which sign-in people see

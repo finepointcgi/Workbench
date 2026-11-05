@@ -1,0 +1,17 @@
+Employee ID,Person,Project Code,Total Hours,Labor Cost
+H1001,Mara Lindqvist,HV-2201,84,6594.00
+H1001,Mara Lindqvist,HV-3305,63,4945.50
+H1001,Mara Lindqvist,HV-OH,21,1648.50
+H1001,Mara Lindqvist,HV-LV,8,628.00
+H1002,Daniel Okafor,HV-2201,168,11634.00
+H1002,Daniel Okafor,HV-LV,8,554.00
+H1003,Priya Nair,HV-2201,176,9504.00
+H1003,Priya Nair,HV-LV,8,432.00
+H1004,Tomas Brandt,HV-2201,168,7224.00
+H1004,Tomas Brandt,HV-LV,8,334.00
+H1005,Ines Ferreira,HV-3305,168,11928.00
+H1005,Ines Ferreira,HV-LV,8,568.00
+H1006,Wei Zhang,HV-OH,168,6081.60
+H1007,Quinn Alvarez,HV-2201,16,800.00
+H1005,Ines Ferreira,HV-9999,8,568.00
+Total,,,,

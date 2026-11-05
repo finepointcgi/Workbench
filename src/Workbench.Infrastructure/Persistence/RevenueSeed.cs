@@ -30,7 +30,7 @@ internal static class RevenueSeed
         }
 
         var project = await db.Set<Project>().AsNoTracking().FirstOrDefaultAsync(p => p.Code == "1001" && p.ContractId != null, cancellationToken);
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = DateOnly.FromDateTime(DateTime.Now);
         var period = await db.Set<FiscalPeriod>().AsNoTracking().FirstOrDefaultAsync(p => p.Start <= today && p.End >= today && p.Status == PeriodStatus.Open, cancellationToken);
         if (project is null || period is null)
         {

@@ -47,7 +47,7 @@ internal static class PricingSeed
         }
 
         var now = DateTime.UtcNow;
-        var today = DateOnly.FromDateTime(now);
+        var today = DateOnly.FromDateTime(DateTime.Now);
         if (!await db.Set<AppUser>().AnyAsync(u => u.Email == PricerEmail, cancellationToken))
         {
             await RoleStore.AddUserAsync(db, new AppUser { Email = PricerEmail, DisplayName = "Riley Quinn", CreatedAtUtc = now }, OrgRoles.Pricing, cancellationToken);

@@ -1,8 +1,8 @@
 # Runbooks
 
 Routine production procedures. Every change to production goes through change management (A.8.32): a ticket or pull
-request saying what, why, who approved, and the result. Alert responses are in [alerts.md](alerts.md); incidents in
-[incident-response.md](incident-response.md).
+request saying what, why, who approved, and the result. Alert responses are in [Alerts and runbook](alerts.md); incidents in
+[Incident response: technical steps](incident-response.md).
 
 Commands use `docker compose -f docker-compose.prod.yml` (abbreviated `dc`); the Kubernetes equivalents are a Job from
 the same image and `kubectl rollout`.
@@ -22,7 +22,7 @@ Normally through `.github/workflows/deploy.yml` (staging, smoke test, approval, 
 - Redeploy the previous digest (`WORKBENCH_IMAGE=<previous> dc up -d --no-build --wait web`). Fine when the release had
   no migration or only additive ones.
 - If a migration damaged data or the old version can't run on the new schema: stop the web hosts, restore to just
-  before the migrate job with point-in-time recovery ([backup-restore.md](backup-restore.md#restoring)), deploy the
+  before the migrate job with point-in-time recovery ([Backup and restore](backup-restore.md#restoring)), deploy the
   previous digest. Record the data window lost.
 
 ## Restart
@@ -45,7 +45,7 @@ tenants actively used, in MultiTenant mode, since each tenant database has its o
 | OIDC client secret | Create a second secret at the IdP, update `Authentication:Oidc:ClientSecret`, roll out, delete the old one at the IdP | None |
 | SCIM token | Generate (`openssl rand -base64 48`), set it in the IdP's provisioning config and `Scim:BearerToken` together, roll out | Provisioning pauses briefly |
 | Email credentials / API key | New key at the provider, update, roll out, revoke the old | None |
-| Key-encryption certificate or key | [data-protection-keys.md](data-protection-keys.md#rotation) (includes `--rewrap-data-protection-keys`) | Rolling restarts |
+| Key-encryption certificate or key | [Data Protection keys](data-protection-keys.md#rotation) (includes `--rewrap-data-protection-keys`) | Rolling restarts |
 | Backup gpg key | New key pair; new public key to the job; keep the old private key while backups encrypted to it exist | None |
 
 Rotate at least yearly and whenever someone with access leaves (`docs/iso/access-control-policy.md`).
@@ -57,7 +57,7 @@ Rotate at least yearly and whenever someone with access leaves (`docs/iso/access
   wildcard. The next backup run includes it automatically.
 - **Suspend / reactivate**: on `/host`. Suspended tenants get 403, background jobs skip them, data is kept and still
   backed up.
-- **Restore one tenant**: [backup-restore.md](backup-restore.md#restoring), suspending the tenant during the restore.
+- **Restore one tenant**: [Backup and restore](backup-restore.md#restoring), suspending the tenant during the restore.
 - **Offboard** (contract ended): suspend; export what the contract requires; after the agreed retention, take a final
   encrypted backup, drop the database, remove the catalog row, and record it. Never reuse the slug.
 
@@ -78,5 +78,5 @@ is fixed.
 
 ## Restore test (quarterly)
 
-[backup-restore.md](backup-restore.md#restore-test-scriptsrestore-testsh): run `scripts/restore-test.sh` against an
+[Backup and restore](backup-restore.md#restore-test-scriptsrestore-testsh): run `scripts/restore-test.sh` against an
 off-site copy on a non-production server, record date, backup, result and time in the restore test record.

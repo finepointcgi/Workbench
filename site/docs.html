@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Workbench Documentation: Install, Migrate, Secure</title>
+<meta name="description" content="Guides for installing Workbench, moving from Costpoint, Smartsheet and Unanet, single sign-on, backups, security and training.">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml"><script defer data-domain="REPLACE-WITH-DOMAIN" src="https://plausible.io/js/script.js"></script><link rel="canonical" href="https://REPLACE-WITH-DOMAIN/docs.html">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta property="og:type" content="article"><meta property="og:site_name" content="Workbench"><meta property="og:title" content="Workbench Documentation: Install, Migrate, Secure">
+<meta property="og:description" content="Guides for installing Workbench, moving from Costpoint, Smartsheet and Unanet, single sign-on, backups, security and training."><meta property="og:url" content="https://REPLACE-WITH-DOMAIN/docs.html"><meta property="og:image" content="https://REPLACE-WITH-DOMAIN/img/plan.jpg">
+<meta name="twitter:card" content="summary_large_image"><meta name="theme-color" content="#c2410c">
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [{"@type": "Question", "name": "Where do I report a problem?", "acceptedAnswer": {"@type": "Answer", "text": "Open an issue on the project page, or write to us."}}]}</script>
+<style>
+  :root {
+    --bg: #fbfaf7; --surface: #ffffff; --ink: #1c2420; --muted: #5b665f; --line: #e3e1d9;
+    --accent: #c2410c; --accent-ink: #ffffff; --accent-soft: #fff1ea; --warn-soft: #f6efe0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #121714; --surface: #1a211d; --ink: #eaeee9; --muted: #9ba89f; --line: #2b352f;
+      --accent: #ffb59a; --accent-ink: #3a1200; --accent-soft: #3a2118; --warn-soft: #2a261a;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--ink); line-height: 1.55;
+    font: 17px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  a { color: var(--accent); }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px; }
+  header { border-bottom: 1px solid var(--line); }
+  nav { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 0; flex-wrap: wrap; }
+  .brand { font-weight: 700; font-size: 1.15rem; letter-spacing: -.01em; color: var(--ink); text-decoration: none; }
+  nav .links { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+  nav .links a { color: var(--muted); text-decoration: none; font-size: .95rem; }
+  nav .links a:hover { color: var(--ink); }
+  .btn { display: inline-block; padding: 12px 20px; border-radius: 8px; font-weight: 600; text-decoration: none;
+    background: var(--accent); color: var(--accent-ink) !important; border: 1px solid var(--accent); }
+  .btn.ghost { background: transparent; color: var(--ink) !important; border-color: var(--line); }
+  .btn.small { padding: 8px 14px; font-size: .92rem; }
+  .hero { padding: 72px 0 56px; }
+  h1 { font-size: clamp(2rem, 5.4vw, 3.4rem); line-height: 1.1; letter-spacing: -.025em; margin: 0 0 18px; max-width: 18ch; }
+  .lede { font-size: 1.2rem; color: var(--muted); max-width: 40rem; margin: 0 0 28px; }
+  .cta { display: flex; gap: 12px; flex-wrap: wrap; }
+  .note { color: var(--muted); font-size: .9rem; margin-top: 14px; }
+  section { padding: 56px 0; border-top: 1px solid var(--line); }
+  h2 { font-size: clamp(1.5rem, 3.4vw, 2.1rem); letter-spacing: -.02em; line-height: 1.2; margin: 0 0 12px; }
+  .sub { color: var(--muted); max-width: 40rem; margin: 0 0 32px; }
+  .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .grid.two { grid-template-columns: repeat(2, 1fr); }
+  .grid.four, .replace { grid-template-columns: repeat(2, 1fr); }
+  @media (min-width: 960px) { .grid.four, .replace { grid-template-columns: repeat(4, 1fr); } }
+  @media (max-width: 560px) { .grid.two, .grid.four, .replace { grid-template-columns: 1fr; } }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 22px; }
+  .card h3 { margin: 0 0 8px; font-size: 1.05rem; }
+  .card p { margin: 0; color: var(--muted); font-size: .97rem; }
+  .replace { display: grid; gap: 16px; }
+  .replace .card h3 { font-size: 1rem; }
+  .tag { display: inline-block; font-size: .75rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+    color: var(--accent); background: var(--accent-soft); padding: 3px 9px; border-radius: 99px; margin-bottom: 10px; }
+  .plans { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); align-items: stretch; }
+  .plan { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 28px; display: flex; flex-direction: column; }
+  .plan.featured { border: 2px solid var(--accent); }
+  .plan h3 { margin: 0; font-size: 1.25rem; }
+  .price { font-size: 2.3rem; font-weight: 700; letter-spacing: -.02em; margin: 10px 0 2px; }
+  .price small { font-size: 1rem; font-weight: 500; color: var(--muted); letter-spacing: 0; }
+  .plan ul { list-style: none; padding: 0; margin: 18px 0 24px; flex: 1; }
+  .plan li { padding: 6px 0 6px 26px; position: relative; font-size: .97rem; }
+  .plan li::before { content: ""; position: absolute; left: 4px; top: 13px; width: 10px; height: 6px;
+    border-left: 2px solid var(--accent); border-bottom: 2px solid var(--accent); transform: rotate(-45deg); }
+  .callout { background: var(--accent-soft); border-radius: 12px; padding: 18px 22px; margin-top: 24px; }
+  .callout p { margin: 0; }
+  .honest { background: var(--warn-soft); border-radius: 12px; padding: 18px 22px; }
+  .honest h3 { margin: 0 0 8px; font-size: 1rem; }
+  .honest ul { margin: 0; padding-left: 20px; color: var(--muted); font-size: .97rem; }
+  details { border-bottom: 1px solid var(--line); padding: 16px 0; }
+  summary { font-weight: 600; cursor: pointer; }
+  details p { color: var(--muted); margin: 10px 0 0; max-width: 42rem; }
+  footer { border-top: 1px solid var(--line); padding: 32px 0 48px; color: var(--muted); font-size: .92rem; }
+  footer .row { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .shot { margin: 40px 0 0; } .shot img { width: 100%; height: auto; display: block; border-radius: 14px; box-shadow: 0 10px 30px rgba(0,0,0,.08); }
+  .shot figcaption { color: var(--muted); font-size: .88rem; margin-top: 10px; }
+  .split { display: flex; gap: 40px; align-items: center; margin-bottom: 32px; }
+  .split img { width: 220px; height: auto; flex: none; }
+  .split img.phone { border: 6px solid #1c2420; border-radius: 28px; box-shadow: 0 10px 30px rgba(0,0,0,.15); }
+  .shot img { border: 1px solid var(--line); }
+  @media (max-width: 640px) { .split { flex-direction: column; align-items: flex-start; } }
+  table.cmp{width:100%;border-collapse:collapse;font-size:.95rem} table.cmp th,table.cmp td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top} table.cmp th{color:var(--muted);font-size:.8rem;text-transform:uppercase;letter-spacing:.05em} .tablewrap{overflow-x:auto}
+  form.contact{display:grid;gap:12px;max-width:34rem} form.contact label{font-weight:600;font-size:.92rem} form.contact input,form.contact textarea,form.contact select{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font:inherit} form.contact button{justify-self:start;cursor:pointer;font:inherit}
+  .hp{position:absolute;left:-9999px}
+  ol.steps { padding-left: 20px; max-width: 42rem; } ol.steps li { margin-bottom: 10px; }
+</style>
+<style>.prose p,.prose ul{max-width:42rem} .prose ul{padding-left:20px;color:var(--ink)} .prose li{margin-bottom:8px} .prose p{color:var(--ink)}
+table.cmp{width:100%;border-collapse:collapse;font-size:.95rem;margin-top:12px} table.cmp th,table.cmp td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top} table.cmp th{color:var(--muted);font-size:.8rem;text-transform:uppercase;letter-spacing:.05em}
+.tablewrap{overflow-x:auto} pre{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow-x:auto;max-width:42rem;font-size:.9rem} code{font-family:ui-monospace,Menlo,monospace}</style>
+</head><body>
+<header><div class="wrap"><nav aria-label="Main"><a class="brand" href="/"><img src="/logo.svg" alt="" width="50" height="22" style="vertical-align:-4px;margin-right:8px">Workbench</a><div class="links">
+<a href="/#replaces">What it replaces</a><a href="/#pricing">Pricing</a><a href="/docs.html">Docs</a><a href="/#faq">Questions</a>
+<a class="btn small" href="https://REPLACE-WITH-DEMO-URL">Try the demo</a></div></nav></div></header>
+<main>
+<div class="wrap hero" style="padding-bottom:32px"><h1 style="max-width:24ch">Documentation</h1><p class="lede">Everything you need to install Workbench, move your data, keep it secure and train your people. The guides live with the code, so they always match the version you run.</p>
+<div class="cta"><a class="btn" href="https://REPLACE-WITH-DEMO-URL">Try the live demo</a><a class="btn ghost" href="/#pricing">See pricing</a></div></div>
+<section><div class="wrap prose"><h2>Get started</h2><ul><li><a href="https://finepointcgi.github.io/Workbench/guide/">User and administrator guide</a>: every page of Workbench, with screenshots, for employees, managers, finance and administrators</li><li><a href="https://github.com/finepointcgi/workbench/blob/master/docs/quick-start.md">Quick start</a>: try it in two minutes, or install it for real with one command</li><li><a href="https://github.com/finepointcgi/workbench/blob/master/docs/editions.md">Editions and licensing</a>: what Community and Business include, how seats and keys work</li></ul></div></section>
+<section><div class="wrap prose"><h2>Run it</h2><ul><li><a href="https://github.com/finepointcgi/workbench/blob/master/docs/operations/README.md">Operations guide</a>: deployment, every setting, upgrades and monitoring</li><li><a href="https://github.com/finepointcgi/workbench/blob/master/docs/operations/backup-restore.md">Backup and restore</a>: nightly encrypted backups and how to restore</li><li><a href="https://github.com/finepointcgi/workbench/blob/master/docs/operations/email.md">Email</a>: so invites and password resets are sent</li><li><a href="https://github.com/finepointcgi/workbench/blob/master/docs/operations/data-protection-keys.md">Encryption keys</a>: what to keep safe and why</li><li><a href="https://github.com/finepointcgi/workbench/blob/master/docs/operations/incident-response.md">Incident response</a>: what to do when something goes wrong</li></ul></div></section>
+<section><div class="wrap prose"><h2>Move your data</h2><ul><li><a href="https://github.com/finepointcgi/workbench/blob/master/docs/migration/costpoint-cutover.md">Costpoint cut-over</a>: import in order, check the totals, run a month in parallel</li><li><a href="https://github.com/finepointcgi/workbench/blob/master/docs/integrations/costpoint.md">Costpoint integration</a>: the Costpoint source and its settings</li><li><a href="https://github.com/finepointcgi/workbench/blob/master/docs/integrations/unanet.md">Unanet</a>: importing from Unanet</li></ul></div></section>
+<section><div class="wrap prose"><h2>Sign-in and security</h2><ul><li><a href="https://github.com/finepointcgi/workbench/blob/master/docs/security/built-in-accounts.md">Built-in accounts</a>: passwords, authenticator apps and lockout</li><li><a href="https://github.com/finepointcgi/workbench/blob/master/docs/security/sso-entra.md">Single sign-on with Microsoft Entra ID</a>: set it up in a few steps</li><li><a href="https://github.com/finepointcgi/workbench/blob/master/docs/security/sso-okta.md">Single sign-on with Okta</a>: set it up in a few steps</li><li><a href="https://github.com/finepointcgi/workbench/blob/master/docs/security/permissions.md">Roles and permissions</a>: who can see and do what</li><li><a href="https://github.com/finepointcgi/workbench/blob/master/docs/security/threat-model.md">Threat model</a>: what we protect against and how</li></ul></div></section>
+<section><div class="wrap prose"><h2>Connect other tools</h2><ul><li><a href="https://github.com/finepointcgi/workbench/blob/master/docs/integrations/connectors.md">Integrations overview</a>: connectors and what they sync</li><li><a href="https://github.com/finepointcgi/workbench/blob/master/docs/integrations/jira.md">Jira</a>: sync issues with the Plan</li><li><a href="https://github.com/finepointcgi/workbench/blob/master/docs/integrations/gitlab.md">GitLab</a>: sync issues and merge requests</li><li><a href="https://github.com/finepointcgi/workbench/blob/master/docs/integrations/chat.md">Slack and Teams</a>: notifications and reminders</li><li><a href="https://github.com/finepointcgi/workbench/blob/master/docs/integrations/api-keys.md">API keys and webhooks</a>: the public API</li></ul></div></section>
+<section><div class="wrap prose"><h2>Compliance and training</h2><ul><li><a href="https://github.com/finepointcgi/workbench/blob/master/docs/compliance/README.md">Compliance readiness</a>: DCAA, CAS, CPSR and NIST 800-171 notes</li><li><a href="https://github.com/finepointcgi/workbench/blob/master/docs/training/README.md">Training materials</a>: agendas and quick cards for employees, managers, finance and administrators</li></ul></div></section>
+
+<section><div class="wrap"><div class="honest"><h3>Can't find something?</h3><ul><li>The full list of guides is in the <a href="https://github.com/finepointcgi/workbench/tree/master/docs">docs folder</a>.</li><li>If a guide is missing or unclear, tell us and we will fix it.</li></ul></div></div></section>
+<section id="faq"><div class="wrap"><h2>Questions</h2><details><summary>Where do I report a problem?</summary><p>Open an issue on the <a href="https://github.com/finepointcgi/workbench/issues">project page</a>, or write to us.</p></details></div></section>
+<section><div class="wrap"><h2>Price</h2><p class="sub" style="margin:0 0 16px">Community is free to run on your own server, for one company, with unlimited people. Business is $10 per person per month and adds more than one company, single sign-on, integrations, customer links, the supplier portal, custom approval workflows and incurred cost submission.</p>
+<div class="cta"><a class="btn" href="https://github.com/finepointcgi/workbench">Get Community</a><a class="btn ghost" href="mailto:REPLACE-WITH-SALES-EMAIL">Ask for a Business key</a></div>
+<p class="note">Related: <a href="/self-host.html">Self-host guide</a> &middot; <a href="/costpoint-alternative.html">Costpoint alternative</a></p></div></section>
+</main>
+<footer><div class="wrap row"><div>Workbench</div><div>
+<a href="/costpoint-alternative.html">Costpoint alternative</a> &middot; <a href="/smartsheet-alternative.html">Smartsheet alternative</a> &middot;
+<a href="/ms-project-alternative.html">MS Project alternative</a> &middot; <a href="/dcaa-timekeeping.html">DCAA timekeeping</a> &middot; <a href="/self-host.html">Self-host</a> &middot; <a href="/docs.html">Documentation</a> &middot;
+<a href="mailto:REPLACE-WITH-SALES-EMAIL">Contact</a></div></div></footer>
+</body></html>

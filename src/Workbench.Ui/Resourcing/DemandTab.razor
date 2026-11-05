@@ -1,5 +1,6 @@
 @* Budgeted hours nobody is staffed on yet, and a search for people with free capacity in a labor category. *@
 @inject IResourcePlanningService Planning
+@inject ISkillService SkillList
 @inject ISnackbar Snackbar
 
 <MudText Typo="Typo.subtitle1" Class="mb-1">Unstaffed budget</MudText>
@@ -45,6 +46,22 @@
             <MudSelectItem T="Guid?" Value="c.Id">@c.Code · @c.Name</MudSelectItem>
         }
     </MudSelect>
+    <MudSelect T="Guid" Label="Skills" MultiSelection="true" SelectedValues="_skillIds" SelectedValuesChanged="v => _skillIds = v.ToHashSet()" Style="min-width:240px" Clearable="true" data-testid="find-skills"
+               MultiSelectionTextFunc="@(_ => !_skillIds.Any() ? "Any" : string.Join(", ", _skills.Where(s => _skillIds.Contains(s.Id)).Select(s => s.Name)))">
+        @foreach (var s in _skills)
+        {
+            <MudSelectItem T="Guid" Value="s.Id">@s.Name (@s.People)</MudSelectItem>
+        }
+    </MudSelect>
+    @if (_skillIds.Any())
+    {
+        <MudSelect T="SkillLevel" Label="At least" @bind-Value="_minLevel" Style="max-width:150px" data-testid="find-skill-level">
+            @foreach (var l in Enum.GetValues<SkillLevel>())
+            {
+                <MudSelectItem T="SkillLevel" Value="l">@SkillLabels.Label(l)</MudSelectItem>
+            }
+        </MudSelect>
+    }
     <MudDatePicker Label="From" @bind-Date="_from" DateFormat="yyyy-MM-dd" Style="max-width:160px" />
     <MudDatePicker Label="To" @bind-Date="_to" DateFormat="yyyy-MM-dd" Style="max-width:160px" />
     <MudNumericField T="decimal" Label="At least (h)" @bind-Value="_minHours" Min="0" Style="max-width:120px" />
@@ -57,6 +74,7 @@
             <tr>
                 <th>Person</th>
                 <th>Labor category</th>
+                <th>Skills</th>
                 <th>Org unit</th>
                 <th style="text-align:right">Capacity h</th>
                 <th style="text-align:right">Staffed h</th>
@@ -70,6 +88,12 @@
                 <tr>
                     <td>@p.EmployeeName</td>
                     <td>@p.LaborCategory</td>
+                    <td data-testid="find-person-skills">
+                        @foreach (var sk in (p.Skills ?? []).Take(8))
+                        {
+                            <MudChip T="string" Size="Size.Small" Class="ma-0 mr-1" Color="@(_skillIds.Contains(sk.SkillId) ? Color.Primary : Color.Default)">@sk.Name · @SkillLabels.Label(sk.Level)</MudChip>
+                        }
+                    </td>
                     <td>@p.OrgUnit</td>
                     <td style="text-align:right">@ResourcingFormat.Hours(p.CapacityHours)</td>
                     <td style="text-align:right">@ResourcingFormat.Hours(p.AllocatedHours)</td>
@@ -79,7 +103,7 @@
             }
             @if (_people.Count == 0)
             {
-                <tr><td colspan="7" class="mud-text-secondary">Nobody has that much free capacity in those weeks.</td></tr>
+                <tr><td colspan="8" class="mud-text-secondary">Nobody has that much free capacity in those weeks.</td></tr>
             }
         </tbody>
     </MudSimpleTable>
@@ -94,12 +118,16 @@
     private DateTime? _from = ResourcingFormat.ThisWeek.ToDateTime(TimeOnly.MinValue);
     private DateTime? _to = ResourcingFormat.ThisWeek.AddDays(27).ToDateTime(TimeOnly.MinValue);
     private decimal _minHours = 8;
+    private IReadOnlyList<SkillDto> _skills = [];
+    private IReadOnlyCollection<Guid> _skillIds = new HashSet<Guid>();
+    private SkillLevel _minLevel = SkillLevel.Working;
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
             _demand = await Planning.ListOpenDemandAsync();
+            _skills = await SkillList.ListSkillsAsync();
         }
         catch (Exception ex) when (ResourcingFormat.IsExpected(ex))
         {
@@ -125,7 +153,7 @@
 
         try
         {
-            _people = await Planning.FindAvailablePeopleAsync(new FindPeopleQuery(DateOnly.FromDateTime(_from.Value), DateOnly.FromDateTime(_to.Value), _categoryId, _minHours));
+            _people = await Planning.FindAvailablePeopleAsync(new FindPeopleQuery(DateOnly.FromDateTime(_from.Value), DateOnly.FromDateTime(_to.Value), _categoryId, _minHours, _skillIds.Any() ? _skillIds.ToList() : null, _minLevel));
         }
         catch (Exception ex) when (ResourcingFormat.IsExpected(ex))
         {

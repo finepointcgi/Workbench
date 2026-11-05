@@ -24,7 +24,8 @@ x-workbench: &workbench
     # Caddy's address on the internal network (see networks below); forwarded headers from anyone else are ignored.
     ForwardedHeaders__KnownProxies__0: 172.28.0.10
     Notifications__PublicBaseUrl: https://${WORKBENCH_DOMAIN:-localhost}
-    Authentication__Oidc__Authority: ${OIDC_AUTHORITY:?Set OIDC_AUTHORITY (your identity provider) in .env}
+    # Optional: leave empty to sign in with the built-in email-and-password accounts (scripts/install.sh does).
+    Authentication__Oidc__Authority: ${OIDC_AUTHORITY:-}
     Authentication__Oidc__ClientId: ${OIDC_CLIENT_ID:-workbench}
     Authentication__Admins__0: ${WORKBENCH_BOOTSTRAP_ADMIN:-}
     DataProtection__Store: Database

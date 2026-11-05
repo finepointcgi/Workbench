@@ -131,6 +131,10 @@ else
                 <CredentialsPanel EmployeeId="EmployeeId" Credentials="_record.Credentials ?? []" CanEdit="full" Changed="ReloadAsync" />
             </MudTabPanel>
 
+            <MudTabPanel Text="Skills" data-testid="tab-skills">
+                <Workbench.Ui.Resourcing.SkillsPanel EmployeeId="EmployeeId" />
+            </MudTabPanel>
+
             @if (_record.Documents is { } documents)
             {
                 <MudTabPanel Text="Documents">
