@@ -234,7 +234,34 @@ public static class PerDiemResourcingClientRegistration
         services.AddHttpClient<IAllocationForecastService, HttpAllocationForecastService>(client => client.BaseAddress = serverBaseAddress);
         services.AddHttpClient<IProjectStaffingService, HttpProjectStaffingService>(client => client.BaseAddress = serverBaseAddress);
         services.AddHttpClient<IStaffingAssignmentService, HttpStaffingAssignmentService>(client => client.BaseAddress = serverBaseAddress);
+        services.AddHttpClient<ISkillService, HttpSkillService>(client => client.BaseAddress = serverBaseAddress);
         services.AddHttpClient<IResourcePlanService, HttpResourcePlanService>(client => client.BaseAddress = serverBaseAddress);
         return services;
     }
+}
+
+public sealed class HttpSkillService(HttpClient http) : ISkillService
+{
+    private const string Root = "api/v1/resourcing";
+
+    public async Task<IReadOnlyList<SkillDto>> ListSkillsAsync(CancellationToken cancellationToken = default) =>
+        await (await http.GetAsync($"{Root}/skills", cancellationToken)).ReadAsync<List<SkillDto>>(cancellationToken);
+
+    public async Task<IReadOnlyList<PersonSkillsDto>> ListPeopleSkillsAsync(CancellationToken cancellationToken = default) =>
+        await (await http.GetAsync($"{Root}/people-skills", cancellationToken)).ReadAsync<List<PersonSkillsDto>>(cancellationToken);
+
+    public async Task<IReadOnlyList<EmployeeSkillDto>> GetEmployeeSkillsAsync(Guid employeeId, CancellationToken cancellationToken = default) =>
+        await (await http.GetAsync($"{Root}/employees/{employeeId}/skills", cancellationToken)).ReadAsync<List<EmployeeSkillDto>>(cancellationToken);
+
+    public async Task<EmployeeSkillDto> SetEmployeeSkillAsync(Guid employeeId, SetEmployeeSkillRequest request, CancellationToken cancellationToken = default) =>
+        await (await http.PutAsJsonAsync($"{Root}/employees/{employeeId}/skills", request, cancellationToken)).ReadAsync<EmployeeSkillDto>(cancellationToken);
+
+    public async Task RemoveEmployeeSkillAsync(Guid employeeId, Guid skillId, CancellationToken cancellationToken = default) =>
+        await (await http.DeleteAsync($"{Root}/employees/{employeeId}/skills/{skillId}", cancellationToken)).EnsureOkAsync(cancellationToken);
+
+    public async Task<SkillDto> RenameSkillAsync(Guid skillId, RenameSkillRequest request, CancellationToken cancellationToken = default) =>
+        await (await http.PutAsJsonAsync($"{Root}/skills/{skillId}", request, cancellationToken)).ReadAsync<SkillDto>(cancellationToken);
+
+    public async Task DeleteSkillAsync(Guid skillId, CancellationToken cancellationToken = default) =>
+        await (await http.DeleteAsync($"{Root}/skills/{skillId}", cancellationToken)).EnsureOkAsync(cancellationToken);
 }

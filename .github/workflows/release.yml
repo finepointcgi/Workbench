@@ -1,0 +1,57 @@
+# Publishes a release anyone can install with Docker: the image on ghcr.io (amd64 + arm64) plus the files a customer
+# downloads (docker-compose.yml, Caddyfile, install.sh, upgrade.sh, first-login-link.sh and a zip of them).
+#   git tag v1.0.0 && git push origin v1.0.0
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/workbench
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push the image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: runtime
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ steps.v.outputs.version }}
+            ${{ env.IMAGE }}:latest
+          build-args: |
+            VERSION=${{ steps.v.outputs.version }}
+            REVISION=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Assemble the customer files
+        run: |
+          mkdir out && cp deploy/selfhost/{docker-compose.yml,Caddyfile,install.sh,upgrade.sh,first-login-link.sh} out/
+          sed -i "s/__VERSION__/${{ steps.v.outputs.version }}/" out/install.sh
+          sed -i "s/:\${WORKBENCH_VERSION:-latest}/:\${WORKBENCH_VERSION:-${{ steps.v.outputs.version }}}/" out/docker-compose.yml
+          (cd out && zip -q ../workbench-${{ steps.v.outputs.version }}.zip *)
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --generate-notes --title "Workbench ${{ steps.v.outputs.version }}" \
+            out/* workbench-${{ steps.v.outputs.version }}.zip

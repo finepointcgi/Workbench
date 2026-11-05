@@ -3,8 +3,8 @@ using System.Text;
 namespace Workbench.Ui.Theme;
 
 /// <summary>
-/// The Material 3 design tokens, defined once. The primary roles are the brand orange from the logo; the other color roles
-/// are the Material Theme Builder output for the seed #415F91 (the tonal palettes: primary at tone 40 light / 80 dark, containers at 90 / 30, surfaces at 98 / 6 with the
+/// The Material 3 design tokens, defined once. The color roles are the Material Theme Builder output for the brand seed
+/// #C2410C (the tonal palettes: primary at tone 40 light / 80 dark, containers at 90 / 30, surfaces at 98 / 6 with the
 /// five container levels). They are emitted as <c>--md-sys-color-*</c> CSS variables (<see cref="ToCss"/>; the
 /// ThemeTokens component for the app, wwwroot/m3-tokens.css for the public pages) and mapped into the MudBlazor palette by
 /// <see cref="WorkbenchTheme"/>, so a component picks up the same color whichever way it is styled. wwwroot/theme.css
@@ -16,14 +16,13 @@ namespace Workbench.Ui.Theme;
 /// </summary>
 public static class M3Tokens
 {
-    /// <summary>The brand color: the logo's orange, deepened for AA contrast. The neutral and accent roles come from the earlier seed #415F91.</summary>
-    public const string Seed = "#B33C0B";
+    /// <summary>The brand seed the tonal palettes are generated from.</summary>
+    public const string Seed = "#B53C0A";
 
     /// <summary>Light scheme, role name (kebab-case, no prefix) to hex.</summary>
     public static IReadOnlyDictionary<string, string> Light { get; } = new Dictionary<string, string>
     {
-        // Primary: the brand orange from the logo, deepened until it is 4.5:1 text on every surface level.
-        ["primary"] = "#B33C0B", ["on-primary"] = "#FFFFFF", ["primary-container"] = "#FFDBCB", ["on-primary-container"] = "#380D00",
+        ["primary"] = "#B53C0A", ["on-primary"] = "#FFFFFF", ["primary-container"] = "#FFDBCB", ["on-primary-container"] = "#380D00",
         ["secondary"] = "#565F71", ["on-secondary"] = "#FFFFFF", ["secondary-container"] = "#DAE2F9", ["on-secondary-container"] = "#131C2B",
         ["tertiary"] = "#705575", ["on-tertiary"] = "#FFFFFF", ["tertiary-container"] = "#FAD8FD", ["on-tertiary-container"] = "#28132E",
         ["error"] = "#BA1A1A", ["on-error"] = "#FFFFFF", ["error-container"] = "#FFDAD6", ["on-error-container"] = "#410002",
@@ -34,7 +33,7 @@ public static class M3Tokens
         ["outline"] = "#74777F", ["outline-variant"] = "#C4C6D0",
         ["inverse-surface"] = "#2E3135", ["inverse-on-surface"] = "#F0F0F7", ["inverse-primary"] = "#FFB59A",
         ["scrim"] = "#000000",
-        // Extended colors (M3 "custom colors"): status, harmonised with the blue seed.
+        // Extended colors (M3 "custom colors"): status, harmonised with the orange seed.
         ["success"] = "#2E7D32", ["on-success"] = "#FFFFFF",
         ["warning"] = "#A35200", ["on-warning"] = "#FFFFFF",
         ["info"] = "#1565C0", ["on-info"] = "#FFFFFF",
@@ -52,7 +51,7 @@ public static class M3Tokens
         ["surface-container-lowest"] = "#0C0E13", ["surface-container-low"] = "#191C20", ["surface-container"] = "#1D2024",
         ["surface-container-high"] = "#282A2F", ["surface-container-highest"] = "#33353A",
         ["outline"] = "#8E9099", ["outline-variant"] = "#44474E",
-        ["inverse-surface"] = "#E2E2E9", ["inverse-on-surface"] = "#2E3135", ["inverse-primary"] = "#B33C0B",
+        ["inverse-surface"] = "#E2E2E9", ["inverse-on-surface"] = "#2E3135", ["inverse-primary"] = "#B53C0A",
         ["scrim"] = "#000000",
         ["success"] = "#66BB6A", ["on-success"] = "#121212",
         ["warning"] = "#FFB74D", ["on-warning"] = "#121212",
@@ -61,7 +60,7 @@ public static class M3Tokens
 
     public static IReadOnlyDictionary<string, string> Scheme(bool dark) => dark ? Dark : Light;
 
-    /// <summary>The declarations of one scheme: <c>--md-sys-color-primary: #415F91;</c> per role.</summary>
+    /// <summary>The declarations of one scheme: <c>--md-sys-color-primary: #C2410C;</c> per role.</summary>
     public static string Declarations(bool dark, string indent = "")
     {
         var sb = new StringBuilder();

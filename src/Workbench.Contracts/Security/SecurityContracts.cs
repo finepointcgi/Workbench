@@ -112,7 +112,16 @@ public interface IInviteService
     Task<InviteDto> CreateAsync(CreateInviteRequest request, CancellationToken cancellationToken = default);
 
     Task<InviteDto> RevokeAsync(Guid inviteId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// A fresh one-time link for a pending invite, to give the person directly when email isn't set up: they open it,
+    /// choose a password and are signed in. Admins only. Earlier links for the same invite keep working until it expires.
+    /// </summary>
+    Task<InviteLinkDto> GetLinkAsync(Guid inviteId, CancellationToken cancellationToken = default);
 }
+
+/// <summary>A link to accept an invite. <see cref="Url"/> may be a path (starting with <c>/</c>) when the server has no public address set.</summary>
+public sealed record InviteLinkDto(string Url, DateTime ExpiresAtUtc);
 
 // ---- Access reviews ----
 

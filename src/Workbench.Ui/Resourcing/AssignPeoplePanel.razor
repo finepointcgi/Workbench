@@ -6,6 +6,7 @@
 @inject IResourceAllocationService Allocations
 @inject IProjectService Projects
 @inject IPeopleService People
+@inject ISkillService SkillList
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 
@@ -70,7 +71,7 @@
                     @foreach (var u in _data.WeekByWeek)
                     {
                         <tr>
-                            <td>@u.EmployeeName</td>
+                            <td>@u.EmployeeName<div><SkillChips Skills="SkillsOf(u.EmployeeId)" Max="3" /></div></td>
                             <td>@u.WbsLabel</td>
                             <td style="text-align: right">@ResourcingFormat.Hours(u.Hours) h</td>
                             <td style="white-space: nowrap">@u.From.ToString("MMM d") – @u.To.ToString("MMM d, yyyy")</td>
@@ -133,7 +134,10 @@
     private ProjectStaffingPlanDto? _plan;
     private IReadOnlyList<WbsElementDto> _wbs = [];
     private IReadOnlyList<LaborCategoryDto> _categories = [];
+    private Dictionary<Guid, IReadOnlyList<EmployeeSkillDto>> _skills = [];
     private bool _canManage;
+
+    private IReadOnlyList<EmployeeSkillDto>? SkillsOf(Guid employeeId) => _skills.GetValueOrDefault(employeeId);
     private bool _byWeek;
     private bool _busy;
     private string? _error;
@@ -146,6 +150,7 @@
             _canManage = await Allocations.CanManageAsync(ProjectId);
             _wbs = await Projects.ListWbsAsync(ProjectId);
             _categories = await People.ListLaborCategoriesAsync();
+            _skills = (await SkillList.ListPeopleSkillsAsync()).ToDictionary(p => p.EmployeeId, p => p.Skills);
         }
         catch (Exception ex) when (ResourcingFormat.IsExpected(ex))
         {
@@ -203,6 +208,7 @@
                             <th scope="row" style="@($"{Pinned(0)} text-align: left; font-weight: normal; width: {NameWidth}px; min-width: {NameWidth}px")">
                                 <div>@a.EmployeeName</div>
                                 <div class="mud-text-secondary" style="font-size: 0.75rem">@a.WbsLabel</div>
+                                <SkillChips Skills="SkillsOf(a.EmployeeId)" Max="3" />
                             </th>
                             <td style="@($"{Pinned(NameWidth)} text-align: right")" data-testid="week-row-total"><b>@ResourcingFormat.ExactHours(a.TotalHours)</b></td>
                             @foreach (var week in weeks)
