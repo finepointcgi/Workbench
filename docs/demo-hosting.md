@@ -69,6 +69,47 @@ nothing until you set it up in GitHub (**Settings → Secrets and variables → 
 A redeploy keeps the day's data and applies new migrations. New sample data from a change to the seeds appears after
 the next nightly reset, or right away with a manual reset.
 
+## Redeploy on Cloud Run
+
+`.github/workflows/demo-cloudrun.yml` does the same for a demo on Google Cloud Run: on every push to master it builds
+the `demo` image, pushes it to Artifact Registry and points your existing service at it (only the image changes).
+It does nothing until these **variables** are set in GitHub (**Settings → Secrets and variables → Actions**):
+
+| Variable | Value |
+|---|---|
+| `GCP_PROJECT_ID` | your project id |
+| `GCP_REGION` | the service's region, for example `us-central1` |
+| `CLOUD_RUN_SERVICE` | the service name shown in the Cloud Run console |
+| `GCP_AR_REPOSITORY` | an Artifact Registry Docker repository, created once (below) |
+| `GCP_WORKLOAD_IDENTITY_PROVIDER` | the provider's full name, `projects/NUMBER/locations/global/workloadIdentityPools/POOL/providers/PROVIDER` |
+| `GCP_DEPLOY_SERVICE_ACCOUNT` | `github-deploy@PROJECT.iam.gserviceaccount.com` |
+
+One-time setup in Cloud Shell (no keys are created; GitHub proves who it is to Google):
+
+```bash
+P=your-project-id; R=us-central1; REPO=finepointcgi/Workbench; S=your-service-name
+gcloud services enable artifactregistry.googleapis.com run.googleapis.com iamcredentials.googleapis.com --project $P
+gcloud artifacts repositories create workbench --repository-format=docker --location=$R --project $P
+gcloud iam service-accounts create github-deploy --project $P
+SA=github-deploy@$P.iam.gserviceaccount.com
+gcloud projects add-iam-policy-binding $P --member serviceAccount:$SA --role roles/run.admin
+gcloud projects add-iam-policy-binding $P --member serviceAccount:$SA --role roles/artifactregistry.writer
+# the deploy account acts as the service's runtime account:
+RUNTIME=$(gcloud run services describe $S --region $R --project $P --format='value(spec.template.spec.serviceAccountName)')
+gcloud iam service-accounts add-iam-policy-binding $RUNTIME --member serviceAccount:$SA --role roles/iam.serviceAccountUser --project $P
+gcloud iam workload-identity-pools create github --location=global --project $P
+gcloud iam workload-identity-pools providers create-oidc github --location=global --workload-identity-pool=github --project $P \
+  --issuer-uri=https://token.actions.githubusercontent.com --attribute-mapping=google.subject=assertion.sub,attribute.repository=assertion.repository \
+  --attribute-condition="assertion.repository=='$REPO'"
+gcloud iam service-accounts add-iam-policy-binding $SA --project $P --role roles/iam.workloadIdentityUser \
+  --member "principalSet://iam.googleapis.com/projects/$(gcloud projects describe $P --format='value(projectNumber)')/locations/global/workloadIdentityPools/github/attribute.repository/$REPO"
+gcloud iam workload-identity-pools providers describe github --workload-identity-pool=github --location=global --project $P --format='value(name)'
+```
+
+The last command prints the value for `GCP_WORKLOAD_IDENTITY_PROVIDER`. A service that was never created needs these
+settings once: one instance at most and at least one (SQLite lives in the container), CPU always allocated, port 8080.
+Data lives in the container, so each new revision starts from fresh sample data.
+
 ## Reset by hand
 
 From GitHub: **Actions → Demo → Run workflow**, tick **Start over with fresh demo data**. Or from a terminal:
@@ -117,4 +158,4 @@ changes don't survive a quiet spell. The nightly reset still applies.
 The `demo` image runs anywhere that keeps a container running with a persistent volume at `/data` and restarts it when
 it exits (the nightly reset relies on that): Render with a disk mounted at `/data` (about US$7.25 a month; see above for the free plan), Azure Container Apps (minimum replicas 1, but its Azure Files volumes don't suit SQLite's locking) or any
 Docker host (`docker run -d --restart always -p 80:8080 -v workbench-demo:/data workbench:demo` behind a TLS proxy).
-The workflow only targets Fly.io.
+The workflows target Fly.io and Cloud Run.
