@@ -130,12 +130,12 @@ public static class NavCatalog
         new(People, "My profile", "My profile", "hr/me", Icons.Material.Filled.Badge, NavRule.Everyone, Keywords: "personal details emergency contacts address self identification eeo"),
         new(People, "My profile", "My benefits", "hr/benefits/me", Icons.Material.Filled.HealthAndSafety, NavRule.Everyone, Keywords: "open enrollment medical dental vision 401k fsa hsa dependents life event"),
         // Business development: the capture pipeline (BD, Finance, Admin); capture and proposal managers see their own.
-        new(Growth, "Business development", "Pipeline", "bd", Icons.Material.Filled.ViewKanban, NavRule.Custom(a => a.ShowBusinessDevelopment, "Also capture and proposal managers (their own opportunities)", P.PipelineView), MatchAll: true, Keywords: "capture board opportunities crm"),
+        new(Growth, "Business development", "Pipeline", "bd", Icons.Material.Filled.ViewKanban, NavRule.Custom(a => a.ShowBusinessDevelopment, "Also capture and proposal managers (their own opportunities)", P.PipelineView), MatchAll: true, Keywords: "capture board opportunities crm win themes swot pwin color team"),
         new(Growth, "Business development", "Opportunities", "bd/opportunities", Icons.Material.Filled.Flag, NavRule.Custom(a => a.ShowBusinessDevelopment, "Also capture and proposal managers (their own opportunities)", P.PipelineView), Detail: "Opportunity", Keywords: "pursuits rfp solicitation capture"),
         new(Growth, "Business development", "Accounts and contacts", "bd/accounts", Icons.Material.Filled.Contacts, NavRule.Need(P.PipelineView), Detail: "Account", Keywords: "agencies offices primes partners competitors crm"),
         new(Growth, "Business development", "Leads", "bd/leads", Icons.Material.Filled.TravelExplore, NavRule.Need(P.PipelineView), Keywords: "sam.gov saved searches import notices"),
         new(Growth, "Business development", "Forecast and win/loss", "bd/forecast", Icons.Material.Filled.Insights, NavRule.Need(P.PipelineView), Keywords: "pwin pgo weighted pipeline b&p spend"),
-        new(Growth, "Business development", "Gates and settings", "bd/settings", Icons.Material.Filled.Rule, NavRule.Need(P.PipelineView), Keywords: "go no-go bid decision checklist b&p charge code"),
+        new(Growth, "Business development", "Gates and settings", "bd/settings", Icons.Material.Filled.Rule, NavRule.Need(P.PipelineView), Keywords: "go no-go bid decision checklist b&p charge code capture exec captureexec import"),
 
         new(Sheets, null, "Sheets", "sheets", Icons.Material.Filled.TableChart, NavRule.Everyone, Detail: "Sheet", Keywords: "grid gantt board calendar plan"),
         new(Sheets, null, "Dashboards", "dashboards", Icons.Material.Filled.Dashboard, NavRule.Everyone, Detail: "Dashboard", Keywords: "charts widgets"),

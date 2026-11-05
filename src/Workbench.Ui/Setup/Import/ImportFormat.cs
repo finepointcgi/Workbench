@@ -12,6 +12,7 @@ public static class ImportFormat
         ImportSource.SmartsheetApi => "Smartsheet (API)",
         ImportSource.SmartsheetExcel => "Smartsheet (.xlsx)",
         ImportSource.Unanet => "Unanet",
+        ImportSource.CaptureExec => "Capture Exec",
         _ => source.ToString(),
     };
 
