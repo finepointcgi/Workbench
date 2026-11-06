@@ -115,6 +115,21 @@ public sealed record BdHighlightsDto(
 
 public sealed record CrmSettingsDto(Guid? BpParentWbsElementId, string? BpParentCode, string? BpParentName, bool BpParentFound, string? CompanyProfile = null);
 
+/// <summary>One open pursuit's staffing, if it were won: the hours a week its contract value implies, over its period of performance.</summary>
+public sealed record PipelineDemandOpportunityDto(
+    Guid OpportunityId, string Number, string Name, OpportunityStage Stage, int WinChancePercent, DateOnly StartsOn, DateOnly EndsOn,
+    decimal HoursPerWeek, decimal WeightedHoursPerWeek, bool StartIsEstimated);
+
+/// <summary>Hours wanted in one week: <see cref="WeightedHours"/> is each pursuit's hours × its win chance; <see cref="FullHours"/> counts every one as won.</summary>
+public sealed record PipelineDemandWeekDto(DateOnly WeekStart, decimal WeightedHours, decimal FullHours);
+
+/// <summary>
+/// What winning the open pipeline would ask of the staff. Hours are contract value ÷ <see cref="RevenuePerHour"/>, spread evenly
+/// over the period of performance from the estimated award date (or 90 days after the proposal is due). <see cref="NotCounted"/>
+/// is pursuits with no value or no date to start from.
+/// </summary>
+public sealed record PipelineDemandDto(IReadOnlyList<PipelineDemandWeekDto> Weeks, IReadOnlyList<PipelineDemandOpportunityDto> Opportunities, decimal RevenuePerHour, int NotCounted);
+
 /// <summary>A charge code a B&amp;P element may be (indirect elements), for the settings picker.</summary>
 public sealed record BpParentOptionDto(Guid Id, string Code, string Name, string ProjectCode);
 
@@ -132,6 +147,9 @@ public interface IPipelineService
     Task<WinLossDto> GetWinLossAsync(DateOnly? from = null, DateOnly? to = null, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<BpSpendDto>> GetBpSpendAsync(Guid? opportunityId = null, CancellationToken cancellationToken = default);
+
+    /// <summary>Weekly hours the open pipeline would need if won, so resource managers see demand before it is awarded. Pursuits the viewer manages, or all with pipeline access.</summary>
+    Task<PipelineDemandDto> GetStaffingDemandAsync(DateOnly from, int weeks, decimal revenuePerHour = 150m, CancellationToken cancellationToken = default);
 
     Task<CrmSettingsDto> GetSettingsAsync(CancellationToken cancellationToken = default);
 

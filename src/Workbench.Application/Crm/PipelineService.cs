@@ -52,6 +52,23 @@ public sealed class PipelineService(IWorkbenchDbContextFactory dbFactory, CrmAcc
         return new PipelineBoardDto(lanes);
     }
 
+    public async Task<PipelineDemandDto> GetStaffingDemandAsync(DateOnly from, int weeks, decimal revenuePerHour = PipelineDemandMath.DefaultRevenuePerHour, CancellationToken cancellationToken = default)
+    {
+        var roles = await access.RolesAsync(cancellationToken);
+        var me = access.Email;
+        await using var db = await dbFactory.CreateAsync(cancellationToken);
+        var query = db.Set<D.Opportunity>().AsNoTracking().Where(o => CrmMapping.OpenStages.Contains(o.Stage));
+        if (!roles.Has(Permission.PipelineView))
+        {
+            query = query.Where(o => o.CaptureManagerEmail == me || o.ProposalManagerEmail == me);
+        }
+
+        var open = await query.ToListAsync(cancellationToken);
+        return PipelineDemandMath.Compute(
+            open.Select(o => new PipelineDemandMath.Input(o.Id, o.Number, o.Name, o.Stage.ToContract(), o.EstimatedValue, o.Pwin, o.Pgo, o.EstimatedAwardDate, o.ProposalDueOn, o.PeriodOfPerformanceMonths)),
+            from, weeks, revenuePerHour);
+    }
+
     public async Task<ForecastDto> GetForecastAsync(CancellationToken cancellationToken = default)
     {
         await using var db = await dbFactory.CreateAsync(cancellationToken);

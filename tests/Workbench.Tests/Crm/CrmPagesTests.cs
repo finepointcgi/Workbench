@@ -64,6 +64,7 @@ public sealed class CrmPagesTests
     {
         public Task<PipelineBoardDto> GetBoardAsync(bool includeOutcomes = false, CancellationToken cancellationToken = default) => Task.FromResult(Board());
         public Task<ForecastDto> GetForecastAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<PipelineDemandDto> GetStaffingDemandAsync(DateOnly from, int weeks, decimal revenuePerHour = 150m, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<BdHighlightsDto> GetHighlightsAsync(int windowDays = 30, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<WinLossDto> GetWinLossAsync(DateOnly? from = null, DateOnly? to = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<BpSpendDto>> GetBpSpendAsync(Guid? opportunityId = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
