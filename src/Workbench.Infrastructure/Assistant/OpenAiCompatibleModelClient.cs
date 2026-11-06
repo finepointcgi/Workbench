@@ -1,6 +1,5 @@
 using System.Net;
 using System.Net.Http.Headers;
-using System.Net.Http.Json;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
@@ -37,7 +36,7 @@ internal sealed class OpenAiCompatibleModelClient(HttpClient http, string baseUr
         var withFormat = request.JsonSchema is not null;
         for (var attempt = 0; ; attempt++)
         {
-            using var message = new HttpRequestMessage(HttpMethod.Post, _endpoint) { Content = JsonContent.Create(Body(request, withFormat)) };
+            using var message = new HttpRequestMessage(HttpMethod.Post, _endpoint) { Content = new StringContent(Body(request, withFormat).ToJsonString(), Encoding.UTF8, "application/json") };
             if (!string.IsNullOrWhiteSpace(apiKey))
             {
                 message.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
