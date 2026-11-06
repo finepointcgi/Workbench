@@ -9,53 +9,53 @@
     <section aria-labelledby="pipeline-demand-heading" class="mt-6" data-testid="pipeline-demand">
         <MudText Typo="Typo.h6" HtmlTag="h2" id="pipeline-demand-heading">If we win the pipeline</MudText>
         <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2" Style="max-width: 80ch">
-            Hours a week the open pursuits would need, from their estimated award dates. <b>Likely</b> weights each by its chance of winning;
-            <b>If all won</b> counts every one. Free hours are what the people above can still take.
+            Hours a week the open pursuits would need from their estimated award dates, by month. <b>Likely</b> weights each by its chance of winning;
+            <b>If all won</b> counts every one. It's measured against the hours the people above have free now, so today's bookings that end sooner aren't counted.
         </MudText>
         <MudNumericField T="decimal" Label="Contract $ per staffed hour" Value="_rate" ValueChanged="OnRateChangedAsync" Min="1" Max="2000" Style="max-width:240px" Class="mb-2"
                          HelperText="Blended: contract value ÷ this = hours" data-testid="pipeline-rate" Immediate="true" DebounceInterval="500" />
         <div style="overflow-x:auto">
-            <MudSimpleTable Dense="true" Bordered="true" aria-label="Pipeline staffing demand against free hours, by week" data-testid="pipeline-demand-table">
+            <MudSimpleTable Dense="true" Bordered="true" aria-label="Pipeline staffing demand by month against the free hours now" data-testid="pipeline-demand-table">
                 <thead>
                     <tr>
-                        <th scope="col" style="min-width:180px"></th>
-                        @foreach (var w in _demand.Weeks)
+                        <th scope="col" style="min-width:200px">Hours a week, on average</th>
+                        @foreach (var m in Months)
                         {
-                            <th scope="col" style="text-align:center; white-space:nowrap">@w.WeekStart.ToString("MMM d")</th>
+                            <th scope="col" style="text-align:center; white-space:nowrap">@m.Start.ToString("MMM yyyy")</th>
                         }
                     </tr>
                 </thead>
                 <tbody>
                     <tr>
-                        <th scope="row" style="text-align:left; font-weight:normal">Free hours</th>
-                        @foreach (var w in _demand.Weeks)
+                        <th scope="row" style="text-align:left; font-weight:normal">Free now (average of the weeks above)</th>
+                        @foreach (var m in Months)
                         {
-                            <td style="text-align:center">@ResourcingFormat.Hours(Free(w.WeekStart))</td>
+                            <td style="text-align:center">@ResourcingFormat.Hours(FreeNow)</td>
                         }
                     </tr>
                     <tr>
                         <th scope="row" style="text-align:left; font-weight:normal">Likely demand</th>
-                        @foreach (var w in _demand.Weeks)
+                        @foreach (var m in Months)
                         {
-                            <td style="text-align:center">@ResourcingFormat.Hours(w.WeightedHours)</td>
+                            <td style="text-align:center">@ResourcingFormat.Hours(m.Likely)</td>
                         }
                     </tr>
                     <tr>
                         <th scope="row" style="text-align:left; font-weight:normal">If all won</th>
-                        @foreach (var w in _demand.Weeks)
+                        @foreach (var m in Months)
                         {
-                            <td style="text-align:center">@ResourcingFormat.Hours(w.FullHours)</td>
+                            <td style="text-align:center">@ResourcingFormat.Hours(m.All)</td>
                         }
                     </tr>
                     <tr>
                         <th scope="row" style="text-align:left">Short by (likely)</th>
-                        @foreach (var w in _demand.Weeks)
+                        @foreach (var m in Months)
                         {
-                            var short_ = w.WeightedHours - Free(w.WeekStart);
+                            var short_ = m.Likely - FreeNow;
                             <td style="text-align:center; @(short_ > 0 ? "background:var(--mud-palette-warning-hover); font-weight:600" : "")" data-short="@(short_ > 0)">
                                 @if (short_ > 0)
                                 {
-                                    <span aria-hidden="true">▲ </span>@ResourcingFormat.Hours(short_)<span class="wb-sr-only"> hours short, about @Math.Ceiling(short_ / 40m) people</span>
+                                    <span aria-hidden="true">▲ </span>@ResourcingFormat.Hours(short_)<span class="wb-sr-only"> hours a week short, about @Math.Ceiling(short_ / 40m) @(Math.Ceiling(short_ / 40m) == 1 ? "person" : "people")</span>
                                 }
                                 else
                                 {
@@ -122,7 +122,7 @@
         (_loadedFrom, _loadedWeeks) = (Map.Weeks[0], Map.Weeks.Count);
         try
         {
-            _demand = await Pipeline.GetStaffingDemandAsync(Map.Weeks[0], Map.Weeks.Count, _rate);
+            _demand = await Pipeline.GetStaffingDemandAsync(Map.Weeks[0], HorizonWeeks, _rate);
         }
         catch (Exception ex) when (ResourcingFormat.IsExpected(ex))
         {
@@ -130,7 +130,27 @@
         }
     }
 
-    /// <summary>Hours people can still take that week: capacity not yet staffed, across everyone shown (someone over their hours takes nothing).</summary>
-    private decimal Free(DateOnly week) =>
-        Map.Rows.Sum(r => r.Weeks.FirstOrDefault(c => c.WeekStart == week) is { } c ? Math.Max(0, c.Capacity - c.Allocated) : 0);
+    private const int HorizonWeeks = 78;
+    private const int HorizonMonths = 18;
+
+    private sealed record MonthDemand(DateOnly Start, decimal Likely, decimal All);
+
+    /// <summary>The pipeline's average weekly hours for each of the next months, from the weeks whose Monday falls in the month.</summary>
+    private IEnumerable<MonthDemand> Months
+    {
+        get
+        {
+            var first = new DateOnly(Map.Weeks[0].Year, Map.Weeks[0].Month, 1);
+            for (var i = 0; i < HorizonMonths; i++)
+            {
+                var start = first.AddMonths(i);
+                var weeks = _demand!.Weeks.Where(w => w.WeekStart.Year == start.Year && w.WeekStart.Month == start.Month).ToList();
+                yield return new MonthDemand(start, weeks.Count == 0 ? 0 : Math.Round(weeks.Average(w => w.WeightedHours), 1), weeks.Count == 0 ? 0 : Math.Round(weeks.Average(w => w.FullHours), 1));
+            }
+        }
+    }
+
+    /// <summary>Hours people can still take in an average week of the heat map: capacity not yet staffed, across everyone shown (someone over their hours takes nothing).</summary>
+    private decimal FreeNow => Map.Weeks.Count == 0 ? 0 : Math.Round(Map.Weeks.Average(week =>
+        Map.Rows.Sum(r => r.Weeks.FirstOrDefault(c => c.WeekStart == week) is { } c ? Math.Max(0, c.Capacity - c.Allocated) : 0)), 1);
 }
