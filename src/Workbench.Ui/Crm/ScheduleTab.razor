@@ -182,6 +182,9 @@ else
         _ => "var(--mud-palette-text-secondary)",
     };
 
+    private static readonly MilestoneKind[] StandardReviews =
+        [MilestoneKind.BlackHat, MilestoneKind.BlueTeam, MilestoneKind.Kickoff, MilestoneKind.PinkTeam, MilestoneKind.RedTeam, MilestoneKind.GoldTeam, MilestoneKind.WhiteGlove, MilestoneKind.Submission];
+
     private async Task StandardAsync()
     {
         _busy = true;
@@ -190,7 +193,13 @@ else
             var before = _milestones!.Count;
             _milestones = (await Plans.AddStandardScheduleAsync(Opportunity.Id)).ToList();
             var added = _milestones.Count - before;
-            Snackbar.Add(added == 0 ? "The schedule already has every standard review (or their dates have passed)." : $"Added {added} milestones.", added == 0 ? Severity.Info : Severity.Success);
+            // Reviews whose dates have already passed are left out; say which, so a short schedule isn't a surprise.
+            var have = _milestones.Select(m => m.Kind).ToHashSet();
+            var left = StandardReviews.Where(k => !have.Contains(k)).Select(k => CapturePlanLabels.Label(k).ToLowerInvariant()).ToList();
+            var tail = left.Count == 0 ? "" : $" Left out because their dates have passed: {string.Join(", ", left)}.";
+            Snackbar.Add(added == 0 && left.Count == 0 ? "The schedule already has every standard review."
+                : added == 0 ? $"Nothing to add.{tail}"
+                : $"Added {added} milestone{(added == 1 ? "" : "s")}.{tail}", added == 0 ? Severity.Info : left.Count > 0 ? Severity.Warning : Severity.Success);
         }
         catch (Exception ex) when (CrmFormat.IsExpected(ex))
         {

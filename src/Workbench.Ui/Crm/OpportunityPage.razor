@@ -270,6 +270,17 @@ else if (_opportunity is { } o)
         {
             Replace(await Opportunities.ChangeStageAsync(_opportunity!.Id, new ChangeStageRequest(stage)));
             Snackbar.Add($"Moved to {CrmFormat.Stage(stage)}.", Severity.Success);
+            if (stage == OpportunityStage.Submitted)
+            {
+                // Submitted starts the wait for the award: the forecast and staffing demand count from the award date.
+                var missing = new List<string>();
+                if (string.IsNullOrWhiteSpace(_opportunity!.ProposalManagerEmail)) { missing.Add("a proposal manager"); }
+                if (_opportunity.EstimatedAwardDate is null) { missing.Add("an estimated award date"); }
+                if (missing.Count > 0)
+                {
+                    Snackbar.Add($"Add {string.Join(" and ", missing)} in Details: the forecast and staffing demand rely on {(missing.Count == 1 && missing[0].Contains("date") ? "it" : "them")}.", Severity.Warning);
+                }
+            }
         }
         catch (ArgumentException ex) when (ex.Message.Contains("gate", StringComparison.OrdinalIgnoreCase))
         {
