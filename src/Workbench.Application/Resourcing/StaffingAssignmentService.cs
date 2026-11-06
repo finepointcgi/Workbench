@@ -552,6 +552,87 @@ public sealed class StaffingAssignmentService(
     /// <summary>
     /// Whether dates on this charge code are its plan task's, so they'll move with the task (null: not a task on a plan).
     /// </summary>
+    /// <summary>
+    /// People just assigned to a plan task get hours on it, so the heat map, staffing and the budget see them without a
+    /// separate step: their share of the task's Planned hours (split between its assignees), or their standard day, over the
+    /// task's remaining dates, following the task when it moves. Someone who already has hours on the task is left alone.
+    /// Doesn't save (the caller does). Returns a note for each person who couldn't be staffed, and each overbooking, so
+    /// nothing is skipped silently.
+    /// </summary>
+    internal async Task<IReadOnlyList<string>> StaffTaskAssigneesAsync(IWorkbenchDbContext db, Guid itemId, IReadOnlyCollection<string> emails, int assigneeCount, CancellationToken ct)
+    {
+        var notes = new List<string>();
+        if (emails.Count == 0
+            || await db.Set<WbsElement>().AsNoTracking().FirstOrDefaultAsync(w => w.ItemId == itemId, ct) is not { } element
+            || await db.Items.AsNoTracking().FirstOrDefaultAsync(i => i.Id == itemId, ct) is not { } item
+            || item.IsMilestone
+            || await db.Items.AnyAsync(i => i.ParentId == itemId, ct))
+        {
+            return notes; // not a charge-code task on a project's plan
+        }
+
+        var today = Today;
+        var title = $"\"{item.Title}\"";
+        if (item.Start is not { } start || item.Finish is not { } finish)
+        {
+            notes.AddRange(emails.Select(e => $"{e} has no hours on {title}: the task has no dates yet. Give it dates and they'll be staffed, or use Fill staffing from the plan."));
+            return notes;
+        }
+
+        if (finish < today)
+        {
+            notes.AddRange(emails.Select(e => $"{e} has no hours on {title}: the task has already finished."));
+            return notes;
+        }
+
+        var from = start > today ? start : today;
+        var weekdays = Enumerable.Range(0, finish.DayNumber - from.DayNumber + 1).Select(from.AddDays).Count(d => d.DayOfWeek is not (DayOfWeek.Saturday or DayOfWeek.Sunday));
+        var columns = await db.Columns.AsNoTracking().Where(c => c.SheetId == item.SheetId).ToListAsync(ct);
+        var planned = PlanAllocationGenerator.PlannedHours(columns, item);
+        foreach (var email in emails)
+        {
+            var lower = email.ToLowerInvariant();
+            var employee = await db.Set<Employee>().AsNoTracking().FirstOrDefaultAsync(e => e.Email.ToLower() == lower, ct);
+            if (employee is null)
+            {
+                notes.Add($"{email} has no hours on {title}: they aren't set up as an employee.");
+                continue;
+            }
+
+            if (await db.Set<StaffingAssignment>().AnyAsync(a => a.WbsElementId == element.Id && a.EmployeeId == employee.Id, ct)
+                || await db.Set<ResourceAllocation>().AnyAsync(a => a.WbsElementId == element.Id && a.EmployeeId == employee.Id && a.Hours > 0, ct))
+            {
+                continue;
+            }
+
+            if (weekdays == 0)
+            {
+                notes.Add($"{employee.DisplayName} has no hours on {title}: it has no working days left.");
+                continue;
+            }
+
+            var hours = Math.Round(planned is { } p ? p / Math.Max(1, assigneeCount) : employee.StandardHoursPerWeek / 5m * weekdays, 2, MidpointRounding.AwayFromZero);
+            if (hours <= 0)
+            {
+                continue;
+            }
+
+            var request = new SaveAssignmentRequest(employee.Id, element.ProjectId, hours, element.Id, from, finish, null, "Staffed when assigned on the plan");
+            try
+            {
+                var preview = await PreviewOfAsync(db, await PlanAsync(db, request, ct), ct);
+                await SaveOneAsync(db, request, ct);
+                notes.AddRange(preview.Warnings.Select(w => $"{employee.DisplayName} on {title}: {w}"));
+            }
+            catch (ArgumentException ex)
+            {
+                notes.Add($"{employee.DisplayName} has no hours on {title}: {ex.Message}");
+            }
+        }
+
+        return notes;
+    }
+
     private async Task<bool?> FollowsTaskAsync(IWorkbenchDbContext db, Guid? wbsElementId, DateOnly from, DateOnly to, CancellationToken ct)
     {
         if (wbsElementId is not { } wbs
