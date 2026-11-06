@@ -136,7 +136,17 @@ public sealed class JiraSyncEngine(
             throw;
         }
 
-        await ctx.SaveAsync(ct);
+        try
+        {
+            await ctx.SaveAsync(ct);
+        }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException)
+        {
+            // Another delivery for the same issue saved first (webhooks and the poll can overlap). Nothing was lost: its
+            // save is the same change, and the next poll reconciles anything it missed.
+            return JiraSyncReport.Empty;
+        }
+
         return report;
     }
 
