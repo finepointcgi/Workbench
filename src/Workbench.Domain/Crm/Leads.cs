@@ -57,6 +57,14 @@ public sealed class OpportunityLead : Entity
     public string? Description { get; set; }
     public decimal? EstimatedValue { get; set; }
 
+    /// <summary>How well the notice fits the company's profile (0–100) and why; null until scored. See <c>LeadFitScorer</c>.</summary>
+    public int? FitScore { get; set; }
+    public string? FitReason { get; set; }
+
+    /// <summary>True when the assistant refined the rule-based score; false when the rules alone scored it.</summary>
+    public bool FitByAssistant { get; set; }
+    public DateTime? FitScoredAtUtc { get; set; }
+
     public Guid? SavedSearchId { get; set; }
     public LeadStatus Status { get; set; }
     public Guid? OpportunityId { get; set; }
@@ -70,6 +78,9 @@ public sealed class CrmSettings : Entity
 {
     /// <summary>The B&amp;P WBS element (e.g. <c>IND.BP</c>). Null: found by code/name in the indirect project.</summary>
     public Guid? BpParentWbsElementId { get; set; }
+
+    /// <summary>What the company does and wins (NAICS codes, set-asides, capabilities, past performance): what lead fit scores and proposal drafts are written against.</summary>
+    public string? CompanyProfile { get; set; }
 
     public DateTime UpdatedAtUtc { get; set; }
     public string? UpdatedBy { get; set; }

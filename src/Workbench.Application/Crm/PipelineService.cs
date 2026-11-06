@@ -296,7 +296,31 @@ public sealed class PipelineService(IWorkbenchDbContextFactory dbFactory, CrmAcc
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var settings = await db.Set<D.CrmSettings>().AsNoTracking().FirstOrDefaultAsync(cancellationToken);
         var parent = await BpChargeCodes.FindParentAsync(db, cancellationToken);
-        return new CrmSettingsDto(settings?.BpParentWbsElementId, parent?.Code, parent?.Name, parent is not null);
+        return new CrmSettingsDto(settings?.BpParentWbsElementId, parent?.Code, parent?.Name, parent is not null, settings?.CompanyProfile);
+    }
+
+    public async Task<CrmSettingsDto> SetCompanyProfileAsync(string? profile, CancellationToken cancellationToken = default)
+    {
+        var text = string.IsNullOrWhiteSpace(profile) ? null : profile.Trim();
+        if (text is { Length: > 8000 })
+        {
+            throw new ArgumentException("Keep the company profile under 8,000 characters.");
+        }
+
+        await using var db = await dbFactory.CreateAsync(cancellationToken);
+        var settings = await db.Set<D.CrmSettings>().FirstOrDefaultAsync(cancellationToken);
+        if (settings is null)
+        {
+            settings = new D.CrmSettings();
+            db.Set<D.CrmSettings>().Add(settings);
+        }
+
+        settings.CompanyProfile = text;
+        settings.UpdatedAtUtc = clock.GetUtcNow().UtcDateTime;
+        settings.UpdatedBy = access.Email;
+        audit.Record(db, "CrmSettings", settings.Id, "Updated", new { CompanyProfile = "(changed)" }, new { CompanyProfile = text is null ? "(cleared)" : $"{text.Length} characters" });
+        await db.SaveChangesAsync(cancellationToken);
+        return await GetSettingsAsync(cancellationToken);
     }
 
     public async Task<CrmSettingsDto> SetBpParentAsync(Guid? wbsElementId, CancellationToken cancellationToken = default)

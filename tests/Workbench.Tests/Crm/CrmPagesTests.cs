@@ -68,6 +68,7 @@ public sealed class CrmPagesTests
         public Task<WinLossDto> GetWinLossAsync(DateOnly? from = null, DateOnly? to = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<BpSpendDto>> GetBpSpendAsync(Guid? opportunityId = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<CrmSettingsDto> GetSettingsAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<CrmSettingsDto> SetCompanyProfileAsync(string? profile, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<CrmSettingsDto> SetBpParentAsync(Guid? wbsElementId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<BpParentOptionDto>> ListBpParentOptionsAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }

@@ -20,6 +20,7 @@ public static class CrmPermissionRegistration
         services.Decorate<IOpportunityLeadService, PermissionCheckingOpportunityLeadService>();
         services.Decorate<IPipelineService, PermissionCheckingPipelineService>();
         services.Decorate<ICapturePlanService, PermissionCheckingCapturePlanService>();
+        services.Decorate<IProposalService, PermissionCheckingProposalService>();
         return services;
     }
 }
@@ -314,6 +315,12 @@ public sealed class PermissionCheckingOpportunityLeadService(IOpportunityLeadSer
         return await inner.ImportCsvAsync(csv, cancellationToken);
     }
 
+    public async Task<LeadFitResultDto> ScoreLeadsAsync(bool rescoreAll = false, CancellationToken cancellationToken = default)
+    {
+        await access.RequireBusinessDevelopmentAsync("score leads", cancellationToken);
+        return await inner.ScoreLeadsAsync(rescoreAll, cancellationToken);
+    }
+
     public async Task<IReadOnlyList<OpportunityLeadDto>> ListLeadsAsync(LeadStatus? status = LeadStatus.New, CancellationToken cancellationToken = default)
     {
         await access.RequirePipelineAsync("see leads", cancellationToken);
@@ -378,6 +385,12 @@ public sealed class PermissionCheckingPipelineService(IPipelineService inner, Cr
     {
         await access.RequirePipelineAsync("see business development settings", cancellationToken);
         return await inner.GetSettingsAsync(cancellationToken);
+    }
+
+    public async Task<CrmSettingsDto> SetCompanyProfileAsync(string? profile, CancellationToken cancellationToken = default)
+    {
+        await access.RequireBusinessDevelopmentAsync("change the company profile", cancellationToken);
+        return await inner.SetCompanyProfileAsync(profile, cancellationToken);
     }
 
     public async Task<CrmSettingsDto> SetBpParentAsync(Guid? wbsElementId, CancellationToken cancellationToken = default)
@@ -468,5 +481,46 @@ public sealed class PermissionCheckingCapturePlanService(ICapturePlanService inn
         await using var db = await dbFactory.CreateAsync(ct);
         return await db.Set<Domain.Crm.OpportunityMilestone>().AsNoTracking().Where(m => m.Id == milestoneId).Select(m => (Guid?)m.OpportunityId).FirstOrDefaultAsync(ct)
             ?? throw WorkbenchNotFoundException.For("Milestone", milestoneId);
+    }
+}
+
+/// <summary>Proposals follow their opportunity: whoever may see it reads the draft, whoever may edit it drafts, edits and re-drafts.</summary>
+public sealed class PermissionCheckingProposalService(IProposalService inner, CrmAccess access, IWorkbenchDbContextFactory dbFactory) : IProposalService
+{
+    public async Task<ProposalDto> GetAsync(Guid opportunityId, CancellationToken cancellationToken = default)
+    {
+        await access.RequireReadAsync(opportunityId, cancellationToken);
+        return await inner.GetAsync(opportunityId, cancellationToken);
+    }
+
+    public async Task<ProposalDraftResultDto> DraftAsync(Guid opportunityId, CancellationToken cancellationToken = default)
+    {
+        await access.RequireEditAsync(opportunityId, cancellationToken);
+        return await inner.DraftAsync(opportunityId, cancellationToken);
+    }
+
+    public async Task<ProposalSectionDto> RedraftSectionAsync(Guid sectionId, CancellationToken cancellationToken = default)
+    {
+        await access.RequireEditAsync(await OfSectionAsync(sectionId, cancellationToken), cancellationToken);
+        return await inner.RedraftSectionAsync(sectionId, cancellationToken);
+    }
+
+    public async Task<ProposalSectionDto> SaveSectionAsync(Guid sectionId, SaveProposalSectionRequest request, CancellationToken cancellationToken = default)
+    {
+        await access.RequireEditAsync(await OfSectionAsync(sectionId, cancellationToken), cancellationToken);
+        return await inner.SaveSectionAsync(sectionId, request, cancellationToken);
+    }
+
+    public async Task<ProposalFileDto> ExportAsync(Guid opportunityId, CancellationToken cancellationToken = default)
+    {
+        await access.RequireReadAsync(opportunityId, cancellationToken);
+        return await inner.ExportAsync(opportunityId, cancellationToken);
+    }
+
+    private async Task<Guid> OfSectionAsync(Guid sectionId, CancellationToken ct)
+    {
+        await using var db = await dbFactory.CreateAsync(ct);
+        return await db.Set<Domain.Crm.ProposalSection>().AsNoTracking().Where(s => s.Id == sectionId).Select(s => (Guid?)s.OpportunityId).FirstOrDefaultAsync(ct)
+            ?? throw WorkbenchNotFoundException.For("Proposal section", sectionId);
     }
 }

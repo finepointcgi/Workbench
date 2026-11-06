@@ -23,10 +23,12 @@ public static class CrmRegistration
         services.AddScoped<IOpportunityService, OpportunityService>();
         services.AddScoped<ICrmAccountService, CrmAccountService>();
         services.AddScoped<IOpportunityGateService, OpportunityGateService>();
+        services.AddScoped<LeadFitScorer>();
         services.AddScoped<OpportunityLeadService>();
         services.AddScoped<IOpportunityLeadService>(sp => sp.GetRequiredService<OpportunityLeadService>());
         services.AddScoped<IPipelineService, PipelineService>();
         services.AddScoped<ICapturePlanService, CapturePlanService>();
+        services.AddScoped<IProposalService, ProposalService>();
         services.AddScoped<IApprovalDocumentHandler, OpportunityGateApprovalHandler>();
         services.AddScoped<IMyTodoProvider, CrmTodoProvider>();
         services.AddScoped<Contracts.Pricing.IPricingOpportunityLookup, CrmOpportunityLookup>(); // The proposal dialog's picker (wins over pricing's TryAdd default).

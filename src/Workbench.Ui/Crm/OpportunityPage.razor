@@ -82,6 +82,12 @@ else if (_opportunity is { } o)
                 <OpportunityTeamTab Opportunity="o" Accounts="_accounts" Changed="ReplaceAsync" />
             }
         </MudTabPanel>
+        <MudTabPanel Text="Proposal" Icon="@Icons.Material.Outlined.Description" data-testid="tab-proposal">
+            @if (_tab == "proposal")
+            {
+                <ProposalTab Opportunity="o" />
+            }
+        </MudTabPanel>
         <MudTabPanel Text="Gates" data-testid="tab-gates">
             @if (_tab == "gates")
             {
@@ -140,7 +146,7 @@ else if (_opportunity is { } o)
 
     [SupplyParameterFromQuery(Name = "tab")] public string? Tab { get; set; }
 
-    private static readonly List<string> _tabs = ["details", "plan", "schedule", "team", "gates", "activity", "bp", "outcome", "history"];
+    private static readonly List<string> _tabs = ["details", "plan", "schedule", "team", "proposal", "gates", "activity", "bp", "outcome", "history"];
 
     private OpportunityDto? _opportunity;
     private OpportunityModel? _model;

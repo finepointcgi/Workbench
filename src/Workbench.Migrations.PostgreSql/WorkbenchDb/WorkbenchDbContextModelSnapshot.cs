@@ -5513,6 +5513,11 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                     b.Property<Guid?>("BpParentWbsElementId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("CompanyProfile")
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)")
+                        .UseCollation("C");
+
                     b.Property<DateTime>("UpdatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -5993,6 +5998,20 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
 
+                    b.Property<bool>("FitByAssistant")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("FitReason")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .UseCollation("C");
+
+                    b.Property<int?>("FitScore")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("FitScoredAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("NaicsCode")
                         .HasMaxLength(16)
                         .HasColumnType("character varying(16)")
@@ -6318,6 +6337,59 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                     b.HasIndex("OpportunityId");
 
                     b.ToTable("OpportunityTeammate");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Crm.ProposalSection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("ByAssistant")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasMaxLength(30000)
+                        .HasColumnType("character varying(30000)")
+                        .UseCollation("C");
+
+                    b.Property<bool>("EditedByHand")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .UseCollation("C");
+
+                    b.Property<Guid>("OpportunityId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .UseCollation("C");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .UseCollation("C");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OpportunityId", "Key")
+                        .IsUnique();
+
+                    b.ToTable("ProposalSection");
                 });
 
             modelBuilder.Entity("Workbench.Domain.Crm.SavedLeadSearch", b =>
@@ -25925,6 +25997,15 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                         .HasForeignKey("AccountId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("Workbench.Domain.Crm.Opportunity", null)
+                        .WithMany()
+                        .HasForeignKey("OpportunityId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Crm.ProposalSection", b =>
+                {
                     b.HasOne("Workbench.Domain.Crm.Opportunity", null)
                         .WithMany()
                         .HasForeignKey("OpportunityId")

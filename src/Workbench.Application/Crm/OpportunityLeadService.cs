@@ -1,5 +1,6 @@
 using System.Globalization;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Workbench.Application.Cash.Statements;
 using Workbench.Application.Imports;
 using Workbench.Application.Notifications;
@@ -17,7 +18,9 @@ public sealed class OpportunityLeadService(
     ISamGovClient sam,
     AuditRecorder audit,
     INotificationPublisher notifications,
-    TimeProvider clock) : IOpportunityLeadService
+    TimeProvider clock,
+    LeadFitScorer? fit = null,
+    ILogger<OpportunityLeadService>? logger = null) : IOpportunityLeadService
 {
     public const int MaxCsvRows = 5000;
 
@@ -98,6 +101,11 @@ public sealed class OpportunityLeadService(
         search.LastRunAtUtc = UtcNow;
         search.LastRunNewLeads = result.Created;
         await db.SaveChangesAsync(cancellationToken);
+        if (result.Created > 0)
+        {
+            await TryScoreAsync(db, cancellationToken);
+        }
+
         if (result.Created > 0 && search.OwnerEmail != access.Email)
         {
             await notifications.PublishAsync(search.OwnerEmail, CrmNotificationKinds.NewLeads, $"{result.Created} new lead{(result.Created == 1 ? "" : "s")} from \"{search.Name}\"",
@@ -105,6 +113,35 @@ public sealed class OpportunityLeadService(
         }
 
         return result;
+    }
+
+    /// <summary>Scoring is advice on top of a finished search: a failure here never fails the run.</summary>
+    private async Task TryScoreAsync(IWorkbenchDbContext db, CancellationToken ct)
+    {
+        if (fit is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await fit.ScoreAsync(db, rescoreAll: false, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger?.LogWarning(ex, "Scoring new leads failed");
+        }
+    }
+
+    public async Task<LeadFitResultDto> ScoreLeadsAsync(bool rescoreAll = false, CancellationToken cancellationToken = default)
+    {
+        if (fit is null)
+        {
+            return new LeadFitResultDto(0, 0);
+        }
+
+        await using var db = await dbFactory.CreateAsync(cancellationToken);
+        return await fit.ScoreAsync(db, rescoreAll, cancellationToken);
     }
 
     /// <summary>
@@ -320,7 +357,8 @@ public sealed class OpportunityLeadService(
         var searches = await db.Set<D.SavedLeadSearch>().AsNoTracking().Where(s => searchIds.Contains(s.Id)).ToDictionaryAsync(s => s.Id, s => s.Name, ct);
         return leads.Select(l => new OpportunityLeadDto(l.Id, l.Source.ToContract(), l.SourceId, l.SolicitationNumber, l.Title, l.Agency, l.Office, l.NaicsCode,
             l.SetAside.ToContract(), l.NoticeType, l.PostedOn, l.ResponseDueOn, l.PlaceOfPerformance, l.Url, l.Description, l.EstimatedValue, l.SavedSearchId,
-            l.SavedSearchId is { } s ? searches.GetValueOrDefault(s) : null, l.Status.ToContract(), l.OpportunityId, l.ReviewedBy, l.CreatedAtUtc)).ToList();
+            l.SavedSearchId is { } s ? searches.GetValueOrDefault(s) : null, l.Status.ToContract(), l.OpportunityId, l.ReviewedBy, l.CreatedAtUtc,
+            l.FitScore, l.FitReason, l.FitByAssistant)).ToList();
     }
 
     private static SavedLeadSearchDto Map(D.SavedLeadSearch s) =>

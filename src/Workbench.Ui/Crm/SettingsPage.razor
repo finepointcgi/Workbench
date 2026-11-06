@@ -44,6 +44,20 @@ else
         }
     </MudPaper>
 
+    <MudPaper Outlined="true" Class="pa-4 mb-4" data-testid="company-profile-card">
+        <MudText Typo="Typo.subtitle1" HtmlTag="h2">Company profile</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+            What your company does and wins. New leads are scored for fit against it, and proposal drafts are written from it. Include your NAICS codes (6 digits),
+            the set-aside statuses you hold (small business, 8(a), HUBZone, SDVOSB, WOSB), your capabilities, key customers and past performance.
+        </MudText>
+        <MudTextField T="string" @bind-Value="_profile" Lines="8" Variant="Variant.Outlined" MaxLength="8000" Label="Company profile" ReadOnly="!_canEditGates"
+                      Placeholder="NAICS: 541511, 541512, 541519&#10;Status: small business, SDVOSB&#10;We build and run cloud and DevSecOps platforms for civilian agencies..." data-testid="company-profile" />
+        @if (_canEditGates)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="SaveProfileAsync" Disabled="_busy" data-testid="company-profile-save">Save profile</MudButton>
+        }
+    </MudPaper>
+
     <MudPaper Outlined="true" Class="pa-4 mb-4">
         <MudText Typo="Typo.subtitle1" HtmlTag="h2">Go/no-go gates</MudText>
         <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
@@ -143,6 +157,7 @@ else
     private bool _canImport;
     private bool _busy;
     private string? _error;
+    private string? _profile;
     private GateDefinitionDto? _editing;
     private string? _name, _description, _criteria;
     private OpportunityStage _toStage = OpportunityStage.Capture;
@@ -160,6 +175,7 @@ else
             _canImport = me.Can(Workbench.Contracts.Identity.Permission.SetupImports);
             _gates = await Gates.ListGatesAsync(includeInactive: true);
             _settings = await Pipeline.GetSettingsAsync();
+            _profile = _settings.CompanyProfile;
             if (_isFinance)
             {
                 _options = await Pipeline.ListBpParentOptionsAsync();
@@ -168,6 +184,24 @@ else
         catch (Exception ex) when (CrmFormat.IsExpected(ex))
         {
             _error = ex.Message;
+        }
+    }
+
+    private async Task SaveProfileAsync()
+    {
+        _busy = true;
+        try
+        {
+            _settings = await Pipeline.SetCompanyProfileAsync(_profile);
+            Snackbar.Add("Company profile saved.", Severity.Success);
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
         }
     }
 

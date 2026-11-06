@@ -1,0 +1,179 @@
+@* The proposal draft: the standard sections written from the opportunity, its capture plan, the team and the company profile.
+   Rules write a template with [ADD: …] placeholders; the assistant (when it's on) rewrites it into prose. People edit each
+   section, re-draft one, and export to Word. Sections edited by hand are kept when the proposal is drafted again. *@
+@using Microsoft.JSInterop
+@inject IProposalService Proposals
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error">@_error</MudAlert>
+}
+else if (_proposal is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-3" Spacing="2">
+        <div>
+            <MudText Typo="Typo.h6" HtmlTag="h2">Proposal draft</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                A first draft from the opportunity, the capture plan's win themes and hot buttons, the team and your company profile.
+                Fill in each <strong>[ADD: …]</strong> yourself: the draft never invents past performance, names or numbers.
+            </MudText>
+        </div>
+        <MudSpacer />
+        @if (_proposal.Sections.Count > 0)
+        {
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Outlined.Download" OnClick="ExportAsync" Disabled="_busy" data-testid="proposal-export">Export to Word</MudButton>
+        }
+        @if (_proposal.CanEdit)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.AutoAwesome" OnClick="DraftAsync" Disabled="_busy" data-testid="proposal-draft">
+                @(_proposal.Sections.Count == 0 ? "Draft proposal" : "Draft again")
+            </MudButton>
+        }
+    </MudStack>
+
+    @if (_proposal.Sections.Count == 0)
+    {
+        <MudText Class="mud-text-secondary" data-testid="proposal-empty">
+            No draft yet.@(_proposal.CanEdit ? " Add win themes and hot buttons on the Capture plan tab first for a better draft, then choose Draft proposal." : "")
+        </MudText>
+    }
+
+    @foreach (var s in _proposal.Sections)
+    {
+        var open = Placeholders(_edits.GetValueOrDefault(s.Id) ?? s.Content);
+        <MudPaper Outlined="true" Class="pa-3 mb-3" data-testid="proposal-section" data-key="@s.Key">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2" Class="mb-2">
+                <MudText Typo="Typo.subtitle1" HtmlTag="h3">@s.Title</MudText>
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Text">@(s.EditedByHand ? "Edited by hand" : s.ByAssistant ? "Written by the assistant" : "Template")</MudChip>
+                @if (open > 0)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Text">@open to fill in</MudChip>
+                }
+                <MudSpacer />
+                @if (_proposal.CanEdit)
+                {
+                    <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => RedraftAsync(s)" Disabled="_busy" aria-label="@($"Re-draft {s.Title}")">Re-draft</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="() => SaveAsync(s)" Disabled="@(_busy || !Dirty(s))" aria-label="@($"Save {s.Title}")">Save</MudButton>
+                }
+            </MudStack>
+            <MudTextField T="string" Value="@(_edits.GetValueOrDefault(s.Id) ?? s.Content)" ValueChanged="v => _edits[s.Id] = v" Lines="10" Variant="Variant.Outlined" MaxLength="30000"
+                          ReadOnly="!_proposal.CanEdit" AutoGrow="true" aria-label="@s.Title" />
+        </MudPaper>
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public OpportunityDto Opportunity { get; set; } = default!;
+
+    private ProposalDto? _proposal;
+    private readonly Dictionary<Guid, string> _edits = [];
+    private bool _busy;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _proposal = await Proposals.GetAsync(Opportunity.Id);
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private bool Dirty(ProposalSectionDto s) => _edits.TryGetValue(s.Id, out var text) && text != s.Content;
+
+    private static int Placeholders(string text) => System.Text.RegularExpressions.Regex.Matches(text, @"\[ADD:").Count;
+
+    private async Task DraftAsync()
+    {
+        _busy = true;
+        try
+        {
+            var result = await Proposals.DraftAsync(Opportunity.Id);
+            _proposal = result.Proposal;
+            _edits.Clear();
+            Snackbar.Add(result.KeptEdited > 0
+                ? $"Drafted {result.Created + result.Rewritten} sections, kept {result.KeptEdited} you edited."
+                : $"Drafted {result.Created + result.Rewritten} sections" + (result.WrittenByAssistant > 0 ? " with the assistant." : " from the template (the assistant is off)."), Severity.Success);
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task RedraftAsync(ProposalSectionDto section)
+    {
+        _busy = true;
+        try
+        {
+            await Proposals.RedraftSectionAsync(section.Id);
+            _edits.Remove(section.Id);
+            _proposal = await Proposals.GetAsync(Opportunity.Id);
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task SaveAsync(ProposalSectionDto section)
+    {
+        _busy = true;
+        try
+        {
+            await Proposals.SaveSectionAsync(section.Id, new SaveProposalSectionRequest(section.Title, _edits.GetValueOrDefault(section.Id) ?? section.Content));
+            _edits.Remove(section.Id);
+            _proposal = await Proposals.GetAsync(Opportunity.Id);
+            Snackbar.Add($"Saved {section.Title}.", Severity.Success);
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ExportAsync()
+    {
+        _busy = true;
+        try
+        {
+            if (_edits.Count > 0)
+            {
+                Snackbar.Add("Unsaved edits aren't in the export: save them first.", Severity.Warning);
+            }
+
+            var file = await Proposals.ExportAsync(Opportunity.Id);
+            await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/Workbench.Ui/evm.js");
+            await module.InvokeVoidAsync("downloadBase64", file.FileName, file.ContentType, Convert.ToBase64String(file.Content));
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}
