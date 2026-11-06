@@ -2,17 +2,17 @@
    checks their hours, the budget and the labor category, so this only asks for the project. Returns the project id. *@
 <MudDialog>
     <DialogContent>
-        <MudSelect T="Guid" Label="Project" @bind-Value="_projectId" Required="true" AutoFocus="true" data-testid="pick-project"
+        <MudSelect T="Guid?" Label="Project" @bind-Value="_projectId" Required="true" AutoFocus="true" data-testid="pick-project"
                    HelperText="Only projects you can staff are listed.">
             @foreach (var p in Projects)
             {
-                <MudSelectItem T="Guid" Value="p.Id">@p.Code · @p.Name</MudSelectItem>
+                <MudSelectItem T="Guid?" Value="p.Id">@p.Code · @p.Name</MudSelectItem>
             }
         </MudSelect>
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
-        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(_projectId == Guid.Empty)" OnClick="() => MudDialog.Close(DialogResult.Ok(_projectId))" data-testid="pick-project-next">Next</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(_projectId is null)" OnClick="() => MudDialog.Close(DialogResult.Ok(_projectId!.Value))" data-testid="pick-project-next">Next</MudButton>
     </DialogActions>
 </MudDialog>
 
@@ -22,8 +22,8 @@
     [Parameter] public IReadOnlyList<ProjectDto> Projects { get; set; } = [];
     [Parameter] public Guid? DefaultProjectId { get; set; }
 
-    private Guid _projectId;
+    private Guid? _projectId;
 
     protected override void OnInitialized() =>
-        _projectId = DefaultProjectId is { } d && Projects.Any(p => p.Id == d) ? d : Projects.Count == 1 ? Projects[0].Id : Guid.Empty;
+        _projectId = DefaultProjectId is { } d && Projects.Any(p => p.Id == d) ? d : Projects.Count == 1 ? Projects[0].Id : null;
 }
