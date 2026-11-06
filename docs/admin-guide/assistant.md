@@ -17,6 +17,30 @@ reads to answer them (project financials, budgets, earned value, ledger lines, t
 resourcing and sheet rows) are sent to the AI provider you choose, which processes them to produce the answer. Check
 this against your contracts, especially any that involve CUI.
 
+## Choosing a provider
+
+Connections are set up on the server (keys stay there), under `Assistant:Connections`. Pick one on this page.
+
+| Provider | Use it for | Configuration |
+|---|---|---|
+| **Anthropic** | Claude through Anthropic's API | `Provider: Anthropic`, `ApiKey` |
+| **Amazon Bedrock** | Claude in your AWS account, including GovCloud for CUI | `Provider: Bedrock`, `Region` |
+| **OpenAI-compatible** | OpenAI, Azure OpenAI, or a model you host: Ollama, LM Studio, vLLM, a gateway | `Provider: OpenAiCompatible`, `BaseUrl`, `DefaultModel`, optional `ApiKey` |
+| **Claude Code on this computer** | Trying it on your own machine with the Claude Code you are already signed into, no key | `Assistant:EnableClaudeCodeProvider: true` (development only; refused in Production) |
+
+An OpenAI-compatible connection, for example a model running in Ollama on the same computer:
+
+```bash
+Assistant__Connections__ollama__Provider=OpenAiCompatible
+Assistant__Connections__ollama__BaseUrl=http://localhost:11434/v1
+Assistant__Connections__ollama__DefaultModel=llama3.1
+```
+
+Or OpenAI itself (`BaseUrl=https://api.openai.com/v1`, `DefaultModel=gpt-4o`, `ApiKey` from a secret). Plain `http` is
+accepted only for this computer; anything else must be `https`. Questions that read your data need a model that supports
+function calling; drafts (proposals, lead fit) work with any chat model. The Claude Code connection writes drafts only.
+Check each provider's data handling against your contracts: the page shows where the data goes for the connection you pick.
+
 ## Settings
 
 1. Tick **Turn on the assistant for this organization**.
