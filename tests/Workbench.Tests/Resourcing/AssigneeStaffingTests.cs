@@ -20,6 +20,7 @@ public sealed class AssigneeStaffingTests
     {
         var host = await CreateAsync();
         await using var db = await host.Db.CreateAsync();
+        await RoleStore.AddUserAsync(db, new AppUser { Email = Dev, DisplayName = "Dana" }, OrgRoles.Employee);
         await RoleStore.AddUserAsync(db, new AppUser { Email = Analyst, DisplayName = "Alex" }, OrgRoles.Employee);
         await db.SaveChangesAsync();
         return host;
@@ -79,5 +80,20 @@ public sealed class AssigneeStaffingTests
         Assert.DoesNotContain((await host.Get<IStaffingAssignmentService>().ListAsync(host.Project1)).Assignments, a => a.EmployeeId == host.AnalystId);
         var plan = await host.As(Pm).Get<IProjectStaffingService>().GetPlanAsync(host.Project1);
         Assert.Contains(plan.Notes, n => n.Contains("Alex") && n.Contains("no hours") && n.Contains("no dates"));
+    }
+
+    [Fact]
+    public async Task A_new_assignee_takes_the_planned_hours_others_havent_already_got()
+    {
+        await using var host = await HostAsync();
+        var design = await ItemAsync(host, "Design");
+        await host.As(Pm).Get<IItemService>().UpdateAsync(host.SheetId, design,
+            new UpdateItemRequest("Design", new DateOnly(2026, 10, 12), new DateOnly(2026, 10, 23), null, new Dictionary<string, string?> { [host.HoursColumn.ToString()] = "100" }));
+        await host.As(Pm).Get<IResourcePlanService>().ApplyAsync(host.Project1, [new PlanChange(PlanChangeKind.SetPerson, ItemId: design, EmployeeId: host.DevId, Hours: 60m)]);
+
+        await host.As(Pm).Get<ITaskAssignmentService>().SetAssigneesAsync(host.SheetId, design, new SetAssigneesRequest([Dev, Analyst]));
+
+        var alex = (await host.Get<IStaffingAssignmentService>().ListAsync(host.Project1)).Assignments.Single(a => a.EmployeeId == host.AnalystId);
+        Assert.Equal(40m, alex.TotalHours); // 100 planned, 60 already staffed
     }
 }

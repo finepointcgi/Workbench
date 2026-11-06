@@ -589,6 +589,8 @@ public sealed class StaffingAssignmentService(
         var weekdays = Enumerable.Range(0, finish.DayNumber - from.DayNumber + 1).Select(from.AddDays).Count(d => d.DayOfWeek is not (DayOfWeek.Saturday or DayOfWeek.Sunday));
         var columns = await db.Columns.AsNoTracking().Where(c => c.SheetId == item.SheetId).ToListAsync(ct);
         var planned = PlanAllocationGenerator.PlannedHours(columns, item);
+        var alreadyStaffed = await db.Set<StaffingAssignment>().Where(a => a.WbsElementId == element.Id).SumAsync(a => (decimal?)a.TotalHours, ct) ?? 0m;
+        alreadyStaffed += await db.Set<ResourceAllocation>().Where(a => a.WbsElementId == element.Id && a.AssignmentId == null).SumAsync(a => (decimal?)a.Hours, ct) ?? 0m;
         foreach (var email in emails)
         {
             var lower = email.ToLowerInvariant();
@@ -611,7 +613,12 @@ public sealed class StaffingAssignmentService(
                 continue;
             }
 
-            var hours = Math.Round(planned is { } p ? p / Math.Max(1, assigneeCount) : employee.StandardHoursPerWeek / 5m * weekdays, 2, MidpointRounding.AwayFromZero);
+            // The task's Planned hours less what others already have on it, split between the people just added; if the
+            // task is already fully staffed they take an equal share anyway (and the overbooking checks say so).
+            decimal share = planned is { } p
+                ? (p - alreadyStaffed > 0 ? (p - alreadyStaffed) / emails.Count : p / Math.Max(1, assigneeCount))
+                : employee.StandardHoursPerWeek / 5m * weekdays;
+            var hours = Math.Round(share, 2, MidpointRounding.AwayFromZero);
             if (hours <= 0)
             {
                 continue;
