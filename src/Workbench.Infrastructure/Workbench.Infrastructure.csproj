@@ -25,4 +25,7 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Workbench.Tests" />
+  </ItemGroup>
 </Project>

@@ -43,6 +43,15 @@ public sealed class AssistantGate(IWorkbenchDbContextFactory dbFactory, IOptions
 
             connection = new AssistantConnectionOptions { Provider = AssistantProviderKind.Fake };
         }
+        else if (string.Equals(name, AssistantOptions.ClaudeCodeConnection, StringComparison.OrdinalIgnoreCase))
+        {
+            if (!Options.EnableClaudeCodeProvider)
+            {
+                return null;
+            }
+
+            connection = new AssistantConnectionOptions { Provider = AssistantProviderKind.ClaudeCode };
+        }
         else if (!Options.Connections.TryGetValue(name, out var configured) || AssistantConnections.Validate(name, configured).Count > 0)
         {
             return null;
@@ -55,7 +64,12 @@ public sealed class AssistantGate(IWorkbenchDbContextFactory dbFactory, IOptions
         var model = !string.IsNullOrWhiteSpace(settings.Model) && connection.AllowedModels.Contains(settings.Model.Trim(), StringComparer.Ordinal)
             ? settings.Model.Trim()
             : connection.EffectiveDefaultModel;
-        var label = connection.Provider == AssistantProviderKind.Fake ? AssistantConnections.Fake.Label : AssistantConnections.Describe(name, connection).Label;
+        var label = connection.Provider switch
+        {
+            AssistantProviderKind.Fake => AssistantConnections.Fake.Label,
+            AssistantProviderKind.ClaudeCode => AssistantConnections.ClaudeCode.Label,
+            _ => AssistantConnections.Describe(name, connection).Label,
+        };
         return new AssistantRoute(name, connection, model, label);
     }
 

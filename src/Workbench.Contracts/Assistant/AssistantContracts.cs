@@ -21,6 +21,9 @@ public enum AssistantProviderKind
     Fake,
     Anthropic,
     Bedrock,
+
+    /// <summary>Development only: the Claude Code CLI signed in on the server's own machine writes drafts (no tools).</summary>
+    ClaudeCode,
 }
 
 /// <summary>A connection the host configured (no secrets): what an administrator can pick for the organization.</summary>
