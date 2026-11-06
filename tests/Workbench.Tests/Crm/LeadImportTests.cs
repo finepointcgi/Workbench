@@ -181,3 +181,18 @@ public sealed class LeadImportTests
         }
     }
 }
+
+public sealed class SamAgencyNameTests
+{
+    [Theory]
+    [InlineData("Department of Veterans Affairs", "VA", "VETERANS AFFAIRS, DEPARTMENT OF", true)]
+    [InlineData("Department of the Army", null, "ARMY, DEPARTMENT OF THE", true)]
+    [InlineData("Department of Homeland Security", "DHS", "HOMELAND SECURITY, DEPARTMENT OF", true)]
+    [InlineData("Department of the Army", null, "DEPT OF THE ARMY", false)]
+    [InlineData("PEO EIS", null, "DEPT OF THE ARMY / PEO EIS", true)]
+    [InlineData("Department of Defense", "DOD", "DEFENSE INFORMATION SYSTEMS AGENCY", false)]
+    [InlineData("General Services Administration", "GSA", "GENERAL SERVICES ADMINISTRATION", true)]
+    [InlineData("Department of Veterans Affairs", "VA", null, false)]
+    public void Sam_agency_text_matches_the_account_however_it_is_written(string account, string? acronym, string? text, bool expected) =>
+        Assert.Equal(expected, SamAgencyNames.Matches(account, acronym, text));
+}
