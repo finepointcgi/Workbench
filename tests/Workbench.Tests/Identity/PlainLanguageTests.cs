@@ -2,6 +2,7 @@ using Bunit;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 using MudBlazor.Services;
+using Workbench.Contracts.Crm;
 using Workbench.Contracts.Financials;
 using Workbench.Contracts.Identity;
 using Workbench.Contracts.Odcs;
@@ -179,6 +180,8 @@ public sealed class PlainLanguageTests
         ctx.Services.AddSingleton(Fake<IProjectService>.Create());
         ctx.Services.AddSingleton(Fake<IResourceAllocationService>.Create());
         ctx.Services.AddSingleton(Fake<IResourcePlanningService>.Create(("GetHeatMapAsync", _ => throw new InvalidOperationException("not faked"))));
+        ctx.Services.AddSingleton(Fake<IStaffingAssignmentService>.Create());
+        ctx.Services.AddSingleton(Fake<IPipelineService>.Create());
 
         var page = ctx.Render<ResourcingPage>();
 
@@ -207,6 +210,8 @@ public sealed class PlainLanguageTests
         ctx.Services.AddSingleton(Fake<IProjectService>.Create(("ListProjectsAsync", _ => (IReadOnlyList<ProjectDto>)[project])));
         ctx.Services.AddSingleton(Fake<IResourceAllocationService>.Create(("CanManageAsync", _ => true)));
         ctx.Services.AddSingleton(Fake<IResourcePlanningService>.Create(("GetHeatMapAsync", _ => throw new InvalidOperationException("not faked"))));
+        ctx.Services.AddSingleton(Fake<IStaffingAssignmentService>.Create());
+        ctx.Services.AddSingleton(Fake<IPipelineService>.Create());
 
         var page = ctx.Render<ResourcingPage>();
 

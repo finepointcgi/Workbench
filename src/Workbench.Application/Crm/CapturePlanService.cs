@@ -36,7 +36,9 @@ public sealed class CapturePlanService(IWorkbenchDbContextFactory dbFactory, Crm
         var opportunity = await db.Set<D.Opportunity>().AsNoTracking().FirstOrDefaultAsync(o => o.Id == opportunityId, cancellationToken)
             ?? throw WorkbenchNotFoundException.For("Opportunity", opportunityId);
         var items = await db.Set<D.OpportunityPlanItem>().AsNoTracking().Where(i => i.OpportunityId == opportunityId)
-            .OrderBy(i => i.Kind).ThenBy(i => i.Order).ToListAsync(cancellationToken);
+            .ToListAsync(cancellationToken);
+        // Kinds are stored as text, so the database would sort them alphabetically (and differently per provider): sort by the enum here.
+        items = items.OrderBy(i => i.Kind).ThenBy(i => i.Order).ToList();
         var milestones = await MilestonesAsync(db, opportunityId, cancellationToken);
         var assessment = await db.Set<D.OpportunityPwinAssessment>().AsNoTracking().FirstOrDefaultAsync(a => a.OpportunityId == opportunityId, cancellationToken);
         var roles = await access.RolesAsync(cancellationToken);

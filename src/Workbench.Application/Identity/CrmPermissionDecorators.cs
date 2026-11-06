@@ -349,6 +349,12 @@ public sealed class PermissionCheckingPipelineService(IPipelineService inner, Cr
         return await inner.GetBoardAsync(includeOutcomes, cancellationToken);
     }
 
+    public async Task<PipelineDemandDto> GetStaffingDemandAsync(DateOnly from, int weeks, decimal revenuePerHour = 150m, CancellationToken cancellationToken = default)
+    {
+        await access.RequirePipelineAsync("see the pipeline's staffing demand", cancellationToken, orManager: true);
+        return await inner.GetStaffingDemandAsync(from, weeks, revenuePerHour, cancellationToken);
+    }
+
     public async Task<ForecastDto> GetForecastAsync(CancellationToken cancellationToken = default)
     {
         await access.RequirePipelineAsync("see the pipeline forecast", cancellationToken);

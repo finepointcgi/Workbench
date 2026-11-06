@@ -146,6 +146,10 @@ public sealed class HttpPipelineService(HttpClient http) : IPipelineService
     public async Task<PipelineBoardDto> GetBoardAsync(bool includeOutcomes = false, CancellationToken cancellationToken = default) =>
         await (await http.GetAsync($"api/v1/crm/pipeline/board?includeOutcomes={(includeOutcomes ? "true" : "false")}", cancellationToken)).ReadAsync<PipelineBoardDto>(cancellationToken);
 
+    public async Task<PipelineDemandDto> GetStaffingDemandAsync(DateOnly from, int weeks, decimal revenuePerHour = 150m, CancellationToken cancellationToken = default) =>
+        await (await http.GetAsync($"api/v1/crm/pipeline/staffing-demand?from={from:yyyy-MM-dd}&weeks={weeks}&revenuePerHour={revenuePerHour.ToString(System.Globalization.CultureInfo.InvariantCulture)}", cancellationToken))
+            .ReadAsync<PipelineDemandDto>(cancellationToken);
+
     public async Task<ForecastDto> GetForecastAsync(CancellationToken cancellationToken = default) =>
         await (await http.GetAsync("api/v1/crm/pipeline/forecast", cancellationToken)).ReadAsync<ForecastDto>(cancellationToken);
 

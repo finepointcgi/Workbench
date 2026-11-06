@@ -111,6 +111,8 @@ internal static class CrmEndpoints
 
         var p = v1.MapGroup("/crm/pipeline").WithTags("Business development");
         p.MapGet("/board", (bool? includeOutcomes, IPipelineService s, CancellationToken ct) => s.GetBoardAsync(includeOutcomes ?? false, ct));
+        p.MapGet("/staffing-demand", (DateOnly from, int? weeks, decimal? revenuePerHour, IPipelineService s, CancellationToken ct) =>
+            s.GetStaffingDemandAsync(from, weeks ?? 12, revenuePerHour ?? 150m, ct));
         p.MapGet("/forecast", (IPipelineService s, CancellationToken ct) => s.GetForecastAsync(ct));
         p.MapGet("/highlights", (int? windowDays, IPipelineService s, CancellationToken ct) => s.GetHighlightsAsync(windowDays ?? 30, ct));
         p.MapGet("/win-loss", (DateOnly? from, DateOnly? to, IPipelineService s, CancellationToken ct) => s.GetWinLossAsync(from, to, ct));

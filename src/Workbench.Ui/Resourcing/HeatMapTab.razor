@@ -1,6 +1,8 @@
 @* People × weeks: staffed hours against capacity. Click a cell to see, change or add that week's staffing. *@
 @inject IResourcePlanningService Planning
 @inject IResourceAllocationService Allocations
+@inject IStaffingAssignmentService Assignments
+@inject IProjectService ProjectService
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 
@@ -83,6 +85,10 @@ else
             </tbody>
         </MudSimpleTable>
     </div>
+    @if (_projectId is null)
+    {
+        <PipelineDemandPanel Map="_map" />
+    }
 }
 
 @code {
@@ -123,29 +129,12 @@ else
         await LoadAsync();
     }
 
+    // Same checked dialog as the project's Staffing tab: overbooking, budget and labor category warnings come with it.
     private async Task AddAsync(Guid? employeeId, DateOnly? week)
     {
-        var parameters = new DialogParameters<AllocationDialog>
+        var start = new SaveAssignmentRequest(employeeId ?? Guid.Empty, _projectId ?? Guid.Empty, 0, From: week ?? _from);
+        if (await StaffingFlow.AssignAsync(DialogService, Snackbar, ProjectService, Assignments, Lookups, start, _projectId) is not null)
         {
-            { d => d.Employees, Lookups.Employees },
-            { d => d.Projects, Lookups.ManageableProjects },
-            { d => d.DefaultEmployeeId, employeeId },
-            { d => d.DefaultProjectId, _projectId },
-            { d => d.DefaultWeek, week ?? _from },
-        };
-        var dialog = await DialogService.ShowAsync<AllocationDialog>("Staff a person", parameters, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
-        if (await dialog.Result is { Canceled: false, Data: SaveAllocationRequest request })
-        {
-            try
-            {
-                await Allocations.CreateAsync(request);
-                Snackbar.Add("Staffing saved.", Severity.Success);
-            }
-            catch (Exception ex) when (ResourcingFormat.IsExpected(ex))
-            {
-                Snackbar.Add(ex.Message, Severity.Error);
-            }
-
             await LoadAsync();
         }
     }

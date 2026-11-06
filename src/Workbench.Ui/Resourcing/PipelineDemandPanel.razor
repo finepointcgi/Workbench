@@ -1,0 +1,156 @@
+@* Below the heat map: what the open pipeline would ask of the staff if won, week by week, next to the free hours the heat map
+   shows. Hours are contract value ÷ the revenue per hour, spread over each pursuit's period of performance. Hidden from people
+   who can't see the pipeline. *@
+@using Workbench.Contracts.Crm
+@inject IPipelineService Pipeline
+
+@if (_demand is { Opportunities.Count: > 0 })
+{
+    <section aria-labelledby="pipeline-demand-heading" class="mt-6" data-testid="pipeline-demand">
+        <MudText Typo="Typo.h6" HtmlTag="h2" id="pipeline-demand-heading">If we win the pipeline</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2" Style="max-width: 80ch">
+            Hours a week the open pursuits would need from their estimated award dates, by month. <b>Likely</b> weights each by its chance of winning;
+            <b>If all won</b> counts every one. It's measured against the hours the people above have free now, so today's bookings that end sooner aren't counted.
+        </MudText>
+        <MudNumericField T="decimal" Label="Contract $ per staffed hour" Value="_rate" ValueChanged="OnRateChangedAsync" Min="1" Max="2000" Style="max-width:240px" Class="mb-2"
+                         HelperText="Blended: contract value ÷ this = hours" data-testid="pipeline-rate" Immediate="true" DebounceInterval="500" />
+        <div style="overflow-x:auto">
+            <MudSimpleTable Dense="true" Bordered="true" aria-label="Pipeline staffing demand by month against the free hours now" data-testid="pipeline-demand-table">
+                <thead>
+                    <tr>
+                        <th scope="col" style="min-width:200px">Hours a week, on average</th>
+                        @foreach (var m in Months)
+                        {
+                            <th scope="col" style="text-align:center; white-space:nowrap">@m.Start.ToString("MMM yyyy")</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <th scope="row" style="text-align:left; font-weight:normal">Free now (average of the weeks above)</th>
+                        @foreach (var m in Months)
+                        {
+                            <td style="text-align:center">@ResourcingFormat.Hours(FreeNow)</td>
+                        }
+                    </tr>
+                    <tr>
+                        <th scope="row" style="text-align:left; font-weight:normal">Likely demand</th>
+                        @foreach (var m in Months)
+                        {
+                            <td style="text-align:center">@ResourcingFormat.Hours(m.Likely)</td>
+                        }
+                    </tr>
+                    <tr>
+                        <th scope="row" style="text-align:left; font-weight:normal">If all won</th>
+                        @foreach (var m in Months)
+                        {
+                            <td style="text-align:center">@ResourcingFormat.Hours(m.All)</td>
+                        }
+                    </tr>
+                    <tr>
+                        <th scope="row" style="text-align:left">Short by (likely)</th>
+                        @foreach (var m in Months)
+                        {
+                            var short_ = m.Likely - FreeNow;
+                            <td style="text-align:center; @(short_ > 0 ? "background:var(--mud-palette-warning-hover); font-weight:600" : "")" data-short="@(short_ > 0)">
+                                @if (short_ > 0)
+                                {
+                                    <span aria-hidden="true">▲ </span>@ResourcingFormat.Hours(short_)<span class="wb-sr-only"> hours a week short, about @Math.Ceiling(short_ / 40m) @(Math.Ceiling(short_ / 40m) == 1 ? "person" : "people")</span>
+                                }
+                                else
+                                {
+                                    <span class="mud-text-secondary">covered</span>
+                                }
+                            </td>
+                        }
+                    </tr>
+                </tbody>
+            </MudSimpleTable>
+        </div>
+        <MudSimpleTable Dense="true" Class="mt-3" aria-label="Pursuits behind the demand" data-testid="pipeline-demand-opps">
+            <thead>
+                <tr><th>Pursuit</th><th>Stage</th><th style="text-align:right">Win chance</th><th>Starts</th><th>Ends</th><th style="text-align:right">h a week</th><th style="text-align:right">Likely h a week</th></tr>
+            </thead>
+            <tbody>
+                @foreach (var o in _demand.Opportunities)
+                {
+                    <tr>
+                        <td><MudLink Href="@($"/bd/opportunities/{o.OpportunityId}")">@o.Number</MudLink> · @o.Name</td>
+                        <td>@o.Stage</td>
+                        <td style="text-align:right">@o.WinChancePercent%</td>
+                        <td>@o.StartsOn.ToString("MMM d, yyyy")@(o.StartIsEstimated ? " (est.)" : "")</td>
+                        <td>@o.EndsOn.ToString("MMM d, yyyy")</td>
+                        <td style="text-align:right">@ResourcingFormat.Hours(o.HoursPerWeek)</td>
+                        <td style="text-align:right">@ResourcingFormat.Hours(o.WeightedHoursPerWeek)</td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+        @if (_demand.NotCounted > 0)
+        {
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">@_demand.NotCounted open pursuit@(_demand.NotCounted == 1 ? "" : "s") left out: no value, or no award or proposal date to start from.</MudText>
+        }
+    </section>
+}
+
+@code {
+    [Parameter, EditorRequired] public HeatMapDto Map { get; set; } = default!;
+
+    private PipelineDemandDto? _demand;
+    private decimal _rate = 150;
+    private DateOnly _loadedFrom;
+    private int _loadedWeeks;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Map.Weeks.Count == 0 || (_loadedFrom == Map.Weeks[0] && _loadedWeeks == Map.Weeks.Count))
+        {
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task OnRateChangedAsync(decimal rate)
+    {
+        _rate = rate > 0 ? rate : 150;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        (_loadedFrom, _loadedWeeks) = (Map.Weeks[0], Map.Weeks.Count);
+        try
+        {
+            _demand = await Pipeline.GetStaffingDemandAsync(Map.Weeks[0], HorizonWeeks, _rate);
+        }
+        catch (Exception ex) when (ResourcingFormat.IsExpected(ex))
+        {
+            _demand = null; // not allowed to see the pipeline: show nothing
+        }
+    }
+
+    private const int HorizonWeeks = 78;
+    private const int HorizonMonths = 18;
+
+    private sealed record MonthDemand(DateOnly Start, decimal Likely, decimal All);
+
+    /// <summary>The pipeline's average weekly hours for each of the next months, from the weeks whose Monday falls in the month.</summary>
+    private IEnumerable<MonthDemand> Months
+    {
+        get
+        {
+            var first = new DateOnly(Map.Weeks[0].Year, Map.Weeks[0].Month, 1);
+            for (var i = 0; i < HorizonMonths; i++)
+            {
+                var start = first.AddMonths(i);
+                var weeks = _demand!.Weeks.Where(w => w.WeekStart.Year == start.Year && w.WeekStart.Month == start.Month).ToList();
+                yield return new MonthDemand(start, weeks.Count == 0 ? 0 : Math.Round(weeks.Average(w => w.WeightedHours), 1), weeks.Count == 0 ? 0 : Math.Round(weeks.Average(w => w.FullHours), 1));
+            }
+        }
+    }
+
+    /// <summary>Hours people can still take in an average week of the heat map: capacity not yet staffed, across everyone shown (someone over their hours takes nothing).</summary>
+    private decimal FreeNow => Map.Weeks.Count == 0 ? 0 : Math.Round(Map.Weeks.Average(week =>
+        Map.Rows.Sum(r => r.Weeks.FirstOrDefault(c => c.WeekStart == week) is { } c ? Math.Max(0, c.Capacity - c.Allocated) : 0)), 1);
+}
