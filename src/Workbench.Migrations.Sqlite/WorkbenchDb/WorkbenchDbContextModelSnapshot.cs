@@ -5164,6 +5164,10 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.Property<Guid?>("BpParentWbsElementId")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("CompanyProfile")
+                        .HasMaxLength(8000)
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime>("UpdatedAtUtc")
                         .HasColumnType("TEXT");
 
@@ -5609,6 +5613,19 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .HasPrecision(18, 2)
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("FitByAssistant")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("FitReason")
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("FitScore")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("FitScoredAtUtc")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("NaicsCode")
                         .HasMaxLength(16)
                         .HasColumnType("TEXT");
@@ -5911,6 +5928,55 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.HasIndex("OpportunityId");
 
                     b.ToTable("OpportunityTeammate");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Crm.ProposalSection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("ByAssistant")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasMaxLength(30000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("EditedByHand")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OpportunityId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UpdatedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OpportunityId", "Key")
+                        .IsUnique();
+
+                    b.ToTable("ProposalSection");
                 });
 
             modelBuilder.Entity("Workbench.Domain.Crm.SavedLeadSearch", b =>
@@ -24427,6 +24493,15 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .HasForeignKey("AccountId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("Workbench.Domain.Crm.Opportunity", null)
+                        .WithMany()
+                        .HasForeignKey("OpportunityId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Crm.ProposalSection", b =>
+                {
                     b.HasOne("Workbench.Domain.Crm.Opportunity", null)
                         .WithMany()
                         .HasForeignKey("OpportunityId")
