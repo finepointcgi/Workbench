@@ -96,6 +96,7 @@ public sealed class AssistantConnectionOptions
         AssistantProviderKind.Anthropic => "claude-opus-5-5",
         AssistantProviderKind.Bedrock => "anthropic.claude-opus-5-5",
         AssistantProviderKind.ClaudeCode => "claude-code-default",
+        AssistantProviderKind.OpenAiCompatible => "",
         _ => "workbench-fake-1",
     };
 
@@ -180,8 +181,26 @@ public static class AssistantConnections
                 }
 
                 break;
+            case AssistantProviderKind.OpenAiCompatible:
+                if (string.IsNullOrWhiteSpace(options.BaseUrl) || !Uri.TryCreate(options.BaseUrl, UriKind.Absolute, out var openAiUri)
+                    || (openAiUri.Scheme != Uri.UriSchemeHttps && !(openAiUri.Scheme == Uri.UriSchemeHttp && openAiUri.IsLoopback)))
+                {
+                    errors.Add($"Assistant connection '{name}': set BaseUrl to the server's API root, for example https://api.openai.com/v1 or http://localhost:11434/v1 (plain http is allowed only for this computer).");
+                }
+
+                if (string.IsNullOrWhiteSpace(options.DefaultModel))
+                {
+                    errors.Add($"Assistant connection '{name}': set DefaultModel to the model id the server offers (for example gpt-4o or llama3.1).");
+                }
+
+                if (!string.IsNullOrWhiteSpace(options.Region) || !string.IsNullOrWhiteSpace(options.AwsProfile))
+                {
+                    errors.Add($"Assistant connection '{name}': Region and AwsProfile apply to Bedrock connections only.");
+                }
+
+                break;
             default:
-                errors.Add($"Assistant connection '{name}': Provider must be Anthropic or Bedrock (the fake provider is turned on with Assistant:EnableFakeProvider).");
+                errors.Add($"Assistant connection '{name}': Provider must be Anthropic, Bedrock or OpenAiCompatible (the fake and Claude Code providers are turned on with Assistant:EnableFakeProvider and Assistant:EnableClaudeCodeProvider).");
                 break;
         }
 
@@ -208,6 +227,7 @@ public static class AssistantConnections
             {
                 AssistantProviderKind.Anthropic => "Anthropic API",
                 AssistantProviderKind.Bedrock => $"Amazon Bedrock ({options.Region})",
+                AssistantProviderKind.OpenAiCompatible => $"{name} ({HostOf(options.BaseUrl)})",
                 _ => name,
             };
         var handling = options.Provider switch
@@ -218,10 +238,16 @@ public static class AssistantConnections
                 $"Prompts and records stay in AWS GovCloud (US) ({options.Region}) through Amazon Bedrock, under your AWS account and its FedRAMP High / DoD IL authorizations.",
             AssistantProviderKind.Bedrock =>
                 $"Prompts and records are sent to Amazon Bedrock in {options.Region} (commercial AWS), under your AWS account. For CUI, use a GovCloud region.",
+            AssistantProviderKind.OpenAiCompatible when Uri.TryCreate(options.BaseUrl, UriKind.Absolute, out var u) && u.IsLoopback =>
+                "Prompts and records are sent to a model server running on this computer. Nothing leaves it unless that server forwards it.",
+            AssistantProviderKind.OpenAiCompatible =>
+                $"Prompts and the records the assistant reads are sent to {HostOf(options.BaseUrl)} using the OpenAI-compatible API. Check that provider's data handling against your contracts before using it with CUI.",
             _ => "No data leaves Workbench: the built-in test provider writes canned answers from the tool results.",
         };
         return new AssistantConnectionDto(name, options.Provider, label, options.Region?.Trim(), options.IsGovCloud, options.EffectiveDefaultModel, options.AllowedModels, handling);
     }
+
+    private static string HostOf(string? baseUrl) => Uri.TryCreate(baseUrl, UriKind.Absolute, out var u) ? u.Host : "the configured server";
 
     public static AssistantConnectionDto Fake { get; } = new(
         AssistantOptions.FakeConnection,

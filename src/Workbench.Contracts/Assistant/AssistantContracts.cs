@@ -22,6 +22,9 @@ public enum AssistantProviderKind
     Anthropic,
     Bedrock,
 
+    /// <summary>Any server that speaks the OpenAI chat-completions API: OpenAI, Azure OpenAI, Ollama, LM Studio, vLLM, a gateway.</summary>
+    OpenAiCompatible,
+
     /// <summary>Development only: the Claude Code CLI signed in on the server's own machine writes drafts (no tools).</summary>
     ClaudeCode,
 }
