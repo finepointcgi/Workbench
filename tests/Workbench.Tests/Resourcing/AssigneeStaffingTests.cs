@@ -96,4 +96,28 @@ public sealed class AssigneeStaffingTests
         var alex = (await host.Get<IStaffingAssignmentService>().ListAsync(host.Project1)).Assignments.Single(a => a.EmployeeId == host.AnalystId);
         Assert.Equal(40m, alex.TotalHours); // 100 planned, 60 already staffed
     }
+
+    [Fact]
+    public async Task A_standard_day_assignee_gets_more_hours_when_the_task_gets_longer_and_stops_following_once_edited()
+    {
+        await using var host = await HostAsync();
+        var design = await ItemAsync(host, "Design");
+        await host.As(Pm).Get<ITaskAssignmentService>().SetAssigneesAsync(host.SheetId, design, new SetAssigneesRequest([Analyst]));
+        var staffing = host.Get<IStaffingAssignmentService>();
+        var before = (await staffing.ListAsync(host.Project1)).Assignments.Single(a => a.EmployeeId == host.AnalystId);
+        Assert.Equal(64m, before.TotalHours); // 8 working days (Oct 14–23) at 8 h
+
+        // Design runs a week longer: another 5 days at 8 h.
+        await host.As(Pm).Get<IItemService>().UpdateAsync(host.SheetId, design,
+            new UpdateItemRequest("Design", new DateOnly(2026, 10, 12), new DateOnly(2026, 10, 30), null, new Dictionary<string, string?>()));
+        var longer = (await staffing.ListAsync(host.Project1)).Assignments.Single(a => a.EmployeeId == host.AnalystId);
+        Assert.Equal(104m, longer.TotalHours);
+
+        // Once someone sets the hours on purpose, they stay put.
+        await host.As(Pm).Get<IResourcePlanService>().ApplyAsync(host.Project1, [new PlanChange(PlanChangeKind.SetPerson, AssignmentId: longer.Id, Hours: 30m)]);
+        await host.As(Pm).Get<IItemService>().UpdateAsync(host.SheetId, design,
+            new UpdateItemRequest("Design", new DateOnly(2026, 10, 12), new DateOnly(2026, 11, 6), null, new Dictionary<string, string?>()));
+        var edited = (await staffing.ListAsync(host.Project1)).Assignments.Single(a => a.EmployeeId == host.AnalystId);
+        Assert.Equal(30m, edited.TotalHours);
+    }
 }
