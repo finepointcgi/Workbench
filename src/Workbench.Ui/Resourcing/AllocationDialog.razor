@@ -5,7 +5,7 @@
     <DialogContent>
         <MudStack Spacing="2">
             <MudText Typo="Typo.body2" Class="mud-text-secondary">
-                Hours count against the labor category the person bills as. To staff against a project's budget, with checks, use the project's Staffing tab.
+                Hours count against the labor category the person bills as. To staff against a project's budget, with checks, use Project staffing under Resourcing, or assign them to a task on the project's Plan tab.
             </MudText>
             <MudSelect T="Guid" Label="Person" @bind-Value="_employeeId" Required="true" data-testid="alloc-person">
                 @foreach (var e in Employees)
