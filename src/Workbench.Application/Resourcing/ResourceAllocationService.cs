@@ -390,6 +390,15 @@ public static class PlanAllocationGenerator
         }
     }
 
+    /// <summary>The task's planned hours from its "Planned hours" (or similar) column, if it has a positive number there.</summary>
+    public static decimal? PlannedHours(IReadOnlyList<Column> columns, Item item)
+    {
+        var hoursColumn = columns.Where(c => c.Type == ColumnType.Number && Rank(HoursColumns, c.Name) < HoursColumns.Length)
+            .OrderBy(c => Rank(HoursColumns, c.Name)).FirstOrDefault();
+        return hoursColumn is not null && decimal.TryParse(item.Values.GetValueOrDefault(hoursColumn.Id.ToString()), NumberStyles.Number, CultureInfo.InvariantCulture, out var h) && h > 0
+            ? h : null;
+    }
+
     private static int Rank(string[] names, string name)
     {
         var index = Array.FindIndex(names, n => string.Equals(n, name.Trim(), StringComparison.OrdinalIgnoreCase));
