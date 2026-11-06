@@ -41,6 +41,16 @@ internal sealed class AssistantModelClientFactory(IOptionsMonitor<AssistantOptio
             return new FakeAssistantModel();
         }
 
+        if (connection.Provider == AssistantProviderKind.ClaudeCode)
+        {
+            if (!options.CurrentValue.EnableClaudeCodeProvider)
+            {
+                throw new AssistantProviderException("The local Claude Code provider is turned off on this server.");
+            }
+
+            return new ClaudeCodeModelClient(options.CurrentValue.ClaudeCodePath, options.CurrentValue.RequestTimeout, loggers.CreateLogger<ClaudeCodeModelClient>());
+        }
+
         if (AssistantConnections.Validate(connectionName, connection).Count > 0)
         {
             throw new AssistantProviderException($"The assistant connection '{connectionName}' isn't configured correctly.");

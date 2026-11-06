@@ -20,6 +20,19 @@ public sealed class AssistantOptions
     /// </summary>
     public bool EnableFakeProvider { get; set; }
 
+    /// <summary>The built-in name of the local Claude Code connection.</summary>
+    public const string ClaudeCodeConnection = "claude-code";
+
+    /// <summary>
+    /// Offers the "claude-code" connection: drafts (proposals, lead fit) are written by the Claude Code CLI signed in on this
+    /// machine, so no API key is needed. Development on your own computer only (refused in Production); it can't use the
+    /// assistant's data tools, so Ask stays unavailable on it.
+    /// </summary>
+    public bool EnableClaudeCodeProvider { get; set; }
+
+    /// <summary>The Claude Code executable for the local connection.</summary>
+    public string ClaudeCodePath { get; set; } = "claude";
+
     public Dictionary<string, AssistantConnectionOptions> Connections { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Tool calls one question may make before the assistant must answer with what it has.</summary>
@@ -82,6 +95,7 @@ public sealed class AssistantConnectionOptions
     {
         AssistantProviderKind.Anthropic => "claude-opus-5-5",
         AssistantProviderKind.Bedrock => "anthropic.claude-opus-5-5",
+        AssistantProviderKind.ClaudeCode => "claude-code-default",
         _ => "workbench-fake-1",
     };
 
@@ -119,6 +133,11 @@ public static class AssistantConnections
         if (string.Equals(name, AssistantOptions.FakeConnection, StringComparison.OrdinalIgnoreCase))
         {
             errors.Add("The connection name 'fake' is reserved for the built-in test provider.");
+        }
+
+        if (string.Equals(name, AssistantOptions.ClaudeCodeConnection, StringComparison.OrdinalIgnoreCase))
+        {
+            errors.Add("The connection name 'claude-code' is reserved for the local Claude Code provider.");
         }
 
         switch (options.Provider)
@@ -214,6 +233,16 @@ public static class AssistantConnections
         [AssistantConnectionOptions.DefaultModelFor(AssistantProviderKind.Fake)],
         "No data leaves Workbench: canned answers are built from the tool results. For development and testing only.");
 
+    public static AssistantConnectionDto ClaudeCode { get; } = new(
+        AssistantOptions.ClaudeCodeConnection,
+        AssistantProviderKind.ClaudeCode,
+        "Claude Code on this computer (development only)",
+        null,
+        false,
+        AssistantConnectionOptions.DefaultModelFor(AssistantProviderKind.ClaudeCode),
+        [AssistantConnectionOptions.DefaultModelFor(AssistantProviderKind.ClaudeCode)],
+        "Drafts are written by the Claude Code CLI signed in on this computer, so the text goes to Anthropic under that login. Development only; it writes drafts but can't answer data questions.");
+
     /// <summary>The connections administrators may choose from: valid configured ones, plus the fake one when enabled.</summary>
     public static IReadOnlyList<AssistantConnectionDto> Available(AssistantOptions options)
     {
@@ -225,6 +254,11 @@ public static class AssistantConnections
         if (options.EnableFakeProvider)
         {
             list.Add(Fake);
+        }
+
+        if (options.EnableClaudeCodeProvider)
+        {
+            list.Add(ClaudeCode);
         }
 
         return list;
