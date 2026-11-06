@@ -85,6 +85,10 @@ else
             </tbody>
         </MudSimpleTable>
     </div>
+    @if (_projectId is null)
+    {
+        <PipelineDemandPanel Map="_map" />
+    }
 }
 
 @code {
