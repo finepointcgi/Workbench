@@ -46,6 +46,8 @@ public enum AssistantInteractionKind
     Narrative,
     FlagExplanation,
     ReceiptReading,
+    LeadFit,
+    ProposalDraft,
 }
 
 public enum AssistantOutcome

@@ -18,6 +18,7 @@ internal static class CrmEndpoints
 
     /// <summary>Request body for choosing the B&amp;P parent element.</summary>
     public sealed record BpParentBody(Guid? WbsElementId);
+    public sealed record CompanyProfileBody(string? Profile);
 
     public static void MapCrmEndpoints(this RouteGroupBuilder v1)
     {
@@ -36,6 +37,15 @@ internal static class CrmEndpoints
         o.MapGet("/{id:guid}/gate-reviews", (Guid id, IOpportunityGateService s, CancellationToken ct) => s.ListReviewsAsync(id, ct));
         o.MapPost("/{id:guid}/gate-reviews", (Guid id, SubmitGateReviewRequest r, IOpportunityGateService s, CancellationToken ct) => s.SubmitAsync(id, r, ct));
 
+        o.MapGet("/{id:guid}/proposal", (Guid id, IProposalService s, CancellationToken ct) => s.GetAsync(id, ct));
+        o.MapPost("/{id:guid}/proposal/draft", (Guid id, IProposalService s, CancellationToken ct) => s.DraftAsync(id, ct));
+        o.MapGet("/{id:guid}/proposal/export", async (Guid id, IProposalService s, CancellationToken ct) =>
+        {
+            var file = await s.ExportAsync(id, ct);
+            return Results.File(file.Content, file.ContentType, file.FileName);
+        });
+        o.MapPost("/proposal-sections/{sectionId:guid}/redraft", (Guid sectionId, IProposalService s, CancellationToken ct) => s.RedraftSectionAsync(sectionId, ct));
+        o.MapPut("/proposal-sections/{sectionId:guid}", (Guid sectionId, SaveProposalSectionRequest r, IProposalService s, CancellationToken ct) => s.SaveSectionAsync(sectionId, r, ct));
         o.MapGet("/{id:guid}/capture-plan", (Guid id, ICapturePlanService s, CancellationToken ct) => s.GetAsync(id, ct));
         o.MapPost("/{id:guid}/capture-plan/items", (Guid id, SavePlanItemRequest r, ICapturePlanService s, CancellationToken ct) => s.AddItemAsync(id, r, ct));
         o.MapPost("/{id:guid}/milestones", (Guid id, SaveMilestoneRequest r, ICapturePlanService s, CancellationToken ct) => s.AddMilestoneAsync(id, r, ct));
@@ -84,6 +94,7 @@ internal static class CrmEndpoints
 
         var l = v1.MapGroup("/crm/leads").WithTags("Business development");
         l.MapGet("", (LeadStatus? status, bool? all, IOpportunityLeadService s, CancellationToken ct) => s.ListLeadsAsync(all == true ? null : status ?? LeadStatus.New, ct));
+        l.MapPost("/score", (bool? all, IOpportunityLeadService s, CancellationToken ct) => s.ScoreLeadsAsync(all == true, ct));
         l.MapPost("/import", (CsvBody r, IOpportunityLeadService s, CancellationToken ct) => s.ImportCsvAsync(r.Csv, ct));
         l.MapPost("/{id:guid}/accept", (Guid id, AcceptLeadRequest r, IOpportunityLeadService s, CancellationToken ct) => s.AcceptAsync(id, r, ct));
         l.MapPost("/{id:guid}/dismiss", (Guid id, IOpportunityLeadService s, CancellationToken ct) => s.DismissAsync(id, ct));
@@ -105,6 +116,7 @@ internal static class CrmEndpoints
         p.MapGet("/win-loss", (DateOnly? from, DateOnly? to, IPipelineService s, CancellationToken ct) => s.GetWinLossAsync(from, to, ct));
         p.MapGet("/bp-spend", (Guid? opportunityId, IPipelineService s, CancellationToken ct) => s.GetBpSpendAsync(opportunityId, ct));
         p.MapGet("/settings", (IPipelineService s, CancellationToken ct) => s.GetSettingsAsync(ct));
+        p.MapPut("/settings/company-profile", (CompanyProfileBody r, IPipelineService s, CancellationToken ct) => s.SetCompanyProfileAsync(r.Profile, ct));
         p.MapPut("/settings/bp-parent", (BpParentBody r, IPipelineService s, CancellationToken ct) => s.SetBpParentAsync(r.WbsElementId, ct));
         p.MapGet("/settings/bp-parent-options", (IPipelineService s, CancellationToken ct) => s.ListBpParentOptionsAsync(ct));
     }

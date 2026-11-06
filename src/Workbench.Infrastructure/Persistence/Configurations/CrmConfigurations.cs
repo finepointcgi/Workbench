@@ -227,6 +227,7 @@ internal sealed class OpportunityLeadConfiguration : IEntityTypeConfiguration<Op
         b.Property(l => l.Url).HasMaxLength(500);
         b.Property(l => l.Description).HasMaxLength(4000);
         b.Property(l => l.EstimatedValue).HasPrecision(18, 2);
+        b.Property(l => l.FitReason).HasMaxLength(300);
         b.Property(l => l.Status).HasConversion<string>().HasMaxLength(16);
         b.Property(l => l.ReviewedBy).HasMaxLength(320);
         b.HasIndex(l => l.SolicitationKey);
@@ -242,7 +243,21 @@ internal sealed class CrmSettingsConfiguration : IEntityTypeConfiguration<CrmSet
     public void Configure(EntityTypeBuilder<CrmSettings> b)
     {
         b.Property(s => s.UpdatedBy).HasMaxLength(320);
+        b.Property(s => s.CompanyProfile).HasMaxLength(8000);
         b.HasOne<WbsElement>().WithMany().HasForeignKey(s => s.BpParentWbsElementId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class ProposalSectionConfiguration : IEntityTypeConfiguration<ProposalSection>
+{
+    public void Configure(EntityTypeBuilder<ProposalSection> b)
+    {
+        b.Property(s => s.Key).HasMaxLength(32);
+        b.Property(s => s.Title).HasMaxLength(200);
+        b.Property(s => s.Content).HasMaxLength(30000);
+        b.Property(s => s.UpdatedBy).HasMaxLength(320);
+        b.HasIndex(s => new { s.OpportunityId, s.Key }).IsUnique();
+        b.HasOne<Opportunity>().WithMany().HasForeignKey(s => s.OpportunityId).OnDelete(DeleteBehavior.Cascade);
     }
 }
 

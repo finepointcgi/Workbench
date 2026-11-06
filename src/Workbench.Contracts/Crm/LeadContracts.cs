@@ -46,7 +46,13 @@ public sealed record OpportunityLeadDto(
     LeadStatus Status,
     Guid? OpportunityId,
     string? ReviewedBy,
-    DateTime CreatedAtUtc);
+    DateTime CreatedAtUtc,
+    int? FitScore = null,
+    string? FitReason = null,
+    bool FitByAssistant = false);
+
+/// <summary>What a scoring pass did: leads scored, and how many of those the assistant refined (the rest were scored by rules alone).</summary>
+public sealed record LeadFitResultDto(int Scored, int RefinedByAssistant);
 
 /// <summary>What a run or import did: new leads, and how many were skipped as already known (by solicitation number or notice id).</summary>
 public sealed record LeadImportResultDto(int Found, int Created, int Duplicates, IReadOnlyList<string> Errors);
@@ -78,6 +84,13 @@ public interface IOpportunityLeadService
     /// Estimated Value.
     /// </summary>
     Task<LeadImportResultDto> ImportCsvAsync(string csv, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Scores new leads against the company profile (0–100, with a one-line reason): rules first (NAICS, set-aside, keywords,
+    /// time left), then the assistant refines when it's on. <paramref name="rescoreAll"/> re-scores leads already scored.
+    /// Runs on its own after each saved search.
+    /// </summary>
+    Task<LeadFitResultDto> ScoreLeadsAsync(bool rescoreAll = false, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<OpportunityLeadDto>> ListLeadsAsync(LeadStatus? status = LeadStatus.New, CancellationToken cancellationToken = default);
 

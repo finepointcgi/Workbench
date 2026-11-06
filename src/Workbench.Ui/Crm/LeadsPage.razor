@@ -3,6 +3,7 @@
    already in the pipeline (or seen before) are skipped. *@
 @using Microsoft.AspNetCore.Components.Forms
 @inject IOpportunityLeadService Leads
+@inject IPipelineService Pipeline
 @inject ICurrentUserContext CurrentUser
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
@@ -29,9 +30,26 @@ else
             }
             else
             {
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-2" Wrap="Wrap.Wrap">
+                    @if (!_hasProfile)
+                    {
+                        <MudAlert Severity="Severity.Info" Dense="true" Class="flex-grow-1" data-testid="fit-needs-profile">
+                            Leads are scored for fit against your company profile. <a href="bd/settings">Add one in Gates and settings</a> to rank this list.
+                        </MudAlert>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body2" Class="mud-text-secondary flex-grow-1">Best fit first. Scores are advice: you decide who to pursue.</MudText>
+                    }
+                    @if (_canReview && _hasProfile)
+                    {
+                        <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="ScoreAsync" Disabled="_busy" StartIcon="@Icons.Material.Outlined.AutoAwesome" data-testid="score-leads">Score fit</MudButton>
+                    }
+                </MudStack>
                 <MudTable T="OpportunityLeadDto" Items="_leads" Dense="true" Hover="true" Outlined="true" Elevation="0" Breakpoint="Breakpoint.Sm" aria-label="Leads to review" data-testid="lead-table">
                     <HeaderContent>
                         <MudTh>Notice</MudTh>
+                        <MudTh>Fit</MudTh>
                         <MudTh>Agency</MudTh>
                         <MudTh>NAICS / set-aside</MudTh>
                         <MudTh>Posted</MudTh>
@@ -55,6 +73,21 @@ else
                             <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">
                                 @(context.SolicitationNumber ?? "No solicitation number") · @(context.NoticeType ?? context.Source.ToString())@(context.SavedSearchName is { } s ? $" · {s}" : "")
                             </MudText>
+                            @if (context.FitReason is { } why)
+                            {
+                                <MudText Typo="Typo.caption" Class="d-block" data-testid="lead-fit-reason">Fit: @why</MudText>
+                            }
+                        </MudTd>
+                        <MudTd DataLabel="Fit" data-testid="lead-fit">
+                            @if (context.FitScore is { } fit)
+                            {
+                                <MudChip T="string" Size="Size.Small" Color="@(fit >= 70 ? Color.Success : fit >= 40 ? Color.Warning : Color.Default)" Variant="Variant.Filled"
+                                         title="@(context.FitByAssistant ? "Scored by the assistant" : "Scored by rules")">@fit</MudChip>
+                            }
+                            else
+                            {
+                                <span class="mud-text-secondary">—</span>
+                            }
                         </MudTd>
                         <MudTd DataLabel="Agency">@context.Agency@(context.Office is { } o ? $" / {o}" : "")</MudTd>
                         <MudTd DataLabel="NAICS / set-aside">@context.NaicsCode · @OpportunityStages.Label(context.SetAside)</MudTd>
@@ -172,6 +205,7 @@ else
     private IReadOnlyList<OpportunityLeadDto>? _leads;
     private IReadOnlyList<SavedLeadSearchDto>? _searches;
     private bool _canReview;
+    private bool _hasProfile;
     private bool _busy;
     private string? _error;
     private SavedLeadSearchDto? _editing;
@@ -198,8 +232,40 @@ else
 
     private async Task LoadAsync()
     {
-        _leads = await Leads.ListLeadsAsync(LeadStatus.New);
+        _leads = await ReviewListAsync();
         _searches = await Leads.ListSearchesAsync();
+        try
+        {
+            _hasProfile = !string.IsNullOrWhiteSpace((await Pipeline.GetSettingsAsync()).CompanyProfile);
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            _hasProfile = false;
+        }
+    }
+
+    /// <summary>New leads, best fit first (unscored last, newest first within a score).</summary>
+    private async Task<IReadOnlyList<OpportunityLeadDto>> ReviewListAsync() =>
+        (await Leads.ListLeadsAsync(LeadStatus.New)).OrderByDescending(l => l.FitScore ?? -1).ThenByDescending(l => l.CreatedAtUtc).ToList();
+
+    private async Task ScoreAsync()
+    {
+        _busy = true;
+        try
+        {
+            var result = await Leads.ScoreLeadsAsync(rescoreAll: true);
+            _leads = await ReviewListAsync();
+            Snackbar.Add(result.Scored == 0 ? "Nothing to score." : $"Scored {result.Scored} lead{(result.Scored == 1 ? "" : "s")}"
+                + (result.RefinedByAssistant > 0 ? $", {result.RefinedByAssistant} refined by the assistant." : " by rules (the assistant is off)."), Severity.Success);
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
     }
 
     private async Task AcceptAsync(OpportunityLeadDto lead)
@@ -221,7 +287,7 @@ else
         try
         {
             await Leads.DismissAsync(lead.Id);
-            _leads = await Leads.ListLeadsAsync(LeadStatus.New);
+            _leads = await ReviewListAsync();
         }
         catch (Exception ex) when (CrmFormat.IsExpected(ex))
         {
@@ -322,7 +388,7 @@ else
         try
         {
             _import = await Leads.ImportCsvAsync(_csv ?? "");
-            _leads = await Leads.ListLeadsAsync(LeadStatus.New);
+            _leads = await ReviewListAsync();
         }
         catch (Exception ex) when (CrmFormat.IsExpected(ex))
         {

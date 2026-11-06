@@ -128,6 +128,9 @@ public sealed class HttpOpportunityLeadService(HttpClient http) : IOpportunityLe
     public async Task<LeadImportResultDto> ImportCsvAsync(string csv, CancellationToken cancellationToken = default) =>
         await (await http.PostAsJsonAsync("api/v1/crm/leads/import", new { Csv = csv }, cancellationToken)).ReadAsync<LeadImportResultDto>(cancellationToken);
 
+    public async Task<LeadFitResultDto> ScoreLeadsAsync(bool rescoreAll = false, CancellationToken cancellationToken = default) =>
+        await (await http.PostAsync($"api/v1/crm/leads/score?all={(rescoreAll ? "true" : "false")}", null, cancellationToken)).ReadAsync<LeadFitResultDto>(cancellationToken);
+
     public async Task<IReadOnlyList<OpportunityLeadDto>> ListLeadsAsync(LeadStatus? status = LeadStatus.New, CancellationToken cancellationToken = default) =>
         await (await http.GetAsync(status is { } s ? $"api/v1/crm/leads?status={s}" : "api/v1/crm/leads?all=true", cancellationToken)).ReadAsync<List<OpportunityLeadDto>>(cancellationToken);
 
@@ -160,11 +163,39 @@ public sealed class HttpPipelineService(HttpClient http) : IPipelineService
     public async Task<CrmSettingsDto> GetSettingsAsync(CancellationToken cancellationToken = default) =>
         await (await http.GetAsync("api/v1/crm/pipeline/settings", cancellationToken)).ReadAsync<CrmSettingsDto>(cancellationToken);
 
+    public async Task<CrmSettingsDto> SetCompanyProfileAsync(string? profile, CancellationToken cancellationToken = default) =>
+        await (await http.PutAsJsonAsync("api/v1/crm/pipeline/settings/company-profile", new { Profile = profile }, cancellationToken)).ReadAsync<CrmSettingsDto>(cancellationToken);
+
     public async Task<CrmSettingsDto> SetBpParentAsync(Guid? wbsElementId, CancellationToken cancellationToken = default) =>
         await (await http.PutAsJsonAsync("api/v1/crm/pipeline/settings/bp-parent", new { WbsElementId = wbsElementId }, cancellationToken)).ReadAsync<CrmSettingsDto>(cancellationToken);
 
     public async Task<IReadOnlyList<BpParentOptionDto>> ListBpParentOptionsAsync(CancellationToken cancellationToken = default) =>
         await (await http.GetAsync("api/v1/crm/pipeline/settings/bp-parent-options", cancellationToken)).ReadAsync<List<BpParentOptionDto>>(cancellationToken);
+}
+
+public sealed class HttpProposalService(HttpClient http) : IProposalService
+{
+    private const string Base = "api/v1/crm/opportunities";
+
+    public async Task<ProposalDto> GetAsync(Guid opportunityId, CancellationToken cancellationToken = default) =>
+        await (await http.GetAsync($"{Base}/{opportunityId}/proposal", cancellationToken)).ReadAsync<ProposalDto>(cancellationToken);
+
+    public async Task<ProposalDraftResultDto> DraftAsync(Guid opportunityId, CancellationToken cancellationToken = default) =>
+        await (await http.PostAsync($"{Base}/{opportunityId}/proposal/draft", null, cancellationToken)).ReadAsync<ProposalDraftResultDto>(cancellationToken);
+
+    public async Task<ProposalSectionDto> RedraftSectionAsync(Guid sectionId, CancellationToken cancellationToken = default) =>
+        await (await http.PostAsync($"{Base}/proposal-sections/{sectionId}/redraft", null, cancellationToken)).ReadAsync<ProposalSectionDto>(cancellationToken);
+
+    public async Task<ProposalSectionDto> SaveSectionAsync(Guid sectionId, SaveProposalSectionRequest request, CancellationToken cancellationToken = default) =>
+        await (await http.PutAsJsonAsync($"{Base}/proposal-sections/{sectionId}", request, cancellationToken)).ReadAsync<ProposalSectionDto>(cancellationToken);
+
+    public async Task<ProposalFileDto> ExportAsync(Guid opportunityId, CancellationToken cancellationToken = default)
+    {
+        var response = await http.GetAsync($"{Base}/{opportunityId}/proposal/export", cancellationToken);
+        await response.EnsureOkAsync(cancellationToken);
+        var name = response.Content.Headers.ContentDisposition?.FileNameStar ?? response.Content.Headers.ContentDisposition?.FileName?.Trim('"') ?? "proposal.docx";
+        return new ProposalFileDto(name, response.Content.Headers.ContentType?.MediaType ?? "application/octet-stream", await response.Content.ReadAsByteArrayAsync(cancellationToken));
+    }
 }
 
 public sealed class HttpCapturePlanService(HttpClient http) : ICapturePlanService
@@ -212,6 +243,7 @@ public static class CrmClientRegistration
         services.AddHttpClient<IOpportunityLeadService, HttpOpportunityLeadService>(c => c.BaseAddress = serverBaseAddress);
         services.AddHttpClient<IPipelineService, HttpPipelineService>(c => c.BaseAddress = serverBaseAddress);
         services.AddHttpClient<ICapturePlanService, HttpCapturePlanService>(c => c.BaseAddress = serverBaseAddress);
+        services.AddHttpClient<IProposalService, HttpProposalService>(c => c.BaseAddress = serverBaseAddress);
         return services;
     }
 }

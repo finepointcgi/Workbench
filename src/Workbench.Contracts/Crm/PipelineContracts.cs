@@ -113,7 +113,7 @@ public sealed record BdHighlightsDto(
     IReadOnlyList<AttentionItemDto> Attention,
     int WindowDays);
 
-public sealed record CrmSettingsDto(Guid? BpParentWbsElementId, string? BpParentCode, string? BpParentName, bool BpParentFound);
+public sealed record CrmSettingsDto(Guid? BpParentWbsElementId, string? BpParentCode, string? BpParentName, bool BpParentFound, string? CompanyProfile = null);
 
 /// <summary>A charge code a B&amp;P element may be (indirect elements), for the settings picker.</summary>
 public sealed record BpParentOptionDto(Guid Id, string Code, string Name, string ProjectCode);
@@ -136,6 +136,9 @@ public interface IPipelineService
     Task<CrmSettingsDto> GetSettingsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>Finance or administrators: the indirect element opportunity B&amp;P charge codes go under.</summary>
+    /// <summary>What the company does and wins: lead fit scores and proposal drafts are written against it. Business development edits.</summary>
+    Task<CrmSettingsDto> SetCompanyProfileAsync(string? profile, CancellationToken cancellationToken = default);
+
     Task<CrmSettingsDto> SetBpParentAsync(Guid? wbsElementId, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<BpParentOptionDto>> ListBpParentOptionsAsync(CancellationToken cancellationToken = default);
