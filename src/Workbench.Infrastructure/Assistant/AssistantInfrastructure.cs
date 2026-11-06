@@ -27,6 +27,7 @@ public static class AssistantInfrastructure
 /// </summary>
 internal sealed class AssistantModelClientFactory(IOptionsMonitor<AssistantOptions> options, ILoggerFactory loggers) : IAssistantModelClientFactory
 {
+    private readonly ConcurrentDictionary<string, HttpClient> _openAiHttp = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, (string Fingerprint, Lazy<Task<IAnthropicClient>> Client)> _clients = new(StringComparer.OrdinalIgnoreCase);
 
     public IAssistantModelClient Create(string connectionName, AssistantConnectionOptions? connection)
@@ -54,6 +55,12 @@ internal sealed class AssistantModelClientFactory(IOptionsMonitor<AssistantOptio
         if (AssistantConnections.Validate(connectionName, connection).Count > 0)
         {
             throw new AssistantProviderException($"The assistant connection '{connectionName}' isn't configured correctly.");
+        }
+
+        if (connection.Provider == AssistantProviderKind.OpenAiCompatible)
+        {
+            var http = _openAiHttp.GetOrAdd(connectionName + "|" + connection.BaseUrl, _ => new HttpClient { Timeout = options.CurrentValue.RequestTimeout });
+            return new OpenAiCompatibleModelClient(http, connection.BaseUrl!, connection.ApiKey, loggers.CreateLogger<OpenAiCompatibleModelClient>());
         }
 
         var fingerprint = string.Join('|', connection.Provider, connection.Region, connection.AwsProfile, connection.BaseUrl, connection.UsesBedrockRuntime,
