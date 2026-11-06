@@ -21,6 +21,15 @@ internal static class PlanPeopleSync
     /// <summary>The <see cref="ItemAssignee.AssignedBy"/> of assignees added because they have hours on the task.</summary>
     public const string StaffingActor = "staffing";
 
+    /// <summary>
+    /// The notes of an assignment made by assigning someone on the plan. With <see cref="StandardDayNote"/> the hours are
+    /// the person's standard day over the task's working days, so they scale when the task gets longer or shorter. Editing
+    /// the assignment by hand replaces the note, so it stops following the task's length.
+    /// </summary>
+    public const string AssignedNote = "Staffed when assigned on the plan";
+
+    public const string StandardDayNote = "Staffed when assigned on the plan (standard day)";
+
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     /// <summary>
@@ -91,6 +100,17 @@ internal static class PlanPeopleSync
             }
 
             var spreadFrom = start > today ? start : today;
+            if (a.Notes == StandardDayNote)
+            {
+                // Hours that were the person's standard day on the task keep being a standard day as the task grows or shrinks.
+                var days = Enumerable.Range(0, Math.Max(0, finish.DayNumber - spreadFrom.DayNumber + 1)).Select(spreadFrom.AddDays)
+                    .Count(d => calendar.IsWorkingDay(d) && employee.IsActiveOn(d));
+                if (days > 0)
+                {
+                    a.TotalHours = Math.Round(past.Values.Sum() + employee.StandardHoursPerWeek / 5m * days, 2, MidpointRounding.AwayFromZero);
+                }
+            }
+
             IReadOnlyList<AssignmentWeekDto> weeks;
             try
             {

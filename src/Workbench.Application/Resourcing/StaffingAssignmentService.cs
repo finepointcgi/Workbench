@@ -624,7 +624,8 @@ public sealed class StaffingAssignmentService(
                 continue;
             }
 
-            var request = new SaveAssignmentRequest(employee.Id, element.ProjectId, hours, element.Id, from, finish, null, "Staffed when assigned on the plan");
+            var request = new SaveAssignmentRequest(employee.Id, element.ProjectId, hours, element.Id, from, finish, null,
+                planned is null ? PlanPeopleSync.StandardDayNote : PlanPeopleSync.AssignedNote);
             try
             {
                 var preview = await PreviewOfAsync(db, await PlanAsync(db, request, ct), ct);
