@@ -2,6 +2,9 @@
 @inject IResourcePlanningService Planning
 @inject ISkillService SkillList
 @inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject IProjectService ProjectService
+@inject IStaffingAssignmentService Assignments
 
 <MudText Typo="Typo.subtitle1" Class="mb-1">Unstaffed budget</MudText>
 <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">Labor hours budgeted in coming fiscal periods (Current budget) that nobody is staffed on yet.</MudText>
@@ -65,7 +68,7 @@
     <MudDatePicker Label="From" @bind-Date="_from" DateFormat="yyyy-MM-dd" Style="max-width:160px" />
     <MudDatePicker Label="To" @bind-Date="_to" DateFormat="yyyy-MM-dd" Style="max-width:160px" />
     <MudNumericField T="decimal" Label="At least (h)" @bind-Value="_minHours" Min="0" Style="max-width:120px" />
-    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonSearch" OnClick="FindAsync" data-testid="find-people">Search</MudButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonSearch" OnClick="SearchAsync" data-testid="find-people">Search</MudButton>
 </MudStack>
 @if (_people is not null)
 {
@@ -80,6 +83,7 @@
                 <th style="text-align:right">Staffed h</th>
                 <th style="text-align:right">Available h</th>
                 <th>By week (available)</th>
+                @if (Lookups.ManageableProjects.Count > 0) { <th><span class="wb-sr-only">Actions</span></th> }
             </tr>
         </thead>
         <tbody>
@@ -99,11 +103,15 @@
                     <td style="text-align:right">@ResourcingFormat.Hours(p.AllocatedHours)</td>
                     <td style="text-align:right"><b>@ResourcingFormat.Hours(p.AvailableHours)</b></td>
                     <td class="mud-text-secondary" style="font-size:0.8rem">@string.Join(" · ", p.Weeks.Select(w => $"{w.WeekStart:MMM d}: {ResourcingFormat.Hours(w.Available)}"))</td>
+                    @if (Lookups.ManageableProjects.Count > 0)
+                    {
+                        <td><MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" OnClick="() => AssignAsync(p)" aria-label="@($"Assign {p.EmployeeName} to a project")" data-testid="find-assign">Assign</MudButton></td>
+                    }
                 </tr>
             }
             @if (_people.Count == 0)
             {
-                <tr><td colspan="8" class="mud-text-secondary">Nobody has that much free capacity in those weeks.</td></tr>
+                <tr><td colspan="9" class="mud-text-secondary">Nobody has that much free capacity in those weeks.</td></tr>
             }
         </tbody>
     </MudSimpleTable>
@@ -113,6 +121,7 @@
     [Parameter, EditorRequired] public ResourcingContext Lookups { get; set; } = default!;
 
     private IReadOnlyList<OpenDemandDto> _demand = [];
+    private Guid? _forProjectId; // set when the search came from an unstaffed-budget row
     private IReadOnlyList<AvailablePersonDto>? _people;
     private Guid? _categoryId;
     private DateTime? _from = ResourcingFormat.ThisWeek.ToDateTime(TimeOnly.MinValue);
@@ -138,10 +147,17 @@
     private async Task FindForAsync(OpenDemandDto demand)
     {
         _categoryId = demand.LaborCategoryId;
+        _forProjectId = demand.ProjectId;
         var start = demand.PeriodStart < ResourcingFormat.ThisWeek ? ResourcingFormat.ThisWeek : demand.PeriodStart;
         _from = start.ToDateTime(TimeOnly.MinValue);
         _to = new DateOnly(demand.PeriodStart.Year, demand.PeriodStart.Month, 1).AddMonths(1).AddDays(-1).ToDateTime(TimeOnly.MinValue);
         await FindAsync();
+    }
+
+    private Task SearchAsync()
+    {
+        _forProjectId = null; // a hand-typed search isn't for any one project
+        return FindAsync();
     }
 
     private async Task FindAsync()
@@ -158,6 +174,19 @@
         catch (Exception ex) when (ResourcingFormat.IsExpected(ex))
         {
             Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    /// <summary>Opens the checked assign dialog for this person: their free hours, over the searched weeks, on the project the search was for.</summary>
+    private async Task AssignAsync(AvailablePersonDto person)
+    {
+        var from = _from is { } f ? DateOnly.FromDateTime(f) : (DateOnly?)null;
+        var to = _to is { } t ? DateOnly.FromDateTime(t) : (DateOnly?)null;
+        var start = new SaveAssignmentRequest(person.EmployeeId, _forProjectId ?? Guid.Empty, person.AvailableHours, null, from, to, _categoryId);
+        if (await StaffingFlow.AssignAsync(DialogService, Snackbar, ProjectService, Assignments, Lookups, start, _forProjectId) is not null)
+        {
+            await FindAsync();
+            _demand = await Planning.ListOpenDemandAsync();
         }
     }
 }
