@@ -3,6 +3,7 @@
    section, re-draft one, and export to Word. Sections edited by hand are kept when the proposal is drafted again. *@
 @using Microsoft.JSInterop
 @inject IProposalService Proposals
+@inject Workbench.Contracts.Assistant.IAssistantService Assistant
 @inject IJSRuntime JS
 @inject ISnackbar Snackbar
 
@@ -16,6 +17,18 @@ else if (_proposal is null)
 }
 else
 {
+    @if (_assistantOff)
+    {
+        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3" data-testid="proposal-assistant-off">
+            The AI assistant is off, so the draft is a template: standard sections with <strong>[ADD: …]</strong> gaps for you to fill in.
+            @if (_assistantReason is { Length: > 0 })
+            {
+                <span> (@_assistantReason)</span>
+            }
+            An administrator can turn it on under <MudLink Href="admin/assistant">Assistant</MudLink>; after that, <em>Draft again</em> writes the sections in prose from the same facts.
+        </MudAlert>
+    }
+
     <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-3" Spacing="2">
         <div>
             <MudText Typo="Typo.h6" HtmlTag="h2">Proposal draft</MudText>
@@ -75,12 +88,23 @@ else
     private readonly Dictionary<Guid, string> _edits = [];
     private bool _busy;
     private string? _error;
+    private bool _assistantOff;
+    private string? _assistantReason;
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
             _proposal = await Proposals.GetAsync(Opportunity.Id);
+            try
+            {
+                var status = await Assistant.GetStatusAsync();
+                (_assistantOff, _assistantReason) = (!status.IsEnabled || !status.CanAsk, status.IsEnabled ? status.Reason : null);
+            }
+            catch (Exception ex) when (CrmFormat.IsExpected(ex))
+            {
+                _assistantOff = true;
+            }
         }
         catch (Exception ex) when (CrmFormat.IsExpected(ex))
         {
