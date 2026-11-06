@@ -6,6 +6,11 @@
 #
 # Trial on this machine only:  ... --domain localhost --admin you@example.com
 # Installs into ./workbench (change with --dir). Options: --http-port N, --https-port N.
+#
+# Try it from a git checkout, without a release (builds the image from source, first build takes several minutes):
+#   docker build --target runtime -t workbench:local .
+#   WORKBENCH_FILES_DIR=deploy/selfhost WORKBENCH_IMAGE=workbench:local deploy/selfhost/install.sh \
+#       --domain localhost --admin you@example.com --dir ~/workbench-local --https-port 8443 --http-port 8088
 set -euo pipefail
 
 VERSION="__VERSION__"        # filled in when the release is made
@@ -27,13 +32,19 @@ docker compose version >/dev/null 2>&1 || { echo "Docker Compose v2 is required 
 command -v openssl >/dev/null || { echo "openssl is required." >&2; exit 1; }
 command -v curl >/dev/null || { echo "curl is required." >&2; exit 1; }
 
+files_dir="${WORKBENCH_FILES_DIR:-}"; [[ -n "$files_dir" ]] && files_dir="$(cd "$files_dir" && pwd)"
 [[ -e "$dir/.env" ]] && { echo "$dir/.env exists, so this looks installed. To upgrade: cd $dir && ./upgrade.sh" >&2; exit 1; }
 mkdir -p "$dir/secrets" && cd "$dir"
 
 if [[ "$VERSION" == "__VERSION__" ]]; then base="https://github.com/$REPO/releases/latest/download"; VERSION=latest
 else base="https://github.com/$REPO/releases/download/v$VERSION"; fi
-echo "Downloading Workbench $VERSION files..."
-for f in docker-compose.yml Caddyfile upgrade.sh first-login-link.sh; do curl -fsSL -o "$f" "$base/$f"; done
+if [[ -n "$files_dir" ]]; then
+  echo "Using the files in $files_dir..."
+  for f in docker-compose.yml Caddyfile upgrade.sh first-login-link.sh; do cp "$files_dir/$f" "$f"; done
+else
+  echo "Downloading Workbench $VERSION files..."
+  for f in docker-compose.yml Caddyfile upgrade.sh first-login-link.sh; do curl -fsSL -o "$f" "$base/$f"; done
+fi
 chmod +x upgrade.sh first-login-link.sh
 
 # A real domain gets a Let's Encrypt certificate (ports 80 and 443 must be open to the internet);
@@ -54,7 +65,8 @@ chmod 644 secrets/dataprotection.pfx; chmod 700 secrets
 umask 077
 cat > .env <<ENV
 WORKBENCH_VERSION=$VERSION
-WORKBENCH_DOMAIN=$domain
+${WORKBENCH_IMAGE:+WORKBENCH_IMAGE=$WORKBENCH_IMAGE
+}WORKBENCH_DOMAIN=$domain
 WORKBENCH_TLS=$tls
 WORKBENCH_BOOTSTRAP_ADMIN=$admin
 HTTP_PORT=$http_port

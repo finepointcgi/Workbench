@@ -4,7 +4,7 @@
 name: workbench
 
 x-workbench: &workbench
-  image: ghcr.io/finepointcgi/workbench:${WORKBENCH_VERSION:-latest}
+  image: ${WORKBENCH_IMAGE:-ghcr.io/finepointcgi/workbench:${WORKBENCH_VERSION:-latest}}
   environment:
     ASPNETCORE_ENVIRONMENT: Production
     Database__Provider: PostgreSQL
