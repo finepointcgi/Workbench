@@ -293,11 +293,7 @@ public sealed class OpportunityLeadService(
     {
         var accounts = await db.Set<D.CrmAccount>().AsNoTracking()
             .Where(a => a.IsActive && (a.Kind == D.CrmAccountKind.Agency || a.Kind == D.CrmAccountKind.Office)).ToListAsync(ct);
-        // Whole words, ignoring case and punctuation: "DEPT OF THE ARMY / PEO EIS" matches "PEO EIS" and "Department of the Army"-style names.
-        static string Words(string text) =>
-            " " + string.Join(' ', text.ToUpperInvariant().Split([' ', '/', ',', '.', '-', '(', ')', '&'], StringSplitOptions.RemoveEmptyEntries)) + " ";
-        bool Matches(D.CrmAccount a, string? text) => text is not null
-            && (Words(text).Contains(Words(a.Name), StringComparison.Ordinal) || (a.Acronym is { Length: > 1 } acr && Words(text).Contains(Words(acr), StringComparison.Ordinal)));
+        bool Matches(D.CrmAccount a, string? text) => SamAgencyNames.Matches(a.Name, a.Acronym, text);
         return (accounts.FirstOrDefault(a => a.Kind == D.CrmAccountKind.Office && Matches(a, lead.Office))
                 ?? accounts.FirstOrDefault(a => Matches(a, lead.Office)) ?? accounts.FirstOrDefault(a => Matches(a, lead.Agency)))?.Id;
     }

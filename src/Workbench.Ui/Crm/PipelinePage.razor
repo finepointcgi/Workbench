@@ -121,7 +121,7 @@ else
                             <span class="card-pwin-text">Pwin @context.Pwin% · Pgo @context.Pgo%</span>
                         </div>
                         <div class="card-foot">
-                            @if (context.ProposalDueOn is { } due && context.Stage.IsOpen())
+                            @if (context.ProposalDueOn is { } due && context.Stage.IsOpen() && context.Stage < OpportunityStage.Submitted)
                             {
                                 var days = due.DayNumber - _today.DayNumber;
                                 <span class="card-due @(days < 0 ? "late" : days <= 14 ? "soon" : "")">
