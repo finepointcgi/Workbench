@@ -18,18 +18,18 @@
         <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">A win or loss is recorded once the proposal is submitted; a no-bid at any stage.</MudText>
         <MudGrid Spacing="2">
             <MudItem xs="12" sm="4">
-                <MudSelect T="OpportunityStage" @bind-Value="_outcome" Label="Outcome" data-testid="outcome-kind">
+                <MudSelect T="OpportunityStage?" @bind-Value="_outcome" Label="Outcome" Required="true" data-testid="outcome-kind">
                     @foreach (var o in OpportunityStages.Outcomes)
                     {
-                        <MudSelectItem T="OpportunityStage" Value="o">@CrmFormat.Stage(o)</MudSelectItem>
+                        <MudSelectItem T="OpportunityStage?" Value="o">@CrmFormat.Stage(o)</MudSelectItem>
                     }
                 </MudSelect>
             </MudItem>
             <MudItem xs="12" sm="4">
-                <MudSelect T="OutcomeReason" @bind-Value="_reason" Label="Main reason">
+                <MudSelect T="OutcomeReason?" @bind-Value="_reason" Label="Main reason" Required="true">
                     @foreach (var r in Enum.GetValues<OutcomeReason>())
                     {
-                        <MudSelectItem T="OutcomeReason" Value="r">@OpportunityStages.Label(r)</MudSelectItem>
+                        <MudSelectItem T="OutcomeReason?" Value="r">@OpportunityStages.Label(r)</MudSelectItem>
                     }
                 </MudSelect>
             </MudItem>
@@ -52,7 +52,7 @@
                 <MudTextField T="string" @bind-Value="_notes" Label="Notes (debrief)" Lines="2" MaxLength="2000" />
             </MudItem>
         </MudGrid>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="RecordAsync" Disabled="_busy" data-testid="outcome-record">Record outcome</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="RecordAsync" Disabled="@(_busy || _outcome is null || _reason is null)" data-testid="outcome-record">Record outcome</MudButton>
     }
 }
 else
@@ -143,8 +143,8 @@ else
 
     [Parameter] public EventCallback<OpportunityDto> Changed { get; set; }
 
-    private OpportunityStage _outcome = OpportunityStage.Won;
-    private OutcomeReason _reason = OutcomeReason.Technical;
+    private OpportunityStage? _outcome; // chosen on purpose: a win starts a handoff
+    private OutcomeReason? _reason;
     private DateTime? _decidedOn = DateTime.Today;
     private decimal? _awarded;
     private string? _awardedTo;
@@ -183,7 +183,7 @@ else
     }
 
     private Task RecordAsync() => RunAsync(() => Opportunities.RecordOutcomeAsync(Opportunity.Id,
-        new RecordOutcomeRequest(_outcome, _reason, _notes, CrmFormat.ToDateOnly(_decidedOn), _awarded, _awardedTo)), "Outcome recorded.");
+        new RecordOutcomeRequest(_outcome!.Value, _reason!.Value, _notes, CrmFormat.ToDateOnly(_decidedOn), _awarded, _awardedTo)), "Outcome recorded.");
 
     private Task ReopenAsync() => RunAsync(() => Opportunities.ReopenAsync(Opportunity.Id, new ChangeStageRequest(_reopenTo)), "Reopened.");
 

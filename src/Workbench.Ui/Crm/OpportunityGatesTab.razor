@@ -52,11 +52,11 @@ else
                                 <td>@c.Text@if (c.Guidance is { } g) { <div class="mud-text-secondary" style="font-size:.8rem">@g</div> }</td>
                                 <td>×@c.Weight</td>
                                 <td style="min-width:120px">
-                                    <MudSelect T="int" Value="_scores[c.Id]" ValueChanged="v => _scores[c.Id] = v" Dense="true" aria-label="@($"Score: {c.Text}")">
+                                    <MudSelect T="int?" Value="_scores[c.Id]" ValueChanged="v => _scores[c.Id] = v" Dense="true" Placeholder="Score" aria-label="@($"Score: {c.Text}")">
                                         @for (var i = 0; i <= 5; i++)
                                         {
                                             var score = i;
-                                            <MudSelectItem T="int" Value="score">@score@(score == 0 ? " (not at all)" : score == 5 ? " (fully)" : "")</MudSelectItem>
+                                            <MudSelectItem T="int?" Value="score">@score@(score == 0 ? " (not at all)" : score == 5 ? " (fully)" : "")</MudSelectItem>
                                         }
                                     </MudSelect>
                                 </td>
@@ -66,18 +66,35 @@ else
                     </tbody>
                 </MudSimpleTable>
                 <MudText Class="mt-3" data-testid="gate-score">
-                    Score: <strong>@Score.ToString("0.#")%</strong> (passing @gate.PassingScore%)
-                    @if (Score < gate.PassingScore)
+                    @if (!AllScored)
                     {
-                        <MudChip T="string" Size="Size.Small" Color="Color.Warning" Icon="@Icons.Material.Filled.Warning" Class="ml-2">Below passing</MudChip>
+                        <span>Score every question to see the result (@_scores.Values.Count(v => v is not null) of @gate.Criteria.Count scored).</span>
+                    }
+                    else
+                    {
+                        <span>Score: <strong>@Score.ToString("0.#")%</strong> (passing @gate.PassingScore%)</span>
+                        @if (Score < gate.PassingScore)
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Icon="@Icons.Material.Filled.Warning" Class="ml-2">Below passing</MudChip>
+                        }
+                        else
+                        {
+                            <span class="mud-text-secondary"> · suggests Go</span>
+                        }
                     }
                 </MudText>
-                <MudRadioGroup T="GateRecommendation" @bind-Value="_recommendation" Class="mt-2">
-                    <MudRadio T="GateRecommendation" Value="GateRecommendation.Go" Color="Color.Primary">Go: move to @CrmFormat.Stage(gate.ToStage)</MudRadio>
-                    <MudRadio T="GateRecommendation" Value="GateRecommendation.NoGo" Color="Color.Primary">No-go: don't bid</MudRadio>
+                <MudRadioGroup T="GateRecommendation?" @bind-Value="_recommendation" Class="mt-2" aria-label="Your recommendation">
+                    <MudRadio T="GateRecommendation?" Value="GateRecommendation.Go" Color="Color.Primary">Go: move to @CrmFormat.Stage(gate.ToStage)</MudRadio>
+                    <MudRadio T="GateRecommendation?" Value="GateRecommendation.NoGo" Color="Color.Primary">No-go: don't bid</MudRadio>
                 </MudRadioGroup>
+                @if (_recommendation == GateRecommendation.Go && AllScored && Score < gate.PassingScore)
+                {
+                    <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2" data-testid="gate-go-below-passing">
+                        The score is below passing (@Score.ToString("0.#")% against @gate.PassingScore%). Say why in the notes so the approvers see it.
+                    </MudAlert>
+                }
                 <MudTextField T="string" @bind-Value="_notes" Label="Notes for the approvers" Lines="2" MaxLength="2000" />
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="SubmitAsync" Disabled="_busy" data-testid="gate-submit">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="SubmitAsync" Disabled="@(_busy || !AllScored || _recommendation is null)" data-testid="gate-submit">
                     @(gate.RequiresApproval ? "Submit for approval" : "Record decision")
                 </MudButton>
             </MudPaper>
@@ -142,15 +159,17 @@ else
     private IReadOnlyList<GateReviewDto>? _reviews;
     private Guid? _gateId;
     private GateDefinitionDto? _gate;
-    private Dictionary<Guid, int> _scores = [];
+    private Dictionary<Guid, int?> _scores = [];
     private Dictionary<Guid, string?> _comments = [];
-    private GateRecommendation _recommendation;
+    private GateRecommendation? _recommendation;
     private string? _notes;
     private string? _decision;
     private bool _busy;
 
-    private decimal Score => _gate is null || _gate.Criteria.Count == 0 ? 0
-        : Math.Round(100m * _gate.Criteria.Sum(c => (decimal)_scores[c.Id] * c.Weight) / _gate.Criteria.Sum(c => 5m * c.Weight), 1);
+    private bool AllScored => _gate is { Criteria.Count: > 0 } && _gate.Criteria.All(c => _scores.GetValueOrDefault(c.Id) is not null);
+
+    private decimal Score => !AllScored ? 0
+        : Math.Round(100m * _gate!.Criteria.Sum(c => (decimal)_scores[c.Id]!.Value * c.Weight) / _gate.Criteria.Sum(c => 5m * c.Weight), 1);
 
     protected override async Task OnParametersSetAsync() => await LoadAsync();
 
@@ -178,9 +197,9 @@ else
     {
         _gateId = id;
         _gate = _gates?.FirstOrDefault(g => g.Id == id);
-        _scores = _gate?.Criteria.ToDictionary(c => c.Id, _ => 3) ?? [];
+        _scores = _gate?.Criteria.ToDictionary(c => c.Id, _ => (int?)null) ?? [];
         _comments = _gate?.Criteria.ToDictionary(c => c.Id, _ => (string?)null) ?? [];
-        _recommendation = GateRecommendation.Go;
+        _recommendation = null; // the person decides; the score only suggests
     }
 
     private async Task SubmitAsync()
@@ -188,8 +207,8 @@ else
         _busy = true;
         try
         {
-            var review = await Gates.SubmitAsync(Opportunity.Id, new SubmitGateReviewRequest(_gate!.Id, _recommendation,
-                _gate.Criteria.Select(c => new GateScoreInput(c.Id, _scores[c.Id], _comments[c.Id])).ToList(), _notes));
+            var review = await Gates.SubmitAsync(Opportunity.Id, new SubmitGateReviewRequest(_gate!.Id, _recommendation!.Value,
+                _gate.Criteria.Select(c => new GateScoreInput(c.Id, _scores[c.Id]!.Value, _comments[c.Id])).ToList(), _notes));
             Snackbar.Add(review.Status == GateReviewStatus.Pending ? "Submitted for approval." : "Decision recorded.", Severity.Success);
             (_gateId, _gate, _notes) = (null, null, null);
             await Changed.InvokeAsync();
