@@ -17,12 +17,15 @@ public static class ResourcingRegistration
         services.TryAddScoped<IResourceLeaveCalendar, NoLeaveCalendar>();
         services.AddScoped<ResourcingAccess>();
         services.AddScoped<IResourceAllocationService, ResourceAllocationService>();
-        services.AddScoped<IResourcePlanningService, ResourcePlanningService>();
+        services.AddScoped<ResourcePlanningService>();
+        services.AddScoped<IResourcePlanningService>(sp => sp.GetRequiredService<ResourcePlanningService>());
         services.AddScoped<IAllocationForecastService, AllocationForecastService>();
         services.AddScoped<ProjectStaffingService>();
         services.AddScoped<IProjectStaffingService>(sp => sp.GetRequiredService<ProjectStaffingService>());
         services.AddScoped<StaffingAssignmentService>();
         services.AddScoped<IStaffingAssignmentService>(sp => sp.GetRequiredService<StaffingAssignmentService>());
+        services.AddScoped<StaffingSuggestionService>();
+        services.AddScoped<IStaffingSuggestionService>(sp => sp.GetRequiredService<StaffingSuggestionService>());
         services.AddScoped<ISkillService, SkillService>();
         services.AddScoped<IResourcePlanService, ResourcePlanService>();
         services.AddScoped<MyTodo.IMyTodoProvider, StaffingTodoProvider>();
