@@ -21,6 +21,7 @@ public static class CrmPermissionRegistration
         services.Decorate<IPipelineService, PermissionCheckingPipelineService>();
         services.Decorate<ICapturePlanService, PermissionCheckingCapturePlanService>();
         services.Decorate<IProposalService, PermissionCheckingProposalService>();
+        services.Decorate<IRequirementService, PermissionCheckingRequirementService>();
         return services;
     }
 }
@@ -528,5 +529,52 @@ public sealed class PermissionCheckingProposalService(IProposalService inner, Cr
         await using var db = await dbFactory.CreateAsync(ct);
         return await db.Set<Domain.Crm.ProposalSection>().AsNoTracking().Where(s => s.Id == sectionId).Select(s => (Guid?)s.OpportunityId).FirstOrDefaultAsync(ct)
             ?? throw WorkbenchNotFoundException.For("Proposal section", sectionId);
+    }
+}
+
+/// <summary>Whoever may see an opportunity reads its compliance matrix; whoever may edit it shreds a solicitation and changes the lines.</summary>
+public sealed class PermissionCheckingRequirementService(IRequirementService inner, CrmAccess access, IWorkbenchDbContextFactory dbFactory) : IRequirementService
+{
+    public async Task<RequirementsDto> GetAsync(Guid opportunityId, CancellationToken cancellationToken = default)
+    {
+        await access.RequireReadAsync(opportunityId, cancellationToken);
+        return await inner.GetAsync(opportunityId, cancellationToken);
+    }
+
+    public async Task<ShredResultDto> ShredAsync(Guid opportunityId, ShredRequest request, CancellationToken cancellationToken = default)
+    {
+        await access.RequireEditAsync(opportunityId, cancellationToken);
+        return await inner.ShredAsync(opportunityId, request, cancellationToken);
+    }
+
+    public async Task<RequirementDto> AddAsync(Guid opportunityId, SaveRequirementRequest request, CancellationToken cancellationToken = default)
+    {
+        await access.RequireEditAsync(opportunityId, cancellationToken);
+        return await inner.AddAsync(opportunityId, request, cancellationToken);
+    }
+
+    public async Task<RequirementDto> UpdateAsync(Guid requirementId, SaveRequirementRequest request, CancellationToken cancellationToken = default)
+    {
+        await access.RequireEditAsync(await OfAsync(requirementId, cancellationToken), cancellationToken);
+        return await inner.UpdateAsync(requirementId, request, cancellationToken);
+    }
+
+    public async Task DeleteAsync(Guid requirementId, CancellationToken cancellationToken = default)
+    {
+        await access.RequireEditAsync(await OfAsync(requirementId, cancellationToken), cancellationToken);
+        await inner.DeleteAsync(requirementId, cancellationToken);
+    }
+
+    public async Task<RequirementFileDto> ExportAsync(Guid opportunityId, CancellationToken cancellationToken = default)
+    {
+        await access.RequireReadAsync(opportunityId, cancellationToken);
+        return await inner.ExportAsync(opportunityId, cancellationToken);
+    }
+
+    private async Task<Guid> OfAsync(Guid requirementId, CancellationToken ct)
+    {
+        await using var db = await dbFactory.CreateAsync(ct);
+        return await db.Set<Domain.Crm.OpportunityRequirement>().AsNoTracking().Where(r => r.Id == requirementId).Select(r => (Guid?)r.OpportunityId).FirstOrDefaultAsync(ct)
+            ?? throw WorkbenchNotFoundException.For("Requirement", requirementId);
     }
 }

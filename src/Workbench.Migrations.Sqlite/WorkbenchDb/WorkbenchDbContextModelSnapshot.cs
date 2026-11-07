@@ -5853,6 +5853,63 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.ToTable("OpportunityPwinAssessment");
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Crm.OpportunityRequirement", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("ByAssistant")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OpportunityId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ProposalSectionKey")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasMaxLength(1200)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OpportunityId");
+
+                    b.ToTable("OpportunityRequirement");
+                });
+
             modelBuilder.Entity("Workbench.Domain.Crm.OpportunityStageChange", b =>
                 {
                     b.Property<Guid>("Id")
@@ -24469,6 +24526,15 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 });
 
             modelBuilder.Entity("Workbench.Domain.Crm.OpportunityPwinAssessment", b =>
+                {
+                    b.HasOne("Workbench.Domain.Crm.Opportunity", null)
+                        .WithMany()
+                        .HasForeignKey("OpportunityId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Crm.OpportunityRequirement", b =>
                 {
                     b.HasOne("Workbench.Domain.Crm.Opportunity", null)
                         .WithMany()

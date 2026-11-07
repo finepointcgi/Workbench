@@ -46,6 +46,20 @@ internal static class CrmEndpoints
         });
         o.MapPost("/proposal-sections/{sectionId:guid}/redraft", (Guid sectionId, IProposalService s, CancellationToken ct) => s.RedraftSectionAsync(sectionId, ct));
         o.MapPut("/proposal-sections/{sectionId:guid}", (Guid sectionId, SaveProposalSectionRequest r, IProposalService s, CancellationToken ct) => s.SaveSectionAsync(sectionId, r, ct));
+        o.MapGet("/{id:guid}/requirements", (Guid id, IRequirementService s, CancellationToken ct) => s.GetAsync(id, ct));
+        o.MapPost("/{id:guid}/requirements/shred", (Guid id, ShredRequest r, IRequirementService s, CancellationToken ct) => s.ShredAsync(id, r, ct));
+        o.MapPost("/{id:guid}/requirements", (Guid id, SaveRequirementRequest r, IRequirementService s, CancellationToken ct) => s.AddAsync(id, r, ct));
+        o.MapGet("/{id:guid}/requirements/export", async (Guid id, IRequirementService s, CancellationToken ct) =>
+        {
+            var file = await s.ExportAsync(id, ct);
+            return Results.File(file.Content, file.ContentType, file.FileName);
+        });
+        o.MapPut("/requirements/{requirementId:guid}", (Guid requirementId, SaveRequirementRequest r, IRequirementService s, CancellationToken ct) => s.UpdateAsync(requirementId, r, ct));
+        o.MapDelete("/requirements/{requirementId:guid}", async (Guid requirementId, IRequirementService s, CancellationToken ct) =>
+        {
+            await s.DeleteAsync(requirementId, ct);
+            return Results.NoContent();
+        });
         o.MapGet("/{id:guid}/capture-plan", (Guid id, ICapturePlanService s, CancellationToken ct) => s.GetAsync(id, ct));
         o.MapPost("/{id:guid}/capture-plan/items", (Guid id, SavePlanItemRequest r, ICapturePlanService s, CancellationToken ct) => s.AddItemAsync(id, r, ct));
         o.MapPost("/{id:guid}/milestones", (Guid id, SaveMilestoneRequest r, ICapturePlanService s, CancellationToken ct) => s.AddMilestoneAsync(id, r, ct));

@@ -1,0 +1,311 @@
+@* The compliance matrix: what the solicitation says the proposal must contain and how it is judged. Paste Sections L and M and
+   the work statement (or upload the PDF or Word file) and Workbench lists every "shall", "must" and "will be evaluated"
+   sentence, with the solicitation's own words. Each line gets a proposal section to answer it in and a status; the
+   dates it finds go on the Schedule tab. The proposal draft is written against the open lines. *@
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.JSInterop
+@inject IRequirementService Requirements
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error">@_error</MudAlert>
+}
+else if (_matrix is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Class="mb-3" Spacing="2">
+        <div>
+            <MudText Typo="Typo.h6" HtmlTag="h2">Requirements</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                A compliance matrix read from the solicitation: its own words, one line each. Say where the proposal answers each line and mark it addressed.
+            </MudText>
+        </div>
+        <MudSpacer />
+        @if (_matrix.Items.Count > 0)
+        {
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Outlined.Download" OnClick="ExportAsync" Disabled="_busy" data-testid="req-export">Export to CSV</MudButton>
+        }
+    </MudStack>
+
+    @if (_matrix.CanEdit)
+    {
+        <MudPaper Outlined="true" Class="pa-3 mb-3" data-testid="req-reader">
+            <MudText Typo="Typo.subtitle2" Class="mb-1">Read a solicitation</MudText>
+            <MudTextField T="string" @bind-Value="_pasted" Label="Paste the text of Sections L and M and the work statement" Lines="5" Variant="Variant.Outlined" MaxLength="400000"
+                          Immediate="true" Disabled="_busy" data-testid="req-text" />
+            <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2" Class="mt-2">
+                <MudFileUpload T="IBrowserFile" FilesChanged="OnFileAsync" Accept=".pdf,.docx,.txt,.md" Disabled="_busy" Class="mt-0">
+                    <CustomContent>
+                        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Outlined.UploadFile" OnClick="@context.OpenFilePickerAsync" Disabled="_busy" data-testid="req-upload">Choose a PDF or Word file</MudButton>
+                    </CustomContent>
+                    <SelectedTemplate />
+                </MudFileUpload>
+                @if (_file is not null)
+                {
+                    <MudChip T="string" Size="Size.Small" OnClose="() => _file = null" data-testid="req-file">@_file.Name</MudChip>
+                }
+                <MudSpacer />
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.AutoAwesome" OnClick="ShredAsync"
+                           Disabled="@(_busy || (string.IsNullOrWhiteSpace(_pasted) && _file is null))" data-testid="req-shred">Read it</MudButton>
+            </MudStack>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                PDFs need a text layer (scans can't be read). Reading an amendment later adds only the lines that are new.
+            </MudText>
+            @if (_busy)
+            {
+                <MudProgressLinear Indeterminate="true" Class="mt-2" />
+            }
+        </MudPaper>
+    }
+
+    @if (_result is { } r)
+    {
+        <MudAlert Severity="@(r.Added > 0 ? Severity.Success : Severity.Info)" Dense="true" Class="mb-3" data-testid="req-result">
+            @(r.Added == 0 ? "No new requirements." : $"Added {r.Added} requirement{(r.Added == 1 ? "" : "s")}.")
+            @if (r.Duplicates > 0)
+            {
+                <span> @r.Duplicates already in the matrix.</span>
+            }
+            @if (r.ByAssistant > 0)
+            {
+                <span> The assistant sorted @r.ByAssistant of them.</span>
+            }
+            @if (r.Dates.Any(d => d.Added))
+            {
+                <span> Added to the Schedule tab: @string.Join(", ", r.Dates.Where(d => d.Added).Select(d => $"{d.Name} {d.Date:MMM d, yyyy}")).</span>
+            }
+            @foreach (var note in r.Notes)
+            {
+                <div>@note</div>
+            }
+        </MudAlert>
+    }
+
+    @if (_matrix.Items.Count == 0)
+    {
+        <MudText Class="mud-text-secondary" data-testid="req-empty">
+            No requirements yet.@(_matrix.CanEdit ? " Paste the solicitation above and choose Read it." : "")
+        </MudText>
+    }
+    else
+    {
+        var counted = _matrix.Items.Where(i => i.Status != RequirementStatus.NotApplicable).ToList();
+        var done = counted.Count(i => i.Status == RequirementStatus.Addressed);
+        <div class="mb-2" data-testid="req-progress">
+            <MudText Typo="Typo.body2">@done of @counted.Count addressed</MudText>
+            <MudProgressLinear Value="@(counted.Count == 0 ? 0 : done * 100.0 / counted.Count)" Color="Color.Success" Size="Size.Small" aria-label="Requirements addressed" />
+        </div>
+
+        <MudChipSet T="string" SelectedValue="_filter" SelectedValueChanged="v => _filter = v ?? FilterAll" SelectionMode="SelectionMode.SingleSelection" CheckMark="false" Class="mb-2">
+            <MudChip T="string" Value="@FilterAll" Size="Size.Small">All (@_matrix.Items.Count)</MudChip>
+            <MudChip T="string" Value="@FilterOpen" Size="Size.Small">Open (@_matrix.Items.Count(i => i.Status == RequirementStatus.Open))</MudChip>
+            <MudChip T="string" Value="@FilterInstruction" Size="Size.Small">Instructions (@_matrix.Items.Count(i => i.Kind == RequirementKind.Instruction))</MudChip>
+            <MudChip T="string" Value="@FilterEvaluation" Size="Size.Small">Evaluation (@_matrix.Items.Count(i => i.Kind == RequirementKind.Evaluation))</MudChip>
+            <MudChip T="string" Value="@FilterWork" Size="Size.Small">Work (@_matrix.Items.Count(i => i.Kind == RequirementKind.Technical || i.Kind == RequirementKind.Administrative))</MudChip>
+        </MudChipSet>
+
+        <div style="overflow-x: auto">
+            <MudSimpleTable Dense="true" Hover="true" data-testid="req-table">
+                <thead>
+                    <tr><th>Requirement</th><th>Answered in</th><th>Status</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in Visible())
+                    {
+                        <tr data-testid="req-row" data-status="@item.Status">
+                            <td style="min-width: 300px; white-space: normal; vertical-align: top">
+                                <div>
+                                    @if (!string.IsNullOrEmpty(item.Reference))
+                                    {
+                                        <strong>@item.Reference</strong>
+                                    }
+                                    <span class="mud-text-secondary">&nbsp;·&nbsp;@RequirementLabels.Label(item.Kind)</span>
+                                </div>
+                                <div>@item.Text</div>
+                                <MudTextField T="string" Value="item.Notes" Variant="Variant.Text" Dense="true" Disabled="@(!_matrix.CanEdit)" MaxLength="2000" Placeholder="Notes: where it is answered, who owns it"
+                                              aria-label="Notes" Immediate="false" ValueChanged="v => SaveAsync(item, item with { Notes = v })" />
+                            </td>
+                            <td style="min-width: 170px; vertical-align: top">
+                                <MudSelect T="string" Dense="true" Variant="Variant.Text" Value="@(item.ProposalSectionKey ?? "")" Disabled="@(!_matrix.CanEdit)"
+                                           ValueChanged="v => SaveAsync(item, item with { ProposalSectionKey = string.IsNullOrEmpty(v) ? null : v })" aria-label="Proposal section">
+                                    <MudSelectItem T="string" Value="@("")">Not set</MudSelectItem>
+                                    @foreach (var (key, title) in RequirementLabels.ProposalSections)
+                                    {
+                                        <MudSelectItem T="string" Value="@key">@title</MudSelectItem>
+                                    }
+                                </MudSelect>
+                            </td>
+                            <td style="min-width: 170px; white-space: nowrap; vertical-align: top">
+                                <div class="d-flex align-center">
+                                    <MudSelect T="RequirementStatus" Dense="true" Variant="Variant.Text" Value="item.Status" Disabled="@(!_matrix.CanEdit)"
+                                               ValueChanged="v => SaveAsync(item, item with { Status = v })" aria-label="Status" data-testid="req-status">
+                                        @foreach (var status in Enum.GetValues<RequirementStatus>())
+                                        {
+                                            <MudSelectItem T="RequirementStatus" Value="status">@RequirementLabels.Label(status)</MudSelectItem>
+                                        }
+                                    </MudSelect>
+                                    @if (_matrix.CanEdit)
+                                    {
+                                        <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small" aria-label="Remove requirement" OnClick="() => DeleteAsync(item)" />
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </div>
+    }
+
+    @if (_matrix.CanEdit)
+    {
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mt-3">
+            <MudTextField T="string" @bind-Value="_newText" Label="Add a requirement yourself" Variant="Variant.Outlined" Dense="true" MaxLength="1200" Immediate="true" Style="flex: 1" data-testid="req-new-text" />
+            <MudButton Variant="Variant.Outlined" OnClick="AddAsync" Disabled="@(string.IsNullOrWhiteSpace(_newText) || _busy)" data-testid="req-add">Add</MudButton>
+        </MudStack>
+    }
+}
+
+@code {
+    private const string FilterAll = "all";
+    private const string FilterOpen = "open";
+    private const string FilterInstruction = "instruction";
+    private const string FilterEvaluation = "evaluation";
+    private const string FilterWork = "work";
+    private const long MaxFileBytes = 25 * 1024 * 1024;
+
+    [Parameter, EditorRequired] public OpportunityDto Opportunity { get; set; } = default!;
+
+    private RequirementsDto? _matrix;
+    private ShredResultDto? _result;
+    private string? _pasted;
+    private string? _newText;
+    private string _filter = FilterAll;
+    private IBrowserFile? _file;
+    private bool _busy;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _matrix = await Requirements.GetAsync(Opportunity.Id);
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private IEnumerable<RequirementDto> Visible() => _filter switch
+    {
+        FilterOpen => _matrix!.Items.Where(i => i.Status == RequirementStatus.Open),
+        FilterInstruction => _matrix!.Items.Where(i => i.Kind == RequirementKind.Instruction),
+        FilterEvaluation => _matrix!.Items.Where(i => i.Kind == RequirementKind.Evaluation),
+        FilterWork => _matrix!.Items.Where(i => i.Kind is RequirementKind.Technical or RequirementKind.Administrative),
+        _ => _matrix!.Items,
+    };
+
+    private void OnFileAsync(IBrowserFile? file) => _file = file;
+
+    private async Task ShredAsync()
+    {
+        _busy = true;
+        try
+        {
+            ShredRequest request;
+            if (_file is { } file)
+            {
+                await using var stream = file.OpenReadStream(MaxFileBytes);
+                using var buffer = new MemoryStream();
+                await stream.CopyToAsync(buffer);
+                request = new ShredRequest(null, file.Name, buffer.ToArray());
+            }
+            else
+            {
+                request = new ShredRequest(_pasted);
+            }
+
+            _result = await Requirements.ShredAsync(Opportunity.Id, request);
+            _matrix = _result.Requirements;
+            (_pasted, _file) = (null, null);
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex) || ex is IOException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task SaveAsync(RequirementDto before, RequirementDto after)
+    {
+        try
+        {
+            var saved = await Requirements.UpdateAsync(before.Id, new SaveRequirementRequest(after.Text, after.Kind, after.Status, after.Reference, after.ProposalSectionKey, after.Notes));
+            _matrix = _matrix! with { Items = _matrix.Items.Select(i => i.Id == saved.Id ? saved : i).ToList() };
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task AddAsync()
+    {
+        _busy = true;
+        try
+        {
+            var added = await Requirements.AddAsync(Opportunity.Id, new SaveRequirementRequest(_newText!, RequirementKind.Technical, RequirementStatus.Open));
+            _matrix = _matrix! with { Items = [.. _matrix.Items, added] };
+            _newText = null;
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DeleteAsync(RequirementDto item)
+    {
+        try
+        {
+            await Requirements.DeleteAsync(item.Id);
+            _matrix = _matrix! with { Items = _matrix.Items.Where(i => i.Id != item.Id).ToList() };
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task ExportAsync()
+    {
+        _busy = true;
+        try
+        {
+            var file = await Requirements.ExportAsync(Opportunity.Id);
+            await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/Workbench.Ui/evm.js");
+            await module.InvokeVoidAsync("downloadBase64", file.FileName, file.ContentType, Convert.ToBase64String(file.Content));
+        }
+        catch (Exception ex) when (CrmFormat.IsExpected(ex))
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

@@ -202,6 +202,34 @@ public sealed class HttpProposalService(HttpClient http) : IProposalService
     }
 }
 
+public sealed class HttpRequirementService(HttpClient http) : IRequirementService
+{
+    private const string Base = "api/v1/crm/opportunities";
+
+    public async Task<RequirementsDto> GetAsync(Guid opportunityId, CancellationToken cancellationToken = default) =>
+        await (await http.GetAsync($"{Base}/{opportunityId}/requirements", cancellationToken)).ReadAsync<RequirementsDto>(cancellationToken);
+
+    public async Task<ShredResultDto> ShredAsync(Guid opportunityId, ShredRequest request, CancellationToken cancellationToken = default) =>
+        await (await http.PostAsJsonAsync($"{Base}/{opportunityId}/requirements/shred", request, cancellationToken)).ReadAsync<ShredResultDto>(cancellationToken);
+
+    public async Task<RequirementDto> AddAsync(Guid opportunityId, SaveRequirementRequest request, CancellationToken cancellationToken = default) =>
+        await (await http.PostAsJsonAsync($"{Base}/{opportunityId}/requirements", request, cancellationToken)).ReadAsync<RequirementDto>(cancellationToken);
+
+    public async Task<RequirementDto> UpdateAsync(Guid requirementId, SaveRequirementRequest request, CancellationToken cancellationToken = default) =>
+        await (await http.PutAsJsonAsync($"{Base}/requirements/{requirementId}", request, cancellationToken)).ReadAsync<RequirementDto>(cancellationToken);
+
+    public async Task DeleteAsync(Guid requirementId, CancellationToken cancellationToken = default) =>
+        await (await http.DeleteAsync($"{Base}/requirements/{requirementId}", cancellationToken)).EnsureOkAsync(cancellationToken);
+
+    public async Task<RequirementFileDto> ExportAsync(Guid opportunityId, CancellationToken cancellationToken = default)
+    {
+        var response = await http.GetAsync($"{Base}/{opportunityId}/requirements/export", cancellationToken);
+        await response.EnsureOkAsync(cancellationToken);
+        var name = response.Content.Headers.ContentDisposition?.FileNameStar ?? response.Content.Headers.ContentDisposition?.FileName?.Trim('"') ?? "compliance-matrix.csv";
+        return new RequirementFileDto(name, response.Content.Headers.ContentType?.MediaType ?? "text/csv", await response.Content.ReadAsByteArrayAsync(cancellationToken));
+    }
+}
+
 public sealed class HttpCapturePlanService(HttpClient http) : ICapturePlanService
 {
     private const string Base = "api/v1/crm/opportunities";
@@ -248,6 +276,7 @@ public static class CrmClientRegistration
         services.AddHttpClient<IPipelineService, HttpPipelineService>(c => c.BaseAddress = serverBaseAddress);
         services.AddHttpClient<ICapturePlanService, HttpCapturePlanService>(c => c.BaseAddress = serverBaseAddress);
         services.AddHttpClient<IProposalService, HttpProposalService>(c => c.BaseAddress = serverBaseAddress);
+        services.AddHttpClient<IRequirementService, HttpRequirementService>(c => c.BaseAddress = serverBaseAddress);
         return services;
     }
 }
