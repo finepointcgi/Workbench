@@ -168,6 +168,12 @@ public sealed class HttpProjectStaffingService(HttpClient http) : IProjectStaffi
             .ReadAsync<List<StaffingCandidateDto>>(cancellationToken);
 }
 
+public sealed class HttpStaffingSuggestionService(HttpClient http) : IStaffingSuggestionService
+{
+    public async Task<StaffingSuggestionsDto> SuggestAsync(SuggestStaffRequest request, CancellationToken cancellationToken = default) =>
+        await (await http.PostAsJsonAsync("api/v1/resourcing/staffing-suggestions", request, cancellationToken)).ReadAsync<StaffingSuggestionsDto>(cancellationToken);
+}
+
 public sealed class HttpStaffingAssignmentService(HttpClient http) : IStaffingAssignmentService
 {
     private const string Root = "api/v1/resourcing";
@@ -233,6 +239,7 @@ public static class PerDiemResourcingClientRegistration
         services.AddHttpClient<IResourcePlanningService, HttpResourcePlanningService>(client => client.BaseAddress = serverBaseAddress);
         services.AddHttpClient<IAllocationForecastService, HttpAllocationForecastService>(client => client.BaseAddress = serverBaseAddress);
         services.AddHttpClient<IProjectStaffingService, HttpProjectStaffingService>(client => client.BaseAddress = serverBaseAddress);
+        services.AddHttpClient<IStaffingSuggestionService, HttpStaffingSuggestionService>(client => client.BaseAddress = serverBaseAddress);
         services.AddHttpClient<IStaffingAssignmentService, HttpStaffingAssignmentService>(client => client.BaseAddress = serverBaseAddress);
         services.AddHttpClient<ISkillService, HttpSkillService>(client => client.BaseAddress = serverBaseAddress);
         services.AddHttpClient<IResourcePlanService, HttpResourcePlanService>(client => client.BaseAddress = serverBaseAddress);

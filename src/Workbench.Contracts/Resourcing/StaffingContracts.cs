@@ -170,3 +170,39 @@ public interface IProjectStaffingService
     /// <summary>Active people, those who qualify for <paramref name="laborCategoryId"/> first.</summary>
     Task<IReadOnlyList<StaffingCandidateDto>> ListCandidatesAsync(Guid projectId, Guid? laborCategoryId, CancellationToken cancellationToken = default);
 }
+
+/// <summary>Who to suggest for a task: the project, the task (or the whole project), and what is known about the work so far.</summary>
+public sealed record SuggestStaffRequest(
+    Guid ProjectId,
+    Guid? WbsElementId = null,
+    decimal? Hours = null,
+    DateOnly? From = null,
+    DateOnly? To = null,
+    Guid? LaborCategoryId = null);
+
+/// <summary>One suggested person: the rules' score (0–100), why in a sentence, and anything to watch.</summary>
+public sealed record StaffingSuggestionDto(
+    Guid EmployeeId,
+    string Name,
+    int Score,
+    string Why,
+    IReadOnlyList<string> Concerns,
+    decimal FreeHours,
+    bool ByAssistant);
+
+/// <summary>The best few people for the work, and the window and hours they were weighed against.</summary>
+public sealed record StaffingSuggestionsDto(
+    IReadOnlyList<StaffingSuggestionDto> Suggestions,
+    DateOnly From,
+    DateOnly To,
+    decimal? Hours,
+    bool AssistantUsed);
+
+/// <summary>
+/// Suggests who to put on a task from skills, free hours and labor category. Advice only: it changes nothing, and the
+/// assign dialog's own checks (overbooking, budget, qualification) still apply to whoever is chosen.
+/// </summary>
+public interface IStaffingSuggestionService
+{
+    Task<StaffingSuggestionsDto> SuggestAsync(SuggestStaffRequest request, CancellationToken cancellationToken = default);
+}
