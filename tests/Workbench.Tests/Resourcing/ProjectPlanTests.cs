@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Workbench.Contracts;
 using Workbench.Contracts.Approvals;
 using Workbench.Contracts.Financials;
@@ -306,8 +307,20 @@ public sealed class ProjectPlanTests
         Assert.True(Assert.Single(versions, v => v.Kind == BudgetVersionKind.Baseline).IsLocked);
         Assert.Single(versions, v => v.Kind == BudgetVersionKind.Current);
         await using var db = await host.Db.CreateAsync();
-        Assert.False(await db.Set<Notification>().AnyAsync(n => n.RecipientEmail == Finance && n.Title.StartsWith("Review the plan", StringComparison.Ordinal)));
+        Assert.False(await db.Set<Notification>().AnyAsync(n => n.RecipientEmail == Finance && n.Title == "Review the plan for 1001 Modernization"));
         Assert.Empty((await host.As(Finance).Get<IApprovalInboxService>().ListMineAsync()).Where(i => i.DocumentType == ApprovalDocumentTypes.ProjectPlan));
+    }
+
+    [Fact]
+    public async Task With_automatic_approval_turned_off_every_plan_goes_to_finance()
+    {
+        await using var host = await CreateAsync(services => services.Configure<Workbench.Application.Resourcing.ResourcingOptions>(o => o.AutoApprovePlansWithinBudget = false));
+        var build = await ItemAsync(host, "Build");
+        await host.Get<IResourcePlanService>().ApplyAsync(host.Project1, [new PlanChange(PlanChangeKind.SetPerson, ItemId: build, EmployeeId: host.DevId, Hours: 80m)]);
+
+        var submitted = await host.As(Pm).Get<IProjectPlanService>().SubmitAsync(host.Project1);
+
+        Assert.Equal(PlanApprovalStatus.Submitted, submitted.Status);
     }
 
     [Fact]

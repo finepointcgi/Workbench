@@ -28,7 +28,8 @@ public sealed class ProjectPlanService(
     IBudgetService budgets,
     AuditRecorder audit,
     TimeProvider clock,
-    INotificationPublisher? notifications = null) : IProjectPlanService
+    INotificationPublisher? notifications = null,
+    Microsoft.Extensions.Options.IOptions<Resourcing.ResourcingOptions>? options = null) : IProjectPlanService
 {
     public const string NotificationKind = "project-plan";
 
@@ -123,7 +124,7 @@ public sealed class ProjectPlanService(
         audit.Record(db, nameof(ProjectPlan), plan.Id, "Submitted", new { Status = before }, new { plan.Status, Note = plan.SubmitNote });
         await db.SaveChangesAsync(cancellationToken);
 
-        var withinBudget = await WithinBudgetAsync(db, project, plan, lines, cancellationToken);
+        var withinBudget = (options?.Value.AutoApprovePlansWithinBudget ?? true) && await WithinBudgetAsync(db, project, plan, lines, cancellationToken);
         if (notifications is not null && !withinBudget)
         {
             var finance = await ApproverRoles.MembersAsync(db, ApprovalOrgRole.Finance.ToString(), cancellationToken);
