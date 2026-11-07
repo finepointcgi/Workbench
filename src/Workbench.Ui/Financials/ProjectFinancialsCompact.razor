@@ -12,7 +12,7 @@ else
     <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
         <MudText Typo="Typo.h6" HtmlTag="h2">@_summary.ProjectCode · @_summary.ProjectName</MudText>
         <MudText Typo="Typo.caption" Class="mud-text-secondary">
-            @(_summary.BudgetVersionName is { } v ? $"Budget: {v}" : "No budget") · as of @_summary.AsOf.ToString("yyyy-MM-dd")
+            @(_summary.BudgetVersionName is { } v ? $"Budget: {v}" : "No budget") · as of @_summary.AsOf.ToString("yyyy-MM-dd") (UTC)
         </MudText>
         <MudSpacer />
         <MudButton Href="@($"projects/{ProjectId}/budgets")" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.EditNote">Budgets</MudButton>

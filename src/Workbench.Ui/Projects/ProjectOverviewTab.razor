@@ -59,7 +59,7 @@
         </MudItem>
     </MudGrid>
     <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-4">
-        Figures as of @ProjectsFormat.Date(Hub.AsOf). Hover a number for its accounting term.
+        Figures as of @ProjectsFormat.Date(Hub.AsOf) (UTC date). Hover a number for its accounting term.
         @if (Hub.Tabs.Financials)
         {
             <MudLink Href="@($"projects/{Hub.Project.Id}/financials")" Typo="Typo.caption">Full financials</MudLink>
