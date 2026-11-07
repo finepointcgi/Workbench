@@ -265,9 +265,10 @@ public sealed class OpportunityService(
             db.Set<D.OpportunityTeammate>().RemoveRange(await db.Set<D.OpportunityTeammate>().Where(t => t.OpportunityId == o.Id).ToListAsync(ct));
             foreach (var t in teammates)
             {
+                var (partnerId, partnerName) = await ResolveAccountAsync(db, t.AccountId, t.Name, "teammate", ct);
                 db.Set<D.OpportunityTeammate>().Add(new D.OpportunityTeammate
                 {
-                    OpportunityId = o.Id, AccountId = t.AccountId, Name = await NameOfAsync(db, t.AccountId, t.Name, "teammate", ct),
+                    OpportunityId = o.Id, AccountId = partnerId, Name = partnerName,
                     Role = t.Role.ToDomain(), WorksharePercent = Math.Round(t.WorksharePercent, 2), Notes = CrmMapping.Clean(t.Notes, 500, "Teammate notes"),
                 });
             }
@@ -278,13 +279,31 @@ public sealed class OpportunityService(
             db.Set<D.OpportunityCompetitor>().RemoveRange(await db.Set<D.OpportunityCompetitor>().Where(c => c.OpportunityId == o.Id).ToListAsync(ct));
             foreach (var c in competitors)
             {
+                var (rivalId, rivalName) = await ResolveAccountAsync(db, c.AccountId, c.Name, "competitor", ct);
                 db.Set<D.OpportunityCompetitor>().Add(new D.OpportunityCompetitor
                 {
-                    OpportunityId = o.Id, AccountId = c.AccountId, Name = await NameOfAsync(db, c.AccountId, c.Name, "competitor", ct),
+                    OpportunityId = o.Id, AccountId = rivalId, Name = rivalName,
                     IsIncumbent = c.IsIncumbent, Notes = CrmMapping.Clean(c.Notes, 1000, "Competitor notes"),
                 });
             }
         }
+    }
+
+    /// <summary>
+    /// A teammate or competitor typed by name links to the account of that name when exactly one account matches
+    /// (ignoring case and surrounding spaces); otherwise the name stays as typed.
+    /// </summary>
+    private static async Task<(Guid? AccountId, string Name)> ResolveAccountAsync(IWorkbenchDbContext db, Guid? accountId, string? name, string what, CancellationToken ct)
+    {
+        var resolved = await NameOfAsync(db, accountId, name, what, ct);
+        if (accountId is not null)
+        {
+            return (accountId, resolved);
+        }
+
+        var key = resolved.Trim().ToLowerInvariant();
+        var matches = await db.Set<D.CrmAccount>().AsNoTracking().Where(a => a.Name.ToLower() == key).Select(a => new { a.Id, a.Name }).Take(2).ToListAsync(ct);
+        return matches.Count == 1 ? (matches[0].Id, matches[0].Name) : (null, resolved);
     }
 
     private static async Task<string> NameOfAsync(IWorkbenchDbContext db, Guid? accountId, string? name, string what, CancellationToken ct)

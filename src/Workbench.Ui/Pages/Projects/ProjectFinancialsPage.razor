@@ -71,7 +71,7 @@ else
             }
         </MudSelect>
         <MudText Typo="Typo.caption" Class="mud-text-secondary">
-            @(_summary.BudgetVersionName is { } name ? $"Showing {name}" : "No budget") · as of @_summary.AsOf.ToString("yyyy-MM-dd")
+            @(_summary.BudgetVersionName is { } name ? $"Showing {name}" : "No budget") · as of @_summary.AsOf.ToString("yyyy-MM-dd") (UTC)
             @(_summary.ContractNumber is { } c ? $" · {c} ({_summary.ContractType})" : "")
         </MudText>
     </MudStack>

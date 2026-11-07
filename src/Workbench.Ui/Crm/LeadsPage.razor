@@ -97,7 +97,7 @@ else
                         @if (_canReview)
                         {
                             <MudTd>
-                                <MudStack Row="true" Spacing="1">
+                                <MudStack Row="false" Spacing="1">
                                     <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="() => AcceptAsync(context)" aria-label="@($"Add {context.Title} to the pipeline")" data-testid="lead-accept">Pursue</MudButton>
                                     <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => DismissAsync(context)" aria-label="@($"Dismiss {context.Title}")">Dismiss</MudButton>
                                 </MudStack>

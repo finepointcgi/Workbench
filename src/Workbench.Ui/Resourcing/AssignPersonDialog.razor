@@ -17,6 +17,14 @@
                     <div><SkillChips Skills="c.Skills" Max="5" /></div>
                 </ItemTemplate>
             </MudAutocomplete>
+            @if (_person is { StandardHoursPerWeek: > 0 } chosen)
+            {
+                var free = chosen.StandardHoursPerWeek - chosen.BookedHoursPerWeek;
+                <MudText Typo="Typo.caption" Color="@(free <= 0 ? Color.Warning : Color.Default)" Class="@(free <= 0 ? null : "mud-text-secondary")" data-testid="assign-load">
+                    @chosen.Name is booked @ResourcingFormat.Hours(chosen.BookedHoursPerWeek) of @ResourcingFormat.Hours(chosen.StandardHoursPerWeek) h a week on other work:
+                    @(free <= 0 ? "no free hours, so anything you add is overbooking." : $"about {ResourcingFormat.Hours(free)} h a week free.")
+                </MudText>
+            }
             <MudSelect T="Guid?" Label="Task" Value="_wbsId" ValueChanged="OnTaskChangedAsync" data-testid="assign-task"
                        HelperText="What they'll work on and charge their time to.">
                 <MudSelectItem T="Guid?" Value="null">Whole project</MudSelectItem>
