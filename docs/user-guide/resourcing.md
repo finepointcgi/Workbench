@@ -22,5 +22,13 @@ less leave and holidays.
 hours over the working weeks. Assignments made on a project's [Budget & staffing tab](projects.md#budget-staffing) show
 here too, and the other way around.
 
+**Suggest who** is in the assign dialog, under the task. Pick the task (and, if you know them, the hours and dates), then
+choose **Suggest who**. Workbench shows the best three people with a sentence on why: free hours in those dates, skills
+the task's name mentions (a task called "SQL migration" favors people with the SQL skill), and the labor category. It
+leaves out people who are fully booked in the window or already on the task. If the administrator has turned on the
+[assistant](../admin-guide/assistant.md), it picks and explains from the top six; otherwise the rules alone decide. It is
+advice only: **Choose** fills in the person, and the overbooking, budget and labor-category checks still run before you
+save. Resource managers, administrators and the project's manager can ask.
+
 Thresholds (what counts as full, how much non-billable time to allow, the staffing tolerance) are set by your
 administrator: see [Configuration](../operations/configuration.md).

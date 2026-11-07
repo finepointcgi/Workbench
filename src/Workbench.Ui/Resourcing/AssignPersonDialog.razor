@@ -3,6 +3,7 @@
    booked past their hours on other work. Labor category and notes are under Details. Returns a SaveAssignmentRequest. *@
 @inject IStaffingAssignmentService Assignments
 @inject IProjectStaffingService Staffing
+@inject IStaffingSuggestionService Suggestions
 
 <MudDialog>
     <DialogContent>
@@ -24,6 +25,51 @@
                     <MudSelectItem T="Guid?" Value="w.Id">@w.Code · @w.Name</MudSelectItem>
                 }
             </MudSelect>
+            @if (Existing is null)
+            {
+                <div data-testid="assign-suggest">
+                    <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.AutoAwesome" OnClick="SuggestAsync" Disabled="_suggesting"
+                               data-testid="assign-suggest-button">@(_suggestions is null ? "Suggest who" : "Suggest again")</MudButton>
+                    @if (_suggesting)
+                    {
+                        <MudProgressLinear Indeterminate="true" Size="Size.Small" Class="mt-1" />
+                    }
+                    else if (_suggestionError is not null)
+                    {
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@_suggestionError</MudText>
+                    }
+                    else if (_suggestions is { } found)
+                    {
+                        @if (found.Suggestions.Count == 0)
+                        {
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary" data-testid="assign-suggest-none">
+                                Nobody has free hours between @found.From.ToString("MMM d") and @found.To.ToString("MMM d, yyyy"). Try other dates.
+                            </MudText>
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                                Best fit for @found.From.ToString("MMM d") to @found.To.ToString("MMM d, yyyy")@(found.AssistantUsed ? ", picked by the assistant" : "").
+                                Advice only; the checks below still apply.
+                            </MudText>
+                            @foreach (var (suggestion, index) in found.Suggestions.Select((x, i) => (x, i)))
+                            {
+                                <MudPaper Outlined="true" Class="pa-2 mt-1 d-flex align-center gap-2" data-testid="assign-suggestion">
+                                    <div style="flex: 1; min-width: 0">
+                                        <MudText Typo="Typo.body2"><b>@suggestion.Name</b>@(index == 0 ? " · best fit" : "")</MudText>
+                                        <MudText Typo="Typo.caption">@suggestion.Why</MudText>
+                                        @foreach (var concern in suggestion.Concerns)
+                                        {
+                                            <MudText Typo="Typo.caption" Color="Color.Warning">@concern</MudText>
+                                        }
+                                    </div>
+                                    <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="() => ChooseAsync(suggestion)" data-testid="assign-suggestion-choose">Choose</MudButton>
+                                </MudPaper>
+                            }
+                        }
+                    }
+                </div>
+            }
             <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" AlignItems="AlignItems.Start">
                 <MudNumericField T="decimal?" Label="Hours" Value="_hours" ValueChanged="OnHoursChangedAsync" Min="0" Max="99999" Style="max-width: 140px"
                                  HelperText="In total" data-testid="assign-hours" Immediate="true" DebounceInterval="400" />
@@ -113,6 +159,9 @@
     private AssignmentPreviewDto? _preview;
     private string? _error;
     private int _version;
+    private StaffingSuggestionsDto? _suggestions;
+    private string? _suggestionError;
+    private bool _suggesting;
 
     private IEnumerable<WbsElementDto> Tasks => Wbs.Where(w => w.IsOpen || w.Id == _wbsId).OrderBy(w => w.Code, StringComparer.Ordinal);
 
@@ -154,6 +203,32 @@
             ? _candidates.AsEnumerable()
             : _candidates.Where(c => c.Name.Contains(text.Trim(), StringComparison.OrdinalIgnoreCase)
                 || (c.Skills ?? []).Any(s => s.Name.Contains(text.Trim(), StringComparison.OrdinalIgnoreCase))));
+
+    private async Task SuggestAsync()
+    {
+        (_suggesting, _suggestionError) = (true, null);
+        try
+        {
+            _suggestions = await Suggestions.SuggestAsync(new SuggestStaffRequest(ProjectId, _wbsId, _hours is > 0 ? _hours : null,
+                _datesChosen && _from is { } f ? DateOnly.FromDateTime(f) : null, _datesChosen && _to is { } t ? DateOnly.FromDateTime(t) : null, _categoryId));
+        }
+        catch (Exception ex) when (ResourcingFormat.IsExpected(ex))
+        {
+            (_suggestions, _suggestionError) = (null, ex.Message);
+        }
+        finally
+        {
+            _suggesting = false;
+        }
+    }
+
+    private async Task ChooseAsync(StaffingSuggestionDto suggestion)
+    {
+        if (_candidates.FirstOrDefault(c => c.EmployeeId == suggestion.EmployeeId) is { } person)
+        {
+            await OnPersonChangedAsync(person);
+        }
+    }
 
     private async Task OnPersonChangedAsync(StaffingCandidateDto? person)
     {

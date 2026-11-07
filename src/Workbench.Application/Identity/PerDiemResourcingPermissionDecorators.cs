@@ -28,6 +28,7 @@ public static class PerDiemResourcingPermissionRegistration
         services.Decorate<IResourcePlanningService, PermissionCheckingResourcePlanningService>();
         services.Decorate<IAllocationForecastService, PermissionCheckingAllocationForecastService>();
         services.Decorate<IProjectStaffingService, PermissionCheckingProjectStaffingService>();
+        services.Decorate<IStaffingSuggestionService, PermissionCheckingStaffingSuggestionService>();
         services.Decorate<IStaffingAssignmentService, PermissionCheckingStaffingAssignmentService>();
         services.Decorate<IResourcePlanService, PermissionCheckingResourcePlanService>();
         return services;
@@ -437,4 +438,15 @@ public sealed class PermissionCheckingResourcePlanService(IResourcePlanService i
             BudgetAmount = cost ? c.BudgetAmount : null,
         }).ToList(),
     };
+}
+
+/// <summary>Suggestions are for the people who assign: resource managers, administrators and the project's manager.</summary>
+public sealed class PermissionCheckingStaffingSuggestionService(IStaffingSuggestionService inner, ResourcingAccess rules) : IStaffingSuggestionService
+{
+    public async Task<StaffingSuggestionsDto> SuggestAsync(SuggestStaffRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        await rules.RequireManageProjectAsync(request.ProjectId, cancellationToken);
+        return await inner.SuggestAsync(request, cancellationToken);
+    }
 }
