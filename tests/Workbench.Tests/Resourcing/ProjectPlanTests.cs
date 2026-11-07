@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Workbench.Contracts;
 using Workbench.Contracts.Approvals;
 using Workbench.Contracts.Financials;
@@ -24,6 +25,10 @@ namespace Workbench.Tests.Resourcing;
 public sealed class ProjectPlanTests
 {
     private static readonly DateOnly Oct19 = new(2026, 10, 19);
+
+    /// <summary>Sets the project's ceiling below any plan, so a submitted plan goes to Finance instead of approving itself.</summary>
+    internal static Task OverBudgetAsync(ResourcingHost host, Guid projectId) =>
+        host.As(Finance).Get<IProjectPlanService>().SaveTermsAsync(projectId, new SaveProjectTermsRequest(Ceiling: 100m, Funded: 50m));
 
     // ---- Finance to PM ----
 
@@ -289,6 +294,71 @@ public sealed class ProjectPlanTests
     // ---- Submit, approve, return ----
 
     [Fact]
+    public async Task A_first_plan_within_the_ceiling_approves_itself_and_opens_the_project_without_finance()
+    {
+        await using var host = await CreateAsync();
+        var build = await ItemAsync(host, "Build");
+        await host.Get<IResourcePlanService>().ApplyAsync(host.Project1, [new PlanChange(PlanChangeKind.SetPerson, ItemId: build, EmployeeId: host.DevId, Hours: 80m)]);
+
+        var submitted = await host.As(Pm).Get<IProjectPlanService>().SubmitAsync(host.Project1, "Ready");
+
+        Assert.Equal((PlanApprovalStatus.Approved, 1, "Workbench"), (submitted.Status, submitted.Approvals, submitted.ReviewedBy));
+        var versions = await host.Get<IBudgetService>().ListVersionsAsync(host.Project1);
+        Assert.True(Assert.Single(versions, v => v.Kind == BudgetVersionKind.Baseline).IsLocked);
+        Assert.Single(versions, v => v.Kind == BudgetVersionKind.Current);
+        await using var db = await host.Db.CreateAsync();
+        Assert.False(await db.Set<Notification>().AnyAsync(n => n.RecipientEmail == Finance && n.Title == "Review the plan for 1001 Modernization"));
+        Assert.Empty((await host.As(Finance).Get<IApprovalInboxService>().ListMineAsync()).Where(i => i.DocumentType == ApprovalDocumentTypes.ProjectPlan));
+    }
+
+    [Fact]
+    public async Task With_automatic_approval_turned_off_every_plan_goes_to_finance()
+    {
+        await using var host = await CreateAsync(services => services.Configure<Workbench.Application.Resourcing.ResourcingOptions>(o => o.AutoApprovePlansWithinBudget = false));
+        var build = await ItemAsync(host, "Build");
+        await host.Get<IResourcePlanService>().ApplyAsync(host.Project1, [new PlanChange(PlanChangeKind.SetPerson, ItemId: build, EmployeeId: host.DevId, Hours: 80m)]);
+
+        var submitted = await host.As(Pm).Get<IProjectPlanService>().SubmitAsync(host.Project1);
+
+        Assert.Equal(PlanApprovalStatus.Submitted, submitted.Status);
+    }
+
+    [Fact]
+    public async Task A_first_plan_over_the_ceiling_still_goes_to_finance()
+    {
+        await using var host = await CreateAsync();
+        var build = await ItemAsync(host, "Build");
+        await host.Get<IResourcePlanService>().ApplyAsync(host.Project1, [new PlanChange(PlanChangeKind.SetPerson, ItemId: build, EmployeeId: host.DevId, Hours: 80m)]);
+        await OverBudgetAsync(host, host.Project1);
+
+        var submitted = await host.As(Pm).Get<IProjectPlanService>().SubmitAsync(host.Project1);
+
+        Assert.Equal(PlanApprovalStatus.Submitted, submitted.Status);
+    }
+
+    [Fact]
+    public async Task Changes_to_an_approved_plan_approve_themselves_while_they_stay_within_its_hours_and_cost_and_go_to_finance_when_they_do_not()
+    {
+        await using var host = await CreateAsync();
+        var build = await ItemAsync(host, "Build");
+        var resources = host.Get<IResourcePlanService>();
+        await resources.ApplyAsync(host.Project1, [new PlanChange(PlanChangeKind.SetPerson, ItemId: build, EmployeeId: host.DevId, Hours: 80m)]);
+        await host.As(Pm).Get<IProjectPlanService>().SubmitAsync(host.Project1);
+        var assignment = (await host.As(Pm).Get<IResourcePlanService>().GetAsync(host.Project1)).Task(build)!.People.Single().AssignmentId;
+
+        // Fewer hours: still inside the approved budget.
+        await resources.ApplyAsync(host.Project1, [new PlanChange(PlanChangeKind.SetPerson, AssignmentId: assignment, Hours: 60m)]);
+        var smaller = await host.As(Pm).Get<IProjectPlanService>().SubmitAsync(host.Project1);
+        Assert.Equal((PlanApprovalStatus.Approved, 2, "Workbench"), (smaller.Status, smaller.Approvals, smaller.ReviewedBy));
+        Assert.Equal(60m, Assert.Single(await host.Get<IBudgetService>().ListVersionsAsync(host.Project1), v => v.Kind == BudgetVersionKind.Current).TotalHours);
+
+        // More hours than the approved budget holds: Finance decides.
+        await resources.ApplyAsync(host.Project1, [new PlanChange(PlanChangeKind.SetPerson, AssignmentId: assignment, Hours: 90m)]);
+        var bigger = await host.As(Pm).Get<IProjectPlanService>().SubmitAsync(host.Project1);
+        Assert.Equal(PlanApprovalStatus.Submitted, bigger.Status);
+    }
+
+    [Fact]
     public async Task The_pm_submits_finance_returns_or_approves_and_the_approved_plan_is_the_baseline_budget()
     {
         await using var host = await CreateAsync();
@@ -299,6 +369,8 @@ public sealed class ProjectPlanTests
         Assert.Contains("Assign people", empty.Message, StringComparison.Ordinal);
 
         await host.Get<IResourcePlanService>().ApplyAsync(host.Project1, [new PlanChange(PlanChangeKind.SetPerson, ItemId: build, EmployeeId: host.DevId, Hours: 80m)]);
+        await OverBudgetAsync(host, host.Project1);
+        host.As(Pm);
         var submitted = await pm.SubmitAsync(host.Project1, "Ready for review");
         // Who submitted and reviewed reads as their name, not their sign-in email.
         Assert.Equal((PlanApprovalStatus.Submitted, Pm, "Pat", false, false), (submitted.Status, submitted.SubmittedBy, submitted.SubmittedByName, submitted.CanSubmit, submitted.CanReview));
@@ -324,6 +396,7 @@ public sealed class ProjectPlanTests
         Assert.Equal((PlanApprovalStatus.Returned, "Add a QA person"), (returned.Status, returned.ReviewComment));
         var todo = Assert.Single((await host.As(Pm).Get<IMyTodoService>().GetAsync()).Items, i => i.Key.StartsWith($"plan:{host.Project1}:returned", StringComparison.Ordinal));
         Assert.Contains("Add a QA person", todo.Reason, StringComparison.Ordinal);
+        await OverBudgetAsync(host, host.Project1);
         await host.As(Pm).Get<IProjectPlanService>().SubmitAsync(host.Project1);
 
         // Approved: the locked Baseline and the Current working budget are the plan's hours.
@@ -351,6 +424,7 @@ public sealed class ProjectPlanTests
         Assert.Contains(afterApproval, i => i.Key == $"plan:{host.Project1}:changes");
         Assert.DoesNotContain(afterApproval, i => i.Key.StartsWith($"staffing:{host.Project1}:over:", StringComparison.Ordinal) || i.Key.StartsWith($"staffing:{host.Project1}:unstaffed", StringComparison.Ordinal));
 
+        await OverBudgetAsync(host, host.Project1);
         await host.As(Pm).Get<IProjectPlanService>().SubmitAsync(host.Project1, "Dana needs 20 more hours");
         var second = await host.As(Finance).Get<IProjectPlanService>().ApproveAsync(host.Project1);
         Assert.Equal(2, second.Approvals);
@@ -364,6 +438,7 @@ public sealed class ProjectPlanTests
         await using var host = await CreateAsync();
         var build = await ItemAsync(host, "Build");
         await host.Get<IResourcePlanService>().ApplyAsync(host.Project1, [new PlanChange(PlanChangeKind.SetPerson, ItemId: build, EmployeeId: host.DevId, Hours: 80m)]);
+        await OverBudgetAsync(host, host.Project1);
         await host.As(Pm).Get<IProjectPlanService>().SubmitAsync(host.Project1, "Ready");
 
         // Rejecting in the inbox sends it back to the PM with the reason (a plan is returned, not thrown out).
@@ -374,6 +449,7 @@ public sealed class ProjectPlanTests
         Assert.Equal((PlanApprovalStatus.Returned, "Add QA"), (returned.Status, returned.ReviewComment));
         Assert.Empty((await host.As(Finance).Get<IApprovalInboxService>().ListMineAsync()).Where(i => i.DocumentType == ApprovalDocumentTypes.ProjectPlan));
 
+        await OverBudgetAsync(host, host.Project1);
         await host.As(Pm).Get<IProjectPlanService>().SubmitAsync(host.Project1);
         await host.As(Finance).Get<IApprovalInboxService>().DecideAsync(ApprovalDocumentTypes.ProjectPlan, host.Project1, new ApprovalDecisionRequest(ApprovalDecisionKind.Approve, "Good"));
         Assert.Equal(PlanApprovalStatus.Approved, (await host.As(Finance).Get<IProjectPlanService>().GetAsync(host.Project1)).Status);
@@ -386,6 +462,7 @@ public sealed class ProjectPlanTests
         var build = await ItemAsync(host, "Build");
         await host.As(Pm).Get<IResourcePlanService>().ApplyAsync(host.Project1, [new PlanChange(PlanChangeKind.SetPerson, ItemId: build, EmployeeId: host.DevId, Hours: 8m)]);
         var finance = host.As(Finance).Get<IProjectPlanService>();
+        await OverBudgetAsync(host, host.Project1);
         await finance.SubmitAsync(host.Project1);
 
         Assert.False((await finance.GetAsync(host.Project1)).CanReview);

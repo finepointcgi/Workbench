@@ -157,6 +157,7 @@ Details: [Monitoring](monitoring.md).
 | `PerDiem:Gsa:BaseUrl` | `https://api.gsa.gov/travel/perdiem/v2/` | |
 | `Travel:TolerancePercent` | `10` | How far (percent) an expense report category or trip total may go over its approved travel authorization before it is flagged. |
 | `Resourcing:NonBillableAllowancePercent` / `:FullThresholdPercent` / `:StaffingTolerancePercent` | `0` / `90` / `10` | |
+| `Resourcing:AutoApprovePlansWithinBudget` | `true` | A project plan that stays within its ceiling (or the approved budget, for changes) approves itself when the manager submits it. Set `false` for Finance to review every plan. |
 | `FundingNotices:WarningThreshold` / `:CriticalThreshold` | `0.75` / `0.90` | Limitation of Funds notices. |
 | `Billing:CompanyName` / `:RemitToAddress` / `:CageCode` / `:Uei` | — | Printed on invoices. |
 | `Purchasing:RetainageAccountNumber` / `:RetainageAccountName` | `2020` / `AP retainage` | |

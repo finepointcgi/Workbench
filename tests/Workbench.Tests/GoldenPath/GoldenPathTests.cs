@@ -80,10 +80,9 @@ public sealed class GoldenPathTests
         task = await items.UpdateAsync(project.SheetId.Value, task.Id, new UpdateItemRequest("Analysis", monday, today.AddDays(14), null, new Dictionary<string, string?>()));
         await new HttpResourcePlanService(pm).ApplyAsync(project.Id, [new PlanChange(PlanChangeKind.SetPerson, ItemId: task.Id, EmployeeId: alex.Id, Hours: 40m, From: monday, To: friday)]);
         var submitted = await new HttpProjectPlanService(pm).SubmitAsync(project.Id, "Ready");
-        Assert.Equal(PlanApprovalStatus.Submitted, submitted.Status);
 
-        // ---- Finance: approval makes the plan the baseline and the project Active ----
-        var approved = await new HttpProjectPlanService(finance).ApproveAsync(project.Id);
+        // ---- The plan is within the contract's ceiling, so it approves itself: the baseline, and the project Active ----
+        var approved = submitted;
         Assert.Equal((PlanApprovalStatus.Approved, ProjectState.Active), (approved.Status, approved.ProjectStatus));
         Assert.All(approved.Steps!, s => Assert.True(s.Done));
         var wbs = (await new HttpProjectService(finance).ListWbsAsync(project.Id)).Single(w => w.ItemId == task.Id);
