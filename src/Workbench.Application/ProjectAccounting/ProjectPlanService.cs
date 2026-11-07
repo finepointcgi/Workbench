@@ -123,13 +123,20 @@ public sealed class ProjectPlanService(
         audit.Record(db, nameof(ProjectPlan), plan.Id, "Submitted", new { Status = before }, new { plan.Status, Note = plan.SubmitNote });
         await db.SaveChangesAsync(cancellationToken);
 
-        if (notifications is not null)
+        var withinBudget = await WithinBudgetAsync(db, project, plan, lines, cancellationToken);
+        if (notifications is not null && !withinBudget)
         {
             var finance = await ApproverRoles.MembersAsync(db, ApprovalOrgRole.Finance.ToString(), cancellationToken);
             await notifications.PublishAsync(finance.Where(e => !string.Equals(e, audit.Actor, StringComparison.OrdinalIgnoreCase)), NotificationKind,
                 $"Review the plan for {project.Code} {project.Name}",
                 $"{await NameAsync(db, audit.Actor, cancellationToken)} submitted it for approval." + (plan.SubmitNote is { } n ? $" \"{n}\"" : ""),
                 Link(project.Id));
+        }
+
+        if (withinBudget)
+        {
+            await ApproveCoreAsync(db, project, plan, null, automatic: true, cancellationToken);
+            return await ToDtoAsync(db, await ProjectAsync(db, projectId, cancellationToken), cancellationToken);
         }
 
         return await ToDtoAsync(db, project, cancellationToken);
@@ -140,6 +147,16 @@ public sealed class ProjectPlanService(
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var project = await ProjectAsync(db, projectId, cancellationToken);
         var plan = await ReviewableAsync(db, project, cancellationToken);
+        await ApproveCoreAsync(db, project, plan, comment, automatic: false, cancellationToken);
+        return await ToDtoAsync(db, await ProjectAsync(db, projectId, cancellationToken), cancellationToken);
+    }
+
+    /// <summary>
+    /// Writes the plan into the budget and opens the project. <paramref name="automatic"/> is a plan that stayed within its
+    /// budget and approved itself on submit: no reviewer, and the manager is told why.
+    /// </summary>
+    private async Task ApproveCoreAsync(IWorkbenchDbContext db, Project project, ProjectPlan plan, string? comment, bool automatic, CancellationToken cancellationToken)
+    {
         var lines = await PlanLinesAsync(db, project.Id, cancellationToken);
         if (lines.Count == 0)
         {
@@ -178,17 +195,47 @@ public sealed class ProjectPlanService(
 
         plan.Status = ProjectPlanStatus.Approved;
         plan.Approvals++;
-        plan.ReviewedBy = audit.Actor;
+        plan.ReviewedBy = automatic ? AutomaticReviewer : audit.Actor;
         plan.ReviewedAtUtc = clock.GetUtcNow().UtcDateTime;
-        plan.ReviewComment = Clean(comment);
+        plan.ReviewComment = automatic ? "Within the approved budget, so it approved itself." : Clean(comment);
         Touch(plan);
-        audit.Record(db, nameof(ProjectPlan), plan.Id, "Approved", null,
-            new { plan.Approvals, Hours = lines.Sum(l => l.Hours), BaselineVersionId = baseline.Id, CurrentVersionId = current.Id, plan.ReviewComment });
+        audit.Record(db, nameof(ProjectPlan), plan.Id, automatic ? "AutoApproved" : "Approved", null,
+            new { plan.Approvals, Hours = lines.Sum(l => l.Hours), Cost = lines.Sum(l => l.DirectCost), BaselineVersionId = baseline.Id, CurrentVersionId = current.Id, plan.ReviewComment });
         await db.SaveChangesAsync(cancellationToken);
-        await NotifyManagerAsync(db, project, plan.Approvals == 1 ? $"Finance approved the plan for {project.Code}" : $"Finance approved the changes to {project.Code}'s plan",
+        var who = automatic ? "The plan" : "Finance";
+        await NotifyManagerAsync(db, project, plan.Approvals == 1 ? $"{(automatic ? "Plan approved" : "Finance approved the plan")} for {project.Code}" : $"{(automatic ? "Plan changes approved" : "Finance approved the changes")} for {project.Code}",
             plan.Approvals == 1 ? "It's the project's baseline budget now" + (opened ? ", and the project is Active: time can be charged to it." : ".") + " Changes from here are compared with it." : "They're in the working budget; the baseline stays as first approved.",
-            plan.ReviewComment, cancellationToken);
-        return await ToDtoAsync(db, await ProjectAsync(db, projectId, cancellationToken), cancellationToken);
+            automatic ? $"{who} stayed within its budget, so Finance didn't need to review it." : plan.ReviewComment, cancellationToken);
+    }
+
+    /// <summary>Who the plan's reviewer shows as when it approved itself.</summary>
+    public const string AutomaticReviewer = "Workbench";
+
+    /// <summary>
+    /// Whether the plan stays within its budget, so it needs no review. A plan that was approved before is held to that
+    /// budget (the working budget's hours and cost); a first plan is held to the project's ceiling, or its funding when
+    /// there is no ceiling. With neither there is nothing to measure against, so Finance reviews it.
+    /// </summary>
+    private static async Task<bool> WithinBudgetAsync(IWorkbenchDbContext db, Project project, ProjectPlan plan, IReadOnlyList<PlanLine> lines, CancellationToken ct)
+    {
+        var hours = lines.Sum(l => l.Hours);
+        var cost = lines.Sum(l => l.DirectCost);
+        if (plan.Approvals > 0)
+        {
+            var current = await db.Set<BudgetVersion>().AsNoTracking().Where(v => v.ProjectId == project.Id && v.Kind == BudgetKind.Current)
+                .OrderByDescending(v => v.CreatedAtUtc).Select(v => v.Id).FirstOrDefaultAsync(ct);
+            if (current == Guid.Empty)
+            {
+                return false;
+            }
+
+            var approved = await db.Set<BudgetLine>().AsNoTracking().Where(l => l.BudgetVersionId == current && l.CostType == BudgetCostType.Labor).ToListAsync(ct);
+            return approved.Count > 0 && hours <= approved.Sum(l => l.Hours) + 0.005m && cost <= approved.Sum(l => l.Amount) + 0.005m;
+        }
+
+        var terms = (await ProjectTerms.LoadAsync(db, project, ct)).Terms;
+        var limit = terms.Ceiling is > 0 ? terms.Ceiling : terms.Funded is > 0 ? terms.Funded : null;
+        return limit is { } cap && cost <= cap;
     }
 
     public async Task<ProjectPlanDto> ReturnAsync(Guid projectId, string comment, CancellationToken cancellationToken = default)

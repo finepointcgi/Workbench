@@ -90,6 +90,7 @@ public sealed class ProjectLifecycleTests
         Assert.Equal(["SE2"], set.Categories!.Where(c => c.Selected).Select(c => c.Code));
         Assert.Equal("plan", set.Steps!.Single(s => s.Current).Key);
 
+        await ProjectPlanTests.OverBudgetAsync(host, project.Id);
         var submitted = await PmPlans().SubmitAsync(project.Id, "Ready");
         Assert.Equal(PlanApprovalStatus.Submitted, submitted.Status);
 
@@ -161,6 +162,7 @@ public sealed class ProjectLifecycleTests
 
         // Approving the plan opens the project; this week's timesheet still can't charge it, because it starts the week after.
         await host.As(Finance).Get<IProjectPlanService>().SaveCategoriesAsync(project.Id, [host.Se2]);
+        await ProjectPlanTests.OverBudgetAsync(host, project.Id);
         await host.As(Pm).Get<IProjectPlanService>().SubmitAsync(project.Id);
         await host.As(Finance).Get<IProjectPlanService>().ApproveAsync(project.Id);
         var after = await host.As(Dev).Get<ITimesheetService>().GetOrCreateMyTimesheetAsync(new DateOnly(2026, 10, 14));

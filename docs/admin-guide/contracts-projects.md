@@ -51,7 +51,8 @@ Every project. Open one to set it up on its own page: details, plan and charge c
 
 1. Finance adds its **funding** and picks the **labor categories** it may use.
 2. The project manager builds the **plan** (the WBS) and assigns people.
-3. Finance **approves the plan**. It becomes the baseline budget, and the charge codes open for time.
+3. The plan is **approved**. It becomes the baseline budget, and the charge codes open for time. A plan within the
+   project's ceiling (or funding) approves itself when the manager submits it; one over it waits for Finance.
 
 The project page's **Setup** tab holds:
 
