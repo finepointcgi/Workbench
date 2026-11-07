@@ -32,7 +32,7 @@ Open an opportunity for its tabs:
 | Tab | What's there |
 | --- | --- |
 | **Details** | Solicitation number, agency, NAICS, set-aside, contract type, value, Pwin and Pgo, key dates |
-| **Team and competition** | The incumbent, competitors and teaming partners (**Add competitor**, **Add partner**) |
+| **Team and competition** | The incumbent, competitors and teaming partners (**Add competitor**, **Add partner**). A company you type by name links to the account of the same name when there is exactly one |
 | **Requirements** | The compliance matrix, read from the solicitation (see below) |
 | **Gates** | Gate reviews (for example the bid/no-bid decision) and their decisions; a gate goes to an approver |
 | **Activity** | Notes, calls and meetings |
