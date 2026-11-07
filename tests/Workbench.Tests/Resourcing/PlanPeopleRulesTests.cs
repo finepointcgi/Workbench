@@ -57,13 +57,15 @@ public sealed class PlanPeopleRulesTests
         Assert.Empty((await host.Get<IStaffingAssignmentService>().ListAsync(host.Project1)).Assignments);
         Assert.Empty(await AssigneesAsync(host, build));
 
-        // Assigning Alex in the Assignees cell puts him in the plan's people with no hours yet.
+        // Assigning Alex in the Assignees cell plans his hours on the task at once (Design, from today to Oct 23).
         await tasks.SetAssigneesAsync(host.SheetId, design, new SetAssigneesRequest([Analyst]));
         var alex = (await plans.GetAsync(host.Project1)).Task(design)!.People.Single();
-        Assert.Equal((true, (Guid?)null, 0m), (alex.NoHoursYet, alex.AssignmentId, alex.Hours));
+        Assert.False(alex.NoHoursYet);
+        Assert.NotNull(alex.AssignmentId);
+        Assert.True(alex.Hours > 0);
 
-        // Giving him hours makes them an assignment; he stays the assignee.
-        await plans.ApplyAsync(host.Project1, [new PlanChange(PlanChangeKind.SetPerson, WbsElementId: host.Design, EmployeeId: host.AnalystId, Hours: 20m)]);
+        // Changing his hours edits that assignment; he stays the assignee.
+        await plans.ApplyAsync(host.Project1, [new PlanChange(PlanChangeKind.SetPerson, AssignmentId: alex.AssignmentId, Hours: 20m)]);
         alex = (await plans.GetAsync(host.Project1)).Task(design)!.People.Single();
         Assert.Equal((false, 20m), (alex.NoHoursYet, alex.Hours));
         Assert.Equal([Analyst], await AssigneesAsync(host, design));
@@ -73,10 +75,11 @@ public sealed class PlanPeopleRulesTests
         Assert.Empty(await AssigneesAsync(host, design));
         Assert.Empty((await plans.GetAsync(host.Project1)).Task(design)!.People);
 
-        // Someone with no hours yet can be taken off from the people grid as well.
+        // Assigned again and then unassigned in the Assignees cell, the hours that came with the assignment go too.
         await tasks.SetAssigneesAsync(host.SheetId, design, new SetAssigneesRequest([Analyst]));
-        await plans.ApplyAsync(host.Project1, [new PlanChange(PlanChangeKind.Unassign, WbsElementId: host.Design, EmployeeId: host.AnalystId)]);
+        await tasks.SetAssigneesAsync(host.SheetId, design, new SetAssigneesRequest([]));
         Assert.Empty(await AssigneesAsync(host, design));
+        Assert.Empty((await host.Get<IStaffingAssignmentService>().ListAsync(host.Project1)).Assignments);
     }
 
     [Fact]

@@ -541,7 +541,9 @@ public sealed class ResourcePlanService(
 
             var hours = set?.Weeks is { } exact ? exact.Sum(w => w.Hours) : set?.Hours ?? a.TotalHours;
             var request = new SaveAssignmentRequest(set?.EmployeeId ?? a.EmployeeId, a.ProjectId, hours, a.WbsElementId,
-                set?.From ?? from, set?.To ?? to, set?.LaborCategoryId ?? a.LaborCategoryId, a.Notes, a.Id);
+                set?.From ?? from, set?.To ?? to, set?.LaborCategoryId ?? a.LaborCategoryId,
+                // Setting hours or dates by hand ends "a standard day over the task": from here the hours are what was typed.
+                set is { } && a.Notes == Scheduling.PlanPeopleSync.StandardDayNote && (set.Hours is not null || set.Weeks is not null || set.From is not null || set.To is not null) ? Scheduling.PlanPeopleSync.AssignedNote : a.Notes, a.Id);
             var booking = await PlannedAsync(db, request, set?.Weeks, isNew: false, name, errors, ct, model.WeekByWeek.GetValueOrDefault(a.Id));
             bookings.Add(booking ?? new Booking(a.Id, a.EmployeeId, a.WbsElementId, a.LaborCategoryId, a.From, a.To, a.TotalHours, weeks));
         }

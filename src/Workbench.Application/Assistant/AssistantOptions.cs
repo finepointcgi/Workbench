@@ -20,6 +20,19 @@ public sealed class AssistantOptions
     /// </summary>
     public bool EnableFakeProvider { get; set; }
 
+    /// <summary>The built-in name of the local Claude Code connection.</summary>
+    public const string ClaudeCodeConnection = "claude-code";
+
+    /// <summary>
+    /// Offers the "claude-code" connection: drafts (proposals, lead fit) are written by the Claude Code CLI signed in on this
+    /// machine, so no API key is needed. Development on your own computer only (refused in Production); it can't use the
+    /// assistant's data tools, so Ask stays unavailable on it.
+    /// </summary>
+    public bool EnableClaudeCodeProvider { get; set; }
+
+    /// <summary>The Claude Code executable for the local connection.</summary>
+    public string ClaudeCodePath { get; set; } = "claude";
+
     public Dictionary<string, AssistantConnectionOptions> Connections { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Tool calls one question may make before the assistant must answer with what it has.</summary>
@@ -82,6 +95,8 @@ public sealed class AssistantConnectionOptions
     {
         AssistantProviderKind.Anthropic => "claude-opus-5-5",
         AssistantProviderKind.Bedrock => "anthropic.claude-opus-5-5",
+        AssistantProviderKind.ClaudeCode => "claude-code-default",
+        AssistantProviderKind.OpenAiCompatible => "",
         _ => "workbench-fake-1",
     };
 
@@ -119,6 +134,11 @@ public static class AssistantConnections
         if (string.Equals(name, AssistantOptions.FakeConnection, StringComparison.OrdinalIgnoreCase))
         {
             errors.Add("The connection name 'fake' is reserved for the built-in test provider.");
+        }
+
+        if (string.Equals(name, AssistantOptions.ClaudeCodeConnection, StringComparison.OrdinalIgnoreCase))
+        {
+            errors.Add("The connection name 'claude-code' is reserved for the local Claude Code provider.");
         }
 
         switch (options.Provider)
@@ -161,8 +181,26 @@ public static class AssistantConnections
                 }
 
                 break;
+            case AssistantProviderKind.OpenAiCompatible:
+                if (string.IsNullOrWhiteSpace(options.BaseUrl) || !Uri.TryCreate(options.BaseUrl, UriKind.Absolute, out var openAiUri)
+                    || (openAiUri.Scheme != Uri.UriSchemeHttps && !(openAiUri.Scheme == Uri.UriSchemeHttp && openAiUri.IsLoopback)))
+                {
+                    errors.Add($"Assistant connection '{name}': set BaseUrl to the server's API root, for example https://api.openai.com/v1 or http://localhost:11434/v1 (plain http is allowed only for this computer).");
+                }
+
+                if (string.IsNullOrWhiteSpace(options.DefaultModel))
+                {
+                    errors.Add($"Assistant connection '{name}': set DefaultModel to the model id the server offers (for example gpt-4o or llama3.1).");
+                }
+
+                if (!string.IsNullOrWhiteSpace(options.Region) || !string.IsNullOrWhiteSpace(options.AwsProfile))
+                {
+                    errors.Add($"Assistant connection '{name}': Region and AwsProfile apply to Bedrock connections only.");
+                }
+
+                break;
             default:
-                errors.Add($"Assistant connection '{name}': Provider must be Anthropic or Bedrock (the fake provider is turned on with Assistant:EnableFakeProvider).");
+                errors.Add($"Assistant connection '{name}': Provider must be Anthropic, Bedrock or OpenAiCompatible (the fake and Claude Code providers are turned on with Assistant:EnableFakeProvider and Assistant:EnableClaudeCodeProvider).");
                 break;
         }
 
@@ -189,6 +227,7 @@ public static class AssistantConnections
             {
                 AssistantProviderKind.Anthropic => "Anthropic API",
                 AssistantProviderKind.Bedrock => $"Amazon Bedrock ({options.Region})",
+                AssistantProviderKind.OpenAiCompatible => $"{name} ({HostOf(options.BaseUrl)})",
                 _ => name,
             };
         var handling = options.Provider switch
@@ -199,10 +238,16 @@ public static class AssistantConnections
                 $"Prompts and records stay in AWS GovCloud (US) ({options.Region}) through Amazon Bedrock, under your AWS account and its FedRAMP High / DoD IL authorizations.",
             AssistantProviderKind.Bedrock =>
                 $"Prompts and records are sent to Amazon Bedrock in {options.Region} (commercial AWS), under your AWS account. For CUI, use a GovCloud region.",
+            AssistantProviderKind.OpenAiCompatible when Uri.TryCreate(options.BaseUrl, UriKind.Absolute, out var u) && u.IsLoopback =>
+                "Prompts and records are sent to a model server running on this computer. Nothing leaves it unless that server forwards it.",
+            AssistantProviderKind.OpenAiCompatible =>
+                $"Prompts and the records the assistant reads are sent to {HostOf(options.BaseUrl)} using the OpenAI-compatible API. Check that provider's data handling against your contracts before using it with CUI.",
             _ => "No data leaves Workbench: the built-in test provider writes canned answers from the tool results.",
         };
         return new AssistantConnectionDto(name, options.Provider, label, options.Region?.Trim(), options.IsGovCloud, options.EffectiveDefaultModel, options.AllowedModels, handling);
     }
+
+    private static string HostOf(string? baseUrl) => Uri.TryCreate(baseUrl, UriKind.Absolute, out var u) ? u.Host : "the configured server";
 
     public static AssistantConnectionDto Fake { get; } = new(
         AssistantOptions.FakeConnection,
@@ -213,6 +258,16 @@ public static class AssistantConnections
         AssistantConnectionOptions.DefaultModelFor(AssistantProviderKind.Fake),
         [AssistantConnectionOptions.DefaultModelFor(AssistantProviderKind.Fake)],
         "No data leaves Workbench: canned answers are built from the tool results. For development and testing only.");
+
+    public static AssistantConnectionDto ClaudeCode { get; } = new(
+        AssistantOptions.ClaudeCodeConnection,
+        AssistantProviderKind.ClaudeCode,
+        "Claude Code on this computer (development only)",
+        null,
+        false,
+        AssistantConnectionOptions.DefaultModelFor(AssistantProviderKind.ClaudeCode),
+        [AssistantConnectionOptions.DefaultModelFor(AssistantProviderKind.ClaudeCode)],
+        "Drafts are written by the Claude Code CLI signed in on this computer, so the text goes to Anthropic under that login. Development only; it writes drafts but can't answer data questions.");
 
     /// <summary>The connections administrators may choose from: valid configured ones, plus the fake one when enabled.</summary>
     public static IReadOnlyList<AssistantConnectionDto> Available(AssistantOptions options)
@@ -225,6 +280,11 @@ public static class AssistantConnections
         if (options.EnableFakeProvider)
         {
             list.Add(Fake);
+        }
+
+        if (options.EnableClaudeCodeProvider)
+        {
+            list.Add(ClaudeCode);
         }
 
         return list;
