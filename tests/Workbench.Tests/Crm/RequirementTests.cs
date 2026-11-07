@@ -168,6 +168,41 @@ public sealed class RequirementTests
         await Assert.ThrowsAsync<ArgumentException>(() => service.ShredAsync(o.Id, new ShredRequest(null, "empty.txt", [])));
     }
 
+    private static Paragraph Para(string text) => new(new Run(new Text(text)));
+
+    private static TableRow Row(params string[] cells) => new(cells.Select(c => new TableCell(Para(c))));
+
+    [Fact]
+    public void A_word_file_is_read_a_paragraph_at_a_time_with_a_table_row_kept_together()
+    {
+        using var stream = new MemoryStream();
+        using (var doc = WordprocessingDocument.Create(stream, DocumentFormat.OpenXml.WordprocessingDocumentType.Document))
+        {
+            doc.AddMainDocumentPart().Document = new Document(new Body(
+                Para("SECTION L - INSTRUCTIONS TO OFFERORS"),
+                Para("L.1 Proposals shall be submitted in three volumes."),
+                Para("L.2 Offerors must submit questions by November 30, 2026. Proposals are due December 21, 2026 at 3:00 PM Eastern."),
+                Para("SECTION M - EVALUATION FACTORS FOR AWARD"),
+                new Table(Row("Factor", "Weight", "Basis"),
+                    Row("Factor 1 - Technical Approach", "Most important", "Will be evaluated for feasibility and risk"),
+                    Row("Factor 2 - Past Performance", "Second", "Will be evaluated for recency and relevance"))));
+        }
+
+        var (requirements, dates) = SolicitationParser.Parse(SolicitationText.Read("rfp.docx", stream.ToArray()));
+
+        // The heading and each item are their own lines, not one giant "requirement".
+        Assert.Equal(["L.1", "L.2"], requirements.Where(r => r.Kind == D.RequirementKind.Instruction).Select(r => r.Reference));
+        // Each factor keeps its name and weight with what it is judged on, and the header row is not a requirement.
+        var factors = requirements.Where(r => r.Kind == D.RequirementKind.Evaluation).ToList();
+        Assert.Equal(2, factors.Count);
+        Assert.Contains("Technical Approach", factors[0].Text, StringComparison.Ordinal);
+        Assert.Contains("Most important", factors[0].Text, StringComparison.Ordinal);
+        Assert.Equal("approach", factors[0].SectionKey);
+        // Two dates in one paragraph each become their own milestone.
+        Assert.Equal([(MilestoneKind.QuestionsDue, new DateOnly(2026, 11, 30)), (MilestoneKind.Submission, new DateOnly(2026, 12, 21))],
+            dates.Select(d => (d.Kind, d.Date)));
+    }
+
     [Fact]
     public async Task A_pdf_with_a_text_layer_is_read_and_one_without_says_so()
     {

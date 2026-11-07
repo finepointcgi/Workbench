@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Wordprocessing;
 using Microsoft.EntityFrameworkCore;
@@ -75,6 +76,37 @@ public static class SolicitationText
         }
     }
 
+    /// <summary>
+    /// A Word document's text a block at a time, as pasted text would be: one block per paragraph, one per table row (cells
+    /// joined with " | ", so a factor, its weight and what it is judged on stay together), blank lines between. Reading it as
+    /// one line per paragraph with no gaps would run a heading and every item under it into a single "requirement".
+    /// </summary>
+    private static string WordBlocks(OpenXmlElement container)
+    {
+        var blocks = new List<string>();
+        foreach (var element in container.ChildElements)
+        {
+            switch (element)
+            {
+                case Paragraph p:
+                    blocks.Add(p.InnerText);
+                    break;
+                case Table table:
+                    foreach (var row in table.Elements<TableRow>())
+                    {
+                        blocks.Add(string.Join(" | ", row.Elements<TableCell>().Select(c => string.Join(" ", c.Descendants<Paragraph>().Select(p => p.InnerText.Trim()).Where(t => t.Length > 0)))));
+                    }
+
+                    break;
+                case SdtBlock or CustomXmlBlock:
+                    blocks.Add(WordBlocks(element));
+                    break;
+            }
+        }
+
+        return string.Join("\n\n", blocks.Where(b => !string.IsNullOrWhiteSpace(b)));
+    }
+
     private static string ReadDocx(byte[] content)
     {
         try
@@ -82,7 +114,7 @@ public static class SolicitationText
             using var stream = new MemoryStream(content);
             using var doc = WordprocessingDocument.Open(stream, false);
             var body = doc.MainDocumentPart?.Document?.Body ?? throw new ArgumentException("That Word document has no text.");
-            return string.Join('\n', body.Descendants<Paragraph>().Select(p => p.InnerText));
+            return WordBlocks(body);
         }
         catch (Exception ex) when (ex is InvalidDataException or OpenXmlPackageException or IOException)
         {
