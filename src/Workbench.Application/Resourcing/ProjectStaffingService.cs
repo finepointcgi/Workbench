@@ -35,8 +35,65 @@ public sealed class ProjectStaffingService(
             notes.Add("Nobody is staffed on this project from this week on. Staff people into each labor category below.");
         }
 
+        notes.AddRange(await AssignedWithoutHoursAsync(db, projectId, cancellationToken));
         var overbooked = await OverbookedAsync(db, facts.Inputs.Allocations.Select(a => a.EmployeeId).Distinct().ToList(), cancellationToken);
         return new ProjectStaffingPlanDto(facts.Project.Id, facts.Project.Code, facts.Project.Name, facts.BudgetName, Today, categories, slots, overbooked, notes);
+    }
+
+    /// <summary>
+    /// People assigned to a plan task who have no hours on it (the task has no dates, or has finished): they're on the task
+    /// but not in staffing, so say so instead of leaving the gap unseen.
+    /// </summary>
+    private async Task<IReadOnlyList<string>> AssignedWithoutHoursAsync(IWorkbenchDbContext db, Guid projectId, CancellationToken ct)
+    {
+        var elements = await db.Set<WbsElement>().AsNoTracking().Where(w => w.ProjectId == projectId && w.ItemId != null).Select(w => new { w.Id, ItemId = w.ItemId!.Value }).ToListAsync(ct);
+        if (elements.Count == 0)
+        {
+            return [];
+        }
+
+        var itemIds = elements.Select(e => e.ItemId).ToList();
+        var assignees = await db.Set<Workbench.Domain.Tasks.ItemAssignee>().AsNoTracking().Where(a => itemIds.Contains(a.ItemId)).ToListAsync(ct);
+        if (assignees.Count == 0)
+        {
+            return [];
+        }
+
+        var items = await db.Items.AsNoTracking().Where(i => itemIds.Contains(i.Id)).ToDictionaryAsync(i => i.Id, ct);
+        var parents = items.Values.Where(i => i.ParentId != null).Select(i => i.ParentId!.Value).ToHashSet();
+        var wbsIds = elements.Select(e => e.Id).ToList();
+        var staffed = (await db.Set<StaffingAssignment>().AsNoTracking().Where(a => a.WbsElementId != null && wbsIds.Contains(a.WbsElementId!.Value)).Select(a => new { Wbs = a.WbsElementId!.Value, a.EmployeeId }).ToListAsync(ct))
+            .Concat(await db.Set<ResourceAllocation>().AsNoTracking().Where(a => a.WbsElementId != null && wbsIds.Contains(a.WbsElementId!.Value) && a.Hours > 0).Select(a => new { Wbs = a.WbsElementId!.Value, a.EmployeeId }).Distinct().ToListAsync(ct))
+            .ToHashSet();
+        var emails = assignees.Select(a => a.Email).Distinct().ToList();
+        var people = await db.Set<Employee>().AsNoTracking().Where(e => emails.Contains(e.Email.ToLower())).ToListAsync(ct);
+        var byEmail = people.GroupBy(p => p.Email.ToLowerInvariant()).ToDictionary(g => g.Key, g => g.First());
+        var wbsOfItem = elements.ToDictionary(e => e.ItemId, e => e.Id);
+        var missing = new List<string>();
+        foreach (var a in assignees.OrderBy(a => a.Email))
+        {
+            if (!items.TryGetValue(a.ItemId, out var item) || item.IsMilestone || parents.Contains(item.Id) || !wbsOfItem.TryGetValue(item.Id, out var wbs))
+            {
+                continue;
+            }
+
+            if (byEmail.TryGetValue(a.Email.ToLowerInvariant(), out var person) && staffed.Contains(new { Wbs = wbs, EmployeeId = person.Id }))
+            {
+                continue;
+            }
+
+            var who = person?.DisplayName ?? a.Email;
+            var why = person is null ? "they aren't set up as an employee"
+                : item.Start is null || item.Finish is null ? "the task has no dates"
+                : item.Finish < Today ? "the task has finished" : "they were assigned before hours followed assignments";
+            missing.Add($"{who} is on \"{item.Title}\" in the plan but has no hours there: {why}.");
+            if (missing.Count == 10)
+            {
+                break;
+            }
+        }
+
+        return missing;
     }
 
     public async Task<ProjectSetupProgressDto> GetSetupProgressAsync(Guid projectId, CancellationToken cancellationToken = default)

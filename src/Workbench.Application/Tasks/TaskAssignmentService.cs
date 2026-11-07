@@ -30,7 +30,8 @@ public sealed class TaskAssignmentService(
     AccessControl access,
     ActivityRecorder activity,
     INotificationPublisher notifications,
-    TimeProvider clock) : ITaskAssignmentService
+    TimeProvider clock,
+    Resourcing.StaffingAssignmentService? staffing = null) : ITaskAssignmentService
 {
     private string Me => AccessControl.Normalize(currentUser.Email);
 
@@ -62,6 +63,7 @@ public sealed class TaskAssignmentService(
         Item item;
         string sheetName;
         List<string> added, removed;
+        IReadOnlyList<string> staffingNotes = [];
         Dictionary<string, string> names;
         await using (var db = await dbFactory.CreateAsync(cancellationToken))
         {
@@ -84,6 +86,13 @@ public sealed class TaskAssignmentService(
 
             // On a project's plan the assignees and the people with hours are one list: taking someone off takes their hours too.
             await Scheduling.PlanPeopleSync.TakeOffHoursAsync(db, itemId, removed, actor, cancellationToken);
+
+            // ...and putting someone on a task there plans their hours on it, so Resourcing sees them straight away.
+            if (staffing is not null)
+            {
+                staffingNotes = await staffing.StaffTaskAssigneesAsync(db, itemId, added, emails.Count, cancellationToken);
+            }
+
             await db.SaveChangesAsync(cancellationToken);
             names = await NamesAsync(db, added.Concat(removed).Append(Me), cancellationToken);
         }
@@ -112,6 +121,10 @@ public sealed class TaskAssignmentService(
             }
 
             await activity.RecordAsync(sheetId, itemId, TaskActivityKinds.ItemAssigned, $"{string.Join("; ", parts)} on \"{item.Title}\"", SheetChangeKind.ItemUpdated);
+            foreach (var note in staffingNotes)
+            {
+                await activity.RecordAsync(sheetId, itemId, TaskActivityKinds.ItemAssigned, note, SheetChangeKind.ItemUpdated);
+            }
 
             var me = Me;
             var actorName = names.GetValueOrDefault(me) ?? currentUser.Email;

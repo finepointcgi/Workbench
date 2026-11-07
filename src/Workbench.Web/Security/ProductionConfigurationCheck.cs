@@ -170,6 +170,11 @@ public static class ProductionConfigurationCheck
             yield return "Assistant:EnableFakeProvider is true. The fake provider is for development, tests and the public demo (Demo:Enabled) only; configure an Anthropic or Bedrock connection instead.";
         }
 
+        if (assistant.EnableClaudeCodeProvider)
+        {
+            yield return "Assistant:EnableClaudeCodeProvider is true. The local Claude Code provider is for development on your own computer only; configure an Anthropic or Bedrock connection instead.";
+        }
+
         foreach (var problem in Workbench.Application.Assistant.AssistantConnections.Validate(assistant))
         {
             yield return problem;
