@@ -43,7 +43,8 @@ public static partial class SolicitationParser
                 sectionRef = own;
             }
 
-            foreach (var sentence in Sentences(block))
+            // A table row (cells joined with " | " when a Word file is read) is one statement: the factor, its weight and what it is judged on.
+            foreach (var sentence in block.Contains(" | ", StringComparison.Ordinal) ? [block.Replace(" | ", " · ", StringComparison.Ordinal)] : Sentences(block))
             {
                 if (!Cue().IsMatch(sentence) || sentence.Length < 25)
                 {
@@ -71,7 +72,8 @@ public static partial class SolicitationParser
     public static List<ParsedDate> Dates(string text)
     {
         var found = new Dictionary<MilestoneKind, ParsedDate>();
-        foreach (var raw in text.Split('\n'))
+        // A sentence at a time: "Questions are due Nov 30. Proposals are due Dec 21." holds two dates for two milestones.
+        foreach (var raw in text.Split('\n').SelectMany(l => SentenceBreak().Split(l)))
         {
             var line = raw.Trim();
             if (line.Length is < 8 or > 400 || DateOf(line) is not { } date || date.Year is < 2000 or > 2100)
@@ -276,6 +278,9 @@ public static partial class SolicitationParser
     }
 
     private static string Clip(string text, int max) => text.Length <= max ? text : text[..(max - 1)].TrimEnd() + "…";
+
+    [GeneratedRegex(@"(?<=[a-z0-9\)][.;])\s+(?=[A-Z])")]
+    private static partial Regex SentenceBreak();
 
     [GeneratedRegex(@"\b(shall|must|is required to|are required to|will be evaluated|will evaluate|will be rated|will be scored|not exceed|page limit|should be submitted)\b", RegexOptions.IgnoreCase)]
     private static partial Regex Cue();
