@@ -23,7 +23,7 @@ public sealed record SuggestionCandidate(
     IReadOnlyList<EmployeeSkillDto> Skills);
 
 /// <summary>
-/// The rules half of staffing suggestions: free hours in the window (50 points), skills the task text names (35) and the
+/// The rules half of staffing suggestions: free hours in the window (45 points), skills the task text names (40) and the
 /// labor category (15). Deterministic, so suggestions work with the assistant off and the assistant has a baseline.
 /// </summary>
 public static partial class StaffingSuggestionRules
@@ -51,15 +51,16 @@ public static partial class StaffingSuggestionRules
         }
         else
         {
-            availability = person.CapacityHours > 0 ? (double)Math.Clamp(person.FreeHours / person.CapacityHours, 0m, 1m) : 0;
+            // No hours given: a quarter of their capacity free in the window counts as plenty.
+            availability = person.CapacityHours > 0 ? (double)Math.Clamp(person.FreeHours / (person.CapacityHours * 0.25m), 0m, 1m) : 0;
             reasons.Add($"{Hours(free)} h free in these dates");
         }
 
-        var score = (int)Math.Round(availability * 50);
+        var score = (int)Math.Round(availability * 45);
 
         // Skills the task names.
         var matched = person.Skills.Where(s => Mentions(taskText, s.Name)).OrderByDescending(s => s.Level).ToList();
-        score += Math.Min(35, matched.Sum(s => (int)s.Level * 5));
+        score += Math.Min(40, matched.Sum(s => (int)s.Level * 8));
         if (matched.Count > 0)
         {
             reasons.Add(string.Join(", ", matched.Take(3).Select(s => $"{s.Name} ({SkillLabels.Label(s.Level)})")));
