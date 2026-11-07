@@ -12,7 +12,7 @@ revenue run · unbilled accrual · bank reconciliation · trial balance balances
 
 **Projects › New project** › **A contract** › pick it: its ceiling, funding, type, fee and dates fill in (set this
 project's share when the contract has other projects) › pick the **Project manager** › **Create**. The PM gets a to-do
-to plan it. When they submit, **Review the plan for {project}** is on your home page: on the Plan tab, **Approve** (the
+to plan it. When they submit a plan that goes over the ceiling or funding (one within it approves itself, and you aren't asked), **Review the plan for {project}** is on your home page: on the Plan tab, **Approve** (the
 plan becomes the locked Baseline and the Current working budget) or type comments and **Return to PM**. Later changes
 show against the baseline until they're submitted and approved. **Change the ceiling or funding** is on the Plan tab.
 

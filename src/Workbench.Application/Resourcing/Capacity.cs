@@ -15,6 +15,12 @@ public sealed class ResourcingOptions
 
     /// <summary>A staffing gap within this share of the remaining budget hours counts as balanced. Default 10%.</summary>
     public decimal StaffingTolerancePercent { get; set; } = 10m;
+
+    /// <summary>
+    /// A project plan that stays within its budget approves itself when the manager submits it (see the Plan tab), so Finance
+    /// reviews only plans that go over. Turn this off for Finance to review every plan. Default on.
+    /// </summary>
+    public bool AutoApprovePlansWithinBudget { get; set; } = true;
 }
 
 /// <summary>A company holiday. <see cref="EmployeeId"/> null applies to everyone; <see cref="Hours"/> null is a full day.</summary>

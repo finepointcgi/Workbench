@@ -67,6 +67,14 @@ Use **Import / export** (or **More › Excel**) on the plan:
 
 ## Submit the plan for approval
 
-When it's ready, add a note for Finance if you like and select **Submit plan for approval**. Finance approves it (it
-becomes the baseline budget and the codes open for charging) or returns it with comments. After approval, changes to the
-plan are tracked against the baseline; the Gantt chart can show the baseline beside today's plan.
+When it's ready, add a note for Finance if you like and select **Submit plan for approval**.
+
+- **Within budget, it approves itself.** A first plan whose labor cost is at or under the project's ceiling (or its
+  funding, when there is no ceiling) becomes the baseline budget at once, and the codes open for charging. Later
+  changes approve themselves too while they stay within the approved plan's hours and its cost. The Plan tab says
+  "Approved automatically", and Finance isn't asked.
+- **Over budget, Finance reviews it.** Finance approves it or returns it with comments, and the note you added goes
+  with it. A plan with no ceiling or funding to measure against also goes to Finance.
+
+After approval, changes to the plan are tracked against the baseline; the Gantt chart can show the baseline beside
+today's plan.

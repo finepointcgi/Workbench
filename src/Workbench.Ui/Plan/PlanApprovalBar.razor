@@ -22,7 +22,7 @@
             {
                 @if (_noteOpen || !string.IsNullOrEmpty(_note))
                 {
-                    <input class="wb-approval-note" placeholder="Note for Finance (optional)" aria-label="Note for Finance" @bind="_note" />
+                    <input class="wb-approval-note" placeholder="Note for Finance (optional, used if it needs review)" aria-label="Note for Finance" @bind="_note" />
                 }
                 else
                 {
@@ -210,7 +210,9 @@
     {
         if (await ConfirmOpenProblemsAsync("Submit the plan with these open?", "Submit anyway"))
         {
-            await RunAsync(p => p.SubmitAsync(ProjectId, _note), "Sent to Finance. You'll be notified when they approve it or send it back.");
+            await RunAsync(p => p.SubmitAsync(ProjectId, _note), plan => plan.Status == PlanApprovalStatus.Approved
+                ? "Approved. It stayed within its budget, so Finance didn't need to review it."
+                : "Sent to Finance. It goes over its budget, so they review it. You'll be notified when they approve it or send it back.");
         }
     }
 
@@ -289,7 +291,9 @@
 
     private Task SaveCategoriesAsync() => RunAsync(p => p.SaveCategoriesAsync(ProjectId, _categoryIds.ToList()), "Saved the project's labor categories.");
 
-    private async Task RunAsync(Func<IProjectPlanService, Task<ProjectPlanDto>> action, string done)
+    private Task RunAsync(Func<IProjectPlanService, Task<ProjectPlanDto>> action, string done) => RunAsync(action, _ => done);
+
+    private async Task RunAsync(Func<IProjectPlanService, Task<ProjectPlanDto>> action, Func<ProjectPlanDto, string> done)
     {
         if (Plans is not { } plans)
         {
@@ -299,9 +303,10 @@
         _busy = true;
         try
         {
-            Set(await action(plans));
+            var result = await action(plans);
+            Set(result);
             (_note, _comment, _editing, _editingCategories, _noteOpen) = (null, null, false, false, false);
-            Snackbar.Add(done, Severity.Success);
+            Snackbar.Add(done(result), Severity.Success);
             await Changed.InvokeAsync();
         }
         catch (Exception ex) when (ex is ArgumentException or WorkbenchForbiddenException or WorkbenchNotFoundException or HttpRequestException or TaskCanceledException or UnauthorizedAccessException)
@@ -337,10 +342,11 @@
         PlanApprovalStatus.Submitted => $"Submitted by {plan.SubmittedByName ?? plan.SubmittedBy}{When(plan.SubmittedAtUtc)}. Finance approves it or sends it back.",
         PlanApprovalStatus.Approved when plan.ChangedSinceApproval =>
             $"Since the approved baseline: {Signed(plan.HoursChange)} h. Submit the changes when they're ready.",
+        PlanApprovalStatus.Approved when plan.ReviewedBy == "Workbench" => $"Approved automatically{When(plan.ReviewedAtUtc)}: it stayed within its budget. Changes that stay within it approve themselves too.",
         PlanApprovalStatus.Approved => $"Approved by {plan.ReviewedByName ?? plan.ReviewedBy}{When(plan.ReviewedAtUtc)}. It's the project's baseline budget.",
         PlanApprovalStatus.Returned => "Make the changes Finance asked for, then submit it again.",
         _ when !plan.SetupDone => "Plan it now. You can submit it once Finance has added the project's funding and labor categories.",
-        _ => "Build the WBS and assign people, then submit the plan to Finance.",
+        _ => "Build the WBS and assign people, then submit the plan. It approves itself if it stays within the budget; if not, Finance reviews it.",
     };
 
     private static string DetailsHint(ProjectPlanDto plan) =>
