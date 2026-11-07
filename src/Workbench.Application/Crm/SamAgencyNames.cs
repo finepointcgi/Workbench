@@ -34,6 +34,8 @@ public static class SamAgencyNames
             : text;
     }
 
+    /// <summary>Upper-cased words with the usual short forms spelled out ("DEPT" is "DEPARTMENT"), each wrapped in spaces for whole-word matching.</summary>
     private static string Words(string text) =>
-        " " + string.Join(' ', text.ToUpperInvariant().Split([' ', '/', ',', '.', '-', '(', ')', '&'], StringSplitOptions.RemoveEmptyEntries)) + " ";
+        " " + string.Join(' ', text.ToUpperInvariant().Split([' ', '/', ',', '.', '-', '(', ')', '&'], StringSplitOptions.RemoveEmptyEntries)
+            .Select(w => w is "DEPT" or "DEPT." ? "DEPARTMENT" : w)) + " ";
 }
