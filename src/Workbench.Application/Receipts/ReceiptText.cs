@@ -12,13 +12,13 @@ namespace Workbench.Application.Receipts;
 public static class ReceiptText
 {
     /// <summary>Folios are a page or two; past this the text is a statement or something else and isn't worth reading.</summary>
-    private const int MaxPages = 10;
+    public const int MaxPages = 10;
 
     public static bool IsPdf(string fileName, ReadOnlySpan<byte> content) =>
         content.StartsWith("%PDF"u8) || fileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>The PDF's lines, or an empty list when it has no text layer or can't be read (damaged, encrypted).</summary>
-    public static IReadOnlyList<string> ReadPdfLines(byte[] content)
+    public static IReadOnlyList<string> ReadPdfLines(byte[] content, int maxPages = MaxPages)
     {
         try
         {
@@ -27,7 +27,7 @@ public static class ReceiptText
             var pageNumber = 0;
             foreach (var page in document.GetPages())
             {
-                if (++pageNumber > MaxPages)
+                if (++pageNumber > maxPages)
                 {
                     break;
                 }

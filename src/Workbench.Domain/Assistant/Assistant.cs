@@ -49,6 +49,7 @@ public enum AssistantInteractionKind
     LeadFit,
     ProposalDraft,
     StaffingSuggestion,
+    RequirementReading,
 }
 
 public enum AssistantOutcome

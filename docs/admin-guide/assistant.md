@@ -38,7 +38,7 @@ Assistant__Connections__ollama__DefaultModel=llama3.1
 
 Or OpenAI itself (`BaseUrl=https://api.openai.com/v1`, `DefaultModel=gpt-4o`, `ApiKey` from a secret). Plain `http` is
 accepted only for this computer; anything else must be `https`. Questions that read your data need a model that supports
-function calling; drafts (proposals, lead fit, staffing suggestions) work with any chat model. The Claude Code connection writes drafts only.
+function calling; drafts (proposals, lead fit, staffing suggestions, reading solicitations) work with any chat model. The Claude Code connection writes drafts only.
 Check each provider's data handling against your contracts: the page shows where the data goes for the connection you pick.
 
 ## Settings

@@ -33,6 +33,7 @@ Open an opportunity for its tabs:
 | --- | --- |
 | **Details** | Solicitation number, agency, NAICS, set-aside, contract type, value, Pwin and Pgo, key dates |
 | **Team and competition** | The incumbent, competitors and teaming partners (**Add competitor**, **Add partner**) |
+| **Requirements** | The compliance matrix, read from the solicitation (see below) |
 | **Gates** | Gate reviews (for example the bid/no-bid decision) and their decisions; a gate goes to an approver |
 | **Activity** | Notes, calls and meetings |
 | **B&P** | Bid and proposal hours charged to the pursuit, approved and not yet approved |
@@ -40,6 +41,29 @@ Open an opportunity for its tabs:
 | **History** | Every change |
 
 A [proposal](pricing.md) can be linked to the opportunity to price it.
+
+### Requirements: read the solicitation
+
+On the **Requirements** tab, paste the text of Sections L and M and the work statement, or choose the PDF or Word file,
+and select **Read it**. Workbench lists every sentence that says something *shall* or *must* happen or *will be
+evaluated*, in the solicitation's own words, with its reference (for example L.3.2). Each line gets:
+
+- a type: **Instruction** (how to write and submit the proposal), **Evaluation** (how it is scored) or **Work to perform**;
+- the proposal section that should answer it, which you can change;
+- a status (**Open**, **Addressed**, **Not applicable**) and a note, like where it is answered or who owns it.
+
+The tab shows how many lines are addressed, filters by type, and exports the matrix to CSV. Dates it finds, such as
+questions due and proposals due, are added to the **Schedule** tab (a date already there is left alone). Reading an
+amendment later adds only the lines that are new.
+
+The **Proposal** tab uses the matrix: the "Understanding of the requirement" section lists how the solicitation says
+proposals will be judged and what they must contain, and the assistant is told to answer those points. Lines marked
+**Not applicable** are left out.
+
+PDFs need a text layer; a scan can't be read, so paste its text instead. Everything on the tab is text from the
+document: Workbench never invents a requirement. If the administrator has turned on the
+[assistant](../admin-guide/assistant.md), it also drops lines that aren't real requirements and picks each line's type and
+section; it never rewrites a line.
 
 ## Accounts and contacts
 
