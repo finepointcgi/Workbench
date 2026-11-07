@@ -39,7 +39,8 @@ public sealed record ProposalFacts(
     IReadOnlyList<string> HotButtons,
     IReadOnlyList<string> Strengths,
     IReadOnlyList<(string Name, string Role, decimal Workshare)> Team,
-    string? CompanyCapabilities);
+    string? CompanyCapabilities,
+    IReadOnlyList<string>? SolicitationRequirements = null);
 
 /// <summary>The rules half of proposal drafting: a template with <c>[ADD: …]</c> placeholders wherever the facts run out.</summary>
 public static class ProposalTemplate
@@ -107,6 +108,12 @@ public static class ProposalTemplate
 
         sb.AppendLine().AppendLine($"What matters most to {Customer(f)}:");
         Bullets(sb, f.HotButtons, "[ADD: the customer's hot buttons (Capture plan tab)]");
+        if (f.SolicitationRequirements is { Count: > 0 } asked)
+        {
+            sb.AppendLine().AppendLine("How the solicitation says proposals will be judged and what they must contain:");
+            Bullets(sb, asked, null);
+        }
+
         return sb.ToString().TrimEnd();
     }
 
@@ -210,7 +217,7 @@ public static class ProposalTemplate
         }
     }
 
-    private static string First(string text, int max)
+    internal static string First(string text, int max)
     {
         var t = text.Trim();
         return t.Length <= max ? t : t[..(max - 1)].TrimEnd() + "…";
@@ -487,6 +494,12 @@ public sealed class ProposalService(IWorkbenchDbContextFactory dbFactory, CrmAcc
 
         List<string> Texts(D.CapturePlanItemKind kind) => items.Where(i => i.Kind == kind).Select(i => string.IsNullOrWhiteSpace(i.Detail) ? i.Text : $"{i.Text}: {i.Detail}").ToList();
 
+        // What the solicitation asks of the proposal: evaluation criteria first, then its instructions (not the work statement).
+        var asked = (await db.Set<D.OpportunityRequirement>().AsNoTracking()
+                .Where(r => r.OpportunityId == opportunityId && r.Status != D.RequirementStatus.NotApplicable && (r.Kind == D.RequirementKind.Evaluation || r.Kind == D.RequirementKind.Instruction))
+                .OrderBy(r => r.Order).ToListAsync(ct))
+            .OrderBy(r => r.Kind == D.RequirementKind.Evaluation ? 0 : 1).ThenBy(r => r.Order).Take(12)
+            .Select(r => r.Reference is { Length: > 0 } reference ? $"{reference}: {ProposalTemplate.First(r.Text, 220)}" : ProposalTemplate.First(r.Text, 220)).ToList();
         var profile = (await db.Set<D.CrmSettings>().AsNoTracking().FirstOrDefaultAsync(ct))?.CompanyProfile;
         // The profile's descriptive lines (not the NAICS and status lines, which are for scoring).
         var capabilities = profile is null ? null : string.Join('\n', profile.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
@@ -494,7 +507,7 @@ public sealed class ProposalService(IWorkbenchDbContextFactory dbFactory, CrmAcc
         return new ProposalFacts(o.Name, o.AgencyName, o.SolicitationNumber, o.NaicsCode, o.SetAside.ToString(), o.ContractType?.ToString(), o.PlaceOfPerformance,
             o.PeriodOfPerformanceMonths, o.Description, o.Kind == D.OpportunityKind.Recompete, hasIncumbent, NameOf(o.CaptureManagerEmail), NameOf(o.ProposalManagerEmail),
             Texts(D.CapturePlanItemKind.WinTheme), Texts(D.CapturePlanItemKind.Discriminator), Texts(D.CapturePlanItemKind.HotButton), Texts(D.CapturePlanItemKind.Strength),
-            team.Select(t => (t.Name, t.Role.ToString(), t.WorksharePercent)).ToList(), string.IsNullOrWhiteSpace(capabilities) ? null : capabilities);
+            team.Select(t => (t.Name, t.Role.ToString(), t.WorksharePercent)).ToList(), string.IsNullOrWhiteSpace(capabilities) ? null : capabilities, asked);
     }
 
     private static ProposalSectionDto ToDto(D.ProposalSection s) => new(s.Id, s.Key, s.Title, s.Content, s.Order, s.ByAssistant, s.EditedByHand, s.UpdatedBy, s.UpdatedAtUtc);

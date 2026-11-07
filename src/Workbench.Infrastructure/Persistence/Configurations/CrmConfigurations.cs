@@ -274,6 +274,22 @@ internal sealed class OpportunityPlanItemConfiguration : IEntityTypeConfiguratio
     }
 }
 
+internal sealed class OpportunityRequirementConfiguration : IEntityTypeConfiguration<OpportunityRequirement>
+{
+    public void Configure(EntityTypeBuilder<OpportunityRequirement> b)
+    {
+        b.Property(r => r.Reference).HasMaxLength(64);
+        b.Property(r => r.Text).HasMaxLength(1200);
+        b.Property(r => r.Kind).HasConversion<string>().HasMaxLength(16);
+        b.Property(r => r.Status).HasConversion<string>().HasMaxLength(16);
+        b.Property(r => r.ProposalSectionKey).HasMaxLength(32);
+        b.Property(r => r.Notes).HasMaxLength(2000);
+        b.Property(r => r.CreatedBy).HasMaxLength(320);
+        b.HasIndex(r => r.OpportunityId);
+        b.HasOne<Opportunity>().WithMany().HasForeignKey(r => r.OpportunityId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
 internal sealed class OpportunityMilestoneConfiguration : IEntityTypeConfiguration<OpportunityMilestone>
 {
     public void Configure(EntityTypeBuilder<OpportunityMilestone> b)
