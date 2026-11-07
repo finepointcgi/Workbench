@@ -40,6 +40,15 @@ public sealed class StaffingSuggestionTests
         Assert.Empty(sql.Concerns);
     }
 
+    [Fact]
+    public void With_no_hours_given_a_named_skill_beats_being_merely_free()
+    {
+        var skilled = StaffingSuggestionRules.Score(Person("Sam", 100, 400, Skill("SQL", SkillLevel.Working)), "SQL reporting", null, null);
+        var freer = StaffingSuggestionRules.Score(Person("Pat", 400, 400), "SQL reporting", null, null);
+
+        Assert.True(skilled.Score > freer.Score);
+    }
+
     [Theory]
     [InlineData("Build the C# API", "C#", true)]
     [InlineData("Build the JavaScript front end", "Java", false)]
