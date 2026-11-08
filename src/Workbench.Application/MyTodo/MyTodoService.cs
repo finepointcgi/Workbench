@@ -201,6 +201,7 @@ public static class MyTodoRegistration
         services.AddScoped<IMyTodoProvider, VarianceTodoProvider>();
         services.AddScoped<IMyTodoProvider, CeilingTodoProvider>();
         services.AddScoped<IMyTodoProvider, FundingTodoProvider>();
+        services.AddScoped<IMyTodoProvider, WonHandoffTodoProvider>();
         services.AddScoped<IMyTodoProvider, PeriodCloseTodoProvider>();
         services.AddScoped<IMyTodoProvider, PayrollTodoProvider>();
         services.AddScoped<IMyTodoProvider, ReadyToBillTodoProvider>();

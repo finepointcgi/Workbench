@@ -37,7 +37,7 @@ Open an opportunity for its tabs:
 | **Gates** | Gate reviews (for example the bid/no-bid decision) and their decisions; a gate goes to an approver |
 | **Activity** | Notes, calls and meetings |
 | **B&P** | Bid and proposal hours charged to the pursuit, approved and not yet approved |
-| **Outcome** | Won, lost or no-bid, with the reasons; for a win, **Create contract and project** sets up the award |
+| **Outcome** | Won, lost or no-bid, with the reasons. A win tells Finance, who use **Create contract and project** to set up the award; a status line shows where it stands: waiting on the contract, waiting on funding, planning, live |
 | **History** | Every change |
 
 A [proposal](pricing.md) can be linked to the opportunity to price it.
