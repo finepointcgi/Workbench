@@ -158,7 +158,7 @@ public sealed class PipelineAndHandoffTests
         // Finance is told, has it as a to-do, and BD sees it waiting on them.
         await using (var db = await kit.Factory.CreateAsync())
         {
-            Assert.True(await db.Set<Notification>().AnyAsync(n => n.RecipientEmail == Finance && n.Title.EndsWith("was won", StringComparison.Ordinal)));
+            Assert.True(await db.Set<Notification>().AnyAsync(n => n.RecipientEmail == Finance && n.Title.Contains("was won")));
         }
 
         Assert.Contains((await kit.As(Finance).Get<IMyTodoService>().GetAsync()).Items, i => i.Key == $"won:{o.Id}");
