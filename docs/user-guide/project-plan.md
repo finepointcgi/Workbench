@@ -6,7 +6,7 @@ A project's plan and its WBS are the same tree. Every row you add is a WBS eleme
 people record time against (milestones aren't). Open the project and select the **Plan** tab.
 
 <figure markdown="span">
-  ![The Plan tab: Planned $63,084 of the $2,200,000 ceiling, the plan status checklist, Submit plan for approval, and figures for finish date, hours, labor cost and people](../assets/screenshots/projects-plan.png){ .shot }
+  ![The Plan tab: Planned $63,084 of the $2,200,000 ceiling, the plan status checklist, the status line, and figures for finish date, hours, labor cost and people](../assets/screenshots/projects-plan.png){ .shot }
   <figcaption>The top of the Plan tab: the money against the ceiling, where approval stands, and a summary of the plan.</figcaption>
 </figure>
 
@@ -14,8 +14,8 @@ people record time against (milestones aren't). Open the project and select the 
 
 - **Planned … of … ceiling · … funded · … left**: what the plan costs (labor with fringe, overhead, G&A and fee) against
   the contract's ceiling and funding. **Change the ceiling or funding** and **Labor categories** link to the contract.
-- **The status line**: Draft, submitted, approved or returned, with a **Note for Finance** and **Submit plan for
-  approval**. The checklist shows Funding, Labor categories, Project manager, Plan, Sign-off and Executing.
+- **The status line**: Draft, live, with Finance or returned. Within the contract's money there is nothing to submit:
+  the plan goes live as you build it. Past it, **Send to Finance for approval** (with an optional note) appears. The checklist shows Funding, Labor categories, Project manager, Plan, Sign-off and Executing.
 - **Finishes / Hours / Labor cost / People**: the plan's finish date and slack, hours against the budget, labor cost,
   and whether everyone fits their available hours.
 - **Schedule check**: checks such as tasks without dates, links that go backwards, or summary tasks with resources.
@@ -65,16 +65,18 @@ Use **Import / export** (or **More › Excel**) on the plan:
   with problems, before anything is saved. The file is the whole plan, so rows deleted in Excel are removed.
 - **Download blank template** gets an empty workbook with the columns and instructions.
 
-## Submit the plan for approval
+## Going live, and when Finance gets involved
 
-When it's ready, add a note for Finance if you like and select **Submit plan for approval**.
+You don't submit a plan that stays within the contract's money: it goes live as you build it.
 
-- **Within budget, it approves itself.** A first plan whose labor cost is at or under the project's ceiling (or its
-  funding, when there is no ceiling) becomes the baseline budget at once, and the codes open for charging. Later
-  changes approve themselves too while they stay within the approved plan's hours and its cost. The Plan tab says
-  "Approved automatically", and Finance isn't asked.
-- **Over budget, Finance reviews it.** Finance approves it or returns it with comments, and the note you added goes
-  with it. A plan with no ceiling or funding to measure against also goes to Finance.
+- **Within the contract's money, it goes live by itself.** A plan whose labor cost is at or under the project's ceiling
+  (or its funding, when there is no ceiling) becomes the project's budget at once, and the charge codes open for
+  charging. Changes after that go live the same way, whether they add hours or take them away. The status line says
+  "Live", and Finance isn't asked. If something is still wrong (someone is overbooked, a schedule check fails), the
+  plan waits and the button reads **Make it live**; it lists what's open first.
+- **Past the contract's money, Finance reviews it.** **Send to Finance for approval** appears instead; Finance
+  approves it or returns it with comments, and the note you add goes with it. A plan with no ceiling or funding to
+  measure against also goes to Finance.
 
 After approval, changes to the plan are tracked against the baseline; the Gantt chart can show the baseline beside
 today's plan.

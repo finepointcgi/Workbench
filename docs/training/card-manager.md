@@ -51,9 +51,10 @@ Finance sets up a project from its contract (ceiling, funding, contract type, fe
   work, or gives the hours to someone in the same labor category. Nothing levels the plan by itself.
 - **Try changes**: move a task or change people, see the new finish, cost, ceiling and overbookings, then **Apply
   changes** or **Discard**. **Undo** in the bar puts back the last change.
-- **Submit plan for approval** when it's ready. If it stays within the project's budget it approves itself and becomes
-  the baseline; if it goes over, Finance approves it or returns it with comments. After approval, changes show against
-  the baseline; submit them, and they approve themselves while they stay within the approved hours and cost.
+- Build the plan. Within the contract's ceiling (or funding) it goes live as you work, with nothing to submit, and it
+  becomes the baseline. Past it, **Send to Finance for approval** appears and Finance approves it or returns it with
+  comments. After it's live, changes show against the baseline and go live the same way while they stay within the
+  contract's money.
 
 ## Every month
 
