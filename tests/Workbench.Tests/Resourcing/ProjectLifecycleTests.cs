@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Workbench.Application;
 using Workbench.Application.Identity;
 using Workbench.Contracts.MyTodo;
 using Workbench.Contracts.ProjectAccounting;
@@ -85,8 +86,19 @@ public sealed class ProjectLifecycleTests
         Assert.Contains("labor categories", early.Message, StringComparison.Ordinal);
         await Assert.ThrowsAnyAsync<Exception>(() => PmPlans().SaveCategoriesAsync(project.Id, [host.Se2])); // the PM doesn't choose them
 
+        // Finance can't hand it over while setup is unfinished, and the PM doesn't do the handoff.
+        var notReady = await Assert.ThrowsAsync<ArgumentException>(() => FinancePlans().HandToManagerAsync(project.Id));
+        Assert.Contains("labor categories", notReady.Message, StringComparison.Ordinal);
+
         var set = await FinancePlans().SaveCategoriesAsync(project.Id, [host.Se2]);
         Assert.True(set.SetupDone);
+        await Assert.ThrowsAnyAsync<Exception>(() => PmPlans().HandToManagerAsync(project.Id));
+        await FinancePlans().HandToManagerAsync(project.Id);
+        await using (var db = await host.Get<IWorkbenchDbContextFactory>().CreateAsync())
+        {
+            Assert.Contains(await db.Set<Notification>().AsNoTracking().ToListAsync(), n => n.Title.Contains("is ready to plan", StringComparison.Ordinal) && n.Link == $"projects/{project.Id}/plan");
+        }
+
         Assert.Equal(["SE2"], set.Categories!.Where(c => c.Selected).Select(c => c.Code));
         Assert.Equal("plan", set.Steps!.Single(s => s.Current).Key);
 

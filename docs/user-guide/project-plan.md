@@ -13,7 +13,7 @@ people record time against (milestones aren't). Open the project and select the 
 ## The summary at the top
 
 - **Planned … of … ceiling · … funded · … left**: what the plan costs (labor with fringe, overhead, G&A and fee) against
-  the contract's ceiling and funding. **Change the ceiling or funding** and **Labor categories** link to the contract.
+  the contract's ceiling and funding. **Change the ceiling or funding** and **Labor categories** link to the contract. While a new project is waiting on setup, Finance sees a **Set up for planning** checklist at the top: contract funding (with a button to the contract), labor categories (pick them, or **Use the contract's categories**), and the project manager. **Tell the project manager** sends the notification that it is ready to plan.
 - **The status line**: Draft, live, with Finance or returned. Within the contract's money there is nothing to submit:
   the plan goes live as you build it. Past it, **Send to Finance for approval** (with an optional note) appears. The checklist shows Funding, Labor categories, Project manager, Plan, Sign-off and Executing.
 - **Finishes / Hours / Labor cost / People**: the plan's finish date and slack, hours against the budget, labor cost,

@@ -96,6 +96,7 @@ public sealed class ProjectSetupStepsTests
 
         public Task<ProjectPlanDto> SaveTermsAsync(Guid projectId, SaveProjectTermsRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
+        public Task<ProjectPlanDto> HandToManagerAsync(Guid projectId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<ProjectPlanDto> SaveCategoriesAsync(Guid projectId, IReadOnlyList<Guid> laborCategoryIds, CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
         public Task<ProjectPlanDto> SubmitAsync(Guid projectId, string? note = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
