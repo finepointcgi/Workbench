@@ -336,6 +336,27 @@ public sealed class ProjectPlanTests
         Assert.Equal(PlanApprovalStatus.Submitted, submitted.Status);
     }
 
+    [Theory]
+    [InlineData(1_000_000, true)] // funded well above the plan: approves itself
+    [InlineData(100, false)]      // funded below the plan: goes to Finance
+    public async Task A_contract_with_funding_but_no_ceiling_is_measured_against_its_funding(int funded, bool approvesItself)
+    {
+        await using var host = await CreateAsync();
+        await using (var db = await host.Db.CreateAsync())
+        {
+            var contract = await db.Set<Workbench.Domain.ProjectAccounting.Contract>().SingleAsync();
+            (contract.CeilingValue, contract.FundedValue) = (0m, funded);
+            await db.SaveChangesAsync();
+        }
+
+        var build = await ItemAsync(host, "Build");
+        await host.Get<IResourcePlanService>().ApplyAsync(host.Project1, [new PlanChange(PlanChangeKind.SetPerson, ItemId: build, EmployeeId: host.DevId, Hours: 80m)]);
+
+        var submitted = await host.As(Pm).Get<IProjectPlanService>().SubmitAsync(host.Project1);
+
+        Assert.Equal(approvesItself ? PlanApprovalStatus.Approved : PlanApprovalStatus.Submitted, submitted.Status);
+    }
+
     [Fact]
     public async Task Changes_to_an_approved_plan_approve_themselves_while_they_stay_within_its_hours_and_cost_and_go_to_finance_when_they_do_not()
     {
