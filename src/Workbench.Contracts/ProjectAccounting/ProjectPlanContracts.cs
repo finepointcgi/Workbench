@@ -146,7 +146,14 @@ public sealed record ProjectPlanDto(
     IReadOnlyList<ProjectCategoryDto>? Categories = null,
 
     /// <summary>Finance has added what the project manager plans against (funding and labor categories), so the plan can be submitted.</summary>
-    bool SetupDone = true)
+    bool SetupDone = true,
+
+    /// <summary>
+    /// Submitting now would approve the plan on the spot: it has hours, it is within the contract's money, and it has
+    /// something to approve (a first plan, or changes since the last approval). The plan page then makes it live
+    /// without asking the project manager to submit; otherwise Finance reviews it.
+    /// </summary>
+    bool ApprovesItself = false)
 {
     public decimal HoursChange => SinceBaseline.Sum(l => l.HoursChange);
 

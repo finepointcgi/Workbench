@@ -124,7 +124,7 @@ public sealed class ProjectPlanService(
         audit.Record(db, nameof(ProjectPlan), plan.Id, "Submitted", new { Status = before }, new { plan.Status, Note = plan.SubmitNote });
         await db.SaveChangesAsync(cancellationToken);
 
-        var withinBudget = (options?.Value.AutoApprovePlansWithinBudget ?? true) && await WithinBudgetAsync(db, project, plan, lines, cancellationToken);
+        var withinBudget = (options?.Value.AutoApprovePlansWithinBudget ?? true) && await WithinBudgetAsync(db, project, lines, cancellationToken);
         if (notifications is not null && !withinBudget)
         {
             var finance = await ApproverRoles.MembersAsync(db, ApprovalOrgRole.Finance.ToString(), cancellationToken);
@@ -213,27 +213,14 @@ public sealed class ProjectPlanService(
     public const string AutomaticReviewer = "Workbench";
 
     /// <summary>
-    /// Whether the plan stays within its budget, so it needs no review. A plan that was approved before is held to that
-    /// budget (the working budget's hours and cost); a first plan is held to the project's ceiling, or its funding when
-    /// there is no ceiling. With neither there is nothing to measure against, so Finance reviews it.
+    /// Whether the plan stays within the contract's money, so it needs no review: its cost against the ceiling, or the
+    /// funding when there is no ceiling. That holds for a first plan and for changes after approval alike, so a project
+    /// manager can move people around inside the contract without Finance. With neither figure there is nothing to
+    /// measure against, so Finance reviews it.
     /// </summary>
-    private static async Task<bool> WithinBudgetAsync(IWorkbenchDbContext db, Project project, ProjectPlan plan, IReadOnlyList<PlanLine> lines, CancellationToken ct)
+    private static async Task<bool> WithinBudgetAsync(IWorkbenchDbContext db, Project project, IReadOnlyList<PlanLine> lines, CancellationToken ct)
     {
-        var hours = lines.Sum(l => l.Hours);
         var cost = lines.Sum(l => l.DirectCost);
-        if (plan.Approvals > 0)
-        {
-            var current = await db.Set<BudgetVersion>().AsNoTracking().Where(v => v.ProjectId == project.Id && v.Kind == BudgetKind.Current)
-                .OrderByDescending(v => v.CreatedAtUtc).Select(v => v.Id).FirstOrDefaultAsync(ct);
-            if (current == Guid.Empty)
-            {
-                return false;
-            }
-
-            var approved = await db.Set<BudgetLine>().AsNoTracking().Where(l => l.BudgetVersionId == current && l.CostType == BudgetCostType.Labor).ToListAsync(ct);
-            return approved.Count > 0 && hours <= approved.Sum(l => l.Hours) + 0.005m && cost <= approved.Sum(l => l.Amount) + 0.005m;
-        }
-
         var terms = (await ProjectTerms.LoadAsync(db, project, ct)).Terms;
         var limit = terms.Ceiling is > 0 ? terms.Ceiling : terms.Funded is > 0 ? terms.Funded : null;
         return limit is { } cap && cost <= cap;
@@ -370,9 +357,9 @@ public sealed class ProjectPlanService(
             .OrderByDescending(v => v.CreatedAtUtc).FirstOrDefaultAsync(ct);
         IReadOnlyList<PlanChangeLineDto> since = [];
         var changed = false;
+        var lines = await PlanLinesAsync(db, project.Id, ct);
         if (baseline is not null)
         {
-            var lines = await PlanLinesAsync(db, project.Id, ct);
             var baseLines = await db.Set<BudgetLine>().AsNoTracking().Where(l => l.BudgetVersionId == baseline.Id && l.CostType == BudgetCostType.Labor).ToListAsync(ct);
             var categories = await db.Set<LaborCategory>().AsNoTracking().ToDictionaryAsync(c => c.Id, c => $"{c.Code} {c.Name}", ct);
             since = baseLines.Select(l => l.LaborCategoryId).Concat(lines.Select(l => l.LaborCategoryId)).Distinct()
@@ -384,13 +371,18 @@ public sealed class ProjectPlanService(
             changed = plan?.Status == ProjectPlanStatus.Approved && await ChangedSinceApprovalAsync(db, project.Id, lines, ct);
         }
 
+        var setupDone = project.Status != ProjectStatus.Planning || (await MissingSetupAsync(db, project, ct)).Count == 0;
+        var status = plan?.Status ?? ProjectPlanStatus.Draft;
+        var approvesItself = (options?.Value.AutoApprovePlansWithinBudget ?? true) && setupDone && lines.Count > 0
+            && (status is ProjectPlanStatus.Draft or ProjectPlanStatus.Returned || (status == ProjectPlanStatus.Approved && changed))
+            && await WithinBudgetAsync(db, project, lines, ct);
         return new ProjectPlanDto(project.Id, project.Code, project.Name, manager, loaded.Terms,
             (PlanApprovalStatus)(int)(plan?.Status ?? ProjectPlanStatus.Draft),
             plan?.SubmittedBy, plan?.SubmittedAtUtc, plan?.SubmitNote, plan?.ReviewedBy, plan?.ReviewedAtUtc, plan?.ReviewComment, plan?.Approvals ?? 0,
             baseline?.Id, changed, since, CanEditTerms: false, CanSubmit: false, CanReview: false,
             SubmittedByName: await NameAsync(db, plan?.SubmittedBy, ct), ReviewedByName: await NameAsync(db, plan?.ReviewedBy, ct),
             ProjectStatus: (ProjectState)(int)project.Status, Steps: await StepsAsync(db, project, loaded.Terms, plan, ct),
-            Categories: await CategoriesAsync(db, project, ct), SetupDone: project.Status != ProjectStatus.Planning || (await MissingSetupAsync(db, project, ct)).Count == 0);
+            Categories: await CategoriesAsync(db, project, ct), SetupDone: setupDone, ApprovesItself: approvesItself);
     }
 
     /// <summary>What Finance still has to add before the manager can submit: funding (contract projects) and labor categories.</summary>

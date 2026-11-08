@@ -55,6 +55,34 @@ public sealed class AssigneeStaffingTests
     }
 
     [Fact]
+    public async Task Someone_assigned_in_a_category_the_project_doesnt_use_says_so_and_fills_in_once_a_category_is_picked()
+    {
+        await using var host = await HostAsync();
+        var build = await ItemAsync(host, "Build");
+        await using (var db = await host.Db.CreateAsync())
+        {
+            // Finance picked Systems Engineer II only; Alex is a Business Analyst II.
+            db.Set<Workbench.Domain.ProjectAccounting.ProjectLaborCategory>().Add(new() { ProjectId = host.Project1, LaborCategoryId = host.Se2, CreatedBy = Pm, CreatedAtUtc = DateTime.UtcNow });
+            await db.SaveChangesAsync();
+        }
+
+        await host.As(Pm).Get<ITaskAssignmentService>().SetAssigneesAsync(host.SheetId, build, new SetAssigneesRequest([Analyst]));
+
+        var plan = host.As(Pm).Get<IResourcePlanService>();
+        var blank = (await plan.GetAsync(host.Project1)).Task(build)!.People.Single();
+        Assert.True(blank.NoHoursYet);
+        Assert.Contains("labor categories", Assert.Single(blank.Issues), StringComparison.Ordinal);
+
+        // Picking a category is enough: no hours to type, they get their standard day over the task.
+        var wbs = (await plan.GetAsync(host.Project1)).Task(build)!.WbsElementId;
+        await plan.ApplyAsync(host.Project1, [new PlanChange(PlanChangeKind.SetPerson, WbsElementId: wbs, EmployeeId: host.AnalystId, LaborCategoryId: host.Se2)]);
+
+        var filled = Assert.Single((await plan.GetAsync(host.Project1)).Task(build)!.People);
+        Assert.False(filled.NoHoursYet);
+        Assert.Equal(80m, filled.Hours); // ten working days from Oct 19 to Oct 30, a 40 hour week, none of them a holiday
+    }
+
+    [Fact]
     public async Task Assigning_someone_who_already_has_hours_on_the_task_leaves_their_hours_alone()
     {
         await using var host = await HostAsync();

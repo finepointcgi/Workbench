@@ -358,7 +358,7 @@ public sealed class ProjectPlanTests
     }
 
     [Fact]
-    public async Task Changes_to_an_approved_plan_approve_themselves_while_they_stay_within_its_hours_and_cost_and_go_to_finance_when_they_do_not()
+    public async Task Changes_to_an_approved_plan_approve_themselves_while_the_plan_stays_within_the_contracts_money_and_go_to_finance_when_it_does_not()
     {
         await using var host = await CreateAsync();
         var build = await ItemAsync(host, "Build");
@@ -367,16 +367,22 @@ public sealed class ProjectPlanTests
         await host.As(Pm).Get<IProjectPlanService>().SubmitAsync(host.Project1);
         var assignment = (await host.As(Pm).Get<IResourcePlanService>().GetAsync(host.Project1)).Task(build)!.People.Single().AssignmentId;
 
-        // Fewer hours: still inside the approved budget.
+        // Fewer hours, and then more than the approved budget held: both inside the contract, so neither needs Finance.
         await resources.ApplyAsync(host.Project1, [new PlanChange(PlanChangeKind.SetPerson, AssignmentId: assignment, Hours: 60m)]);
+        Assert.True((await host.As(Pm).Get<IProjectPlanService>().GetAsync(host.Project1)).ApprovesItself);
         var smaller = await host.As(Pm).Get<IProjectPlanService>().SubmitAsync(host.Project1);
         Assert.Equal((PlanApprovalStatus.Approved, 2, "Workbench"), (smaller.Status, smaller.Approvals, smaller.ReviewedBy));
         Assert.Equal(60m, Assert.Single(await host.Get<IBudgetService>().ListVersionsAsync(host.Project1), v => v.Kind == BudgetVersionKind.Current).TotalHours);
-
-        // More hours than the approved budget holds: Finance decides.
         await resources.ApplyAsync(host.Project1, [new PlanChange(PlanChangeKind.SetPerson, AssignmentId: assignment, Hours: 90m)]);
         var bigger = await host.As(Pm).Get<IProjectPlanService>().SubmitAsync(host.Project1);
-        Assert.Equal(PlanApprovalStatus.Submitted, bigger.Status);
+        Assert.Equal((PlanApprovalStatus.Approved, 3), (bigger.Status, bigger.Approvals));
+
+        // Past the contract's ceiling: Finance decides, and the page doesn't make it live on its own.
+        await OverBudgetAsync(host, host.Project1);
+        await host.As(Pm).Get<IResourcePlanService>().ApplyAsync(host.Project1, [new PlanChange(PlanChangeKind.SetPerson, AssignmentId: assignment, Hours: 100m)]);
+        Assert.False((await host.As(Pm).Get<IProjectPlanService>().GetAsync(host.Project1)).ApprovesItself);
+        var over = await host.As(Pm).Get<IProjectPlanService>().SubmitAsync(host.Project1);
+        Assert.Equal(PlanApprovalStatus.Submitted, over.Status);
     }
 
     [Fact]
