@@ -92,6 +92,8 @@ public sealed class CrmPagesTests
         public Task<OpportunityDto> ReopenAsync(Guid id, ChangeStageRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<StageChangeDto>> GetHistoryAsync(Guid id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<HandoffResultDto> HandoffAsync(Guid id, HandoffRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<HandoffStatusDto?> GetHandoffStatusAsync(Guid id, CancellationToken cancellationToken = default) => Task.FromResult<HandoffStatusDto?>(null);
         public Task<OpportunityDto> EnsureBpChargeCodeAsync(Guid id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 

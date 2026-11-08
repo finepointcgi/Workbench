@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Workbench.Contracts.Approvals;
 using Workbench.Contracts.Crm;
 using Workbench.Contracts.MyTodo;
+using Workbench.Domain.Notifications;
 using Workbench.Domain.ProjectAccounting;
 using static Workbench.Tests.Identity.SeededHost;
 
@@ -143,6 +144,53 @@ public sealed class PipelineAndHandoffTests
         Assert.Equal(result.CustomerId, (await kit.As(CrmKit.Bd).Accounts.GetAccountAsync(kit.PeoId)).CustomerId);
         await Assert.ThrowsAsync<ArgumentException>(() => kit.As(Finance).Opportunities.HandoffAsync(o.Id, new HandoffRequest("W2", "3004")));
         await Assert.ThrowsAsync<ArgumentException>(() => kit.As(CrmKit.Bd).Opportunities.ReopenAsync(o.Id, new ChangeStageRequest(OpportunityStage.Submitted)));
+    }
+
+    [Fact]
+    public async Task A_win_tells_finance_and_the_status_follows_it_from_contract_through_funding_to_planning()
+    {
+        await using var kit = await CrmKit.CreateAsync();
+        var o = await kit.AdvanceAsync((await kit.NewAsync("Help desk", 3_000_000m)).Id, OpportunityStage.Submitted);
+        Assert.Null(await kit.As(CrmKit.Bd).Opportunities.GetHandoffStatusAsync(o.Id)); // not won yet
+
+        await kit.As(CrmKit.Bd).Opportunities.RecordOutcomeAsync(o.Id, new RecordOutcomeRequest(OpportunityStage.Won, OutcomeReason.Technical, DecidedOn: new DateOnly(2026, 10, 15)));
+
+        // Finance is told, has it as a to-do, and BD sees it waiting on them.
+        await using (var db = await kit.Factory.CreateAsync())
+        {
+            Assert.True(await db.Set<Notification>().AnyAsync(n => n.RecipientEmail == Finance && n.Title.Contains("was won")));
+        }
+
+        Assert.Contains((await kit.As(Finance).Get<IMyTodoService>().GetAsync()).Items, i => i.Key == $"won:{o.Id}");
+        Assert.Equal(HandoffStage.WaitingForContract, (await kit.As(CrmKit.Bd).Opportunities.GetHandoffStatusAsync(o.Id))!.Stage);
+
+        // Funded so far can't pass the base period; within it, it funds the base CLIN and the contract.
+        kit.As(Finance);
+        await Assert.ThrowsAsync<ArgumentException>(() => kit.Opportunities.HandoffAsync(o.Id, new HandoffRequest("F1", "3010", CustomerCode: "PEO", FundedValue: 9_000_000m)));
+        var result = await kit.Opportunities.HandoffAsync(o.Id, new HandoffRequest("F1", "3010", CustomerCode: "PEO", ProjectManagerId: kit.Fx.PmId, FundedValue: 250_000m));
+        await using (var db = await kit.Factory.CreateAsync())
+        {
+            Assert.Equal(250_000m, (await db.Set<Contract>().SingleAsync(c => c.Id == result.ContractId)).FundedValue);
+            var clins = await db.Set<Clin>().Where(c => c.ContractId == result.ContractId).OrderBy(c => c.Order).ToListAsync();
+            Assert.Equal([250_000m, 0m, 0m], clins.Select(c => c.FundedValue));
+        }
+
+        // Funded, but Finance still has to pick the project's labor categories.
+        var waiting = (await kit.As(CrmKit.Bd).Opportunities.GetHandoffStatusAsync(o.Id))!;
+        Assert.Equal((HandoffStage.WaitingForFunding, "labor categories"), (waiting.Stage, Assert.Single(waiting.Waiting)));
+        var todos = (await kit.As(Finance).Get<IMyTodoService>().GetAsync()).Items;
+        Assert.DoesNotContain(todos, i => i.Key == $"won:{o.Id}");
+        Assert.Contains(todos, i => i.Key == $"setup-project:{result.ProjectId}" && i.Title.Contains("labor categories", StringComparison.Ordinal));
+
+        await using (var db = await kit.Factory.CreateAsync())
+        {
+            var any = await db.Set<LaborCategory>().Select(c => c.Id).FirstAsync();
+            db.Set<ProjectLaborCategory>().Add(new() { ProjectId = result.ProjectId, LaborCategoryId = any, CreatedBy = Finance, CreatedAtUtc = DateTime.UtcNow });
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Equal(HandoffStage.Planning, (await kit.As(CrmKit.Bd).Opportunities.GetHandoffStatusAsync(o.Id))!.Stage);
+        Assert.DoesNotContain((await kit.As(Finance).Get<IMyTodoService>().GetAsync()).Items, i => i.Key == $"setup-project:{result.ProjectId}");
     }
 
     [Fact]

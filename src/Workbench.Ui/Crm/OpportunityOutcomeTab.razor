@@ -72,6 +72,10 @@ else
     @if (Opportunity.Stage == OpportunityStage.Won)
     {
         <MudText Typo="Typo.subtitle1" HtmlTag="h2">Handoff</MudText>
+        @if (_handoff is { } status)
+        {
+            <MudAlert Severity="@(status.Stage == HandoffStage.Live ? Severity.Success : Severity.Info)" Dense="true" Class="mb-2" data-testid="handoff-status">@status.Summary</MudAlert>
+        }
         @if (Opportunity.ContractId is { } contract)
         {
             <MudText data-testid="handoff-done">
@@ -85,7 +89,7 @@ else
         }
         else if (!IsFinance)
         {
-            <MudText Class="mud-text-secondary">Finance creates the customer, contract and project from a won opportunity.</MudText>
+            <MudText Class="mud-text-secondary">Finance has been told. They create the customer, contract and project from a won opportunity, and add its funding.</MudText>
         }
         else
         {
@@ -110,6 +114,9 @@ else
                 <MudItem xs="12" sm="8"><MudTextField T="string" @bind-Value="_contractName" Label="Contract name" MaxLength="200" /></MudItem>
                 <MudItem xs="12" sm="4"><MudTextField T="string" @bind-Value="_projectCode" Label="Project code" MaxLength="64" data-testid="handoff-project" /></MudItem>
                 <MudItem xs="12" sm="4"><MudTextField T="string" @bind-Value="_projectName" Label="Project name" MaxLength="200" /></MudItem>
+                <MudItem xs="12" sm="4">
+                    <MudNumericField T="decimal?" @bind-Value="_funded" Label="Funded so far ($)" Format="N0" Min="0" HelperText="Optional. Funds the base CLINs; add the rest in contract setup" data-testid="handoff-funded" />
+                </MudItem>
                 <MudItem xs="12" sm="4">
                     <MudSelect T="Guid?" @bind-Value="_pm" Label="Project manager" Clearable="true">
                         @foreach (var e in _employees)
@@ -144,6 +151,8 @@ else
     [Parameter] public EventCallback<OpportunityDto> Changed { get; set; }
 
     private OpportunityStage? _outcome; // chosen on purpose: a win starts a handoff
+    private decimal? _funded;
+    private HandoffStatusDto? _handoff;
     private OutcomeReason? _reason;
     private DateTime? _decidedOn = DateTime.Today;
     private decimal? _awarded;
@@ -164,6 +173,19 @@ else
 
     protected override async Task OnParametersSetAsync()
     {
+        _handoff = null;
+        if (Opportunity.Stage == OpportunityStage.Won)
+        {
+            try
+            {
+                _handoff = await Opportunities.GetHandoffStatusAsync(Opportunity.Id);
+            }
+            catch (Exception ex) when (CrmFormat.IsExpected(ex))
+            {
+                // The line is a convenience: the tab works without it.
+            }
+        }
+
         if (Opportunity.Stage == OpportunityStage.Won && Opportunity.ContractId is null && IsFinance && _customers.Count == 0)
         {
             try
@@ -194,7 +216,7 @@ else
         await RunAsync(async () =>
         {
             result = await Opportunities.HandoffAsync(Opportunity.Id, new HandoffRequest(_contractNumber ?? "", _projectCode ?? "", _customerId, _customerCode, _customerName,
-                _contractName, _projectName, _pm));
+                _contractName, _projectName, _pm, null, _funded));
             return await Opportunities.GetAsync(Opportunity.Id);
         }, "Contract and project created. Set up the project's plan next.");
         if (result is { ProjectId: var projectId })

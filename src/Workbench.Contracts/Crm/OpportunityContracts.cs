@@ -212,7 +212,35 @@ public sealed record HandoffRequest(
     string? ContractName = null,
     string? ProjectName = null,
     Guid? ProjectManagerId = null,
-    IReadOnlyList<HandoffClin>? Clins = null);
+    IReadOnlyList<HandoffClin>? Clins = null,
+
+    /// <summary>What the award has funded so far, if Finance knows it. It funds the base CLINs in order; option years are funded when exercised.</summary>
+    decimal? FundedValue = null);
+
+/// <summary>Where a won opportunity stands on its way to a live project.</summary>
+public enum HandoffStage
+{
+    /// <summary>Won; Finance hasn't created the contract and project yet.</summary>
+    WaitingForContract,
+
+    /// <summary>The contract and project exist; Finance still has to add funding or the project's labor categories.</summary>
+    WaitingForFunding,
+
+    /// <summary>Set up: the project manager is planning.</summary>
+    Planning,
+
+    /// <summary>The plan is live and time can be charged to the project.</summary>
+    Live,
+}
+
+public sealed record HandoffStatusDto(
+    HandoffStage Stage,
+    string Summary,
+    Guid? ContractId,
+    string? ContractNumber,
+    Guid? ProjectId,
+    string? ProjectCode,
+    IReadOnlyList<string> Waiting);
 
 public sealed record HandoffResultDto(Guid OpportunityId, Guid CustomerId, Guid ContractId, Guid ProjectId, IReadOnlyList<Guid> ClinIds, bool CreatedCustomer);
 
@@ -247,6 +275,9 @@ public interface IOpportunityService
 
     /// <summary>Finance or administrators: creates the customer/contract/project shells for a won opportunity, linked back to it.</summary>
     Task<HandoffResultDto> HandoffAsync(Guid id, HandoffRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>Where a won opportunity stands (contract, funding, planning, live); null while it isn't won.</summary>
+    Task<HandoffStatusDto?> GetHandoffStatusAsync(Guid id, CancellationToken cancellationToken = default);
 
     /// <summary>Creates the B&amp;P charge code now if the opportunity is at Capture or later and has none (e.g. after setting the B&amp;P element).</summary>
     Task<OpportunityDto> EnsureBpChargeCodeAsync(Guid id, CancellationToken cancellationToken = default);

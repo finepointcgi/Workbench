@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
+using Workbench.Application.Approvals;
 using Workbench.Application.Notifications;
 using Workbench.Application.ProjectAccounting;
 using Workbench.Contracts;
+using Workbench.Contracts.Approvals;
 using Workbench.Contracts.Contracts;
 using Workbench.Contracts.Crm;
 using Workbench.Contracts.Identity;
@@ -19,6 +21,7 @@ public static class CrmNotificationKinds
     public const string GateDecided = "crm.gate.decided";
     public const string NewLeads = "crm.leads";
     public const string HandedOff = "crm.handoff";
+    public const string Won = "crm.won";
     public const string TaskAssigned = "crm.task";
 }
 
@@ -435,7 +438,22 @@ public sealed class OpportunityService(
         await MoveAsync(db, opportunity, outcome, access.Email, request.Notes, audit, UtcNow, cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
         await NotifyStageAsync(opportunity);
+        if (outcome == D.OpportunityStage.Won)
+        {
+            await NotifyFinanceOfWinAsync(db, opportunity, cancellationToken);
+        }
+
         return await GetAsync(id, cancellationToken);
+    }
+
+    /// <summary>A win is Finance's cue: they create the contract and project and add its funding.</summary>
+    private async Task NotifyFinanceOfWinAsync(IWorkbenchDbContext db, D.Opportunity opportunity, CancellationToken ct)
+    {
+        var finance = await ApproverRoles.MembersAsync(db, ApprovalOrgRole.Finance.ToString(), ct);
+        await notifications.PublishAsync(finance.Where(e => !string.Equals(e, access.Email, StringComparison.OrdinalIgnoreCase)),
+            CrmNotificationKinds.Won, $"{opportunity.Number} {opportunity.Name} was won",
+            "Create its contract and project, and add the funding and labor categories so the project manager can plan.",
+            link: $"bd/opportunities/{opportunity.Id}?tab=outcome");
     }
 
     public async Task<OpportunityDto> ReopenAsync(Guid id, ChangeStageRequest request, CancellationToken cancellationToken = default)
@@ -585,6 +603,14 @@ public sealed class OpportunityService(
             throw new ArgumentException("CLIN numbers must be unique.");
         }
 
+        var funded = Math.Round(request.FundedValue ?? 0m, 2);
+        var baseTotal = clins.Where(c => !c.IsOption).Sum(c => c.CeilingValue);
+        if (funded < 0 || funded > baseTotal)
+        {
+            throw new ArgumentException($"Funded so far can't be more than the base period's value ({baseTotal:C0}); option years are funded when they're exercised.");
+        }
+
+        var unfunded = funded;
         var clinIds = new List<Guid>();
         var order = 0;
         foreach (var c in clins)
@@ -598,13 +624,20 @@ public sealed class OpportunityService(
             {
                 ContractId = contract.Id, Number = CrmMapping.Required(c.Number, 16, "CLIN number"), Description = CrmMapping.Required(c.Description, 300, "CLIN description"),
                 Pricing = (ClinPricing)(int)c.Pricing, IsOption = c.IsOption, IsExercised = !c.IsOption, PeriodStart = c.PeriodStart, PeriodEnd = c.PeriodEnd,
-                CeilingValue = Math.Round(c.CeilingValue, 2), FundedValue = 0m, FeeRate = null, Order = order++,
+                CeilingValue = Math.Round(c.CeilingValue, 2), FeeRate = null, Order = order++,
             };
+            if (!c.IsOption)
+            {
+                clin.FundedValue = Math.Min(unfunded, clin.CeilingValue);
+                unfunded -= clin.FundedValue;
+            }
             db.Set<Clin>().Add(clin);
             clinIds.Add(clin.Id);
             audit.Record(db, nameof(Clin), clin.Id, "Created", after: new { clin.Number, clin.Description, Pricing = clin.Pricing.ToString(), clin.IsOption, clin.CeilingValue },
                 reason: $"Placeholder from won opportunity {opportunity.Number}");
         }
+
+        contract.FundedValue = funded;
 
         var project = new Project
         {
@@ -627,6 +660,35 @@ public sealed class OpportunityService(
             CrmNotificationKinds.HandedOff, $"{opportunity.Number} {opportunity.Name} was handed off", $"Contract {contract.ContractNumber}, project {project.Code} (planning)",
             link: $"setup/contracts/{contract.Id}");
         return new HandoffResultDto(opportunity.Id, customer.Id, contract.Id, project.Id, clinIds, createdCustomer);
+    }
+
+    public async Task<HandoffStatusDto?> GetHandoffStatusAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        await using var db = await dbFactory.CreateAsync(cancellationToken);
+        var opportunity = await db.Set<D.Opportunity>().AsNoTracking().FirstOrDefaultAsync(o => o.Id == id, cancellationToken)
+            ?? throw WorkbenchNotFoundException.For("Opportunity", id);
+        if (opportunity.Stage != D.OpportunityStage.Won)
+        {
+            return null;
+        }
+
+        var project = opportunity.ProjectId is { } projectId ? await db.Set<Project>().AsNoTracking().FirstOrDefaultAsync(p => p.Id == projectId, cancellationToken) : null;
+        var contract = opportunity.ContractId is { } contractId ? await db.Set<Contract>().AsNoTracking().FirstOrDefaultAsync(c => c.Id == contractId, cancellationToken) : null;
+        if (project is null || contract is null)
+        {
+            return new HandoffStatusDto(HandoffStage.WaitingForContract, "Won. Waiting on Finance to create the contract and project.", null, null, null, null, ["the contract and project"]);
+        }
+
+        var missing = await ProjectPlanService.MissingSetupAsync(db, project, cancellationToken);
+        if (missing.Count > 0)
+        {
+            return new HandoffStatusDto(HandoffStage.WaitingForFunding, $"Contract {contract.ContractNumber} is set up. Waiting on Finance to add {string.Join(" and ", missing)} before the project can be planned.",
+                contract.Id, contract.ContractNumber, project.Id, project.Code, missing);
+        }
+
+        return project.Status == ProjectStatus.Planning
+            ? new HandoffStatusDto(HandoffStage.Planning, $"Funded and ready. The project manager is planning {project.Code}.", contract.Id, contract.ContractNumber, project.Id, project.Code, [])
+            : new HandoffStatusDto(HandoffStage.Live, $"Live. Time can be charged to {project.Code}.", contract.Id, contract.ContractNumber, project.Id, project.Code, []);
     }
 
     /// <summary>Placeholders: a 12-month base CLIN 0001 and option CLINs 1001, 2001, … for each further year, the value split evenly.</summary>
