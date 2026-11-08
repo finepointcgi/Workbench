@@ -35,6 +35,9 @@ public sealed class HttpOpportunityService(HttpClient http) : IOpportunityServic
     public async Task<HandoffResultDto> HandoffAsync(Guid id, HandoffRequest request, CancellationToken cancellationToken = default) =>
         await (await http.PostAsJsonAsync($"{Base}/{id}/handoff", request, cancellationToken)).ReadAsync<HandoffResultDto>(cancellationToken);
 
+    public async Task<HandoffStatusDto?> GetHandoffStatusAsync(Guid id, CancellationToken cancellationToken = default) =>
+        await (await http.GetAsync($"{Base}/{id}/handoff-status", cancellationToken)).ReadAsync<HandoffStatusDto?>(cancellationToken);
+
     public async Task<OpportunityDto> EnsureBpChargeCodeAsync(Guid id, CancellationToken cancellationToken = default) =>
         await (await http.PostAsync($"{Base}/{id}/bp-charge-code", null, cancellationToken)).ReadAsync<OpportunityDto>(cancellationToken);
 }

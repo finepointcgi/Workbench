@@ -32,6 +32,7 @@ internal static class CrmEndpoints
         o.MapPost("/{id:guid}/outcome", (Guid id, RecordOutcomeRequest r, IOpportunityService s, CancellationToken ct) => s.RecordOutcomeAsync(id, r, ct));
         o.MapPost("/{id:guid}/reopen", (Guid id, ChangeStageRequest r, IOpportunityService s, CancellationToken ct) => s.ReopenAsync(id, r, ct));
         o.MapGet("/{id:guid}/history", (Guid id, IOpportunityService s, CancellationToken ct) => s.GetHistoryAsync(id, ct));
+        o.MapGet("/{id:guid}/handoff-status", (Guid id, IOpportunityService s, CancellationToken ct) => s.GetHandoffStatusAsync(id, ct));
         o.MapPost("/{id:guid}/handoff", (Guid id, HandoffRequest r, IOpportunityService s, CancellationToken ct) => s.HandoffAsync(id, r, ct));
         o.MapPost("/{id:guid}/bp-charge-code", (Guid id, IOpportunityService s, CancellationToken ct) => s.EnsureBpChargeCodeAsync(id, ct));
         o.MapGet("/{id:guid}/gate-reviews", (Guid id, IOpportunityGateService s, CancellationToken ct) => s.ListReviewsAsync(id, ct));

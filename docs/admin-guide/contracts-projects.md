@@ -49,7 +49,7 @@ Every project. Open one to set it up on its own page: details, plan and charge c
 **New project** is the same form project managers use (see
 [Start a project](../user-guide/projects.md#start-a-project)). A project on a contract starts in **Planning**:
 
-1. Finance adds its **funding** and picks the **labor categories** it may use.
+1. Finance adds its **funding** and picks the **labor categories** it may use. For a won opportunity, Finance is told and gets a to-do; the handoff form takes an optional **Funded so far** amount, which funds the base CLINs (option years are funded when exercised). Business development sees the status on the opportunity's Outcome tab until the project is live.
 2. The project manager builds the **plan** (the WBS) and assigns people.
 3. The plan is **approved**. It becomes the baseline budget, and the charge codes open for time. A plan within the
    project's ceiling (or funding) approves itself when the manager submits it; one over it waits for Finance.

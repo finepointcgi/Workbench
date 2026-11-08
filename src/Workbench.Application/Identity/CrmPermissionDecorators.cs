@@ -94,6 +94,12 @@ public sealed class PermissionCheckingOpportunityService(IOpportunityService inn
         return await inner.HandoffAsync(id, request, cancellationToken);
     }
 
+    public async Task<HandoffStatusDto?> GetHandoffStatusAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        await access.RequireReadAsync(id, cancellationToken);
+        return await inner.GetHandoffStatusAsync(id, cancellationToken);
+    }
+
     public async Task<OpportunityDto> EnsureBpChargeCodeAsync(Guid id, CancellationToken cancellationToken = default)
     {
         await access.RequireEditAsync(id, cancellationToken);
