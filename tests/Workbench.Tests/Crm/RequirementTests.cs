@@ -204,6 +204,63 @@ public sealed class RequirementTests
     }
 
     [Fact]
+    public void Word_auto_numbering_is_read_as_the_numbers_a_person_sees()
+    {
+        using var stream = new MemoryStream();
+        using (var doc = WordprocessingDocument.Create(stream, DocumentFormat.OpenXml.WordprocessingDocumentType.Document))
+        {
+            var main = doc.AddMainDocumentPart();
+            // Multilevel list "1." / "1.1" / "(a)", the way Word numbers a statement of work.
+            main.AddNewPart<NumberingDefinitionsPart>().Numbering = new Numbering(
+                new AbstractNum(
+                    new Level(new StartNumberingValue { Val = 1 }, new NumberingFormat { Val = NumberFormatValues.Decimal }, new LevelText { Val = "%1." }) { LevelIndex = 0 },
+                    new Level(new StartNumberingValue { Val = 1 }, new NumberingFormat { Val = NumberFormatValues.Decimal }, new LevelText { Val = "%1.%2" }) { LevelIndex = 1 },
+                    new Level(new StartNumberingValue { Val = 1 }, new NumberingFormat { Val = NumberFormatValues.LowerLetter }, new LevelText { Val = "(%3)" }) { LevelIndex = 2 }) { AbstractNumberId = 7 },
+                new NumberingInstance(new AbstractNumId { Val = 7 }) { NumberID = 3 });
+            Paragraph Numbered(int level, string text) => new(
+                new ParagraphProperties(new NumberingProperties(new NumberingLevelReference { Val = level }, new NumberingId { Val = 3 })),
+                new Run(new Text(text)));
+            main.Document = new Document(new Body(
+                Numbered(0, "Statement of Work"),
+                Numbered(1, "The contractor shall provide a help desk."),
+                Numbered(1, "The contractor shall staff it from 7 AM to 7 PM."),
+                Numbered(2, "The contractor shall log every call."),
+                Numbered(2, "The contractor shall report missed calls weekly."),
+                Numbered(0, "Transition"),
+                Numbered(1, "The contractor shall hand over within 30 days.")));
+        }
+
+        var (requirements, _) = SolicitationParser.Parse(SolicitationText.Read("sow.docx", stream.ToArray()));
+
+        Assert.Equal(["1.1", "1.2", "1.2(a)", "1.2(b)", "2.1"], requirements.Select(r => r.Reference));
+        Assert.Equal("The contractor shall log every call.", requirements[2].Text);
+    }
+
+    [Fact]
+    public void A_pdf_exported_from_word_keeps_a_wrapped_date_and_a_heading_apart_from_the_lines_under_it()
+    {
+        // What a PDF holds is lines, with no blank line between blocks: this is the text of one Word exported through Pages.
+        var text = string.Join('\n',
+            "SECTION L - INSTRUCTIONS TO OFFERORS",
+            "L.3 Offerors must submit questions by November 30, 2026. Proposals are due December 21,",
+            "2026 at 3:00 PM Eastern.",
+            "SECTION M - EVALUATION FACTORS FOR AWARD",
+            "Factor Weight Basis",
+            "Factor 1 - Technical Approach Most",
+            "important",
+            "Will be evaluated for feasibility and risk",
+            "Factor 2 - Past Performance Second Will be evaluated for recency and relevance");
+
+        var (requirements, dates) = SolicitationParser.Parse(text);
+
+        Assert.Equal([(MilestoneKind.QuestionsDue, new DateOnly(2026, 11, 30)), (MilestoneKind.Submission, new DateOnly(2026, 12, 21))], dates.Select(d => (d.Kind, d.Date)));
+        var factors = requirements.Where(r => r.Kind == D.RequirementKind.Evaluation).ToList();
+        Assert.Equal(2, factors.Count);
+        Assert.StartsWith("Factor 1", factors[0].Text, StringComparison.Ordinal);
+        Assert.StartsWith("Factor 2", factors[1].Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task A_pdf_with_a_text_layer_is_read_and_one_without_says_so()
     {
         await using var kit = await CrmKit.CreateAsync();

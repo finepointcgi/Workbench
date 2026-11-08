@@ -115,6 +115,18 @@ public static class CrmFormat
 
     public static DateOnly? ToDateOnly(DateTime? d) => d is { } v ? DateOnly.FromDateTime(v) : null;
 
+    /// <summary>
+    /// What a just-Submitted opportunity still needs, as a sentence, or null when nothing: Submitted starts the wait for the
+    /// award, and the forecast and staffing demand count from the award date.
+    /// </summary>
+    public static string? SubmittedGaps(OpportunityDto o)
+    {
+        var missing = new List<string>();
+        if (string.IsNullOrWhiteSpace(o.ProposalManagerEmail)) { missing.Add("a proposal manager"); }
+        if (o.EstimatedAwardDate is null) { missing.Add("an estimated award date"); }
+        return missing.Count == 0 ? null : $"Add {string.Join(" and ", missing)} in Details: the forecast and staffing demand rely on {(missing.Count == 1 && missing[0].Contains("date", StringComparison.Ordinal) ? "it" : "them")}.";
+    }
+
     /// <summary>A failure the page shows as a message (the server refused or the input was invalid).</summary>
     public static bool IsExpected(Exception ex) =>
         ex is ArgumentException or UnauthorizedAccessException or Workbench.Contracts.WorkbenchNotFoundException or InvalidOperationException or HttpRequestException;

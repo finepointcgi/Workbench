@@ -231,9 +231,13 @@ else
     {
         try
         {
-            await Opportunities.ChangeStageAsync(card.Id, new ChangeStageRequest(stage));
+            var moved = await Opportunities.ChangeStageAsync(card.Id, new ChangeStageRequest(stage));
             _announcement = $"{card.Number} moved to {CrmFormat.Stage(stage)}.";
             Snackbar.Add(_announcement, Severity.Success);
+            if (stage == OpportunityStage.Submitted && CrmFormat.SubmittedGaps(moved) is { } gaps)
+            {
+                Snackbar.Add($"{card.Number}: {gaps}", Severity.Warning);
+            }
         }
         catch (ArgumentException ex) when (ex.Message.Contains("gate", StringComparison.OrdinalIgnoreCase))
         {

@@ -77,11 +77,116 @@ public static class SolicitationText
     }
 
     /// <summary>
+    /// Word's automatic list numbers aren't in the paragraph text, so "1.1" and "(a)" would be lost. This walks the document
+    /// in order, counts each list level the way Word does and returns the number a reader sees. A child like "(a)" gets its
+    /// parent in front ("1.2(a)") so a matrix row says which item it is. Bullets get no number.
+    /// </summary>
+    private sealed class WordNumbering(MainDocumentPart? main)
+    {
+        private readonly Numbering? numbering = main?.NumberingDefinitionsPart?.Numbering;
+        private readonly Styles? styles = main?.StyleDefinitionsPart?.Styles;
+        private readonly Dictionary<int, int?[]> counters = [];
+        private readonly Dictionary<int, string?[]> labels = [];
+
+        public string? Label(Paragraph p)
+        {
+            if (numbering is null || NumberingOf(p) is not (int numId, int level) || level is < 0 or > 8)
+            {
+                return null;
+            }
+
+            var instance = numbering.Elements<NumberingInstance>().FirstOrDefault(n => n.NumberID?.Value == numId);
+            var abstractId = instance?.AbstractNumId?.Val?.Value;
+            var abstractNum = numbering.Elements<AbstractNum>().FirstOrDefault(a => a.AbstractNumberId?.Value == abstractId);
+            if (abstractNum is null)
+            {
+                return null;
+            }
+
+            var key = abstractId!.Value;
+            var counts = counters.TryGetValue(key, out var c) ? c : counters[key] = new int?[9];
+            var full = labels.TryGetValue(key, out var l) ? l : labels[key] = new string?[9];
+            Level? Def(int i) => abstractNum.Elements<Level>().FirstOrDefault(x => x.LevelIndex?.Value == i);
+            int Start(int i) => Def(i)?.StartNumberingValue?.Val?.Value ?? 1;
+
+            counts[level] = counts[level] is { } n ? n + 1 : Start(level);
+            for (var deeper = level + 1; deeper < 9; deeper++)
+            {
+                counts[deeper] = null;
+                full[deeper] = null;
+            }
+
+            var def = Def(level);
+            var format = def?.NumberingFormat?.Val?.Value;
+            if (def is null || format == NumberFormatValues.Bullet || format == NumberFormatValues.None)
+            {
+                return null;
+            }
+
+            var pattern = def.LevelText?.Val?.Value ?? $"%{level + 1}.";
+            var rendered = System.Text.RegularExpressions.Regex.Replace(pattern, "%([1-9])", m =>
+            {
+                var at = m.Groups[1].Value[0] - '1';
+                return Format(counts[at] ?? Start(at), Def(at)?.NumberingFormat?.Val?.Value);
+            });
+            var bare = rendered.Trim().TrimEnd('.');
+            var hasParents = Enumerable.Range(1, level).Any(i => pattern.Contains($"%{i}", StringComparison.Ordinal));
+            var parent = level > 0 ? full[level - 1] : null;
+            var label = !hasParents && parent is not null ? parent + bare : bare;
+            full[level] = label;
+            // A bare number reads as "1)" so it is kept as a reference; "1.1", "A" and "(a)" already are one.
+            return label.All(char.IsDigit) ? label + ")" : label;
+        }
+
+        private (int NumId, int Level)? NumberingOf(Paragraph p)
+        {
+            var direct = p.ParagraphProperties?.NumberingProperties;
+            var styleId = p.ParagraphProperties?.ParagraphStyleId?.Val?.Value;
+            var fromStyle = styleId is null ? null : styles?.Elements<Style>().FirstOrDefault(s => s.StyleId?.Value == styleId)?.StyleParagraphProperties?.NumberingProperties;
+            var id = direct?.NumberingId?.Val?.Value ?? fromStyle?.NumberingId?.Val?.Value;
+            if (id is null or 0)
+            {
+                return null;
+            }
+
+            return (id.Value, direct?.NumberingLevelReference?.Val?.Value ?? fromStyle?.NumberingLevelReference?.Val?.Value ?? 0);
+        }
+
+        private static string Format(int n, NumberFormatValues? format)
+        {
+            if (format == NumberFormatValues.LowerLetter || format == NumberFormatValues.UpperLetter)
+            {
+                var letters = new string((char)('a' + ((n - 1) % 26)), (n - 1) / 26 + 1);
+                return format == NumberFormatValues.UpperLetter ? letters.ToUpperInvariant() : letters;
+            }
+
+            if (format == NumberFormatValues.LowerRoman || format == NumberFormatValues.UpperRoman)
+            {
+                string[] symbols = ["m", "cm", "d", "cd", "c", "xc", "l", "xl", "x", "ix", "v", "iv", "i"];
+                int[] values = [1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1];
+                var roman = new StringBuilder();
+                for (var i = 0; i < values.Length; i++)
+                {
+                    while (n >= values[i])
+                    {
+                        roman.Append(symbols[i]);
+                        n -= values[i];
+                    }
+                }
+
+                return format == NumberFormatValues.UpperRoman ? roman.ToString().ToUpperInvariant() : roman.ToString();
+            }
+
+            return format == NumberFormatValues.DecimalZero ? n.ToString("00", CultureInfo.InvariantCulture) : n.ToString(CultureInfo.InvariantCulture);
+        }
+    }
+
+    /// <summary>
     /// A Word document's text a block at a time, as pasted text would be: one block per paragraph, one per table row (cells
     /// joined with " | ", so a factor, its weight and what it is judged on stay together), blank lines between. Reading it as
     /// one line per paragraph with no gaps would run a heading and every item under it into a single "requirement".
     /// </summary>
-    private static string WordBlocks(OpenXmlElement container)
+    private static string WordBlocks(OpenXmlElement container, WordNumbering numbering)
     {
         var blocks = new List<string>();
         foreach (var element in container.ChildElements)
@@ -89,7 +194,7 @@ public static class SolicitationText
             switch (element)
             {
                 case Paragraph p:
-                    blocks.Add(p.InnerText);
+                    blocks.Add(numbering.Label(p) is { } label ? $"{label} {p.InnerText}" : p.InnerText);
                     break;
                 case Table table:
                     foreach (var row in table.Elements<TableRow>())
@@ -99,7 +204,7 @@ public static class SolicitationText
 
                     break;
                 case SdtBlock or CustomXmlBlock:
-                    blocks.Add(WordBlocks(element));
+                    blocks.Add(WordBlocks(element, numbering));
                     break;
             }
         }
@@ -114,7 +219,7 @@ public static class SolicitationText
             using var stream = new MemoryStream(content);
             using var doc = WordprocessingDocument.Open(stream, false);
             var body = doc.MainDocumentPart?.Document?.Body ?? throw new ArgumentException("That Word document has no text.");
-            return WordBlocks(body);
+            return WordBlocks(body, new WordNumbering(doc.MainDocumentPart));
         }
         catch (Exception ex) when (ex is InvalidDataException or OpenXmlPackageException or IOException)
         {

@@ -73,7 +73,7 @@ public static partial class SolicitationParser
     {
         var found = new Dictionary<MilestoneKind, ParsedDate>();
         // A sentence at a time: "Questions are due Nov 30. Proposals are due Dec 21." holds two dates for two milestones.
-        foreach (var raw in text.Split('\n').SelectMany(l => SentenceBreak().Split(l)))
+        foreach (var raw in WrappedDate().Replace(text, "$1 ").Split('\n').SelectMany(l => SentenceBreak().Split(l)))
         {
             var line = raw.Trim();
             if (line.Length is < 8 or > 400 || DateOf(line) is not { } date || date.Year is < 2000 or > 2100)
@@ -243,7 +243,8 @@ public static partial class SolicitationParser
         foreach (var raw in text.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n'))
         {
             var line = raw.Trim();
-            var startsNew = line.Length == 0 || NumberedStart().IsMatch(line) || SectionLetterOf(line) is not null;
+            var heading = line.Length > 0 && SectionLetterOf(line) is not null;
+            var startsNew = line.Length == 0 || heading || NumberedStart().IsMatch(line) || FactorStart().IsMatch(line);
             if (startsNew && current.Length > 0)
             {
                 yield return current.ToString().Trim();
@@ -253,6 +254,13 @@ public static partial class SolicitationParser
             if (line.Length > 0)
             {
                 current.Append(current.Length == 0 ? "" : " ").Append(line);
+            }
+
+            // A section heading stands alone: a PDF has no blank line after it, and what follows is not part of it.
+            if (heading)
+            {
+                yield return current.ToString().Trim();
+                current.Clear();
             }
         }
 
@@ -268,7 +276,13 @@ public static partial class SolicitationParser
     private static string? ReferenceOf(string block)
     {
         var m = ReferenceStart().Match(block);
-        return m.Success ? m.Groups[1].Value.TrimEnd('.', ')', ' ') : null;
+        if (!m.Success)
+        {
+            return null;
+        }
+
+        var value = m.Groups[1].Value;
+        return value.EndsWith(')') && value.Contains('(') ? value : value.TrimEnd('.', ')', ' ');
     }
 
     private static string StripReference(string sentence)
@@ -282,13 +296,20 @@ public static partial class SolicitationParser
     [GeneratedRegex(@"(?<=[a-z0-9\)][.;])\s+(?=[A-Z])")]
     private static partial Regex SentenceBreak();
 
+    /// <summary>A date a PDF wrapped onto two lines ("December 21,\n2026" or "December\n21, 2026"), so it can be read as one.</summary>
+    [GeneratedRegex(@"(\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sept?(?:ember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?(?:[ \t]+\d{1,2},?)?)[ \t]*\r?\n[ \t]*(?=\d{1,2},?\s+\d{4}\b|\d{4}\b)", RegexOptions.IgnoreCase)]
+    private static partial Regex WrappedDate();
+
+    [GeneratedRegex(@"^\s*(?:sub-?)?factor\s+\d+\b", RegexOptions.IgnoreCase)]
+    private static partial Regex FactorStart();
+
     [GeneratedRegex(@"\b(shall|must|is required to|are required to|will be evaluated|will evaluate|will be rated|will be scored|not exceed|page limit|should be submitted)\b", RegexOptions.IgnoreCase)]
     private static partial Regex Cue();
 
-    [GeneratedRegex(@"^\s*(?:\(?([A-M](?:\.\d+)+|\d+(?:\.\d+)+|[A-M]\.|\d+\)|\([a-z0-9]\)))\s+")]
+    [GeneratedRegex(@"^\s*(?:\(?([A-M](?:\.\d+)+|\d+(?:\.\d+)+|[A-M]\.|\d+\)|(?:[A-M]|\d+)(?:\.\d+)*\([a-z0-9]\)|\([a-z0-9]\)))\s+")]
     private static partial Regex ReferenceStart();
 
-    [GeneratedRegex(@"^\s*(?:[A-M](?:\.\d+)+\s|\d+(?:\.\d+)+\s|\([a-z0-9]\)\s|[a-z]\.\s)")]
+    [GeneratedRegex(@"^\s*(?:[A-M](?:\.\d+)+\s|\d+(?:\.\d+)+\s|(?:[A-M]|\d+)(?:\.\d+)*\([a-z0-9]\)\s|\([a-z0-9]\)\s|[a-z]\.\s)")]
     private static partial Regex NumberedStart();
 
     [GeneratedRegex(@"^\s*(?:SECTION|Section)\s+([A-M])\b|^\s*([A-M])\.\s+[A-Z][A-Za-z,\- ]{4,}$")]

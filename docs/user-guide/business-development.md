@@ -60,8 +60,10 @@ The **Proposal** tab uses the matrix: the "Understanding of the requirement" sec
 proposals will be judged and what they must contain, and the assistant is told to answer those points. Lines marked
 **Not applicable** are left out.
 
-PDFs need a text layer; a scan can't be read, so paste its text instead. Everything on the tab is text from the
-document: Workbench never invents a requirement. If the administrator has turned on the
+PDFs need a text layer; a scan can't be read, so paste its text instead. In a Word file Workbench reads a table a row at
+a time and keeps the numbers Word shows, so an automatically numbered item arrives as "1.2" or "1.2(a)" instead of losing
+its number. A PDF has no table cells to read, so a table comes through as its lines: check those rows. Everything on the
+tab is text from the document: Workbench never invents a requirement. If the administrator has turned on the
 [assistant](../admin-guide/assistant.md), it also drops lines that aren't real requirements and picks each line's type and
 section; it never rewrites a line.
 
