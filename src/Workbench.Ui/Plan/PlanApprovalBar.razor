@@ -8,12 +8,58 @@
 @inject IServiceProvider Services
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
+@inject NavigationManager Nav
 
 @if (_plan is { } plan)
 {
     @if (Part == PlanApprovalPart.Bar)
     {
     <div class="wb-approval" data-testid="plan-approval">
+        @if (ShowSetup(plan))
+        {
+            @* Finance's checklist for a new project: three steps, then the project manager is told. *@
+            <MudPaper Outlined="true" Class="pa-3 mb-2" data-testid="project-setup">
+                <div class="mud-typography-subtitle1"><strong>Set up @plan.ProjectCode for planning</strong></div>
+                <div class="wb-approval-text mb-2">Finish these, then tell the project manager so they can build the plan.</div>
+                <div class="wb-approval-row" data-testid="setup-funding">
+                    <MudIcon Icon="@StepIcon(FundingDone(plan))" Size="Size.Small" Color="@StepColor(FundingDone(plan))" />
+                    <span><strong>1. Contract funding</strong> · @(FundingDone(plan) ? (plan.Terms.Funded is { } f ? $"{f:C0} funded" : "none needed") : "not funded yet. Put money on a CLIN.")</span>
+                    @if (!FundingDone(plan) && plan.Terms.ContractId is { } contractId)
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="() => OpenContract(contractId)" data-testid="setup-open-contract">Open the contract</MudButton>
+                    }
+                </div>
+                <div class="mt-2" data-testid="setup-categories">
+                    <div class="wb-approval-row">
+                        <MudIcon Icon="@StepIcon(CategoriesDone(plan))" Size="Size.Small" Color="@StepColor(CategoriesDone(plan))" />
+                        <span><strong>2. Labor categories</strong> · @(CategoriesDone(plan) ? $"{plan.Categories!.Count(c => c.Selected)} to plan with" : "pick the roles this project can use")</span>
+                    </div>
+                    @if (plan.Categories is { } cats)
+                    {
+                        <div class="wb-approval-row mt-1">
+                            <MudSelect T="Guid" SelectedValues="_categoryIds" SelectedValuesChanged="values => _categoryIds = values.ToHashSet()" MultiSelection="true" ToStringFunc="CategoryName"
+                                       Label="Labor categories" Margin="Margin.Dense" Variant="Variant.Outlined" Style="max-width:420px" data-testid="setup-category-select">
+                                @foreach (var c in cats)
+                                {
+                                    <MudSelectItem T="Guid" Value="c.Id">@c.Label@(c.OnContract ? " · on the contract" : "")</MudSelectItem>
+                                }
+                            </MudSelect>
+                            @if (cats.Any(c => c.OnContract))
+                            {
+                                <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="UseContractCategories" data-testid="setup-use-contract">Use the contract's categories</MudButton>
+                            }
+                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveCategoriesAsync" Disabled="@(_busy || _categoryIds.Count == 0)" data-testid="setup-categories-save">Save</MudButton>
+                        </div>
+                    }
+                </div>
+                <div class="wb-approval-row mt-2" data-testid="setup-manager">
+                    <MudIcon Icon="@StepIcon(ManagerDone(plan))" Size="Size.Small" Color="@StepColor(ManagerDone(plan))" />
+                    <span><strong>3. Project manager</strong> · @(ManagerDone(plan) ? plan.ManagerName : "none assigned. Set one on the project.")</span>
+                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.Send" OnClick="HandToManagerAsync"
+                               Disabled="@(_busy || !plan.SetupDone || !ManagerDone(plan))" data-testid="setup-hand-off">Tell the project manager</MudButton>
+                </div>
+            </MudPaper>
+        }
         <div class="wb-approval-row">
             <MudChip T="string" Size="Size.Small" Color="@StatusColor(plan)" Variant="Variant.Filled" data-testid="plan-approval-status">@StatusText(plan)</MudChip>
             <span class="wb-approval-text">@Explain(plan)</span>
@@ -120,7 +166,7 @@
             @if (_editingCategories && plan.Categories is { } all)
             {
                 <div class="wb-approval-row mt-1" data-testid="plan-categories-form">
-                    <MudSelect T="Guid" SelectedValues="_categoryIds" SelectedValuesChanged="values => _categoryIds = values.ToHashSet()" MultiSelection="true"
+                    <MudSelect T="Guid" SelectedValues="_categoryIds" SelectedValuesChanged="values => _categoryIds = values.ToHashSet()" MultiSelection="true" ToStringFunc="CategoryName"
                                Label="Labor categories" Margin="Margin.Dense" Variant="Variant.Outlined" Style="max-width:420px">
                         @foreach (var c in all)
                         {
@@ -320,6 +366,24 @@
 
     private Task SaveTermsAsync() =>
         RunAsync(p => p.SaveTermsAsync(ProjectId, new SaveProjectTermsRequest(_ceiling, _funded, _plan?.Terms.Pricing, _fee is { } f ? f / 100m : null)), "Saved the project's ceiling and funding.");
+
+    private static bool FundingDone(ProjectPlanDto plan) => plan.Steps?.FirstOrDefault(x => x.Key == "funding")?.Done ?? true;
+    private static bool CategoriesDone(ProjectPlanDto plan) => plan.Steps?.FirstOrDefault(x => x.Key == "categories")?.Done ?? true;
+    private static bool ManagerDone(ProjectPlanDto plan) => plan.Steps?.FirstOrDefault(x => x.Key == "manager")?.Done ?? true;
+    private static string StepIcon(bool done) => done ? Icons.Material.Filled.CheckCircle : Icons.Material.Outlined.RadioButtonUnchecked;
+    private static Color StepColor(bool done) => done ? Color.Success : Color.Default;
+
+    /// <summary>Finance sees the checklist while the project still waits on setup, or on the handoff to its manager.</summary>
+    private static bool ShowSetup(ProjectPlanDto plan) =>
+        plan.CanEditTerms && plan.Steps is { Count: > 0 } steps && (!plan.SetupDone || !ManagerDone(plan) || steps.FirstOrDefault(x => x.Current)?.Key == "plan" && plan.Status is PlanApprovalStatus.Draft && !plan.ChangedSinceApproval);
+
+    private string CategoryName(Guid id) => _plan?.Categories?.FirstOrDefault(c => c.Id == id)?.Label ?? "";
+
+    private void OpenContract(Guid contractId) => Nav.NavigateTo($"setup/contracts/{contractId}");
+
+    private void UseContractCategories() => _categoryIds = (_plan?.Categories ?? []).Where(c => c.OnContract || _categoryIds.Contains(c.Id)).Select(c => c.Id).ToHashSet();
+
+    private Task HandToManagerAsync() => RunAsync(p => p.HandToManagerAsync(ProjectId), plan => $"Told {plan.ManagerName ?? "the project manager"} it's ready to plan.");
 
     private Task SaveCategoriesAsync() => RunAsync(p => p.SaveCategoriesAsync(ProjectId, _categoryIds.ToList()), "Saved the project's labor categories.");
 

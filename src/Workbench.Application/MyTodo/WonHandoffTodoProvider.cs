@@ -44,10 +44,9 @@ public sealed class WonHandoffTodoProvider : IMyTodoProvider
         {
             if (await ProjectPlanService.MissingSetupAsync(db, project, cancellationToken) is { Count: > 0 } missing)
             {
-                var funding = missing.Contains("funding");
                 items.Add(new MyTodoItem($"setup-project:{project.Id}", TodoCategories.Finance, $"{project.Code} {project.Name} needs {string.Join(" and ", missing)}",
                     "The project manager can't make the plan live until it's added.", TodoUrgency.ThisWeek, null,
-                    funding ? $"setup/contracts/{project.ContractId}" : $"projects/{project.Id}/plan", funding ? "Add funding" : "Pick labor categories", Priority: 3));
+                    $"projects/{project.Id}/plan", "Set up the project", Priority: 3));
             }
         }
 

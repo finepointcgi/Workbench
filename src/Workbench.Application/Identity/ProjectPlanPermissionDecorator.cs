@@ -43,6 +43,12 @@ public sealed class PermissionCheckingProjectPlanService(IProjectPlanService inn
         return await WithFlagsAsync(await inner.SaveCategoriesAsync(projectId, laborCategoryIds, cancellationToken), cancellationToken);
     }
 
+    public async Task<ProjectPlanDto> HandToManagerAsync(Guid projectId, CancellationToken cancellationToken = default)
+    {
+        await RequireFinanceAsync(projectId, "hand a project to its manager", cancellationToken);
+        return await WithFlagsAsync(await inner.HandToManagerAsync(projectId, cancellationToken), cancellationToken);
+    }
+
     public async Task<ProjectPlanDto> SubmitAsync(Guid projectId, string? note = null, CancellationToken cancellationToken = default)
     {
         await projects.RequireProjectFinancialsAsync(projectId, What, cancellationToken);
