@@ -20,16 +20,20 @@
             <span class="wb-approval-actions">
             @if (plan.CanSubmit && !_reviewing)
             {
-                @if (_noteOpen || !string.IsNullOrEmpty(_note))
+                @if (plan.ApprovesItself)
                 {
-                    <input class="wb-approval-note" placeholder="Note for Finance (optional, used if it needs review)" aria-label="Note for Finance" @bind="_note" />
+                    @* Nothing for Finance to review: no note to write. *@
+                }
+                else if (_noteOpen || !string.IsNullOrEmpty(_note))
+                {
+                    <input class="wb-approval-note" placeholder="Note for Finance (optional)" aria-label="Note for Finance" @bind="_note" />
                 }
                 else
                 {
                     <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => _noteOpen = true" data-testid="plan-note-add">Add a note</MudButton>
                 }
                 <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Send" OnClick="SubmitAsync" Disabled="@(_busy || !plan.SetupDone)"
-                           data-testid="plan-submit">@(plan.Status == PlanApprovalStatus.Approved ? "Submit the changes" : "Submit plan for approval")</MudButton>
+                           data-testid="plan-submit">@SubmitLabel(plan)</MudButton>
             }
             @if (plan.CanReview)
             {
@@ -156,6 +160,7 @@
 
     private ProjectPlanDto? _plan;
     private int _loadedVersion = -1;
+    private int _autoTriedVersion = -1;
     private string? _note;
     private string? _comment;
     private bool _busy;
@@ -194,7 +199,34 @@
         catch (Exception ex) when (ex is WorkbenchForbiddenException or WorkbenchNotFoundException or HttpRequestException or TaskCanceledException or UnauthorizedAccessException)
         {
             _plan = null;
+            return;
         }
+
+        await MakeLiveAsync();
+    }
+
+    /// <summary>
+    /// A plan within the contract's money has nothing for Finance to review, so it goes live as the project manager builds
+    /// it: no Submit step. Only the bar does this (the details part shares the plan), and not while something is still wrong
+    /// (an overbooked person, someone with no hours, money past what's funded), which keeps the button and its question.
+    /// </summary>
+    private async Task MakeLiveAsync()
+    {
+        if (Part != PlanApprovalPart.Bar || _busy || _plan is not { CanSubmit: true, ApprovesItself: true, SetupDone: true } || _autoTriedVersion == Version)
+        {
+            return;
+        }
+
+        _autoTriedVersion = Version;
+        // Schedule checks are advice; people and money that don't add up are what hold it back.
+        if ((await OpenProblemsAsync(includeSchedule: false)).Count > 0)
+        {
+            return;
+        }
+
+        await RunAsync(p => p.SubmitAsync(ProjectId, null), plan => plan.Status == PlanApprovalStatus.Approved
+            ? "Saved and live. It's within the contract's budget, so Finance doesn't need to review it."
+            : "Sent to Finance for review.");
     }
 
     private void Set(ProjectPlanDto plan)
@@ -208,11 +240,11 @@
 
     private async Task SubmitAsync()
     {
-        if (await ConfirmOpenProblemsAsync("Submit the plan with these open?", "Submit anyway"))
+        if (await ConfirmOpenProblemsAsync(_plan?.ApprovesItself == true ? "Make the plan live with these open?" : "Send the plan to Finance with these open?", _plan?.ApprovesItself == true ? "Make it live" : "Send anyway"))
         {
             await RunAsync(p => p.SubmitAsync(ProjectId, _note), plan => plan.Status == PlanApprovalStatus.Approved
-                ? "Approved. It stayed within its budget, so Finance didn't need to review it."
-                : "Sent to Finance. It goes over its budget, so they review it. You'll be notified when they approve it or send it back.");
+                ? "Live. It's within the contract's budget, so Finance didn't need to review it."
+                : "Sent to Finance. It goes past the contract's budget, so they review it. You'll be notified when they approve it or send it back.");
         }
     }
 
@@ -242,7 +274,7 @@
         return await DialogService.ShowMessageBoxAsync(title, message, yesText: yes, cancelText: "Go back") == true;
     }
 
-    private async Task<List<string>> OpenProblemsAsync()
+    private async Task<List<string>> OpenProblemsAsync(bool includeSchedule = true)
     {
         var problems = new List<string>();
         if (Services.GetService(typeof(IResourcePlanService)) is not IResourcePlanService resourcePlan)
@@ -259,7 +291,7 @@
             }
 
             problems.AddRange(model.Tasks.SelectMany(t => t.People.SelectMany(p => p.Issues.Select(i => $"{t.Title}: {p.Name}. {i}"))));
-            if (model.Health is { Failed: > 0 } health && model.Totals.Hours > 0)
+            if (includeSchedule && model.Health is { Failed: > 0 } health && model.Totals.Hours > 0)
             {
                 problems.Add($"{health.Failed} schedule check{(health.Failed == 1 ? "" : "s")} fail.");
             }
@@ -319,6 +351,9 @@
         }
     }
 
+    private static string SubmitLabel(ProjectPlanDto plan) =>
+        plan.ApprovesItself ? "Make it live" : plan.Status == PlanApprovalStatus.Approved ? "Send the changes to Finance" : "Send to Finance for approval";
+
     private static string StatusText(ProjectPlanDto plan) => plan.Status switch
     {
         PlanApprovalStatus.Submitted => "With Finance",
@@ -340,13 +375,16 @@
     private static string Explain(ProjectPlanDto plan) => plan.Status switch
     {
         PlanApprovalStatus.Submitted => $"Submitted by {plan.SubmittedByName ?? plan.SubmittedBy}{When(plan.SubmittedAtUtc)}. Finance approves it or sends it back.",
+        PlanApprovalStatus.Approved when plan.ChangedSinceApproval && plan.ApprovesItself =>
+            $"Since the approved baseline: {Signed(plan.HoursChange)} h. Fix what's open below, then make it live: it's within the contract's budget, so Finance isn't needed.",
         PlanApprovalStatus.Approved when plan.ChangedSinceApproval =>
-            $"Since the approved baseline: {Signed(plan.HoursChange)} h. Submit the changes when they're ready.",
-        PlanApprovalStatus.Approved when plan.ReviewedBy == "Workbench" => $"Approved automatically{When(plan.ReviewedAtUtc)}: it stayed within its budget. Changes that stay within it approve themselves too.",
+            $"Since the approved baseline: {Signed(plan.HoursChange)} h. This goes past the contract's budget, so send it to Finance.",
+        PlanApprovalStatus.Approved when plan.ReviewedBy == "Workbench" => $"Live{When(plan.ReviewedAtUtc)}: it's within the contract's budget. Changes inside it go live as you make them.",
         PlanApprovalStatus.Approved => $"Approved by {plan.ReviewedByName ?? plan.ReviewedBy}{When(plan.ReviewedAtUtc)}. It's the project's baseline budget.",
-        PlanApprovalStatus.Returned => "Make the changes Finance asked for, then submit it again.",
-        _ when !plan.SetupDone => "Plan it now. You can submit it once Finance has added the project's funding and labor categories.",
-        _ => "Build the WBS and assign people, then submit the plan. It approves itself if it stays within the budget; if not, Finance reviews it.",
+        PlanApprovalStatus.Returned => "Make the changes Finance asked for, then send it again.",
+        _ when !plan.SetupDone => "Plan it now. It can go live once Finance has added the project's funding and labor categories.",
+        _ when plan.ApprovesItself => "Fix what's open below, then make it live: it's within the contract's budget, so Finance isn't needed.",
+        _ => "Build the WBS and assign people. Within the contract's budget it goes live as you work; if it goes past, you send it to Finance.",
     };
 
     private static string DetailsHint(ProjectPlanDto plan) =>

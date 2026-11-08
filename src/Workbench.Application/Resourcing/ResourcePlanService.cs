@@ -317,6 +317,9 @@ public sealed class ResourcePlanService(
         public required Dictionary<Guid, List<Guid>> Assignees { get; init; }
 
         public required Dictionary<Guid, LaborCategory> Categories { get; init; }
+
+        /// <summary>The labor categories Finance picked for the project; empty when any category will do.</summary>
+        public required HashSet<Guid> AllowedCategories { get; init; }
         public required EffectiveRateTable<Guid> Rates { get; init; }
         public required decimal? Multiplier { get; init; }
         public required string? BudgetName { get; init; }
@@ -422,6 +425,7 @@ public sealed class ResourcePlanService(
             People = people,
             Assignees = assignees,
             Categories = await db.Set<LaborCategory>().AsNoTracking().ToDictionaryAsync(c => c.Id, ct),
+            AllowedCategories = (await db.Set<ProjectLaborCategory>().AsNoTracking().Where(c => c.ProjectId == projectId).Select(c => c.LaborCategoryId).ToListAsync(ct)).ToHashSet(),
             Rates = rates,
             Multiplier = multiplier,
             BudgetName = budget.Count > 0 ? version!.Name : null,
@@ -556,7 +560,9 @@ public sealed class ResourcePlanService(
                 continue;
             }
 
-            if (add.Weeks is null && add.Hours is not > 0)
+            // On a task, no hours means "their standard day over the task": what assigning someone on the plan does on its own.
+            var standardDay = add.Weeks is null && add.Hours is not > 0 && (add.ItemId is not null || add.WbsElementId is not null);
+            if (add.Weeks is null && add.Hours is not > 0 && !standardDay)
             {
                 errors.Add($"Enter {person.DisplayName}'s hours.");
                 continue;
@@ -594,7 +600,34 @@ public sealed class ResourcePlanService(
                 continue;
             }
 
-            var hours = add.Weeks is { } exact ? exact.Sum(x => x.Hours) : add.Hours!.Value;
+            decimal hours;
+            if (standardDay)
+            {
+                var task = model.Plan?.Items.FirstOrDefault(i => i.Id == (add.ItemId ?? model.Wbs.GetValueOrDefault(wbsId ?? Guid.Empty)?.ItemId));
+                var first = from ?? (task?.Start is { } ts && ts > Today ? ts : Today);
+                var last = to ?? task?.Finish;
+                if (last is not { } end || end < first)
+                {
+                    errors.Add($"Give {task?.Title ?? "the task"} dates, or enter {person.DisplayName}'s hours.");
+                    continue;
+                }
+
+                var days = Enumerable.Range(0, end.DayNumber - first.DayNumber + 1).Select(first.AddDays).Count(model.Calendar.IsWorkingDay); // the plan's own calendar, so holidays aren't staffed
+                hours = Math.Round(person.StandardHoursPerWeek / 5m * days, 2, MidpointRounding.AwayFromZero);
+                if (hours <= 0)
+                {
+                    errors.Add($"{person.DisplayName} has no working days on {task?.Title ?? "the task"}.");
+                    continue;
+                }
+
+                from ??= first;
+                to ??= end;
+            }
+            else
+            {
+                hours = add.Weeks is { } exact ? exact.Sum(x => x.Hours) : add.Hours!.Value;
+            }
+
             var request = new SaveAssignmentRequest(employeeId, model.Project.Id, hours, wbsId, from, to, add.LaborCategoryId);
             if (await PlannedAsync(db, request, add.Weeks, isNew: true, person.DisplayName, errors, ct) is { } booking)
             {
@@ -723,9 +756,17 @@ public sealed class ResourcePlanService(
         {
             var category = model.CategoryOf(null, employeeId);
             var start = task.Start ?? task.Finish ?? Today;
+            // Why their hours didn't fill in on their own, so it says what to do instead of just "No hours yet".
+            List<string> issues = [];
+            if (category is { } own && model.AllowedCategories.Count > 0 && !model.AllowedCategories.Contains(own) && model.Categories.TryGetValue(own, out var ownCategory))
+            {
+                var allowed = model.AllowedCategories.Where(model.Categories.ContainsKey).Select(a => ProjectStaffingService.Label(model.Categories[a])).Order(StringComparer.OrdinalIgnoreCase);
+                issues.Add($"{model.People.GetValueOrDefault(employeeId)?.DisplayName ?? "They"} is a {ProjectStaffingService.Label(ownCategory)}, which isn't one of {model.Project.Code}'s labor categories ({string.Join(", ", allowed)}). Pick the one they work as and their hours fill in.");
+            }
+
             return new PlanPersonDto(null, employeeId, model.People.GetValueOrDefault(employeeId)?.DisplayName ?? "?",
                 category, category is { } c && model.Categories.TryGetValue(c, out var cat) ? ProjectStaffingService.Label(cat) : null,
-                start, task.Finish ?? start, 0m, 0m, model.Multiplier is null ? null : 0m, [], NoHoursYet: true);
+                start, task.Finish ?? start, 0m, 0m, model.Multiplier is null ? null : 0m, [], Problems: issues, NoHoursYet: true);
         }
 
         var people = bookings.Select(b => (Booking: b, Person: Person(b))).ToList();
