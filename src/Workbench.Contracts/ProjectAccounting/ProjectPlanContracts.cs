@@ -197,6 +197,12 @@ public interface IProjectPlanService
     /// </summary>
     Task<ProjectPlanDto> SaveCategoriesAsync(Guid projectId, IReadOnlyList<Guid> laborCategoryIds, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Finance's last setup step: tells the project manager the project is ready to plan. Refused while funding or labor
+    /// categories are still missing, or when no manager is assigned. Safe to repeat.
+    /// </summary>
+    Task<ProjectPlanDto> HandToManagerAsync(Guid projectId, CancellationToken cancellationToken = default);
+
     /// <summary>Sends the plan to Finance (with an optional note). Finance is notified.</summary>
     Task<ProjectPlanDto> SubmitAsync(Guid projectId, string? note = null, CancellationToken cancellationToken = default);
 

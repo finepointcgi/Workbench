@@ -89,6 +89,27 @@ public sealed class ProjectPlanService(
         return await ToDtoAsync(db, project, cancellationToken);
     }
 
+    public async Task<ProjectPlanDto> HandToManagerAsync(Guid projectId, CancellationToken cancellationToken = default)
+    {
+        await using var db = await dbFactory.CreateAsync(cancellationToken);
+        var project = await ProjectAsync(db, projectId, cancellationToken);
+        if (await MissingSetupAsync(db, project, cancellationToken) is { Count: > 0 } missing)
+        {
+            throw new ArgumentException($"{project.Code} still needs {string.Join(" and ", missing)} before the project manager can plan it.");
+        }
+
+        if (project.ProjectManagerId is null)
+        {
+            throw new ArgumentException($"{project.Code} has no project manager yet. Assign one first.");
+        }
+
+        await NotifyManagerAsync(db, project, $"{project.Code} {project.Name} is ready to plan",
+            "Finance has set up its funding and labor categories. Build the WBS and assign people.", null, cancellationToken);
+        audit.Record(db, nameof(Project), project.Id, "HandedToManager", null, new { project.ProjectManagerId });
+        await db.SaveChangesAsync(cancellationToken);
+        return await ToDtoAsync(db, project, cancellationToken);
+    }
+
     public async Task<ProjectPlanDto> SubmitAsync(Guid projectId, string? note = null, CancellationToken cancellationToken = default)
     {
         await using var db = await dbFactory.CreateAsync(cancellationToken);
