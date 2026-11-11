@@ -77,3 +77,13 @@ The server uses the streamable HTTP transport statelessly: each JSON-RPC request
 response. There are no sessions and no server-sent event stream (`GET` and `DELETE` return `405`). It supports protocol versions
 `2025-11-25`, `2025-06-18` and `2025-03-26`, and the methods `initialize`, `ping`, `tools/list` and `tools/call`. Tool results
 contain the data as JSON text and `resource_link` entries for the Workbench pages that show it.
+
+## Linking to Keel and Meridian
+
+Workbench, Keel PLM and Meridian point at each other with ids, so an assistant can follow a question from one app to the next:
+
+- Add a custom field **Keel program** (text) to projects (**Admin › Custom fields**) and fill in the Keel program code. An
+  assistant finds the Workbench project for a Keel program with `list_custom_field_matches`.
+- In Meridian, blocks and requirements carry the Workbench project code in the tagged value `workbench.project`.
+
+Hearth's engineering team uses this convention.
