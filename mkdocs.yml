@@ -196,6 +196,7 @@ nav:
           - AI assistant: security/ai-assistant.md
       - Integrations:
           - API keys: integrations/api-keys.md
+          - AI assistants (MCP): integrations/mcp.md
           - Webhooks: integrations/webhooks.md
           - Connectors: integrations/connectors.md
           - Calendar and Teams: integrations/calendar-and-teams.md
