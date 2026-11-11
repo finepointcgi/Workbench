@@ -65,6 +65,7 @@ public static class IdentityRegistration
         services.Decorate<IPlanSyncService, PermissionCheckingPlanSyncService>(); // Plan sheet sync: project setup (Finance, Admin, the project's PM with the role).
         services.Decorate<IProjectStartService, PermissionCheckingProjectStartService>(); // Start a project in one step: Set up every project or Create projects.
         services.Decorate<IProjectPlanService, PermissionCheckingProjectPlanService>(); // Plan terms and approval: Finance sets and approves, the PM submits.
+        services.Decorate<Contracts.Risks.IRiskService, PermissionCheckingRiskService>(); // A project's risk register: its manager, Finance and Admin.
         services.Decorate<IFiscalCalendarService, PermissionCheckingFiscalCalendarService>();
         services.Decorate<IAuditLogService, PermissionCheckingAuditLogService>();
         services.Decorate<ITimeReportService, PermissionCheckingTimeReportService>();

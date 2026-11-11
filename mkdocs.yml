@@ -119,6 +119,7 @@ nav:
       - Projects:
           - Projects and the project page: user-guide/projects.md
           - Planning a project: user-guide/project-plan.md
+          - Project risks: user-guide/risk-register.md
           - Resourcing: user-guide/resourcing.md
           - Project costs (ODCs): user-guide/project-costs.md
           - Proposal pricing: user-guide/pricing.md

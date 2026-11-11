@@ -32,6 +32,7 @@ public static class WorkbenchApi
         v1.MapOdcEndpoints();
         v1.MapFinancialsEndpoints();
         v1.MapSetupEndpoints();
+        v1.MapRiskEndpoints();
         v1.MapAccountingEndpoints();
         v1.MapSecurityAdminEndpoints();
         v1.MapContractDetailEndpoints();
