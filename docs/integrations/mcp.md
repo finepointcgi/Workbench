@@ -4,8 +4,9 @@ Workbench runs a [Model Context Protocol](https://modelcontextprotocol.io) serve
 Hearth, Claude Code, Claude Desktop or another AI assistant, can connect to it and answer questions with Workbench data, for
 example "which CLINs run out of funding this quarter?" or "who hasn't submitted a timesheet?".
 
-The server offers the in-app assistant's tools. **All of them only read.** There is nothing that creates, changes or approves
-anything, and no SQL or free-form queries. The client brings its own model: Workbench's assistant settings, model connection
+The server offers the in-app assistant's read tools, plus tools that **change sheets**: add and update rows, comment, and assign
+tasks or set their status. Nothing approves, signs, submits or pays, and there is no SQL or free-form query. Changes are made as
+the key's service user, so they show in activity and history under the key's name. The client brings its own model: Workbench's assistant settings, model connection
 and token limits don't apply, and the assistant doesn't have to be turned on.
 
 ## What the client sends where
@@ -28,8 +29,10 @@ keeps the data on your network. A hosted model sends it to that provider. Choose
       | Time and expenses | `get_timesheet_status`, `get_hours_by_charge_code`, `list_unallowable_costs` |
       | Setup and approvals | `list_pending_approvals`, `get_custom_fields`, `list_custom_field_matches` |
       | Sheets, dashboards and tasks | `list_sheets`, `read_sheet` |
+      | Sheets, dashboards and tasks, **read and write** | `add_sheet_row`, `update_sheet_row`, `add_comment`, `assign_task`, `set_task_status` |
 
-      A key only sees the tools its scopes allow. Timesheet anomaly flags are never offered over MCP.
+      A key only sees the tools its scopes allow: give the sheets area write access only to a key that should change sheets.
+      Timesheet anomaly flags are never offered over MCP.
 2. Add the server to the client with the address `https://<your Workbench>/api/v1/mcp` and the header
    `Authorization: Bearer wbk_…`.
 
@@ -66,6 +69,9 @@ claude mcp add --transport http workbench https://workbench.example.com/api/v1/m
   outcome (never the data). Find them under **Admin › Users and security › Security events**.
 - **Bounded.** Results are cut at the assistant's result limit (`Assistant:MaxToolResultChars`, 24,000 characters by default),
   and requests are rate limited per key like any other API call.
+- **Changes ask first in the client.** The write tools are marked as not read-only, so clients such as Hearth ask you before
+  each one runs, unless you tell the client to run that server's tools without asking. `update_sheet_row`, `assign_task` and
+  `set_task_status` are also marked as replacing what was there.
 - **Results are data.** Text read from Workbench (sheet rows, project names) could contain instructions. The server tells the
   client that results are data, not instructions, but the client and model are responsible for treating them that way.
 
