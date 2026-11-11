@@ -1,0 +1,173 @@
+@* A project's risk register: what could go wrong, how likely and how costly, who owns the response, and what the live
+   risks add up to against the management reserve in the earned-value baseline. *@
+@inject IRiskService Risks
+@inject IDialogService Dialogs
+@inject ISnackbar Snackbar
+
+<div data-testid="risk-register">
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Warning" Dense="true">@_error</MudAlert>
+}
+else if (_register is { } reg)
+{
+    var s = reg.Summary;
+    <div class="d-flex flex-wrap gap-4 mb-3" data-testid="risk-summary">
+        <div><MudText Typo="Typo.caption" Class="mud-text-secondary">Live risks</MudText><MudText Typo="Typo.h6">@s.LiveCount@(s.HighCount > 0 ? $" · {s.HighCount} likely" : "")</MudText></div>
+        <div><MudText Typo="Typo.caption" Class="mud-text-secondary">Expected cost</MudText><MudText Typo="Typo.h6" data-testid="risk-expected-total">@s.ExpectedCost.ToString("C0")</MudText></div>
+        <div><MudText Typo="Typo.caption" Class="mud-text-secondary">If all happen</MudText><MudText Typo="Typo.h6">@s.WorstCaseCost.ToString("C0")</MudText></div>
+        <div><MudText Typo="Typo.caption" Class="mud-text-secondary">Expected delay</MudText><MudText Typo="Typo.h6">@s.ExpectedDays.ToString("0.#") days</MudText></div>
+        <div>
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">Management reserve</MudText>
+            <MudText Typo="Typo.h6" data-testid="risk-reserve">@(s.ManagementReserve is { } mr ? mr.ToString("C0") : "No baseline yet")</MudText>
+        </div>
+    </div>
+    @if (s.ReserveLeft is { } left)
+    {
+        <MudAlert Severity="@(left < 0 ? Severity.Error : Severity.Success)" Dense="true" Class="mb-3" data-testid="risk-reserve-note">
+            @(left < 0
+                ? $"The expected cost of these risks is {(-left).ToString("C0")} more than the management reserve."
+                : $"The management reserve covers the expected cost of these risks, with {left.ToString("C0")} to spare.")
+        </MudAlert>
+    }
+
+    <div class="d-flex align-center mb-2">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="() => EditAsync(null)" data-testid="risk-add">Add a risk</MudButton>
+        <MudSpacer />
+        <MudSwitch T="bool" Value="_showClosed" ValueChanged="ToggleClosedAsync" Label="Show closed" Color="Color.Primary" data-testid="risk-show-closed" />
+    </div>
+
+    @if (reg.Risks.Count == 0)
+    {
+        <MudAlert Severity="Severity.Normal" Dense="true" data-testid="risk-empty">No risks on this project yet. Add the ones that could cost money or time, and Workbench totals them against the reserve.</MudAlert>
+    }
+    else
+    {
+        <div style="overflow-x:auto">
+        <MudSimpleTable Dense="true" Hover="true" Style="min-width:760px" data-testid="risk-table">
+            <thead><tr><th>#</th><th>Risk</th><th>Status</th><th style="text-align:right">Prob.</th><th style="text-align:right">Cost impact</th><th style="text-align:right">Expected</th><th style="text-align:right">Days</th><th>Owner</th><th>Review</th><th></th></tr></thead>
+            <tbody>
+            @foreach (var r in reg.Risks)
+            {
+                <tr data-testid="@($"risk-row-{r.Number}")" class="@(r.IsLive ? "" : "mud-text-secondary")">
+                    <td>@r.Label</td>
+                    <td>
+                        <strong>@r.Title</strong>
+                        <div><MudText Typo="Typo.caption" Class="mud-text-secondary">@r.Category · @r.Response@(RefsText(r))</MudText></div>
+                    </td>
+                    <td><MudChip T="string" Size="Size.Small" Color="@StatusColor(r.Status)" Variant="Variant.Outlined">@r.Status</MudChip></td>
+                    <td style="text-align:right">@r.ProbabilityPercent%</td>
+                    <td style="text-align:right">@r.CostImpact.ToString("C0")</td>
+                    <td style="text-align:right">@r.ExpectedCost.ToString("C0")</td>
+                    <td style="text-align:right">@r.ScheduleImpactDays</td>
+                    <td>@(r.OwnerEmail ?? "")</td>
+                    <td>@if (r.ReviewOn is { } d) { <span class="@(r.ReviewOverdue ? "mud-error-text" : "")">@d.ToString("yyyy-MM-dd")@(r.ReviewOverdue ? " · overdue" : "")</span> }</td>
+                    <td style="white-space:nowrap">
+                        <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" AriaLabel="@($"Edit {r.Label}")" OnClick="() => EditAsync(r)" data-testid="@($"risk-edit-{r.Number}")" />
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" AriaLabel="@($"Delete {r.Label}")" OnClick="() => DeleteAsync(r)" data-testid="@($"risk-delete-{r.Number}")" />
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </MudSimpleTable>
+        </div>
+    }
+}
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Guid ProjectId { get; set; }
+
+    private RiskRegisterDto? _register;
+    private Guid _loaded;
+    private bool _showClosed;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loaded != ProjectId)
+        {
+            _loaded = ProjectId;
+            await LoadAsync();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _register = await Risks.GetRegisterAsync(ProjectId, _showClosed);
+            _error = null;
+        }
+        catch (Exception ex) when (ex is WorkbenchForbiddenException or WorkbenchNotFoundException or HttpRequestException or UnauthorizedAccessException)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task ToggleClosedAsync(bool value)
+    {
+        _showClosed = value;
+        await LoadAsync();
+    }
+
+    private async Task EditAsync(RiskDto? existing)
+    {
+        var dialog = await Dialogs.ShowAsync<RiskDialog>(existing is null ? "Add a risk" : $"Change {existing.Label}",
+            new DialogParameters<RiskDialog> { { d => d.Existing, existing } }, new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+        var result = await dialog.Result;
+        if (result is null || result.Canceled || result.Data is not SaveRiskRequest request)
+        {
+            return;
+        }
+
+        try
+        {
+            if (existing is null)
+            {
+                await Risks.CreateAsync(ProjectId, request);
+            }
+            else
+            {
+                await Risks.UpdateAsync(existing.Id, request);
+            }
+
+            await LoadAsync();
+        }
+        catch (Exception ex) when (ex is ArgumentException or WorkbenchForbiddenException or HttpRequestException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task DeleteAsync(RiskDto risk)
+    {
+        var sure = await Dialogs.ShowMessageBoxAsync($"Delete {risk.Label}?", $"\"{risk.Title}\" comes off the register. To keep it for the record, set its status to Closed instead.", "Delete", cancelText: "Keep it");
+        if (sure != true)
+        {
+            return;
+        }
+
+        try
+        {
+            await Risks.DeleteAsync(risk.Id);
+            await LoadAsync();
+        }
+        catch (Exception ex) when (ex is WorkbenchForbiddenException or WorkbenchNotFoundException or HttpRequestException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private static string RefsText(RiskDto r) =>
+        string.Join("", new[] { r.PartRefs is { } p ? $" · parts {p}" : null, r.RequirementRefs is { } q ? $" · requirements {q}" : null }.Where(x => x is not null));
+
+    private static Color StatusColor(RiskStatusDto s) => s switch
+    {
+        RiskStatusDto.Open => Color.Warning,
+        RiskStatusDto.Mitigating => Color.Info,
+        RiskStatusDto.Accepted => Color.Default,
+        RiskStatusDto.Occurred => Color.Error,
+        _ => Color.Success,
+    };
+}

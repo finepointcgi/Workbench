@@ -1,0 +1,87 @@
+@* Add or change one risk. Exposure is probability times cost impact, shown as it's typed. *@
+<MudDialog>
+    <DialogContent>
+        <MudTextField T="string" @bind-Value="_title" Label="Risk" Placeholder="What could go wrong" Required="true" MaxLength="200" Margin="Margin.Dense" Variant="Variant.Outlined" data-testid="risk-title" />
+        <MudTextField T="string" @bind-Value="_description" Label="Details" Lines="2" Margin="Margin.Dense" Variant="Variant.Outlined" Class="mt-2" />
+        <MudGrid Spacing="2" Class="mt-1">
+            <MudItem xs="12" sm="4">
+                <MudNumericField T="int" @bind-Value="_probability" Label="Probability (%)" Min="0" Max="100" Margin="Margin.Dense" Variant="Variant.Outlined" data-testid="risk-probability" />
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudNumericField T="decimal" @bind-Value="_cost" Label="Cost impact ($)" Min="0" Format="N0" Margin="Margin.Dense" Variant="Variant.Outlined" data-testid="risk-cost" />
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudNumericField T="int" @bind-Value="_days" Label="Schedule impact (days)" Min="0" Margin="Margin.Dense" Variant="Variant.Outlined" data-testid="risk-days" />
+            </MudItem>
+        </MudGrid>
+        <MudText Typo="Typo.caption" Class="mud-text-secondary" data-testid="risk-expected">
+            Expected cost @((_cost * _probability / 100m).ToString("C0")) · expected delay @((_days * _probability / 100m).ToString("0.#")) days
+        </MudText>
+        <MudGrid Spacing="2" Class="mt-1">
+            <MudItem xs="12" sm="4">
+                <MudSelect T="RiskCategoryDto" @bind-Value="_category" Label="Category" Margin="Margin.Dense" Variant="Variant.Outlined">
+                    @foreach (var c in Enum.GetValues<RiskCategoryDto>()) { <MudSelectItem T="RiskCategoryDto" Value="c">@c</MudSelectItem> }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudSelect T="RiskStatusDto" @bind-Value="_status" Label="Status" Margin="Margin.Dense" Variant="Variant.Outlined" data-testid="risk-status">
+                    @foreach (var s in Enum.GetValues<RiskStatusDto>()) { <MudSelectItem T="RiskStatusDto" Value="s">@s</MudSelectItem> }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudSelect T="RiskResponseDto" @bind-Value="_response" Label="Response" Margin="Margin.Dense" Variant="Variant.Outlined">
+                    @foreach (var r in Enum.GetValues<RiskResponseDto>()) { <MudSelectItem T="RiskResponseDto" Value="r">@r</MudSelectItem> }
+                </MudSelect>
+            </MudItem>
+        </MudGrid>
+        <MudTextField T="string" @bind-Value="_plan" Label="Response plan" Lines="2" Margin="Margin.Dense" Variant="Variant.Outlined" Class="mt-2" />
+        <MudGrid Spacing="2" Class="mt-1">
+            <MudItem xs="12" sm="6">
+                <MudTextField T="string" @bind-Value="_owner" Label="Owner (email)" Margin="Margin.Dense" Variant="Variant.Outlined" />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudDatePicker @bind-Date="_review" Label="Review on" DateFormat="yyyy-MM-dd" Editable="true" Margin="Margin.Dense" Variant="Variant.Outlined" Clearable="true" />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudTextField T="string" @bind-Value="_parts" Label="Part and change IDs" HelperText="From the system that tracks parts, e.g. P-1042, CHG-77" MaxLength="500" Margin="Margin.Dense" Variant="Variant.Outlined" />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudTextField T="string" @bind-Value="_requirements" Label="Requirement IDs" HelperText="From the system that tracks requirements" MaxLength="500" Margin="Margin.Dense" Variant="Variant.Outlined" />
+            </MudItem>
+        </MudGrid>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@string.IsNullOrWhiteSpace(_title)" OnClick="Save" data-testid="risk-save">@(Existing is null ? "Add risk" : "Save")</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter] public RiskDto? Existing { get; set; }
+
+    private string? _title, _description, _plan, _owner, _parts, _requirements;
+    private int _probability = 25, _days;
+    private decimal _cost;
+    private DateTime? _review;
+    private RiskCategoryDto _category = RiskCategoryDto.Other;
+    private RiskStatusDto _status = RiskStatusDto.Open;
+    private RiskResponseDto _response = RiskResponseDto.Mitigate;
+
+    protected override void OnInitialized()
+    {
+        if (Existing is not { } r)
+        {
+            return;
+        }
+
+        (_title, _description, _plan, _owner, _parts, _requirements) = (r.Title, r.Description, r.ResponsePlan, r.OwnerEmail, r.PartRefs, r.RequirementRefs);
+        (_probability, _cost, _days, _category, _status, _response) = (r.ProbabilityPercent, r.CostImpact, r.ScheduleImpactDays, r.Category, r.Status, r.Response);
+        _review = r.ReviewOn?.ToDateTime(TimeOnly.MinValue);
+    }
+
+    private void Save() => MudDialog.Close(DialogResult.Ok(new SaveRiskRequest(
+        _title ?? "", _category, _probability, _cost, _days, _status, _response, _description, _plan, _owner,
+        _review is { } d ? DateOnly.FromDateTime(d) : null, _parts, _requirements)));
+}

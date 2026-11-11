@@ -164,6 +164,7 @@ else
         "financials" => @<Workbench.Ui.Pages.Projects.ProjectFinancialsPage ProjectId="ProjectId" Embedded="true" />,
         "budgets" => @<Workbench.Ui.Pages.Projects.ProjectBudgetsPage ProjectId="ProjectId" Embedded="true" />,
         "revenue" => @<Workbench.Ui.Revenue.ProjectRevenueView ProjectId="ProjectId" Embedded="true" />,
+        "risks" => @<Workbench.Ui.Risks.RiskRegisterPanel ProjectId="ProjectId" />,
         "evm" => @<Workbench.Ui.Pages.Projects.ProjectEvmPage ProjectId="ProjectId" Embedded="true" />,
         "schedule-health" => @<Workbench.Ui.Gantt.ScheduleHealthPanel SheetId="_hub!.Project.SheetId!.Value" PlanHref="@($"projects/{ProjectId}/plan")" />,
         "narrative" => @<Workbench.Ui.Assistant.ProjectNarrativeTab ProjectId="ProjectId" />,
