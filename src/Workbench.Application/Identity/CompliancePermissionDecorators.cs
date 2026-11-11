@@ -12,6 +12,7 @@ public static class CompliancePermissionRegistration
     {
         services.Decorate<ICpsrService, PermissionCheckingCpsrService>();
         services.Decorate<ICasDisclosureService, PermissionCheckingCasDisclosureService>();
+        services.Decorate<ICmmcService, PermissionCheckingCmmcService>();
         return services;
     }
 }
@@ -113,5 +114,41 @@ public sealed class PermissionCheckingCasDisclosureService(ICasDisclosureService
     {
         await RequireAsync(cancellationToken);
         return await inner.ExportAsync(statementId, cancellationToken);
+    }
+}
+
+/// <summary>The CMMC (NIST SP 800-171) assessment is for those who manage compliance (the "DCAA readiness" permission: Admin).</summary>
+public sealed class PermissionCheckingCmmcService(ICmmcService inner, AccessControl access) : ICmmcService
+{
+    private Task RequireAsync(CancellationToken ct) => access.RequireAsync(Permission.AdminCompliance, "work with the CMMC assessment", ct);
+
+    public async Task<CmmcAssessmentDto> GetAssessmentAsync(CancellationToken cancellationToken = default)
+    {
+        await RequireAsync(cancellationToken);
+        return await inner.GetAssessmentAsync(cancellationToken);
+    }
+
+    public async Task<CmmcPracticeDto> SavePracticeAsync(string practiceId, SaveCmmcPracticeRequest request, CancellationToken cancellationToken = default)
+    {
+        await RequireAsync(cancellationToken);
+        return await inner.SavePracticeAsync(practiceId, request, cancellationToken);
+    }
+
+    public async Task<CmmcPoamItemDto> AddPoamItemAsync(SaveCmmcPoamRequest request, CancellationToken cancellationToken = default)
+    {
+        await RequireAsync(cancellationToken);
+        return await inner.AddPoamItemAsync(request, cancellationToken);
+    }
+
+    public async Task<CmmcPoamItemDto> UpdatePoamItemAsync(Guid itemId, SaveCmmcPoamRequest request, CancellationToken cancellationToken = default)
+    {
+        await RequireAsync(cancellationToken);
+        return await inner.UpdatePoamItemAsync(itemId, request, cancellationToken);
+    }
+
+    public async Task DeletePoamItemAsync(Guid itemId, CancellationToken cancellationToken = default)
+    {
+        await RequireAsync(cancellationToken);
+        await inner.DeletePoamItemAsync(itemId, cancellationToken);
     }
 }

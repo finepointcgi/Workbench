@@ -1,0 +1,48 @@
+@* One NIST SP 800-171 requirement: where it stands, what's in place, and where the evidence is kept. *@
+<MudDialog>
+    <DialogContent>
+        <MudText Typo="Typo.subtitle2">@Practice.PracticeId · @Practice.Family · @(Practice.Weight == 0 ? "not scored" : $"{Practice.Weight} point{(Practice.Weight == 1 ? "" : "s")}")</MudText>
+        <MudText Typo="Typo.body2" Class="mb-3">@Practice.Statement</MudText>
+        @if (Practice.Weight == 0)
+        {
+            <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">This requirement carries no points, but without a system security plan the DoD methodology says no assessment can be made.</MudAlert>
+        }
+        <MudSelect T="CmmcStatusDto" @bind-Value="_status" Label="Status" Margin="Margin.Dense" Variant="Variant.Outlined" data-testid="cmmc-status">
+            @foreach (var s in Enum.GetValues<CmmcStatusDto>()) { <MudSelectItem T="CmmcStatusDto" Value="s">@CmmcFormat.Status(s)</MudSelectItem> }
+        </MudSelect>
+        @if (Practice.AllowsPartialCredit && _status == CmmcStatusDto.NotImplemented)
+        {
+            <MudCheckBox T="bool" @bind-Value="_partial" Label="Partly met (loses 3 points instead of 5)" Color="Color.Primary" data-testid="cmmc-partial" />
+        }
+        <MudTextField T="string" @bind-Value="_implementation" Label="How it's met (or why it isn't, or why it doesn't apply)" Lines="3" MaxLength="2000" Margin="Margin.Dense" Variant="Variant.Outlined" Class="mt-2" data-testid="cmmc-implementation" />
+        <MudTextField T="string" @bind-Value="_evidence" Label="Where the evidence is" HelperText="Reference it: the SSP section, a ticket, a policy name. Don't paste controlled content." Lines="2" MaxLength="2000" Margin="Margin.Dense" Variant="Variant.Outlined" Class="mt-2" />
+        <MudGrid Spacing="2" Class="mt-1">
+            <MudItem xs="12" sm="6"><MudTextField T="string" @bind-Value="_owner" Label="Owner (email)" Margin="Margin.Dense" Variant="Variant.Outlined" /></MudItem>
+            <MudItem xs="12" sm="6"><MudDatePicker @bind-Date="_assessed" Label="Assessed on" DateFormat="yyyy-MM-dd" Editable="true" Clearable="true" Margin="Margin.Dense" Variant="Variant.Outlined" /></MudItem>
+        </MudGrid>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Save" data-testid="cmmc-save">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired] public CmmcPracticeDto Practice { get; set; } = default!;
+
+    private CmmcStatusDto _status;
+    private bool _partial;
+    private string? _implementation, _evidence, _owner;
+    private DateTime? _assessed;
+
+    protected override void OnInitialized()
+    {
+        (_status, _partial, _implementation, _evidence, _owner) = (Practice.Status, Practice.PartialCredit, Practice.Implementation, Practice.Evidence, Practice.OwnerEmail);
+        _assessed = Practice.AssessedOn?.ToDateTime(TimeOnly.MinValue) ?? (Practice.Status == CmmcStatusDto.NotAssessed ? DateTime.Today : null);
+    }
+
+    private void Save() => MudDialog.Close(DialogResult.Ok(new SaveCmmcPracticeRequest(
+        _status, _partial && _status == CmmcStatusDto.NotImplemented, _implementation, _evidence, _owner, _assessed is { } d ? DateOnly.FromDateTime(d) : null)));
+}
