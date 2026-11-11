@@ -20,6 +20,7 @@ public static class ProjectsFormat
         ("financials", "Financials"),
         ("costs", "Costs"),
         ("revenue", "Revenue"),
+        ("risks", "Risks"),
         ("evm", "Earned value"),
         ("schedule-health", "Schedule health"),
         ("narrative", "Monthly narrative"),
@@ -42,6 +43,7 @@ public static class ProjectsFormat
         "budgets" => tabs.Budgets,
         "revenue" => tabs.Revenue,
         "evm" => tabs.EarnedValue,
+        "risks" => tabs.Financials, // Same rule as the financials: Finance, Admin or the project's manager.
         "narrative" => tabs.Financials, // Same rule as financials: Finance, Admin or the project's manager.
         "ceilings" => tabs.Ceilings,
         "costs" => tabs.Costs,

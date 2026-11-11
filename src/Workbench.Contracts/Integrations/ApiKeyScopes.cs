@@ -25,8 +25,8 @@ public static class ApiKeyScopes
     [
         new("sheets", "Sheets, dashboards and tasks", "Sheets, items, columns, comments, workspaces, dashboards and assigned work.",
             ["sheets", "workspaces", "dashboards", "my-work", "my-tasks", "my-todo", "plan-template"]),
-        new("projects", "Projects and contracts", "Projects, WBS, contracts, CLINs, funding, ceilings, closeout, resourcing and earned value.",
-            ["projects", "project-hub", "project-start", "project-plans", "contracts", "wbs", "assignments", "budgets", "clins", "modifications", "closeout", "resourcing", "evm", "ceilings", "ceiling-overrides", "rate-ceilings"]),
+        new("projects", "Projects and contracts", "Projects, WBS, contracts, CLINs, funding, ceilings, closeout, resourcing, earned value and risks.",
+            ["projects", "project-hub", "project-start", "project-plans", "contracts", "wbs", "assignments", "budgets", "clins", "modifications", "closeout", "resourcing", "evm", "ceilings", "ceiling-overrides", "rate-ceilings", "risks"]),
         new("time", "Time and expenses", "Timesheets, ODCs, expense reports and receipts, leave, per diem and total time.",
             ["time", "expense-reports", "odc-approvals", "odcs", "leave", "per-diem", "total-time", "travel", "cards", "receipts"]),
         new("billing", "Billing and revenue", "Invoices, receipts, receivables and revenue recognition.", ["billing", "revenue"]),
