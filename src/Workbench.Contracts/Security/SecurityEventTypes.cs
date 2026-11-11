@@ -66,6 +66,7 @@ public static class SecurityEventTypes
 
     public const string ApiKeyCreated = "apikey.created"; // Integrations: an API key (service credential) was issued; detail has its scopes and roles, never the key.
     public const string ApiKeyRevoked = "apikey.revoked";
+    public const string McpToolCall = "mcp.tool_call"; // An AI client called one of the assistant's read-only tools over MCP; detail has the tool, its arguments and the outcome, never the data.
     public const string ApiKeyRejected = "apikey.rejected"; // A request with an unknown, revoked or expired key, or outside the key's scopes.
     public const string WebhookChanged = "integration.webhook"; // Webhook endpoint created, changed, secret rotated or deleted.
     public const string ConnectorChanged = "integration.connector"; // Connector created, changed or deleted.
