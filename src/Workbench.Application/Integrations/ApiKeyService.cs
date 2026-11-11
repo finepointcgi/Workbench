@@ -15,8 +15,8 @@ namespace Workbench.Application.Integrations;
 public static class ApiKeyPrincipal
 {
     public const string EmailDomain = "api-keys.workbench.invalid";
-    public const string KeyIdClaim = "wb_api_key";
-    public const string ScopesClaim = "wb_api_scopes";
+    public const string KeyIdClaim = ApiKeyScopes.KeyIdClaim;
+    public const string ScopesClaim = ApiKeyScopes.ScopesClaim;
 
     public static string EmailFor(Guid keyId) => $"key-{keyId:N}@{EmailDomain}";
 

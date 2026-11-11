@@ -14,6 +14,13 @@ public static class ApiKeyScopes
     public const string Read = "read";
     public const string Write = "write";
 
+    /// <summary>The claims an API key's principal carries: its id, and one claim per scope.</summary>
+    public const string KeyIdClaim = "wb_api_key";
+    public const string ScopesClaim = "wb_api_scopes";
+
+    /// <summary>The area that lets AI assistants connect over the Model Context Protocol (<c>/api/v1/mcp</c>).</summary>
+    public const string Mcp = "mcp";
+
     public static IReadOnlyList<ApiKeyAreaDto> Areas { get; } =
     [
         new("sheets", "Sheets, dashboards and tasks", "Sheets, items, columns, comments, workspaces, dashboards and assigned work.",
@@ -32,9 +39,21 @@ public static class ApiKeyScopes
         new("reports", "Reports", "Standard reports, the report writer and saved reports.", ["reports"]),
         new("setup", "Setup and approvals", "Organization setup lists (customers, labor categories, org units), approval workflows, the approval inbox and custom fields.",
             ["setup", "customers", "org-units", "labor-categories", "approvals", "approval-workflows", "approval-delegations", "customization"]),
+        new(Mcp, "AI assistants (MCP)",
+            "Lets an MCP client such as Hearth or Claude read data with the assistant's read-only tools. Each tool also needs its own area (projects, time, sheets or setup).",
+            [Mcp]),
     ];
 
+    /// <summary>
+    /// Areas whose POST requests only read: MCP sends every call, reads included, as a JSON-RPC POST, and it has no write tools.
+    /// </summary>
+    private static readonly HashSet<string> PostOnlyReads = new(StringComparer.Ordinal) { Mcp };
+
     public static string Scope(string area, string access) => $"{area}:{access}";
+
+    /// <summary>Whether <paramref name="scopes"/> let a key read <paramref name="area"/> (read or write access).</summary>
+    public static bool CanRead(IEnumerable<string> scopes, string area) =>
+        scopes.Any(s => string.Equals(s, Scope(area, Read), StringComparison.OrdinalIgnoreCase) || string.Equals(s, Scope(area, Write), StringComparison.OrdinalIgnoreCase));
 
     /// <summary>The area serving <paramref name="segment"/>, or null when keys may never call it.</summary>
     public static ApiKeyAreaDto? AreaFor(string segment) =>
@@ -79,12 +98,13 @@ public static class ApiKeyScopes
         }
 
         var granted = scopes.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        if (granted.Contains(Scope(area.Key, Write)) || (IsReadMethod(method) && granted.Contains(Scope(area.Key, Read))))
+        var reads = IsReadMethod(method) || (PostOnlyReads.Contains(area.Key) && string.Equals(method, "POST", StringComparison.OrdinalIgnoreCase));
+        if (granted.Contains(Scope(area.Key, Write)) || (reads && granted.Contains(Scope(area.Key, Read))))
         {
             return (true, null);
         }
 
-        return (false, $"This key needs the {Scope(area.Key, IsReadMethod(method) ? Read : Write)} scope.");
+        return (false, $"This key needs the {Scope(area.Key, reads ? Read : Write)} scope.");
     }
 
     /// <summary>The first segment after <c>/api/v1/</c>, lower-case; null when the path isn't under the API.</summary>
