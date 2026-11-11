@@ -19,6 +19,7 @@ public static class AssistantRegistration
         services.AddScoped<AssistantRunner>();
         services.AddScoped<AssistantToolbox>();
         services.AddScoped<IAssistantService, AssistantService>();
+        services.AddScoped<AssistantWriteTools>();
         services.AddScoped<IAssistantToolHost, AssistantToolHost>(); // The same tools for outside AI clients over MCP (/api/v1/mcp).
         services.AddScoped<IAssistantAdminService, AssistantAdminService>();
         services.AddScoped<IProjectNarrativeService, ProjectNarrativeService>();

@@ -582,6 +582,7 @@ public sealed class AssistantToolbox(IServiceProvider services, TimeProvider clo
                     .Where(c => i.Values.ContainsKey(c.Id.ToString()))
                     .Select(c => new KeyValuePair<string, string?>(c.Name, Clip(i.Values[c.Id.ToString()], 500))))
                 {
+                    ["Row id"] = i.Id.ToString(),
                     ["Title"] = Clip(i.Title, 300),
                     ["Start"] = i.Start?.ToString("yyyy-MM-dd", Invariant),
                     ["Finish"] = i.Finish?.ToString("yyyy-MM-dd", Invariant),
