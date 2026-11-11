@@ -117,6 +117,54 @@ public sealed class McpWebTests
     }
 
     [Fact]
+    public async Task Write_tools_need_write_access_and_change_sheets_as_the_key_user()
+    {
+        await using var factory = new WorkbenchWebFactory("Development", testAuth: true);
+        var admin = factory.CreateClientAs(Admin);
+        var reader = KeyClient(factory, await CreateKeyAsync(admin, OrgRoles.Admin, "mcp:read", "sheets:read"));
+        var writer = KeyClient(factory, await CreateKeyAsync(admin, OrgRoles.Admin, "mcp:read", "sheets:write"));
+
+        // A read-only key doesn't see the write tools, and can't call them.
+        var readerTools = (await RpcAsync(reader, "tools/list"))["result"]!["tools"]!.AsArray().Select(t => t!["name"]!.ToString()).ToList();
+        Assert.Contains("read_sheet", readerTools);
+        Assert.DoesNotContain("add_sheet_row", readerTools);
+        var refused = (await RpcAsync(reader, "tools/call", Call("add_sheet_row", new JsonObject { ["sheet"] = "x", ["title"] = "x" })))["result"]!;
+        Assert.True(refused["isError"]!.GetValue<bool>());
+        Assert.Contains("sheets:write", refused["content"]![0]!["text"]!.ToString());
+
+        var writerTools = (await RpcAsync(writer, "tools/list"))["result"]!["tools"]!.AsArray();
+        var add = writerTools.Single(t => t!["name"]!.ToString() == "add_sheet_row")!;
+        Assert.False(add["annotations"]!["readOnlyHint"]!.GetValue<bool>());
+        Assert.True(writerTools.Single(t => t!["name"]!.ToString() == "update_sheet_row")!["annotations"]!["destructiveHint"]!.GetValue<bool>());
+
+        var sheets = JsonNode.Parse((await RpcAsync(writer, "tools/call", Call("list_sheets")))["result"]!["content"]![0]!["text"]!.ToString())!;
+        var sheet = sheets["sheets"]![0]!["name"]!.ToString();
+
+        var added = (await RpcAsync(writer, "tools/call", Call("add_sheet_row", new JsonObject { ["sheet"] = sheet, ["title"] = "Added by an assistant", ["finish"] = "2026-12-01" })))["result"]!;
+        Assert.False(added["isError"]!.GetValue<bool>(), added.ToJsonString());
+        var rowId = JsonNode.Parse(added["content"]![0]!["text"]!.ToString())!["rowId"]!.ToString();
+
+        var updated = (await RpcAsync(writer, "tools/call", Call("update_sheet_row", new JsonObject { ["sheet"] = sheet, ["row_id"] = rowId, ["title"] = "Renamed by an assistant" })))["result"]!;
+        Assert.False(updated["isError"]!.GetValue<bool>(), updated.ToJsonString());
+        var commented = (await RpcAsync(writer, "tools/call", Call("add_comment", new JsonObject { ["sheet"] = sheet, ["row_id"] = rowId, ["text"] = "Checked against the plan." })))["result"]!;
+        Assert.False(commented["isError"]!.GetValue<bool>(), commented.ToJsonString());
+
+        // The row is really there, with its id, finish date untouched by the rename.
+        var read = (await RpcAsync(writer, "tools/call", Call("read_sheet", new JsonObject { ["sheet"] = sheet, ["query"] = "Renamed by an assistant" })))["result"]!;
+        var row = JsonNode.Parse(read["content"]![0]!["text"]!.ToString())!["rows"]![0]!;
+        Assert.Equal(rowId, row["Row id"]!.ToString());
+        Assert.Equal("2026-12-01", row["Finish"]!.ToString());
+
+        // Unknown columns, bad ids and formula columns come back as tool errors.
+        Assert.True((await RpcAsync(writer, "tools/call", Call("update_sheet_row", new JsonObject { ["sheet"] = sheet, ["row_id"] = rowId, ["values"] = new JsonObject { ["No such column"] = "x" } })))["result"]!["isError"]!.GetValue<bool>());
+        Assert.True((await RpcAsync(writer, "tools/call", Call("add_comment", new JsonObject { ["sheet"] = sheet, ["row_id"] = Guid.NewGuid().ToString(), ["text"] = "x" })))["result"]!["isError"]!.GetValue<bool>());
+
+        using var search = await admin.PostAsJsonAsync("/api/v1/admin/security-events/search", new SecurityEventQuery(EventType: SecurityEventTypes.McpToolCall, Limit: 100));
+        var events = (await search.Content.ReadFromJsonAsync<List<SecurityEventDto>>())!;
+        Assert.Contains(events, e => e.Target == "add_sheet_row" && e.Outcome == SecurityOutcomes.Success);
+    }
+
+    [Fact]
     public async Task Only_api_keys_with_the_mcp_scope_and_no_browser_origin_may_connect()
     {
         await using var factory = new WorkbenchWebFactory("Development", testAuth: true);

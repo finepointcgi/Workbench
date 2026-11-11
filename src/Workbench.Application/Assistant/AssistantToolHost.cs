@@ -9,12 +9,13 @@ using Workbench.Domain.Assistant;
 namespace Workbench.Application.Assistant;
 
 /// <summary>
-/// The assistant's read-only tools for outside AI clients (the MCP endpoint, <c>/api/v1/mcp</c>). It runs the same
+/// The assistant's tools for outside AI clients (the MCP endpoint, <c>/api/v1/mcp</c>). It runs the same
 /// <see cref="AssistantToolbox"/> as the in-app assistant, so every call goes through the caller's permission checks; the
-/// Workbench model, prompts and token limits aren't involved, because the client brings its own model. Each tool reads one
-/// API key area, which the endpoint checks against the key's scopes. Every call is recorded in the security log.
+/// Workbench model, prompts and token limits aren't involved, because the client brings its own model. It adds the
+/// <see cref="AssistantWriteTools"/> (sheet rows, comments, tasks). Each tool belongs to one API key area, which the endpoint
+/// checks against the key's scopes (write tools need write access). Every call is recorded in the security log.
 /// </summary>
-public sealed class AssistantToolHost(AssistantToolbox toolbox, SecurityEventLog securityLog, IOptions<AssistantOptions> options) : IAssistantToolHost
+public sealed class AssistantToolHost(AssistantToolbox toolbox, AssistantWriteTools writeTools, SecurityEventLog securityLog, IOptions<AssistantOptions> options) : IAssistantToolHost
 {
     /// <summary>
     /// The API key area each tool reads. A tool missing here is never offered: timesheet flags stay inside Workbench, as
@@ -43,14 +44,16 @@ public sealed class AssistantToolHost(AssistantToolbox toolbox, SecurityEventLog
     private static readonly IReadOnlyList<AssistantToolInfo> All = AssistantToolbox.Specs
         .Where(s => Areas.ContainsKey(s.Name))
         .Select(s => new AssistantToolInfo(s.Name, s.Activity, s.Description, Areas[s.Name], s.Schema))
+        .Concat(AssistantWriteTools.Specs.Select(s => new AssistantToolInfo(s.Name, s.Activity, s.Description, "sheets", s.Schema,
+            IsWrite: true, Overwrites: AssistantWriteTools.Overwrites.Contains(s.Name))))
         .ToList();
 
     public IReadOnlyList<AssistantToolInfo> Tools => All;
 
     public async Task<AssistantToolCallResult> CallAsync(string name, string argumentsJson, CancellationToken cancellationToken = default)
     {
-        AssistantToolResult result = Areas.ContainsKey(name)
-            ? await toolbox.RunAsync(name, argumentsJson, cancellationToken)
+        AssistantToolResult result = Areas.ContainsKey(name) ? await toolbox.RunAsync(name, argumentsJson, cancellationToken)
+            : AssistantWriteTools.Find(name) is not null ? await writeTools.RunAsync(name, argumentsJson, cancellationToken)
             : AssistantToolResult.Error(AssistantToolOutcome.Invalid, $"There is no tool named '{AssistantToolbox.Clip(name, 40)}'.");
 
         var outcome = result.Outcome switch

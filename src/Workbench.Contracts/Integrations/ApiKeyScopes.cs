@@ -40,16 +40,21 @@ public static class ApiKeyScopes
         new("setup", "Setup and approvals", "Organization setup lists (customers, labor categories, org units), approval workflows, the approval inbox and custom fields.",
             ["setup", "customers", "org-units", "labor-categories", "approvals", "approval-workflows", "approval-delegations", "customization"]),
         new(Mcp, "AI assistants (MCP)",
-            "Lets an MCP client such as Hearth or Claude read data with the assistant's read-only tools. Each tool also needs its own area (projects, time, sheets or setup).",
+            "Lets an MCP client such as Hearth or Claude use the assistant's tools. Each tool also needs its own area: read access to read, write access for the sheet tools that add rows, comments and task assignments.",
             [Mcp]),
     ];
 
     /// <summary>
-    /// Areas whose POST requests only read: MCP sends every call, reads included, as a JSON-RPC POST, and it has no write tools.
+    /// Areas whose POST requests count as reads: MCP sends every call as a JSON-RPC POST, and each write tool checks the
+    /// key's write scope for its own area (sheets:write), so mcp:read is enough to connect.
     /// </summary>
     private static readonly HashSet<string> PostOnlyReads = new(StringComparer.Ordinal) { Mcp };
 
     public static string Scope(string area, string access) => $"{area}:{access}";
+
+    /// <summary>Whether <paramref name="scopes"/> let a key change <paramref name="area"/> (write access).</summary>
+    public static bool CanWrite(IEnumerable<string> scopes, string area) =>
+        scopes.Any(s => string.Equals(s, Scope(area, Write), StringComparison.OrdinalIgnoreCase));
 
     /// <summary>Whether <paramref name="scopes"/> let a key read <paramref name="area"/> (read or write access).</summary>
     public static bool CanRead(IEnumerable<string> scopes, string area) =>
