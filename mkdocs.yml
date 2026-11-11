@@ -157,6 +157,7 @@ nav:
       - Importing and go-live: admin-guide/import-and-migration.md
       - Integrations: admin-guide/integrations.md
       - Compliance readiness: admin-guide/compliance.md
+      - CMMC assessment: admin-guide/cmmc-assessment.md
       - AI assistant: admin-guide/assistant.md
       - Audit log and support requests: admin-guide/audit-and-support.md
       - Multiple companies: admin-guide/companies.md
