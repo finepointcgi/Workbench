@@ -62,12 +62,33 @@ public sealed class HttpCasDisclosureService(HttpClient http) : ICasDisclosureSe
         await (await http.GetAsync($"{Base}/{statementId}/export", cancellationToken)).ReadLedgerAsync<ComplianceExportFile>(cancellationToken);
 }
 
+public sealed class HttpCmmcService(HttpClient http) : ICmmcService
+{
+    private const string Base = "api/v1/compliance/cmmc";
+
+    public async Task<CmmcAssessmentDto> GetAssessmentAsync(CancellationToken cancellationToken = default) =>
+        await (await http.GetAsync(Base, cancellationToken)).ReadLedgerAsync<CmmcAssessmentDto>(cancellationToken);
+
+    public async Task<CmmcPracticeDto> SavePracticeAsync(string practiceId, SaveCmmcPracticeRequest request, CancellationToken cancellationToken = default) =>
+        await (await http.PutAsJsonAsync($"{Base}/practices/{Uri.EscapeDataString(practiceId)}", request, cancellationToken)).ReadLedgerAsync<CmmcPracticeDto>(cancellationToken);
+
+    public async Task<CmmcPoamItemDto> AddPoamItemAsync(SaveCmmcPoamRequest request, CancellationToken cancellationToken = default) =>
+        await (await http.PostAsJsonAsync($"{Base}/poam", request, cancellationToken)).ReadLedgerAsync<CmmcPoamItemDto>(cancellationToken);
+
+    public async Task<CmmcPoamItemDto> UpdatePoamItemAsync(Guid itemId, SaveCmmcPoamRequest request, CancellationToken cancellationToken = default) =>
+        await (await http.PutAsJsonAsync($"{Base}/poam/{itemId}", request, cancellationToken)).ReadLedgerAsync<CmmcPoamItemDto>(cancellationToken);
+
+    public async Task DeletePoamItemAsync(Guid itemId, CancellationToken cancellationToken = default) =>
+        await (await http.DeleteAsync($"{Base}/poam/{itemId}", cancellationToken)).EnsureLedgerOkAsync(cancellationToken);
+}
+
 public static class ComplianceClientRegistration
 {
     public static IServiceCollection AddComplianceClients(this IServiceCollection services, Uri serverBaseAddress)
     {
         services.AddHttpClient<ICpsrService, HttpCpsrService>(client => client.BaseAddress = serverBaseAddress);
         services.AddHttpClient<ICasDisclosureService, HttpCasDisclosureService>(client => client.BaseAddress = serverBaseAddress);
+        services.AddHttpClient<ICmmcService, HttpCmmcService>(client => client.BaseAddress = serverBaseAddress);
         return services;
     }
 }

@@ -22,6 +22,17 @@ internal static class ComplianceEndpoints
         c.MapPost("/cpsr/files/{kind}/{id:guid}/approve", (ProcurementDocumentKind kind, Guid id, ApproveProcurementFileRequest r, ICpsrService s, CancellationToken ct) =>
             s.ApproveAsync(kind, id, r, ct));
 
+        // CMMC Level 2 (NIST SP 800-171) assessment
+        c.MapGet("/cmmc", (ICmmcService s, CancellationToken ct) => s.GetAssessmentAsync(ct));
+        c.MapPut("/cmmc/practices/{practiceId}", (string practiceId, SaveCmmcPracticeRequest r, ICmmcService s, CancellationToken ct) => s.SavePracticeAsync(practiceId, r, ct));
+        c.MapPost("/cmmc/poam", (SaveCmmcPoamRequest r, ICmmcService s, CancellationToken ct) => s.AddPoamItemAsync(r, ct));
+        c.MapPut("/cmmc/poam/{id:guid}", (Guid id, SaveCmmcPoamRequest r, ICmmcService s, CancellationToken ct) => s.UpdatePoamItemAsync(id, r, ct));
+        c.MapDelete("/cmmc/poam/{id:guid}", async (Guid id, ICmmcService s, CancellationToken ct) =>
+        {
+            await s.DeletePoamItemAsync(id, ct);
+            return Results.NoContent();
+        });
+
         // CAS disclosure statements
         c.MapGet("/disclosure", (DisclosureFormType? form, ICasDisclosureService s, CancellationToken ct) => s.ListVersionsAsync(form, ct));
         c.MapPost("/disclosure", (CreateDisclosureVersionRequest r, ICasDisclosureService s, CancellationToken ct) => s.CreateVersionAsync(r, ct));

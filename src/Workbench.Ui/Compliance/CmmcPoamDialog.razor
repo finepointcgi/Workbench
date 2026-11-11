@@ -1,0 +1,55 @@
+@* One milestone on the plan of action for a requirement that isn't met yet. *@
+<MudDialog>
+    <DialogContent>
+        <MudSelect T="string" @bind-Value="_practice" Label="Requirement" Margin="Margin.Dense" Variant="Variant.Outlined" Disabled="Existing is not null" data-testid="poam-practice">
+            @foreach (var p in Practices)
+            {
+                <MudSelectItem T="string" Value="p.PracticeId">@p.PracticeId · @Trim(p.Statement)</MudSelectItem>
+            }
+        </MudSelect>
+        <MudTextField T="string" @bind-Value="_milestone" Label="What will be done" Lines="2" MaxLength="500" Required="true" Margin="Margin.Dense" Variant="Variant.Outlined" Class="mt-2" data-testid="poam-milestone" />
+        <MudGrid Spacing="2" Class="mt-1">
+            <MudItem xs="12" sm="6"><MudTextField T="string" @bind-Value="_owner" Label="Owner (email)" Margin="Margin.Dense" Variant="Variant.Outlined" /></MudItem>
+            <MudItem xs="12" sm="6"><MudDatePicker @bind-Date="_due" Label="Due" DateFormat="yyyy-MM-dd" Editable="true" Clearable="true" Margin="Margin.Dense" Variant="Variant.Outlined" /></MudItem>
+        </MudGrid>
+        @if (Existing is not null)
+        {
+            <MudCheckBox T="bool" @bind-Value="_done" Label="Done" Color="Color.Primary" data-testid="poam-done" />
+        }
+        <MudTextField T="string" @bind-Value="_notes" Label="Notes" Lines="2" MaxLength="2000" Margin="Margin.Dense" Variant="Variant.Outlined" Class="mt-2" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(string.IsNullOrWhiteSpace(_milestone) || _practice is null)" OnClick="Save" data-testid="poam-save">@(Existing is null ? "Add" : "Save")</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    /// <summary>The requirements to pick from (those not met, or all).</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<CmmcPracticeDto> Practices { get; set; } = [];
+
+    [Parameter] public CmmcPoamItemDto? Existing { get; set; }
+
+    [Parameter] public string? PracticeId { get; set; }
+
+    private string? _practice, _milestone, _owner, _notes;
+    private DateTime? _due;
+    private bool _done;
+
+    protected override void OnInitialized()
+    {
+        _practice = Existing?.PracticeId ?? PracticeId;
+        if (Existing is { } e)
+        {
+            (_milestone, _owner, _notes, _done) = (e.Milestone, e.OwnerEmail, e.Notes, e.Status == CmmcPoamStatusDto.Done);
+            _due = e.DueOn?.ToDateTime(TimeOnly.MinValue);
+        }
+    }
+
+    private static string Trim(string s) => s.Length <= 70 ? s : s[..69] + "…";
+
+    private void Save() => MudDialog.Close(DialogResult.Ok(new SaveCmmcPoamRequest(
+        _practice!, _milestone ?? "", _owner, _due is { } d ? DateOnly.FromDateTime(d) : null, _done ? CmmcPoamStatusDto.Done : CmmcPoamStatusDto.Open, _notes)));
+}

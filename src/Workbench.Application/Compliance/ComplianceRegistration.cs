@@ -18,6 +18,7 @@ public static class ComplianceRegistration
         services.TryAddScoped<IProcurementCompetitionSource, NoCompetitionSource>();
         services.AddScoped<ICpsrService, CpsrService>();
         services.AddScoped<ICasDisclosureService, CasDisclosureService>();
+        services.AddScoped<ICmmcService, CmmcService>();
         return services;
     }
 }

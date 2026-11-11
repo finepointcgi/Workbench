@@ -1,0 +1,211 @@
+@page "/admin/cmmc"
+@inject ICmmcService Cmmc
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+<PageTitle>CMMC assessment · Workbench</PageTitle>
+
+<MudText Typo="Typo.h4" HtmlTag="h1" Class="mb-1">CMMC assessment</MudText>
+<MudText Class="mud-text-secondary mb-3">
+    Your own assessment against the 110 security requirements of NIST SP 800-171 (CMMC Level 2). Mark each one, note where the evidence is
+    kept, and plan the gaps. The score is the DoD Assessment Methodology's: 110, less 5, 3 or 1 point for each requirement not implemented.
+</MudText>
+<MudAlert Severity="Severity.Info" Dense="true" Class="mb-3" data-testid="cmmc-cui-note">
+    Keep controlled content out of here. A system security plan is usually CUI: write down where the evidence lives (a section, a ticket,
+    a policy name), not the evidence itself, unless this Workbench deployment is authorized to hold CUI.
+</MudAlert>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="@(_forbidden ? Severity.Info : Severity.Error)" data-testid="load-error">@(_forbidden ? ComplianceFormat.AccessNote : _error)</MudAlert>
+}
+else if (_data is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" />
+}
+else
+{
+    var d = _data;
+    <MudGrid Spacing="2" Class="mb-3" data-testid="cmmc-summary">
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Outlined="true" Class="pa-3">
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">SPRS score so far</MudText>
+                <MudText Typo="Typo.h4" data-testid="cmmc-score">@d.Score</MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">of 110@(d.NotAssessed > 0 ? $" · {d.WorstCaseScore} if every unassessed one fails" : "")</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Outlined="true" Class="pa-3">
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Requirements</MudText>
+                <MudText Typo="Typo.h6">@d.Implemented implemented · @d.NotImplemented not</MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">@d.NotApplicable not applicable · @d.NotAssessed not assessed</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Outlined="true" Class="pa-3">
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">Plan of action</MudText>
+                <MudText Typo="Typo.h6">@d.OpenPoamItems open@(d.OverduePoamItems > 0 ? $" · {d.OverduePoamItems} overdue" : "")</MudText>
+                <MudText Typo="Typo.caption" Class="@(d.UncoveredGaps > 0 ? "mud-error-text" : "mud-text-secondary")" data-testid="cmmc-uncovered">@(d.UncoveredGaps == 0 ? "Every gap has a plan" : $"{d.UncoveredGaps} gap{(d.UncoveredGaps == 1 ? "" : "s")} with no plan")</MudText>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    <MudTabs Elevation="0" Outlined="true" Rounded="true" TabPanelsClass="pa-3" data-testid="cmmc-tabs">
+        <MudTabPanel Text="Requirements">
+            <div class="d-flex flex-wrap gap-3 align-center mb-2">
+                <MudSelect T="string" @bind-Value="_family" Label="Family" Clearable="true" Margin="Margin.Dense" Variant="Variant.Outlined" Style="max-width:320px" data-testid="cmmc-family">
+                    @foreach (var f in d.Families) { <MudSelectItem T="string" Value="f.Family">@f.Family (@f.Implemented/@f.Total)</MudSelectItem> }
+                </MudSelect>
+                <MudSelect T="CmmcStatusDto?" @bind-Value="_status" Label="Status" Clearable="true" Margin="Margin.Dense" Variant="Variant.Outlined" Style="max-width:220px" data-testid="cmmc-filter-status">
+                    @foreach (var s in Enum.GetValues<CmmcStatusDto>()) { <MudSelectItem T="CmmcStatusDto?" Value="s">@CmmcFormat.Status(s)</MudSelectItem> }
+                </MudSelect>
+            </div>
+            <div style="overflow-x:auto">
+            <MudSimpleTable Dense="true" Hover="true" Style="min-width:820px" data-testid="cmmc-table">
+                <thead><tr><th>#</th><th>Requirement</th><th style="text-align:right">Pts</th><th>Status</th><th>Owner</th><th>Plan</th><th></th></tr></thead>
+                <tbody>
+                @foreach (var p in Visible(d))
+                {
+                    <tr data-testid="@($"cmmc-row-{p.PracticeId}")">
+                        <td style="white-space:nowrap">@p.PracticeId</td>
+                        <td>@p.Statement<div><MudText Typo="Typo.caption" Class="mud-text-secondary">@p.Family@(p.IsBasic ? " · basic" : "")</MudText></div></td>
+                        <td style="text-align:right">@(p.Deduction > 0 ? $"−{p.Deduction}" : p.Weight == 0 ? "–" : p.Weight.ToString())</td>
+                        <td><MudChip T="string" Size="Size.Small" Color="@CmmcFormat.StatusColor(p.Status)" Variant="Variant.Outlined">@CmmcFormat.Status(p.Status)@(p.PartialCredit ? " (partly)" : "")</MudChip></td>
+                        <td>@p.OwnerEmail</td>
+                        <td>@(p.OpenPoamItems > 0 ? $"{p.OpenPoamItems} open" : p.Status == CmmcStatusDto.NotImplemented ? "none" : "")</td>
+                        <td style="white-space:nowrap">
+                            <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" AriaLabel="@($"Assess {p.PracticeId}")" OnClick="() => AssessAsync(p)" data-testid="@($"cmmc-edit-{p.PracticeId}")" />
+                            @if (p.Status == CmmcStatusDto.NotImplemented)
+                            {
+                                <MudIconButton Icon="@Icons.Material.Filled.PlaylistAdd" Size="Size.Small" AriaLabel="@($"Plan for {p.PracticeId}")" OnClick="() => PoamAsync(null, p.PracticeId)" />
+                            }
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </MudSimpleTable>
+            </div>
+        </MudTabPanel>
+        <MudTabPanel Text="@($"Plan of action ({d.OpenPoamItems})")">
+            <div class="d-flex mb-2">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="() => PoamAsync(null, null)" data-testid="poam-add">Add an item</MudButton>
+            </div>
+            @if (d.Poam.Count == 0)
+            {
+                <MudAlert Severity="Severity.Normal" Dense="true">No items yet. For each requirement marked Not implemented, add what will be done and by when.</MudAlert>
+            }
+            else
+            {
+                <div style="overflow-x:auto">
+                <MudSimpleTable Dense="true" Hover="true" Style="min-width:720px" data-testid="poam-table">
+                    <thead><tr><th>Requirement</th><th>Milestone</th><th>Owner</th><th>Due</th><th>Status</th><th></th></tr></thead>
+                    <tbody>
+                    @foreach (var i in d.Poam)
+                    {
+                        <tr class="@(i.Status == CmmcPoamStatusDto.Done ? "mud-text-secondary" : "")">
+                            <td style="white-space:nowrap">@i.PracticeId</td>
+                            <td>@i.Milestone</td>
+                            <td>@i.OwnerEmail</td>
+                            <td><span class="@(i.Overdue ? "mud-error-text" : "")">@(i.DueOn?.ToString("yyyy-MM-dd"))@(i.Overdue ? " · overdue" : "")</span></td>
+                            <td>@(i.Status == CmmcPoamStatusDto.Done ? $"Done {i.CompletedOn:yyyy-MM-dd}" : "Open")</td>
+                            <td style="white-space:nowrap">
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" AriaLabel="Change item" OnClick="() => PoamAsync(i, null)" />
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" AriaLabel="Delete item" OnClick="() => DeletePoamAsync(i)" />
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </MudSimpleTable>
+                </div>
+            }
+        </MudTabPanel>
+    </MudTabs>
+}
+
+@code {
+    private CmmcAssessmentDto? _data;
+    private string? _error;
+    private bool _forbidden;
+    private string? _family;
+    private CmmcStatusDto? _status;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private IEnumerable<CmmcPracticeDto> Visible(CmmcAssessmentDto d) =>
+        d.Practices.Where(p => (_family is null || p.Family == _family) && (_status is null || p.Status == _status));
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _data = await Cmmc.GetAssessmentAsync();
+            _error = null;
+        }
+        catch (WorkbenchForbiddenException ex)
+        {
+            (_error, _forbidden) = (ex.Message, true);
+        }
+        catch (Exception ex) when (ex is WorkbenchNotFoundException or HttpRequestException)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task AssessAsync(CmmcPracticeDto practice)
+    {
+        var dialog = await DialogService.ShowAsync<CmmcPracticeDialog>($"Assess {practice.PracticeId}",
+            new DialogParameters<CmmcPracticeDialog> { { d => d.Practice, practice } }, new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+        var result = await dialog.Result;
+        if (result is null || result.Canceled || result.Data is not SaveCmmcPracticeRequest request)
+        {
+            return;
+        }
+
+        await TryAsync(async () => await Cmmc.SavePracticeAsync(practice.PracticeId, request));
+    }
+
+    private async Task PoamAsync(CmmcPoamItemDto? existing, string? practiceId)
+    {
+        var dialog = await DialogService.ShowAsync<CmmcPoamDialog>(existing is null ? "Add a plan of action item" : "Change the item",
+            new DialogParameters<CmmcPoamDialog> { { d => d.Practices, _data!.Practices }, { d => d.Existing, existing }, { d => d.PracticeId, practiceId } },
+            new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true });
+        var result = await dialog.Result;
+        if (result is null || result.Canceled || result.Data is not SaveCmmcPoamRequest request)
+        {
+            return;
+        }
+
+        await TryAsync(async () =>
+        {
+            if (existing is null)
+            {
+                await Cmmc.AddPoamItemAsync(request);
+            }
+            else
+            {
+                await Cmmc.UpdatePoamItemAsync(existing.Id, request);
+            }
+        });
+    }
+
+    private async Task DeletePoamAsync(CmmcPoamItemDto item)
+    {
+        if (await DialogService.ShowMessageBoxAsync("Delete this item?", $"\"{item.Milestone}\" comes off the plan of action.", "Delete", cancelText: "Keep it") == true)
+        {
+            await TryAsync(async () => await Cmmc.DeletePoamItemAsync(item.Id));
+        }
+    }
+
+    private async Task TryAsync(Func<Task> action)
+    {
+        try
+        {
+            await action();
+            await LoadAsync();
+        }
+        catch (Exception ex) when (ex is ArgumentException or WorkbenchForbiddenException or WorkbenchNotFoundException or HttpRequestException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+}
