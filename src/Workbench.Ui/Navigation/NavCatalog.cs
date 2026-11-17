@@ -1,5 +1,6 @@
 using MudBlazor;
 using Workbench.Contracts.Identity;
+using Workbench.Contracts.Licensing;
 using P = Workbench.Contracts.Identity.Permission;
 
 namespace Workbench.Ui.Navigation;
@@ -47,22 +48,13 @@ public sealed record NavEntry(
     bool MatchAll = false,
     string? Detail = null,
     string? Keywords = null,
-    bool InMenu = true,
-    string? Module = null)
+    bool InMenu = true)
 {
     /// <summary>
-    /// The license module the page belongs to: <see cref="Module"/> when set, otherwise by where it sits. The Finance and
-    /// Business development sections, HR administration, and the audit log and compliance pages are each one module; pages
-    /// of the gated enterprise and govcon modules stay visible (they only block changing things), so nothing is listed here for them.
+    /// The license module the page belongs to, from the one table in <see cref="ModuleMap"/> (the page, else its group, else its
+    /// section). A test fails for any page the table doesn't cover; until it is added the page counts as core.
     /// </summary>
-    public string ModuleId => Module ?? (Section, Group, Href) switch
-    {
-        (NavCatalog.Finance, _, _) => "finance",
-        (NavCatalog.Growth, _, _) => "capture",
-        (NavCatalog.People, "HR administration", _) => "workforce",
-        (NavCatalog.Admin, "Compliance", _) or (NavCatalog.Admin, _, "setup/audit") => "controls",
-        _ => "core",
-    };
+    public string ModuleId => ModuleMap.ForNav(Section, Group, Href) ?? ModuleKeys.Core;
 
     /// <summary>Shown to the user and open to them: their permissions allow it and the organization's license includes its module.</summary>
     public bool IsVisible(NavAccess access) => Rule.Allows(access) && access.HasModule(ModuleId);

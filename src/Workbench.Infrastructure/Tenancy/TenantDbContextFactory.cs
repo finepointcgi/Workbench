@@ -29,7 +29,7 @@ internal sealed class TenantConnectionResolver(TenantCatalog catalog) : IWorkben
 /// wraps it. A singleton that asks <see cref="IWorkbenchConnectionResolver"/> on every call, so feature code stays
 /// unaware of tenants. Options are built once per connection string.
 /// </summary>
-internal sealed class TenantAwareDbContextFactory(DatabaseProvider provider, IWorkbenchConnectionResolver resolver, ILoggerFactory? loggerFactory = null)
+internal sealed class TenantAwareDbContextFactory(DatabaseProvider provider, IWorkbenchConnectionResolver resolver, ILoggerFactory? loggerFactory = null, ReadOnlyTenantInterceptor? readOnly = null)
     : IDbContextFactory<WorkbenchDbContext>
 {
     private readonly ConcurrentDictionary<string, DbContextOptions<WorkbenchDbContext>> _options = new(StringComparer.Ordinal);
@@ -45,6 +45,11 @@ internal sealed class TenantAwareDbContextFactory(DatabaseProvider provider, IWo
             var builder = new DbContextOptionsBuilder<WorkbenchDbContext>();
             builder.Use(provider, cs);
             builder.AddInterceptors(DbTimingInterceptor.Instance);
+            if (readOnly is not null)
+            {
+                builder.AddInterceptors(readOnly);
+            }
+
             if (loggerFactory is not null)
             {
                 builder.UseLoggerFactory(loggerFactory);
