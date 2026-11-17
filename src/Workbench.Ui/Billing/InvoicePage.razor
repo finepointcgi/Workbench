@@ -26,7 +26,7 @@ else
         <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Print" Href="@($"billing/invoices/{s.Id}/print")" data-testid="print-invoice">Print</MudButton>
         @if (_isFinance)
         {
-            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download" OnClick="ExportAsync" data-testid="export-wawf">WAWF CSV</MudButton>
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download" OnClick="ExportAsync" data-testid="export-wawf">@Tm.Reword("WAWF CSV")</MudButton>
             @if (isDraft)
             {
                 @if (s.Type != InvoiceKind.CreditMemo)
@@ -68,7 +68,7 @@ else
         <MudItem xs="12" md="8">
             <MudPaper Outlined="true" Class="pa-4">
                 <MudGrid Spacing="2">
-                    <MudItem xs="6" sm="4"><Field Label="Contract"><MudLink Href="@($"billing/contracts/{s.ContractId}")">@s.ContractNumber</MudLink></Field></MudItem>
+                    <MudItem xs="6" sm="4"><Field Label="@Tm.Reword("Contract")"><MudLink Href="@($"billing/contracts/{s.ContractId}")">@s.ContractNumber</MudLink></Field></MudItem>
                     <MudItem xs="6" sm="4"><Field Label="Customer">@s.CustomerName</Field></MudItem>
                     <MudItem xs="6" sm="4"><Field Label="Type">@BillingFormat.Label(s.Type)</Field></MudItem>
                     <MudItem xs="6" sm="4"><Field Label="Billing period">@BillingFormat.Date(s.PeriodFrom) – @BillingFormat.Date(s.PeriodTo)</Field></MudItem>
@@ -139,7 +139,7 @@ else
                 }
                 @if (_invoice.FundingOverrideReason is not null)
                 {
-                    <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">Approved past funding: @_invoice.FundingOverrideReason</MudAlert>
+                    <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">@Tm.Reword("Approved past funding:") @_invoice.FundingOverrideReason</MudAlert>
                 }
                 @if (s.Status == InvoiceState.Void)
                 {
@@ -178,13 +178,14 @@ else
 
     @if (_invoice.Funding.Count > 0)
     {
-        <MudText Typo="Typo.h6" HtmlTag="h2" Class="mt-4 mb-2">Funding check</MudText>
+        <MudText Typo="Typo.h6" HtmlTag="h2" Class="mt-4 mb-2">@Tm.Reword("Funding check")</MudText>
         <FundingCheckTable Funding="_invoice.Funding" />
     }
     <CustomFieldsSection EntityType="@CustomizableEntityTypes.Invoice" RecordId="InvoiceId" StatusSet="invoice-status" Class="mt-3" />
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [CascadingParameter]
     public FinanceAccess? Access { get; set; }
 

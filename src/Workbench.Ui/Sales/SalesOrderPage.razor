@@ -21,7 +21,7 @@ else
     var s = o.Summary;
     var shippable = s.Status is SalesOrderState.Released or SalesOrderState.PartlyShipped;
     <MaterialsHeader Title="@($"{s.Number} · {s.CustomerName}")" BackHref="materials/sales-orders" BackLabel="Sales orders"
-                     Subtitle="@(string.Join(" · ", new[] { s.ContractNumber is { } c ? $"Contract {c}" : "No contract", s.ProjectCode is { } p ? $"project {p}" : null, s.CustomerReference is { } r ? $"customer ref. {r}" : null }.Where(x => x is not null)))">
+                     Subtitle="@(string.Join(" · ", new[] { s.ContractNumber is { } c ? Tm.Reword($"Contract {c}") : Tm.Reword("No contract"), s.ProjectCode is { } p ? $"project {p}" : null, s.CustomerReference is { } r ? $"customer ref. {r}" : null }.Where(x => x is not null)))">
         <MudChip T="string" Size="Size.Small" Color="SalesFormat.Color(s.Status)" data-testid="so-status">@SalesFormat.Label(s.Status)</MudChip>
         @if (Editable)
         {
@@ -32,7 +32,7 @@ else
 
             @if (s.Status == SalesOrderState.Draft && s.ContractId is not null)
             {
-                <MudButton Variant="Variant.Outlined" OnClick="ClinLinesAsync" Disabled="_options is null" data-testid="so-clins">Add lines from CLINs</MudButton>
+                <MudButton Variant="Variant.Outlined" OnClick="ClinLinesAsync" Disabled="_options is null" data-testid="so-clins">@Tm.Reword("Add lines from CLINs")</MudButton>
             }
 
             @if (s.Status == SalesOrderState.Draft)
@@ -100,7 +100,7 @@ else
         <MudText Typo="Typo.subtitle1" HtmlTag="h2" Class="px-2 pt-1">Lines</MudText>
         @if (o.Lines.Count == 0)
         {
-            <MudText Class="mud-text-secondary pa-2">No lines yet. Edit the order or add lines from the contract's CLINs.</MudText>
+            <MudText Class="mud-text-secondary pa-2">@Tm.Reword("No lines yet. Edit the order or add lines from the contract's CLINs.")</MudText>
         }
         else
         {
@@ -178,6 +178,7 @@ else
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [Parameter] public Guid OrderId { get; set; }
     [CascadingParameter] public CurrentUserInfo? User { get; set; }
 
@@ -243,7 +244,7 @@ else
     {
         if (_options?.Contracts.FirstOrDefault(c => c.Id == _order!.Summary.ContractId) is not { } contract)
         {
-            Snackbar.Add("The order's contract isn't open.", Severity.Warning);
+            Snackbar.Add(Tm.Reword("The order's contract isn't open."), Severity.Warning);
             return;
         }
 

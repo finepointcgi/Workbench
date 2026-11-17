@@ -10,12 +10,14 @@
         @foreach (var tab in _pages)
         {
             <NavLink href="@tab.Href" Match="@(tab.MatchAll ? NavLinkMatch.All : NavLinkMatch.Prefix)" class="wb-group-tab"
-                     ActiveClass="wb-group-tab-current" aria-current="@(tab == _current ? "page" : null)">@tab.Title</NavLink>
+                     ActiveClass="wb-group-tab-current" aria-current="@(tab == _current ? "page" : null)">@Tm.Reword(tab.Title)</NavLink>
         }
     </nav>
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
+
     [Parameter] public NavAccess Access { get; set; } = NavAccess.Anonymous;
 
     private IReadOnlyList<NavEntry> _pages = [];

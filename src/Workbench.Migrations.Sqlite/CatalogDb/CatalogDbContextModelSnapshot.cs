@@ -120,6 +120,101 @@ namespace Workbench.Migrations.Sqlite.CatalogDb
 
                     b.ToTable("Tenants", (string)null);
                 });
+
+            modelBuilder.Entity("Workbench.Infrastructure.Tenancy.TenantEntitlement", b =>
+                {
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("CancelledAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CompanyType")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ExternalRef")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsTrial")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("LightSeats")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Modules")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("PaidThroughUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("PastDueSinceUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Plan")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Seats")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SignupEmail")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SignupSource")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("SourceEventAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("TermsAcceptedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TermsVersion")
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("TrialEndsUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("TenantId");
+
+                    b.HasIndex("SignupEmail");
+
+                    b.ToTable("TenantEntitlements", (string)null);
+                });
+
+            modelBuilder.Entity("Workbench.Infrastructure.Tenancy.TenantEntitlement", b =>
+                {
+                    b.HasOne("Workbench.Infrastructure.Tenancy.Tenant", null)
+                        .WithOne()
+                        .HasForeignKey("Workbench.Infrastructure.Tenancy.TenantEntitlement", "TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
 #pragma warning restore 612, 618
         }
     }

@@ -3,7 +3,7 @@
 
 <PageTitle>Asset transfers · Fixed assets · Workbench</PageTitle>
 
-<AssetHeader Title="Asset transfers" Subtitle="Every move of an asset between locations, custodians, organizations, projects, contracts and companies. Start a transfer from the asset's page." />
+<AssetHeader Title="Asset transfers" Subtitle="@Tm.Reword("Every move of an asset between locations, custodians, organizations, projects, contracts and companies. Start a transfer from the asset's page.")" />
 
 @if (_error is not null)
 {
@@ -48,6 +48,7 @@ else
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     private DateTime? _from;
     private DateTime? _to;
     private IReadOnlyList<AssetTransferRowDto>? _rows;

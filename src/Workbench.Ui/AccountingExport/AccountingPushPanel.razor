@@ -1,0 +1,199 @@
+@using Workbench.Contracts.AccountingExport
+@using Workbench.Contracts.AccountingLive
+@inject IAccountingPushService Push
+@inject ISnackbar Snackbar
+
+<MudPaper Outlined="true" Class="pa-4 mt-4" data-testid="push-panel">
+    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">Push to @ProviderName</MudText>
+    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
+        Sends these records straight into @ProviderName instead of a file. Each record goes once; its @ProviderName id is remembered, so a retry never duplicates it.
+    </MudText>
+    <MudCheckBox T="bool" Value="_create" ValueChanged="v => { _create = v; _preview = null; }" Label="@($"Create customers and vendors that aren't in {ProviderName} yet")" data-testid="push-create-contacts" />
+    <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="PreviewAsync" Disabled="_busy" data-testid="push-preview">Preview the push</MudButton>
+
+    @if (_error is not null)
+    {
+        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="mt-2" data-testid="push-error">@_error</MudAlert>
+    }
+
+    @if (_preview is { } p)
+    {
+        <div class="mt-3" data-testid="push-preview-panel">
+            <MudText data-testid="push-preview-counts">
+                <strong>@p.NewRecords</strong> record@(p.NewRecords == 1 ? "" : "s") will be created in @ProviderName (@p.LinesOrRows lines@(p.ControlTotal != 0 ? $", control total {p.ControlTotal:N2}" : "")).
+                @if (p.AlreadyExported > 0)
+                {
+                    <span> @p.AlreadyExported already exported.</span>
+                }
+                @if (p.CustomersToCreate + p.VendorsToCreate > 0)
+                {
+                    <span> @p.CustomersToCreate customer@(p.CustomersToCreate == 1 ? "" : "s") and @p.VendorsToCreate vendor@(p.VendorsToCreate == 1 ? "" : "s") will be created first.</span>
+                }
+            </MudText>
+            @if (!p.CanPush)
+            {
+                <MudAlert Severity="Severity.Warning" Class="mt-2" data-testid="push-blocked">@p.BlockedReason</MudAlert>
+            }
+            else if (p.BlockedReason is not null)
+            {
+                <MudAlert Severity="Severity.Info" Class="mt-2">@p.BlockedReason</MudAlert>
+            }
+
+            @if (p.Unmapped.Count > 0)
+            {
+                <MudText Typo="Typo.subtitle2" HtmlTag="h3" Class="mt-2">Not mapped yet (@p.Unmapped.Count)</MudText>
+                <ul data-testid="push-unmapped">
+                    @foreach (var u in p.Unmapped.Take(10))
+                    {
+                        <li>@u.Kind: @u.SourceKey @u.SourceName</li>
+                    }
+                </ul>
+            }
+
+            @if (p.MissingAtProvider.Count > 0)
+            {
+                <MudText Typo="Typo.subtitle2" HtmlTag="h3" Class="mt-2">Not in @ProviderName yet (@p.MissingAtProvider.Count)</MudText>
+                <ul data-testid="push-missing">
+                    @foreach (var m in p.MissingAtProvider.Take(15))
+                    {
+                        <li>@m.Kind: @m.Name <span class="mud-text-secondary">@(m.WillBeCreated ? "(will be created)" : m.Kind == AccountingMapKind.Class ? "(lines go without it)" : "")</span></li>
+                    }
+                </ul>
+            }
+
+            @if (p.Warnings.Count > 0)
+            {
+                <ul data-testid="push-warnings">
+                    @foreach (var w in p.Warnings.Take(10))
+                    {
+                        <li>@w</li>
+                    }
+                </ul>
+            }
+
+            @if (p.AlreadyExported > 0)
+            {
+                <MudCheckBox T="bool" Value="_again" ValueChanged="v => _again = v" Label="@($"Push again: include records that were already exported (only if you deleted them in {ProviderName})")" />
+                @if (_again)
+                {
+                    <MudTextField T="string" @bind-Value="_note" Label="Why are you pushing these again?" Required="true" MaxLength="1000" Lines="2" />
+                }
+            }
+
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" StartIcon="@Icons.Material.Filled.CloudUpload" OnClick="PushAsync"
+                       Disabled="@(_busy || !p.CanPush || (_again && string.IsNullOrWhiteSpace(_note)))" data-testid="push-run-button">Push to @ProviderName</MudButton>
+        </div>
+    }
+
+    @if (_run is { } run)
+    {
+        <div class="mt-3"><AccountingPushRunView Run="run" OnRetry="RetryAsync" Busy="_busy" /></div>
+    }
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired] public AccountingTarget Target { get; set; }
+
+    [Parameter, EditorRequired] public AccountingExportKind Kind { get; set; }
+
+    [Parameter, EditorRequired] public DateOnly From { get; set; }
+
+    [Parameter, EditorRequired] public DateOnly To { get; set; }
+
+    [Parameter] public bool IncludeSubledger { get; set; }
+
+    [Parameter] public EventCallback OnPushed { get; set; }
+
+    private bool _create;
+    private bool _again;
+    private string? _note;
+    private bool _busy;
+    private string? _error;
+    private AccountingPushPreviewDto? _preview;
+    private AccountingPushRunDto? _run;
+
+    private string ProviderName => Target == AccountingTarget.QuickBooks ? "QuickBooks Online" : "Xero";
+
+    protected override void OnParametersSet()
+    {
+        // A different format, kind or period is a different push: drop what was previewed.
+        var key = (Target, Kind, From, To, IncludeSubledger);
+        if (_key != key)
+        {
+            _key = key;
+            _preview = null;
+            _run = null;
+            _error = null;
+            _again = false;
+        }
+    }
+
+    private (AccountingTarget, AccountingExportKind, DateOnly, DateOnly, bool) _key;
+
+    private AccountingPushRequest Request() => new(Target, Kind, From, To, null, _create, _again, _note, IncludeSubledger);
+
+    private static bool IsExpected(Exception ex) => ex is ArgumentException or InvalidOperationException or UnauthorizedAccessException or HttpRequestException or TaskCanceledException;
+
+    private async Task PreviewAsync()
+    {
+        _busy = true;
+        _error = null;
+        _run = null;
+        try
+        {
+            _again = false;
+            _preview = await Push.PreviewAsync(Request());
+        }
+        catch (Exception ex) when (IsExpected(ex))
+        {
+            _preview = null;
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task PushAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            _run = await Push.PushAsync(Request());
+            Snackbar.Add(_run.Message ?? "Pushed.", _run.Failed == 0 ? Severity.Success : Severity.Warning);
+            await OnPushed.InvokeAsync();
+            _preview = null;
+            _again = false;
+            _note = null;
+        }
+        catch (Exception ex) when (IsExpected(ex))
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task RetryAsync(AccountingPushRunDto run)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            _run = await Push.RetryFailedAsync(run.RunId, _create);
+            await OnPushed.InvokeAsync();
+        }
+        catch (Exception ex) when (IsExpected(ex))
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

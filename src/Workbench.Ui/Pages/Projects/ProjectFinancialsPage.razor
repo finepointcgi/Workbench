@@ -123,13 +123,14 @@ else
             }
             else
             {
-                <MudPaper Outlined="true" Class="pa-4"><MudText Class="mud-text-secondary">This project isn't on a contract.</MudText></MudPaper>
+                <MudPaper Outlined="true" Class="pa-4"><MudText Class="mud-text-secondary">@Tm.Reword("This project isn't on a contract.")</MudText></MudPaper>
             }
         </MudItem>
     </MudGrid>
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [Parameter]
     public Guid ProjectId { get; set; }
 

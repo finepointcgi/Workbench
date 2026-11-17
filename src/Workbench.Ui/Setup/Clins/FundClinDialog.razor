@@ -6,8 +6,8 @@
 <MudDialog>
     <DialogContent>
         <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
-            CLIN @Clin.Number · @Clin.Description: @ClinFormat.Money(Clin.FundedValue) funded of @ClinFormat.Money(Clin.CeilingValue).
-            Up to @ClinFormat.Money(Room) more can be funded.
+            @Tm.Term("Clin") @Clin.Number · @Clin.Description: @ClinFormat.Money(Clin.FundedValue) @Tm.Term("funded") of @ClinFormat.Money(Clin.CeilingValue).
+            Up to @ClinFormat.Money(Room) more can be @Tm.Term("funded").
         </MudText>
         <MudForm @ref="_form">
             <MudGrid Spacing="2">
@@ -20,8 +20,8 @@
                     <MudDatePicker @bind-Date="_effective" Label="Effective date" Required="true" DateFormat="yyyy-MM-dd" Editable="true" />
                 </MudItem>
                 <MudItem xs="12" sm="6">
-                    <MudTextField @bind-Value="_number" Label="Modification number" Required="true" RequiredError="Enter the modification number." Immediate="true"
-                                  HelperText="From the funding document" data-testid="fund-mod-number" />
+                    <MudTextField @bind-Value="_number" Label="@Tm.Reword("Modification number")" Required="true" RequiredError="@Tm.Reword("Enter the modification number.")" Immediate="true"
+                                  HelperText="@Tm.Reword("From the funding document")" data-testid="fund-mod-number" />
                 </MudItem>
                 <MudItem xs="12" sm="6">
                     <MudTextField @bind-Value="_description" Label="Description" Required="true" RequiredError="Enter a description." Immediate="true" />
@@ -36,6 +36,7 @@
 </MudDialog>
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [CascadingParameter]
     private IMudDialogInstance MudDialog { get; set; } = default!;
 

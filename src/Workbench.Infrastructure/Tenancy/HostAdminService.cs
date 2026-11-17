@@ -10,7 +10,7 @@ namespace Workbench.Infrastructure.Tenancy;
 /// <see cref="IHostAdminService"/>: host admins only, on the host site only. A tenant's own Admin role grants nothing
 /// here, and a host admin signed in on a tenant's address can't use it either (A.8.2, A.8.3).
 /// </summary>
-internal sealed class HostAdminService(IServiceProvider services, TenancyOptions tenancy, ICurrentUser currentUser) : IHostAdminService
+internal sealed class HostAdminService(IServiceProvider services, TenancyOptions tenancy, ICurrentUser currentUser, TenantEntitlements? entitlements = null) : IHostAdminService
 {
     public Task<HostAccessDto> GetAccessAsync(CancellationToken cancellationToken = default)
     {
@@ -21,7 +21,9 @@ internal sealed class HostAdminService(IServiceProvider services, TenancyOptions
     public async Task<IReadOnlyList<HostTenantDto>> ListTenantsAsync(CancellationToken cancellationToken = default)
     {
         var provisioner = Require();
-        return (await provisioner.ListAsync(cancellationToken)).Select(o => ToDto(o.Tenant, o.DatabaseBytes, o.LastActivityUtc)).ToList();
+        var rows = entitlements is null ? new Dictionary<Guid, TenantEntitlement>() : (await entitlements.ListAsync(cancellationToken)).ToDictionary();
+        return (await provisioner.ListAsync(cancellationToken))
+            .Select(o => ToDto(o.Tenant, o.DatabaseBytes, o.LastActivityUtc, rows.GetValueOrDefault(o.Tenant.Id), o.Seats)).ToList();
     }
 
     public async Task<HostTenantDto> CreateTenantAsync(CreateHostTenantRequest request, CancellationToken cancellationToken = default)
@@ -53,7 +55,31 @@ internal sealed class HostAdminService(IServiceProvider services, TenancyOptions
         return services.GetRequiredService<TenantProvisioner>();
     }
 
-    private HostTenantDto ToDto(TenantSummary t, long? bytes, DateTime? lastActivity) =>
+    public async Task<HostTenantDto> SetEntitlementAsync(Guid tenantId, SetEntitlementRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        Require();
+        var row = await RequireEntitlements().ApplyAsync(tenantId, request, currentUser.Email, "host", cancellationToken);
+        return await TenantDtoAsync(tenantId, row, cancellationToken);
+    }
+
+    public async Task<HostTenantDto> ExtendTrialAsync(Guid tenantId, ExtendTrialRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        Require();
+        var row = await RequireEntitlements().ExtendTrialAsync(tenantId, request.Days, currentUser.Email, request.Reason, cancellationToken);
+        return await TenantDtoAsync(tenantId, row, cancellationToken);
+    }
+
+    private TenantEntitlements RequireEntitlements() => entitlements ?? throw new InvalidOperationException("Entitlements aren't available on this server.");
+
+    private async Task<HostTenantDto> TenantDtoAsync(Guid tenantId, TenantEntitlement row, CancellationToken cancellationToken)
+    {
+        var tenant = (await services.GetRequiredService<TenantCatalog>().ListAsync(cancellationToken)).First(t => t.Id == tenantId);
+        return ToDto(tenant, null, null, row, null);
+    }
+
+    private HostTenantDto ToDto(TenantSummary t, long? bytes, DateTime? lastActivity, TenantEntitlement? entitlement = null, (int Full, int Light)? seats = null) =>
         new(t.Id, t.Slug, t.DisplayName, t.Status.ToString(), t.Plan, t.Notes, t.CreatedAtUtc, t.StatusChangedAtUtc, t.StatusChangedBy, bytes, lastActivity,
-            $"https://{t.Slug}.{tenancy.BaseDomain}/");
+            $"https://{t.Slug}.{tenancy.BaseDomain}/", entitlement is null ? null : entitlements?.ToDto(entitlement, seats));
 }

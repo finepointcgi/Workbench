@@ -36,7 +36,7 @@ else
         }
     </MudStack>
     <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3" Style="padding-left: 52px">
-        @(p.ContractNumber is { } cn ? $"{cn}{(_hub.ContractName is { } name ? $" · {name}" : "")}{(_hub.CustomerName is { } cust ? $" · {cust}" : "")}" : "No contract")
+        @(p.ContractNumber is { } cn ? $"{cn}{(_hub.ContractName is { } name ? $" · {name}" : "")}{(_hub.CustomerName is { } cust ? $" · {cust}" : "")}" : Tm.Reword("No contract"))
         · Manager: @(p.ProjectManagerName ?? "none")
         · @ProjectsFormat.Period(p.Start, p.Finish)
     </MudText>
@@ -49,7 +49,7 @@ else
                      AriaLabel="More project pages" data-testid="project-more">
                 @foreach (var slug in _more)
                 {
-                    <MudMenuItem Href="@($"projects/{ProjectId}/{slug}")" data-testid="@($"more-{slug}")">@ProjectsFormat.Tabs.First(t => t.Slug == slug).Label</MudMenuItem>
+                    <MudMenuItem Href="@($"projects/{ProjectId}/{slug}")" data-testid="@($"more-{slug}")">@Tm.Reword(ProjectsFormat.Tabs.First(t => t.Slug == slug).Label)</MudMenuItem>
                 }
             </MudMenu>
         </div>
@@ -58,7 +58,7 @@ else
              ActivePanelIndex="_tabs.IndexOf(_tab)" ActivePanelIndexChanged="OnTabChanged" data-testid="project-tabs">
         @foreach (var slug in _tabs)
         {
-            <MudTabPanel Text="@ProjectsFormat.Tabs.First(t => t.Slug == slug).Label" @key="slug" data-testid="@($"tab-{slug}")">
+            <MudTabPanel Text="@Tm.Reword(ProjectsFormat.Tabs.First(t => t.Slug == slug).Label)" @key="slug" data-testid="@($"tab-{slug}")">
                 @if (slug == _tab)
                 {
                     @TabContent(slug)
@@ -69,6 +69,8 @@ else
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
+
     [Parameter]
     public Guid ProjectId { get; set; }
 

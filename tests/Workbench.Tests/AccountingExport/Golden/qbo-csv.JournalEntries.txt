@@ -1,0 +1,5 @@
+Journal No.,Journal Date,Account Name,Debits,Credits,Description,Name,Class
+JE-000001,01/05/2026,Office Expenses,1500.00,,Office rent,,Headquarters
+JE-000001,01/05/2026,Checking,,1500.00,Rent for January,,
+JE-000002,01/31/2026,Office Expenses,250.50,,Payroll tax,,
+JE-000002,01/31/2026,Accounts Payable,,250.50,"Accrue =bonus, ""Q1""",,

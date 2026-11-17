@@ -50,7 +50,7 @@
                     <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap">
                         <MudNumericField T="decimal" @bind-Value="_technical" Label="Technical risk % (×60%)" ReadOnly="ReadOnly" Min="0" Max="100" HideSpinButtons="true" Format="0.###" Culture="PricingFormat.Culture" HelperText="Normal 5%, range 3–7%" />
                         <MudNumericField T="decimal" @bind-Value="_management" Label="Management risk % (×40%)" ReadOnly="ReadOnly" Min="0" Max="100" HideSpinButtons="true" Format="0.###" Culture="PricingFormat.Culture" HelperText="Normal 5%, range 3–7%" />
-                        <MudNumericField T="decimal" @bind-Value="_contractTypeRisk" Label="Contract type risk %" ReadOnly="ReadOnly" Min="0" Max="100" HideSpinButtons="true" Format="0.###" Culture="PricingFormat.Culture"
+                        <MudNumericField T="decimal" @bind-Value="_contractTypeRisk" Label="@Tm.Reword("Contract type risk %")" ReadOnly="ReadOnly" Min="0" Max="100" HideSpinButtons="true" Format="0.###" Culture="PricingFormat.Culture"
                                          HelperText="FFP 5%, CPIF 1%, CPFF/T&M/LH 0.5%" />
                         <MudNumericField T="decimal" @bind-Value="_efficiency" Label="Cost efficiency %" ReadOnly="ReadOnly" Min="0" Max="100" HideSpinButtons="true" Format="0.###" Culture="PricingFormat.Culture" HelperText="0–4%" />
                     </MudStack>
@@ -174,6 +174,7 @@
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [Parameter, EditorRequired]
     public PriceModelDto Model { get; set; } = default!;
 

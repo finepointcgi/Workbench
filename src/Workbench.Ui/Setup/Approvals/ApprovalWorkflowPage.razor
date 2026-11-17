@@ -128,7 +128,7 @@ else
                                             <IdPicker Options="_projects" @bind-Selected="condition.Ids" Label="Projects" ReadOnly="!_workflow.CanEdit" />
                                             break;
                                         case ApprovalConditionKind.ContractIn:
-                                            <IdPicker Options="_contracts" @bind-Selected="condition.Ids" Label="Contracts" ReadOnly="!_workflow.CanEdit" />
+                                            <IdPicker Options="_contracts" @bind-Selected="condition.Ids" Label="@Tm.Reword("Contracts")" ReadOnly="!_workflow.CanEdit" />
                                             break;
                                         case ApprovalConditionKind.OrgUnitIn:
                                             <IdPicker Options="_orgUnits" @bind-Selected="condition.Ids" Label="Org units" ReadOnly="!_workflow.CanEdit" />
@@ -201,6 +201,7 @@ else
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [Parameter]
     public string DocumentType { get; set; } = "";
 

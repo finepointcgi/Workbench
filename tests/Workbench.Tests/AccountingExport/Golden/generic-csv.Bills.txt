@@ -1,0 +1,4 @@
+Bill,Type,Vendor,Vendor invoice,Date,Due date,Line,Account number,Account,Description,Amount,Class,Bill total
+AP-0001,Bill,Bolt Consulting,B-77,2026-01-12,2026-02-11,1,6220,Office Expenses,"Design, phase 1",600.00,Headquarters,900.00
+AP-0001,Bill,Bolt Consulting,B-77,2026-01-12,2026-02-11,2,6230,Office Expenses,Licences,300.00,,900.00
+AP-0002,Vendor credit,Bolt Consulting,CR-9,2026-01-25,2026-01-25,1,6220,Office Expenses,Credit note,100.00,,100.00

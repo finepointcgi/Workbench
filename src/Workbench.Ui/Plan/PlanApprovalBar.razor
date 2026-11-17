@@ -23,10 +23,10 @@
                 <div class="wb-approval-text mb-2">Finish these, then tell the project manager so they can build the plan.</div>
                 <div class="wb-approval-row" data-testid="setup-funding">
                     <MudIcon Icon="@StepIcon(FundingDone(plan))" Size="Size.Small" Color="@StepColor(FundingDone(plan))" />
-                    <span><strong>1. Contract funding</strong> · @(FundingDone(plan) ? (plan.Terms.Funded is { } f ? $"{f:C0} funded" : "none needed") : "not funded yet. Put money on a CLIN.")</span>
+                    <span><strong>@Tm.Reword("1. Contract funding")</strong> · @(FundingDone(plan) ? (plan.Terms.Funded is { } f ? $"{f:C0} funded" : "none needed") : "not funded yet. Put money on a CLIN.")</span>
                     @if (!FundingDone(plan) && plan.Terms.ContractId is { } contractId)
                     {
-                        <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="() => OpenContract(contractId)" data-testid="setup-open-contract">Open the contract</MudButton>
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" OnClick="() => OpenContract(contractId)" data-testid="setup-open-contract">@Tm.Reword("Open the contract")</MudButton>
                     }
                 </div>
                 <div class="mt-2" data-testid="setup-categories">
@@ -41,12 +41,12 @@
                                        Label="Labor categories" Margin="Margin.Dense" Variant="Variant.Outlined" Style="max-width:420px" data-testid="setup-category-select">
                                 @foreach (var c in cats)
                                 {
-                                    <MudSelectItem T="Guid" Value="c.Id">@c.Label@(c.OnContract ? " · on the contract" : "")</MudSelectItem>
+                                    <MudSelectItem T="Guid" Value="c.Id">@c.Label@(c.OnContract ? Tm.Reword(" · on the contract") : "")</MudSelectItem>
                                 }
                             </MudSelect>
                             @if (cats.Any(c => c.OnContract))
                             {
-                                <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="UseContractCategories" data-testid="setup-use-contract">Use the contract's categories</MudButton>
+                                <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="UseContractCategories" data-testid="setup-use-contract">@Tm.Reword("Use the contract's categories")</MudButton>
                             }
                             <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveCategoriesAsync" Disabled="@(_busy || _categoryIds.Count == 0)" data-testid="setup-categories-save">Save</MudButton>
                         </div>
@@ -61,8 +61,8 @@
             </MudPaper>
         }
         <div class="wb-approval-row">
-            <MudChip T="string" Size="Size.Small" Color="@StatusColor(plan)" Variant="Variant.Filled" data-testid="plan-approval-status">@StatusText(plan)</MudChip>
-            <span class="wb-approval-text">@Explain(plan)</span>
+            <MudChip T="string" Size="Size.Small" Color="@StatusColor(plan)" Variant="Variant.Filled" data-testid="plan-approval-status">@Tm.Reword(StatusText(plan))</MudChip>
+            <span class="wb-approval-text">@Tm.Reword(Explain(plan))</span>
             <span class="wb-approval-actions">
             @if (plan.CanSubmit && !_reviewing)
             {
@@ -79,7 +79,7 @@
                     <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => _noteOpen = true" data-testid="plan-note-add">Add a note</MudButton>
                 }
                 <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Send" OnClick="SubmitAsync" Disabled="@(_busy || !plan.SetupDone)"
-                           data-testid="plan-submit">@SubmitLabel(plan)</MudButton>
+                           data-testid="plan-submit">@Tm.Reword(SubmitLabel(plan))</MudButton>
             }
             @if (plan.CanReview)
             {
@@ -127,7 +127,7 @@
         <div class="wb-approval-row">
             <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@(_detailsOpen ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)"
                        OnClick="() => _detailsOpen = !_detailsOpen" aria-expanded="@(_detailsOpen ? "true" : "false")" data-testid="plan-details-toggle">Plan details</MudButton>
-            <span class="wb-approval-text">@DetailsHint(plan)</span>
+            <span class="wb-approval-text">@Tm.Reword(DetailsHint(plan))</span>
         </div>
         @if (_detailsOpen)
         {
@@ -148,12 +148,12 @@
 
         <div class="wb-approval-terms" data-testid="plan-terms">
                 <span>
-                    @plan.Terms.PricingLabel@(plan.Terms.ContractNumber is { } c ? $" · contract {c}" : "")@(plan.Terms.FeeRate > 0 ? $" · {Percent(plan.Terms.FeeRate)} fee" : "")
+                    @plan.Terms.PricingLabel@(plan.Terms.ContractNumber is { } c ? Tm.Reword($" · contract {c}") : "")@(plan.Terms.FeeRate > 0 ? $" · {Percent(plan.Terms.FeeRate)} fee" : "")
                     @(plan.Terms.Start is { } s && plan.Terms.Finish is { } f ? $" · {PlanPeopleFormat.Range(s, f)}" : "")
                 </span>
                 @if (plan.CanEditTerms)
                 {
-                    <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => _editing = !_editing" data-testid="plan-terms-edit">@(_editing ? "Close" : "Change the ceiling or funding")</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => _editing = !_editing" data-testid="plan-terms-edit">@(_editing ? "Close" : Tm.Reword("Change the ceiling or funding"))</MudButton>
                     <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => _editingCategories = !_editingCategories" data-testid="plan-categories-edit">@(_editingCategories ? "Close" : "Labor categories")</MudButton>
                 }
             </div>
@@ -170,7 +170,7 @@
                                Label="Labor categories" Margin="Margin.Dense" Variant="Variant.Outlined" Style="max-width:420px">
                         @foreach (var c in all)
                         {
-                            <MudSelectItem T="Guid" Value="c.Id">@c.Label@(c.OnContract ? " · on the contract" : "")</MudSelectItem>
+                            <MudSelectItem T="Guid" Value="c.Id">@c.Label@(c.OnContract ? Tm.Reword(" · on the contract") : "")</MudSelectItem>
                         }
                     </MudSelect>
                     <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveCategoriesAsync" Disabled="_busy" data-testid="plan-categories-save">Save</MudButton>
@@ -180,11 +180,11 @@
             @if (_editing)
             {
                 <div class="wb-approval-row mt-1" data-testid="plan-terms-form">
-                    <MudNumericField T="decimal?" @bind-Value="_ceiling" Label="Ceiling ($)" Format="N0" Min="0" Style="max-width:170px" Margin="Margin.Dense" Variant="Variant.Outlined" />
-                    <MudNumericField T="decimal?" @bind-Value="_funded" Label="Funded ($)" Format="N0" Min="0" Style="max-width:170px" Margin="Margin.Dense" Variant="Variant.Outlined" />
+                    <MudNumericField T="decimal?" @bind-Value="_ceiling" Label="@Tm.Reword("Ceiling ($)")" Format="N0" Min="0" Style="max-width:170px" Margin="Margin.Dense" Variant="Variant.Outlined" />
+                    <MudNumericField T="decimal?" @bind-Value="_funded" Label="@Tm.Reword("Funded ($)")" Format="N0" Min="0" Style="max-width:170px" Margin="Margin.Dense" Variant="Variant.Outlined" />
                     <MudNumericField T="decimal?" @bind-Value="_fee" Label="Fee (%)" Min="0" Max="99" Style="max-width:110px" Margin="Margin.Dense" Variant="Variant.Outlined" />
                     <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveTermsAsync" Disabled="_busy">Save</MudButton>
-                    <span class="wb-approval-text">Leave a box as the contract says to keep following it.</span>
+                    <span class="wb-approval-text">@Tm.Reword("Leave a box as the contract says to keep following it.")</span>
                 </div>
             }
         }
@@ -193,6 +193,7 @@
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [Parameter, EditorRequired] public Guid ProjectId { get; set; }
 
     /// <summary>The bar (status, next step, Submit or Approve) sits above the WBS grid; the details (steps, terms) below it.</summary>
@@ -346,11 +347,11 @@
             {
                 if (money.Project.Status == PlanMoneyStatus.OverCeiling)
                 {
-                    problems.Add("The plan costs more than the contract's ceiling.");
+                    problems.Add(Tm.Reword("The plan costs more than the contract's ceiling."));
                 }
                 else if (money.Project.Status == PlanMoneyStatus.OverFunding)
                 {
-                    problems.Add("The plan costs more than is funded so far.");
+                    problems.Add(Tm.Reword("The plan costs more than is funded so far."));
                 }
             }
         }

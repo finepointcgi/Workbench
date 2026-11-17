@@ -5,7 +5,7 @@
 
 <PageTitle>Revenue setup · Accounting · Workbench</PageTitle>
 
-<AccountingHeader Title="Revenue setup" Subtitle="The revenue method for each project on a contract, or for one of its CLINs. A CLIN setup covers the WBS mapped to that CLIN; the project setup covers the rest. Projects without a setup recognize revenue as billed." />
+<AccountingHeader Title="Revenue setup" Subtitle="@Tm.Reword("The revenue method for each project on a contract, or for one of its CLINs. A CLIN setup covers the WBS mapped to that CLIN; the project setup covers the rest. Projects without a setup recognize revenue as billed.")" />
 <RevenueTabs Current="setup" />
 
 @if (_error is not null)
@@ -20,7 +20,7 @@ else
 {
     <MudPaper Outlined="true" Class="pa-4">
         <MudSimpleTable Dense="true" Elevation="0" data-testid="revenue-setup">
-            <thead><tr><th>Project</th><th>Contract</th><th>Methods</th><th><Term Key="eac">Current EAC</Term></th><th><Term Key="eac">Pending EACs</Term></th><th></th></tr></thead>
+            <thead><tr><th>Project</th><th>@Tm.Reword("Contract")</th><th>Methods</th><th><Term Key="eac">Current EAC</Term></th><th><Term Key="eac">Pending EACs</Term></th><th></th></tr></thead>
             <tbody>
                 @foreach (var p in _projects)
                 {
@@ -56,6 +56,7 @@ else
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     private IReadOnlyList<RevenueProjectSummaryDto>? _projects;
     private string? _error;
     private bool _forbidden;

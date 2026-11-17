@@ -5,7 +5,7 @@
 
 <PageTitle>Revenue reports · Accounting · Workbench</PageTitle>
 
-<AccountingHeader Title="Revenue reports" Subtitle="From the general ledger, so revenue from invoices, accruals and revenue runs all counts. Contract assets are earned but not billed; contract liabilities are billed ahead of revenue." />
+<AccountingHeader Title="Revenue reports" Subtitle="@Tm.Reword("From the general ledger, so revenue from invoices, accruals and revenue runs all counts. Contract assets are earned but not billed; contract liabilities are billed ahead of revenue.")" />
 <RevenueTabs Current="reports" />
 
 @if (_error is not null)
@@ -21,7 +21,7 @@ else
                 <MudSelect T="Guid?" @bind-Value="_to" Label="Through" Dense="true" Style="min-width:140px"><PeriodItems Periods="_periods" /></MudSelect>
                 <MudSelect T="RevenueGrouping" @bind-Value="_grouping" Label="By" Dense="true" Style="min-width:140px">
                     <MudSelectItem T="RevenueGrouping" Value="RevenueGrouping.Project">Project</MudSelectItem>
-                    <MudSelectItem T="RevenueGrouping" Value="RevenueGrouping.Contract">Contract</MudSelectItem>
+                    <MudSelectItem T="RevenueGrouping" Value="RevenueGrouping.Contract">@Tm.Reword("Contract")</MudSelectItem>
                 </MudSelect>
                 <MudButton Variant="Variant.Outlined" OnClick="LoadByPeriodAsync" data-testid="report-run">Show</MudButton>
             </MudStack>
@@ -46,7 +46,7 @@ else
             @if (_vs is { } vs)
             {
                 <MudSimpleTable Dense="true" Elevation="0" data-testid="revenue-vs-billings">
-                    <thead><tr><th>Project</th><th>Contract</th><th>Method</th><th style="text-align:right">Recognized</th><th style="text-align:right">Billed</th><th style="text-align:right">Contract asset (under-billed)</th><th style="text-align:right">Contract liability (over-billed)</th><th style="text-align:right">Loss provision</th><th>Last run</th></tr></thead>
+                    <thead><tr><th>Project</th><th>@Tm.Reword("Contract")</th><th>Method</th><th style="text-align:right">Recognized</th><th style="text-align:right">Billed</th><th style="text-align:right">@Tm.Reword("Contract asset (under-billed)")</th><th style="text-align:right">@Tm.Reword("Contract liability (over-billed)")</th><th style="text-align:right">Loss provision</th><th>Last run</th></tr></thead>
                     <tbody>
                         @foreach (var r in vs.Rows)
                         {
@@ -65,9 +65,9 @@ else
         <MudTabPanel Text="Backlog">
             @if (_backlog is { } bl)
             {
-                <MudText Class="mud-text-secondary mb-2">As of @AccountingFormat.Date(bl.AsOf) (choose the period on the Revenue vs billings tab). Contract value and funding are today's CLIN values.</MudText>
+                <MudText Class="mud-text-secondary mb-2">As of @AccountingFormat.Date(bl.AsOf) (choose the period on the Revenue vs billings tab). @Tm.Reword("Contract value and funding are today's CLIN values.")</MudText>
                 <MudSimpleTable Dense="true" Elevation="0" data-testid="backlog">
-                    <thead><tr><th>Contract</th><th>Customer</th><th style="text-align:right">Value</th><th style="text-align:right"><Term Key="funded">Funded</Term></th><th style="text-align:right">Recognized</th><th style="text-align:right"><Term Key="funded">Funded backlog</Term></th><th style="text-align:right">Unfunded backlog</th><th style="text-align:right">Total backlog</th></tr></thead>
+                    <thead><tr><th>@Tm.Reword("Contract")</th><th>Customer</th><th style="text-align:right">Value</th><th style="text-align:right"><Term Key="funded">@Tm.Reword("Funded")</Term></th><th style="text-align:right">Recognized</th><th style="text-align:right"><Term Key="funded">@Tm.Reword("Funded backlog")</Term></th><th style="text-align:right">@Tm.Reword("Unfunded backlog")</th><th style="text-align:right">Total backlog</th></tr></thead>
                     <tbody>
                         @foreach (var r in bl.Rows)
                         {
@@ -87,6 +87,7 @@ else
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     private IReadOnlyList<FiscalPeriodDto> _periods = [];
     private Guid? _from, _to, _asOf;
     private RevenueGrouping _grouping = RevenueGrouping.Project;
