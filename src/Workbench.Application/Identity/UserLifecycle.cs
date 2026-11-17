@@ -83,7 +83,8 @@ public sealed class UserLifecycle(
     UserStatusCache statusCache,
     SecurityEventLog securityLog,
     Licensing.EditionService editions,
-    TimeProvider clock)
+    TimeProvider clock,
+    Licensing.ModuleSeatService? moduleSeats = null)
 {
     public async Task<AppUser> GetAsync(string email, CancellationToken cancellationToken = default)
     {
@@ -106,6 +107,7 @@ public sealed class UserLifecycle(
         if (active)
         {
             await editions.RequireFreeSeatAsync(db, await Licensing.EditionService.IsLightGrantAsync(db, roles, [], cancellationToken), cancellationToken);
+            await RequireModuleSeatsAsync(db, BuiltInRoles.IdsOf(roles), null, true, cancellationToken);
         }
 
         var now = clock.GetUtcNow().UtcDateTime;
@@ -161,15 +163,15 @@ public sealed class UserLifecycle(
     /// <summary>Replaces the built-in roles a user holds with <paramref name="roles"/> (everywhere); their custom roles stay.</summary>
     public Task<AppUser> SetRolesAsync(string email, OrgRoles roles, string actor, CancellationToken cancellationToken = default) =>
         ChangeRolesAsync(email, current => current.Where(a => !BuiltInRoles.IsBuiltIn(a.RoleId) || roles.HasFlag(BuiltInRoles.Find(a.RoleId)!.Role))
-            .Concat(BuiltInRoles.IdsOf(roles).Where(id => current.All(a => a.RoleId != id)).Select(id => new RoleAssignment(id))), actor, cancellationToken);
+            .Concat(BuiltInRoles.IdsOf(roles).Where(id => current.All(a => a.RoleId != id)).Select(id => new RoleAssignment(id))), actor, cancellationToken, checkSeats: true);
 
     /// <summary>Replaces every role a user holds (built-in and custom) with <paramref name="roleIds"/>; roles they keep keep their scope.</summary>
     public Task<AppUser> SetRoleIdsAsync(string email, IReadOnlyCollection<Guid> roleIds, string actor, CancellationToken cancellationToken = default) =>
-        ChangeRolesAsync(email, current => roleIds.Distinct().Select(id => current.FirstOrDefault(a => a.RoleId == id) ?? new RoleAssignment(id)), actor, cancellationToken);
+        ChangeRolesAsync(email, current => roleIds.Distinct().Select(id => current.FirstOrDefault(a => a.RoleId == id) ?? new RoleAssignment(id)), actor, cancellationToken, checkSeats: true);
 
     /// <summary>Replaces every role a user holds with <paramref name="assignments"/>, each with its scope.</summary>
     public Task<AppUser> SetAssignmentsAsync(string email, IReadOnlyCollection<RoleAssignment> assignments, string actor, CancellationToken cancellationToken = default) =>
-        ChangeRolesAsync(email, _ => assignments, actor, cancellationToken);
+        ChangeRolesAsync(email, _ => assignments, actor, cancellationToken, checkSeats: true);
 
     /// <summary>Adds the roles in <paramref name="grant"/> (everywhere) to those the user holds (invites, just-in-time sign-up).</summary>
     public Task<AppUser> GrantAsync(string email, RoleGrant grant, string actor, CancellationToken cancellationToken = default) =>
@@ -183,7 +185,7 @@ public sealed class UserLifecycle(
     /// Every change to the roles a user holds goes through here: nobody removes their own Admin role, there is always an
     /// active administrator, and the change is audit logged (before and after, with scopes) and recorded as a security event.
     /// </summary>
-    private async Task<AppUser> ChangeRolesAsync(string email, Func<IReadOnlyList<RoleAssignment>, IEnumerable<RoleAssignment>> target, string actor, CancellationToken cancellationToken)
+    private async Task<AppUser> ChangeRolesAsync(string email, Func<IReadOnlyList<RoleAssignment>, IEnumerable<RoleAssignment>> target, string actor, CancellationToken cancellationToken, bool checkSeats = false)
     {
         email = AccessControl.Normalize(email);
         await using var db = await dbFactory.CreateAsync(cancellationToken);
@@ -199,6 +201,13 @@ public sealed class UserLifecycle(
             }
 
             await RequireAnotherActiveAdminAsync(db, email, cancellationToken);
+        }
+
+        if (checkSeats && user.IsActive)
+        {
+            // An administrator editing roles must not take someone into a module that has no free seat. Invitations being accepted and roles synced from the
+            // identity provider are not refused here: the invitation already held its seat, and a sign-in is never blocked.
+            await RequireModuleSeatsAsync(db, wanted.Select(a => a.RoleId).ToList(), user.Id, false, cancellationToken);
         }
 
         var now = clock.GetUtcNow().UtcDateTime;
@@ -227,6 +236,9 @@ public sealed class UserLifecycle(
 
         return user;
     }
+
+    private Task RequireModuleSeatsAsync(IWorkbenchDbContext db, IReadOnlyCollection<Guid> roleIds, Guid? existingUserId, bool addsPerson, CancellationToken ct) =>
+        moduleSeats is null ? Task.CompletedTask : moduleSeats.RequireAsync(db, roleIds, existingUserId, addsPerson, ct);
 
     private static async Task<bool> ManagesOwnProjectsAsync(IWorkbenchDbContext db, IReadOnlyList<Guid> roleIds, CancellationToken ct) =>
         (await RoleStore.ResolveRoleIdsAsync(db, roleIds.Where(id => id != BuiltInRoles.Admin.Id).ToList(), ct)).Permissions.Has(Permission.ProjectsManageOwn);
@@ -263,6 +275,7 @@ public sealed class UserLifecycle(
         else
         {
             await editions.RequireFreeSeatAsync(db, await Licensing.EditionService.IsLightPersonAsync(db, user.Id, cancellationToken), cancellationToken);
+            await RequireModuleSeatsAsync(db, await RoleStore.RoleIdsOfAsync(db, user.Id, cancellationToken), null, true, cancellationToken);
             user.IsActive = true;
             user.DeactivatedAtUtc = null;
             user.DeactivatedBy = null;
