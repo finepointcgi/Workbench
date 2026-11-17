@@ -1,0 +1,223 @@
+@* The billing model of an agreement without CLINs (contract billing page): fixed fee milestones, retainer, recurring charge or T&M. *@
+@inject IAgreementBillingService Agreements
+@inject IDialogService DialogService
+@inject ISnackbar Snackbar
+
+@if (_loaded && (_plan is not null || (IsFinance && NoClins)))
+{
+    <MudPaper Outlined="true" Class="pa-4 mb-3" data-testid="agreement-card">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
+            <MudText Typo="Typo.h6" HtmlTag="h2">How this agreement bills</MudText>
+            <MudSpacer />
+            @if (IsFinance)
+            {
+                <MudButton Variant="Variant.Outlined" OnClick="EditPlanAsync" data-testid="edit-plan">@(_plan is null ? "Set up billing" : "Change")</MudButton>
+            }
+        </MudStack>
+
+        @if (_plan is null)
+        {
+            <MudText Class="mud-text-secondary">@Tm.Reword("This agreement has no CLINs. Choose how it bills: a fixed fee in milestones, a retainer, a recurring charge, or time and materials on a rate card.")</MudText>
+        }
+        else
+        {
+            <MudText data-testid="plan-summary"><strong>@BillingFormat.Label(_plan.Model)</strong></MudText>
+            <MudText Class="mud-text-secondary mb-2">@_plan.Summary</MudText>
+            <MudText Typo="Typo.body2">Billed to date @BillingFormat.Money(_plan.BilledToDate)@(_plan.PeriodsBilled > 0 ? $" · {_plan.PeriodsBilled} invoice{(_plan.PeriodsBilled == 1 ? "" : "s")}" : "")</MudText>
+
+            @if (_plan.Model == AgreementModel.FixedFeeMilestones)
+            {
+                <MudStack Row="true" AlignItems="AlignItems.Center" Class="mt-3 mb-1">
+                    <MudText Typo="Typo.subtitle1" HtmlTag="h3">Milestones</MudText>
+                    <MudSpacer />
+                    @if (IsFinance)
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="() => EditMilestoneAsync(null)" data-testid="add-agreement-milestone">Add milestone</MudButton>
+                    }
+                </MudStack>
+                <MudSimpleTable Dense="true" Hover="true" data-testid="agreement-milestones">
+                    <thead><tr><th>Milestone</th><th>Due</th><th>Completed</th><th style="text-align:right">Amount</th><th>Invoice</th><th></th></tr></thead>
+                    <tbody>
+                        @if (_milestones.Count == 0)
+                        {
+                            <tr><td colspan="6" class="mud-text-secondary">No milestones yet.</td></tr>
+                        }
+                        @foreach (var m in _milestones)
+                        {
+                            <tr>
+                                <td>@m.Description</td>
+                                <td>@BillingFormat.Date(m.TargetDate)</td>
+                                <td>@BillingFormat.Date(m.CompletedDate)</td>
+                                <td style="text-align:right">@BillingFormat.Amount(m.Amount)</td>
+                                <td>@if (m.InvoiceId is { } inv) { <MudLink Href="@($"billing/invoices/{inv}")">@m.InvoiceNumber</MudLink> }</td>
+                                <td style="white-space:nowrap">
+                                    @if (IsFinance && !m.IsBilled)
+                                    {
+                                        @if (!m.IsComplete)
+                                        {
+                                            <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => CompleteAsync(m)" data-testid="complete-milestone">Mark complete</MudButton>
+                                        }
+                                        else
+                                        {
+                                            <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => ReopenAsync(m)">Reopen</MudButton>
+                                        }
+                                        <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" aria-label="Edit milestone" OnClick="() => EditMilestoneAsync(m)" />
+                                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" aria-label="Delete milestone" OnClick="() => DeleteMilestoneAsync(m)" />
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">@(_plan.InvoiceOnComplete ? "Marking a milestone complete creates a draft invoice for it." : "Completed milestones go on the next milestone invoice.")</MudText>
+            }
+            else if (_plan.Model is AgreementModel.Retainer or AgreementModel.Recurring)
+            {
+                <MudStack Row="true" AlignItems="AlignItems.Center" Class="mt-3 mb-1">
+                    <MudText Typo="Typo.subtitle1" HtmlTag="h3">Periods ready to invoice</MudText>
+                    <MudSpacer />
+                    @if (IsFinance && _due.Count > 0)
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" OnClick="GenerateAsync" data-testid="generate-due">Create draft invoices</MudButton>
+                    }
+                </MudStack>
+                @if (_due.Count == 0)
+                {
+                    <MudText Class="mud-text-secondary" data-testid="no-due">Nothing is due. @(_plan.NextPeriodFrom is { } n ? $"The next period starts {BillingFormat.Date(n)}." : "")</MudText>
+                }
+                else
+                {
+                    <MudSimpleTable Dense="true" data-testid="due-periods">
+                        <thead><tr><th>Period</th><th style="text-align:right">Amount</th><th>Status</th></tr></thead>
+                        <tbody>
+                            @foreach (var d in _due)
+                            {
+                                <tr><td>@BillingFormat.Date(d.PeriodFrom) – @BillingFormat.Date(d.PeriodTo)</td><td style="text-align:right">@BillingFormat.Amount(d.Amount)</td><td>@(d.HasDraft ? "Draft waiting for approval" : "Not invoiced")</td></tr>
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                }
+            }
+            else
+            {
+                <MudText Typo="Typo.caption" Class="mud-text-secondary mt-2">Create invoices from the New invoice button: approved hours at the rate card, and expenses at cost.</MudText>
+            }
+        }
+    </MudPaper>
+}
+
+@code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
+
+    [Parameter]
+    public Guid ContractId { get; set; }
+
+    [Parameter]
+    public bool IsFinance { get; set; }
+
+    /// <summary>True when the contract has no CLINs (only then can it have a billing plan).</summary>
+    [Parameter]
+    public bool NoClins { get; set; }
+
+    /// <summary>Raised when the plan or an invoice changed, so the page can refresh its totals.</summary>
+    [Parameter]
+    public EventCallback<bool> Changed { get; set; }
+
+    private AgreementBillingPlanDto? _plan;
+    private IReadOnlyList<AgreementMilestoneDto> _milestones = [];
+    private IReadOnlyList<DueAgreementPeriodDto> _due = [];
+    private bool _loaded;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            await LoadAsync();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _plan = null;
+            _loaded = true;
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        _plan = await Agreements.GetPlanAsync(ContractId);
+        _milestones = _plan?.Model == AgreementModel.FixedFeeMilestones ? await Agreements.ListMilestonesAsync(ContractId) : [];
+        _due = _plan?.Model is AgreementModel.Retainer or AgreementModel.Recurring && IsFinance
+            ? (await Agreements.ListDuePeriodsAsync()).Where(d => d.ContractId == ContractId).ToList()
+            : [];
+        _loaded = true;
+        await Changed.InvokeAsync(_plan is not null);
+    }
+
+    private async Task RunAsync(Func<Task> action, string done)
+    {
+        try
+        {
+            await action();
+            await LoadAsync();
+            Snackbar.Add(done, Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(BillingFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private Task ReopenAsync(AgreementMilestoneDto m) => RunAsync(() => Agreements.ReopenMilestoneAsync(m.Id), "Milestone reopened.");
+
+    private Task DeleteMilestoneAsync(AgreementMilestoneDto m) => RunAsync(() => Agreements.DeleteMilestoneAsync(m.Id), "Milestone deleted.");
+
+    private async Task EditPlanAsync()
+    {
+        var dialog = await DialogService.ShowAsync<AgreementPlanDialog>("How this agreement bills", new DialogParameters<AgreementPlanDialog> { { d => d.Plan, _plan } });
+        if (await dialog.Result is { Canceled: false, Data: SaveAgreementBillingPlanRequest request })
+        {
+            await RunAsync(() => Agreements.SavePlanAsync(ContractId, request), "Billing model saved.");
+        }
+    }
+
+    private async Task EditMilestoneAsync(AgreementMilestoneDto? milestone)
+    {
+        var dialog = await DialogService.ShowAsync<AgreementMilestoneDialog>(milestone is null ? "Add milestone" : "Edit milestone",
+            new DialogParameters<AgreementMilestoneDialog> { { d => d.Milestone, milestone } });
+        if (await dialog.Result is { Canceled: false, Data: SaveAgreementMilestoneRequest request })
+        {
+            await RunAsync(() => milestone is null ? Agreements.CreateMilestoneAsync(ContractId, request) : Agreements.UpdateMilestoneAsync(milestone.Id, request), "Milestone saved.");
+        }
+    }
+
+    private async Task CompleteAsync(AgreementMilestoneDto m)
+    {
+        try
+        {
+            var result = await Agreements.CompleteMilestoneAsync(m.Id, new CompleteAgreementMilestoneRequest(DateOnly.FromDateTime(DateTime.Today)));
+            await LoadAsync();
+            Snackbar.Add(result.Draft is { } draft ? $"\"{m.Description}\" is complete; draft invoice {draft.Summary.Number} is ready to review." : $"\"{m.Description}\" is complete.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(BillingFormat.Error(ex), Severity.Error);
+        }
+    }
+
+    private async Task GenerateAsync()
+    {
+        try
+        {
+            var result = await Agreements.GenerateDueDraftsAsync(contractId: ContractId);
+            await LoadAsync();
+            Snackbar.Add(result.Created == 0 ? "No new drafts were needed." : $"Created {result.Created} draft invoice{(result.Created == 1 ? "" : "s")}: {string.Join(", ", result.InvoiceNumbers)}.", Severity.Success);
+            foreach (var skipped in result.Skipped)
+            {
+                Snackbar.Add(skipped, Severity.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(BillingFormat.Error(ex), Severity.Error);
+        }
+    }
+}

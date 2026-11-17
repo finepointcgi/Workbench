@@ -75,7 +75,10 @@ public sealed class ArReportService(IWorkbenchDbContextFactory dbFactory, Overdu
             .Where(i => i.IsBilled).ToList();
         var payments = await db.Set<Payment>().AsNoTracking().Where(p => p.CustomerId == customerId && !p.IsVoid).ToListAsync(cancellationToken);
 
-        var opening = invoices.Where(i => i.InvoiceDate < from).Sum(i => i.Total) - payments.Where(p => p.ReceivedOn < from).Sum(p => p.Amount);
+        var writeOffs = await db.Set<InvoiceWriteOff>().AsNoTracking().Where(w => w.CustomerId == customerId && !w.IsReversed).ToListAsync(cancellationToken);
+        var invoiceNumbers = invoices.ToDictionary(i => i.Id, i => i.Number);
+        var opening = invoices.Where(i => i.InvoiceDate < from).Sum(i => i.Total) - payments.Where(p => p.ReceivedOn < from).Sum(p => p.Amount)
+            - writeOffs.Where(w => w.WrittenOffOn < from).Sum(w => w.Amount);
         var events = invoices.Where(i => i.InvoiceDate >= from && i.InvoiceDate <= to)
             .Select(i => (Date: i.InvoiceDate, Order: 0, Kind: i.Type == InvoiceType.CreditMemo ? "Credit memo" : "Invoice", Reference: i.Number,
                 Description: $"{lookups.Contracts.GetValueOrDefault(i.ContractId)?.ContractNumber} · {i.PeriodFrom:yyyy-MM-dd} to {i.PeriodTo:yyyy-MM-dd}"
@@ -84,6 +87,9 @@ public sealed class ArReportService(IWorkbenchDbContextFactory dbFactory, Overdu
             .Concat(payments.Where(p => p.ReceivedOn >= from && p.ReceivedOn <= to)
                 .Select(p => (Date: p.ReceivedOn, Order: 1, Kind: "Payment", Reference: p.Reference ?? p.Method.ToString(),
                     Description: $"Payment received ({p.Method})", Charges: 0m, Credits: p.Amount, InvoiceId: (Guid?)null)))
+            .Concat(writeOffs.Where(w => w.WrittenOffOn >= from && w.WrittenOffOn <= to)
+                .Select(w => (Date: w.WrittenOffOn, Order: 2, Kind: "Write-off", Reference: invoiceNumbers.GetValueOrDefault(w.InvoiceId) ?? "",
+                    Description: $"Written off: {w.Reason}", Charges: 0m, Credits: w.Amount, InvoiceId: (Guid?)w.InvoiceId)))
             .OrderBy(e => e.Date).ThenBy(e => e.Order).ThenBy(e => e.Reference, StringComparer.Ordinal)
             .ToList();
         var balance = opening;
@@ -179,7 +185,8 @@ public sealed class OverdueInvoiceBackgroundService(IServiceScopeFactory scopes,
                 await tenants.ForEachTenantAsync(async ct =>
                 {
                     await using var scope = scopes.CreateAsyncScope();
-                    var sent = await scope.ServiceProvider.GetRequiredService<OverdueInvoiceCheck>().RunAsync(ct);
+                    var sent = await scope.ServiceProvider.GetRequiredService<OverdueInvoiceCheck>().RunAsync(ct)
+                        + await scope.ServiceProvider.GetRequiredService<DueSoonInvoiceCheck>().RunAsync(ct);
                     if (sent > 0)
                     {
                         logger.LogInformation("Sent {Count} overdue invoice reminders", sent);
