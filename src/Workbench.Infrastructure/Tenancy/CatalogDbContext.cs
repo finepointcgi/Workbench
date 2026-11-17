@@ -68,6 +68,7 @@ public sealed class CatalogDbContext(DbContextOptions<CatalogDbContext> options)
 {
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<HostAuditEvent> HostAuditEvents => Set<HostAuditEvent>();
+    public DbSet<TenantEntitlement> Entitlements => Set<TenantEntitlement>();
     public DbSet<CatalogDataProtectionKey> DataProtectionKeys => Set<CatalogDataProtectionKey>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder) =>
@@ -86,6 +87,23 @@ public sealed class CatalogDbContext(DbContextOptions<CatalogDbContext> options)
             b.Property(t => t.Plan).HasMaxLength(64);
             b.Property(t => t.Notes).HasMaxLength(2000);
             b.Property(t => t.StatusChangedBy).HasMaxLength(320);
+        });
+        modelBuilder.Entity<TenantEntitlement>(b =>
+        {
+            b.ToTable("TenantEntitlements");
+            b.HasKey(e => e.TenantId);
+            b.HasOne<Tenant>().WithOne().HasForeignKey<TenantEntitlement>(e => e.TenantId).OnDelete(DeleteBehavior.Cascade);
+            b.Property(e => e.Plan).HasMaxLength(64);
+            b.Property(e => e.Modules).HasMaxLength(500);
+            b.Property(e => e.Status).HasConversion<string>().HasMaxLength(16);
+            b.Property(e => e.Source).HasMaxLength(32);
+            b.Property(e => e.ExternalRef).HasMaxLength(128);
+            b.Property(e => e.UpdatedBy).HasMaxLength(320);
+            b.Property(e => e.SignupEmail).HasMaxLength(320);
+            b.Property(e => e.SignupSource).HasMaxLength(64);
+            b.Property(e => e.TermsVersion).HasMaxLength(32);
+            b.Property(e => e.CompanyType).HasMaxLength(64);
+            b.HasIndex(e => e.SignupEmail);
         });
         modelBuilder.Entity<HostAuditEvent>(b =>
         {

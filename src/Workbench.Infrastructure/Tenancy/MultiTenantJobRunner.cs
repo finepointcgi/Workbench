@@ -3,8 +3,8 @@ using Workbench.Application.Tenancy;
 
 namespace Workbench.Infrastructure.Tenancy;
 
-/// <summary>Runs background work once per active tenant, each inside its own <see cref="TenantScope"/>. Suspended tenants are skipped.</summary>
-internal sealed class MultiTenantJobRunner(TenantCatalog catalog, ILogger<MultiTenantJobRunner> logger) : ITenantJobRunner
+/// <summary>Runs background work once per active tenant, each inside its own <see cref="TenantScope"/>. Suspended and read-only tenants are skipped.</summary>
+internal sealed class MultiTenantJobRunner(TenantCatalog catalog, TenantEntitlements entitlements, ILogger<MultiTenantJobRunner> logger) : ITenantJobRunner
 {
     public async Task ForEachTenantAsync(Func<CancellationToken, Task> work, CancellationToken cancellationToken)
     {
@@ -13,6 +13,12 @@ internal sealed class MultiTenantJobRunner(TenantCatalog catalog, ILogger<MultiT
             cancellationToken.ThrowIfCancellationRequested();
             using (TenantScope.Enter(tenant))
             {
+                // A read-only tenant (lapsed trial, cancelled) can't save anything, so its jobs would only fail.
+                if (entitlements.CurrentReadOnlyMessage() is not null)
+                {
+                    continue;
+                }
+
                 try
                 {
                     await work(cancellationToken);
