@@ -905,6 +905,13 @@ Full write-up: `docs/customization.md`.
   with names resolved through `AccountingMapping` rows (per **target** package, not per format). A record a format can't carry goes in
   `ExportFile.Skipped` and is never marked exported.
 - Idempotency is `AccountingExportedRecord` (unique target × kind × record), written in the same unit of work as the `AccountingExportRun`.
-  Don't export through any other path (a future OAuth push implements `IAccountingPublisher` and must write the same rows).
+  Don't export through any other path. The live push (`Application/AccountingLive`, guide `docs/admin-guide/accounting-live-push.md`) writes the same rows, plus the provider's id (`AccountingProviderLink`) per record.
 - Journals made by `Billing` and `AP` sources are excluded by default because invoices and bills are exported as documents. A new subledger that
   posts its own documents and gets an export kind must be added to that exclusion in `ExportDataLoader`.
+
+## Live push to QuickBooks Online and Xero
+
+- `Application/AccountingLive`: an `IAccountingOAuth` and an `IAccountingPublisher` per provider; `AccountingPushService` is the only writer of push runs, results, provider links and exported-record marks.
+  Publishers only talk to the provider. Provider calls go through `AccountingApi` over `IAccountingHttp` (never `HttpClient` directly); tests use a fake handler, so no test calls Intuit or Xero.
+- Client ids and secrets come from configuration (`Accounting:QuickBooks:*`, `Accounting:Xero:*`); tokens are stored encrypted per tenant and written only by `AccountingTokenService` (refresh tokens rotate).
+- Nothing here has run against a real sandbox. Say so in any change that touches it, and cite the vendor page for any endpoint or field you add (see the comments on the publishers).

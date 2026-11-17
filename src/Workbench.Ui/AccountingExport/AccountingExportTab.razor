@@ -125,11 +125,21 @@
         {
             <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">Choose a format and a period, then Preview. Nothing is exported until you press Export.</MudAlert>
         }
+        @if (LiveTarget is { } live && _from is not null && _to is not null)
+        {
+            <AccountingPushPanel Target="live" Kind="_kind" From="DateOnly.FromDateTime(_from.Value)" To="DateOnly.FromDateTime(_to.Value)" IncludeSubledger="_subledger" OnPushed="OnPushed" />
+        }
     </MudItem>
 </MudGrid>
 
 @code {
+    [Parameter] public EventCallback OnPushed { get; set; }
+
     [Parameter] public EventCallback ShowMappings { get; set; }
+
+    /// <summary>The package the chosen format is for, when it can also be pushed live (QuickBooks and Xero; not chart of accounts or payments).</summary>
+    private AccountingTarget? LiveTarget =>
+        Current is { Target: AccountingTarget.QuickBooks or AccountingTarget.Xero } f && _kind is AccountingExportKind.JournalEntries or AccountingExportKind.Invoices or AccountingExportKind.Bills ? f.Target : null;
 
     [Parameter] public EventCallback OnExported { get; set; }
 

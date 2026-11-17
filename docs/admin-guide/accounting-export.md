@@ -4,8 +4,8 @@
 
 Many small firms keep QuickBooks or Xero as their books and use Workbench for time, projects and billing. **Admin › Integrations ›
 Accounting export** makes the files those packages import, from what Workbench holds: journal entries, customer invoices, customer
-payments, vendor bills and the chart of accounts. Workbench never connects to QuickBooks or Xero for you; you download a file and import it
-there. (A live connection is a planned extension, see [Later: pushing directly](#later-pushing-directly).)
+payments, vendor bills and the chart of accounts. You can download a file and import it there, or connect QuickBooks Online or Xero and
+[push straight into the books](accounting-live-push.md) (journal entries, invoices and bills; not tested against the real products).
 
 ## Formats
 
@@ -103,12 +103,10 @@ The layouts follow the vendors' public documentation where it could be read, and
     column headers, QuickBooks Desktop's IIF field lists and amount signs, Xero's exact template headers, the Xero account type names and its
     handling of the date style, and how a duplicate journal or invoice number is treated.
 
-## Later: pushing directly
+## Pushing directly
 
-Sending records straight to QuickBooks Online or Xero (OAuth 2.0 and their REST APIs) is not built. The extension point is
-`IAccountingPublisher` (`Application/AccountingExport/ExportModels.cs`): a future implementation per package receives the same resolved export,
-calls out only through the outbound transport, keeps tokens as connector secrets, and records the same run and exported-record rows through
-the export service so a pushed record is never exported again. The files stay as the offline fallback.
+QuickBooks Online and Xero can also be fed over their APIs, with the same mapping, preview, history and never-twice rule: see [Push to QuickBooks Online and Xero](accounting-live-push.md).
+The file formats stay as the offline fallback.
 
 ## For developers
 

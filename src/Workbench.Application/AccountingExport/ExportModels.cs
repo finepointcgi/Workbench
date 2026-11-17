@@ -69,7 +69,7 @@ public sealed record ExportFile(
 /// <summary>
 /// Turns an <see cref="ExportDataset"/> into the file one package imports. One implementation per format id; register with
 /// <c>AddScoped&lt;IAccountingExporter, T&gt;()</c>. A live push to QuickBooks or Xero (OAuth + their REST APIs) would be another
-/// implementation of <see cref="IAccountingPublisher"/>, not an exporter: see that interface.
+/// implementation of <see cref="AccountingLive.IAccountingPublisher"/> (Application/AccountingLive), which takes the same <see cref="ExportInput"/>.
 /// </summary>
 public interface IAccountingExporter
 {
@@ -78,20 +78,3 @@ public interface IAccountingExporter
     /// <summary>Renders <paramref name="input"/>. Throws <see cref="NotSupportedException"/> for a kind the format can't carry.</summary>
     ExportFile Export(ExportInput input);
 }
-
-/// <summary>
-/// Extension point for sending an export straight to the package's API instead of a file (QuickBooks Online and Xero both use
-/// OAuth 2.0 and REST). Nothing implements it yet and nothing calls it: a future session registers an implementation per
-/// <see cref="AccountingTarget"/>, stores the OAuth tokens as connector secrets (<c>IntegrationSecrets</c>), calls out only through
-/// <c>IOutboundTransport</c> (behind <c>OutboundUrlGuard</c>), and records the same <c>AccountingExportRun</c> and
-/// <c>AccountingExportedRecord</c> rows from <see cref="AccountingExportService"/> so a pushed record is never exported twice.
-/// The file formats stay as the offline fallback. See docs/admin-guide/accounting-export.md.
-/// </summary>
-public interface IAccountingPublisher
-{
-    AccountingTarget Target { get; }
-
-    Task<AccountingPublishResult> PublishAsync(ExportInput input, CancellationToken cancellationToken = default);
-}
-
-public sealed record AccountingPublishResult(int Created, int Failed, IReadOnlyList<string> Messages);
