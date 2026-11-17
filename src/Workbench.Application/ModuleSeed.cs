@@ -11,6 +11,9 @@ public enum ModuleSeedStage
     /// <summary>After planning (before multicurrency and multicompany).</summary>
     AfterPlanning,
 
+    /// <summary>After the multicurrency and multicompany seeds (before travel).</summary>
+    AfterMulticompany,
+
     /// <summary>After tax books and the CPSR sample purchase orders.</summary>
     AfterTaxBooks,
 

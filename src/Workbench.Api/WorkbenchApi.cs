@@ -71,7 +71,6 @@ public static class WorkbenchApi
         v1.MapPlanningEndpoints();
         v1.MapCurrencyEndpoints();
         v1.MapCompanyEndpoints();
-        v1.MapGovernmentBillingEndpoints();
         v1.MapCommercialBillingEndpoints();
         v1.MapTravelEndpoints();
         v1.MapSalesShippingEndpoints();

@@ -11,8 +11,8 @@ namespace Workbench.Tests.Modules;
 
 /// <summary>
 /// The product as shipped, without the government contracting module (it lives in a private repository and loads from the modules
-/// folder): its tables, pages, API paths and permissions are simply absent, and nothing else notices. See
-/// docs/operations/module-extraction-govcon.md.
+/// folder): its tables, pages, API paths and permissions are simply absent (government billing included: invoicing runs through the
+/// no-op invoice-financing hook), and nothing else notices. See docs/operations/module-extraction-govcon.md and module-extraction-billing.md.
 /// </summary>
 [Collection(ModuleCollection.Name)]
 public sealed class GovConAbsentTests
@@ -21,6 +21,8 @@ public sealed class GovConAbsentTests
     [
         "CmmcPoamItem", "CmmcPractice", "DisclosureAnswers", "DisclosureStatements", "IncurredCostInputs",
         "IncurredCostSubmissions", "ProcurementFileApprovals", "ProcurementFiles",
+        // Government billing: financing settings, SF 1443 requests, performance-based payment events and PIEE submissions.
+        "ContractGovernmentBilling", "ProgressPaymentRequest", "PerformanceBasedPaymentEvent", "PieeSubmission",
     ];
 
     [Fact]
@@ -60,7 +62,8 @@ public sealed class GovConAbsentTests
         await using var factory = new WorkbenchWebFactory("Development", testAuth: true);
         using var finance = factory.CreateClientAs("pm@example.com");
 
-        foreach (var path in new[] { "api/v1/incurred-cost", "api/v1/compliance/cpsr/settings", "api/v1/total-time/policy", "api/v1/migration/parallel-run" })
+        foreach (var path in new[] { "api/v1/incurred-cost", "api/v1/compliance/cpsr/settings", "api/v1/total-time/policy", "api/v1/migration/parallel-run",
+                     $"api/v1/billing/contracts/{Guid.Empty}/progress-payments", $"api/v1/billing/contracts/{Guid.Empty}/government", $"api/v1/billing/contracts/{Guid.Empty}/performance-events" })
         {
             Assert.Equal(HttpStatusCode.NotFound, (await finance.GetAsync(path)).StatusCode);
         }
