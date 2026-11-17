@@ -5,12 +5,23 @@ hide:
 
 # Workbench guide
 
-Workbench is one system for running a government contractor: timesheets that stand up to a DCAA audit, expenses and
-travel, projects with their WBS, budgets and plans, billing and the books, purchasing, people, business development and
-materials, plus shared sheets, boards, Gantt charts and dashboards for the work in between. It replaces Costpoint,
-Unanet, Smartsheet, Asana and Microsoft Project with one place to sign in.
+Workbench is one system for running a firm that bills for its people's time: timesheets that stand up to an audit,
+expenses and travel, projects with their WBS, budgets and plans, billing and the books, purchasing, people, business
+development and materials, plus shared sheets, boards, Gantt charts and dashboards for the work in between. It can
+replace a stack of separate tools (an accounting system, a project-management tool, a spreadsheet for everything in
+between) with one place to sign in. It is built to the standard government contractors are held to, so it is as strong
+for defense work as it is for everyone else.
 
 This guide shows you how to use it, page by page, with a screenshot of each.
+
+## Who it's for
+
+- **Professional services and consultancies**: time to invoice without re-keying, utilization, and margin by project.
+- **Engineering and program-managed firms**: WBS, plans, earned value and risks beside the hours that fund them.
+- **Government contractors**: DCAA-ready timekeeping, indirect rates, incurred cost, CMMC and NIST SP 800-171
+  readiness. These parts are optional, so firms that don't need them never have to look at them.
+
+Not sure what is included in your license? See [Editions](editions.md).
 
 <figure markdown="span">
   ![The Workbench home page: a to-do list of what's overdue, due this week and coming up, a timer, and this week's hours](assets/screenshots/getting-started-home-pm.png){ .shot }
@@ -102,7 +113,8 @@ role yet. See [Users, roles and sign-in](admin-guide/users-and-access.md#roles) 
 ## About the screenshots
 
 The screenshots are taken from Workbench's demo data: the company **Workbench Federal Services LLC**, the contract
-**W56KGU-26-C-0001 Enterprise Modernization Support** for the U.S. Army PEO EIS, and project **1001 Enterprise
+**W56KGU-26-C-0001 Enterprise Modernization Support** for the U.S. Army PEO EIS (a government example; your own
+projects can be for any kind of client), and project **1001 Enterprise
 Modernization**. The people in them are the demo users (Alex Rivera, an analyst; Pat Morgan, a program manager in
 Finance; Dana Lee, the administrator; and others). Your own screens show your company's data, and may have fields,
 labels or layouts your administrator has customized.
