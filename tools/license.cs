@@ -1,7 +1,7 @@
 // Makes and signs Workbench license keys. Run with .NET 10:  dotnet run tools/license.cs -- <command>
 //
 //   keygen <folder>                                  one time: writes private.pem (keep it secret and backed up) and public.pem
-//   issue2 <private.pem> <licensee> <seats> <yyyy-mm-dd> [--modules finance,capture,...|all] [--light <n>] [--trial] [--id <guid>]
+//   issue2 <private.pem> <licensee> <seats> <yyyy-mm-dd> [--modules billing,accounting,...|all] [--light <n>] [--module-seats accounting=5,billing=3] [--trial] [--id <guid>]
 //                                                    prints a WB2 license key (modules, light seats, trial); core is always included
 //   issue <private.pem> <licensee> <seats> <yyyy-mm-dd> [business]    prints a WB1 key (every module, per-person seats; kept for older customers)
 //
@@ -10,7 +10,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 
-if (args.Length == 0) { Console.Error.WriteLine("usage: keygen <folder> | issue2 <private.pem> <licensee> <seats> <yyyy-mm-dd> [--modules a,b|all] [--light n] [--trial] [--id guid] | issue <private.pem> <licensee> <seats> <yyyy-mm-dd> [business]"); return 2; }
+if (args.Length == 0) { Console.Error.WriteLine("usage: keygen <folder> | issue2 <private.pem> <licensee> <seats> <yyyy-mm-dd> [--modules a,b|all] [--light n] [--module-seats a=n,b=n] [--trial] [--id guid] | issue <private.pem> <licensee> <seats> <yyyy-mm-dd> [business]"); return 2; }
 
 static string B64(byte[] b) => Convert.ToBase64String(b).TrimEnd('=').Replace('+', '-').Replace('/', '_');
 
@@ -52,8 +52,9 @@ switch (args[0])
     }
     case "issue2":
     {
-        if (args.Length < 5) { Console.Error.WriteLine("usage: issue2 <private.pem> <licensee> <seats> <yyyy-mm-dd> [--modules a,b|all] [--light n] [--trial] [--id guid]"); return 2; }
-        string[] known = ["finance", "capture", "workforce", "controls", "govcon", "enterprise"];
+        if (args.Length < 5) { Console.Error.WriteLine("usage: issue2 <private.pem> <licensee> <seats> <yyyy-mm-dd> [--modules a,b|all] [--light n] [--module-seats a=n,b=n] [--trial] [--id guid]"); return 2; }
+        string[] known = ["billing", "accounting", "capture", "workforce", "projectcontrols", "materials", "govcon", "enterprise", "ai"];
+        var moduleSeats = new SortedDictionary<string, int>(StringComparer.Ordinal);
         var modules = new List<string>();
         var light = 0;
         var trial = false;
@@ -67,13 +68,21 @@ switch (args[0])
                     modules = list.Contains("all") ? [.. known] : list;
                     break;
                 case "--light": light = int.Parse(args[++i]); break;
+                case "--module-seats":
+                    foreach (var pair in args[++i].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                    {
+                        var parts = pair.Split('=');
+                        if (parts.Length != 2 || !int.TryParse(parts[1], out var n) || n < 0) { Console.Error.WriteLine($"--module-seats wants module=seats pairs, not '{pair}'"); return 2; }
+                        moduleSeats[parts[0].ToLowerInvariant()] = n;
+                    }
+                    break;
                 case "--trial": trial = true; break;
                 case "--id": id = Guid.Parse(args[++i]); break;
                 default: Console.Error.WriteLine($"unknown option {args[i]}"); return 2;
             }
         }
 
-        var unknown = modules.Where(m => !known.Contains(m) && m != "core").ToList();
+        var unknown = modules.Concat(moduleSeats.Keys).Where(m => !known.Contains(m) && m != "core").ToList();
         if (unknown.Count > 0) { Console.Error.WriteLine($"unknown module(s): {string.Join(", ", unknown)}. Known: core (implied), {string.Join(", ", known)}"); return 2; }
         if (!DateOnly.TryParseExact(args[4], "yyyy-MM-dd", out _)) { Console.Error.WriteLine("expiry must be yyyy-mm-dd"); return 2; }
 
@@ -94,6 +103,13 @@ switch (args[0])
             foreach (var m in modules.Where(m => m != "core").Distinct()) json.WriteStringValue(m);
             json.WriteEndArray();
             json.WriteBoolean("trial", trial);
+            if (moduleSeats.Count > 0)
+            {
+                json.WriteStartObject("moduleSeats");
+                foreach (var (module, seats) in moduleSeats) json.WriteNumber(module, seats);
+                json.WriteEndObject();
+            }
+
             json.WriteEndObject();
         }
 

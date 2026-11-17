@@ -44,21 +44,21 @@ public sealed class ModuleEntitlementTests
         s.Replace(ServiceDescriptor.Singleton<TimeProvider>(new MyWorkServiceTests.FixedClock(now ?? Today)));
     });
 
-    private static IReadOnlyList<ModuleInfo> FinanceEnforced() =>
-        ModuleCatalog.Default.Select(m => m.Id == ModuleIds.Finance ? m with { Enforced = true } : m).ToList();
+    private static IReadOnlyList<ModuleInfo> BillingEnforced() =>
+        ModuleCatalog.Default.Select(m => m.Id == ModuleIds.Billing ? m with { Enforced = true } : m).ToList();
 
     [Fact]
     public void A_hand_built_WB2_sample_parses_to_exactly_the_fields_in_the_spec()
     {
         // Written out by hand, the way the license server will issue it: no serializer, fields in spec order.
-        var key = Sign("""{"v":2,"licenseId":"0f8b1c52-6e1a-4d0e-9a3b-5c1d2e3f4a5b","licensee":"Acme Federal","issuedAt":"2026-10-01","expires":"2027-10-01","seats":25,"lightSeats":10,"modules":["finance","capture","made-up-later"],"trial":true}""");
+        var key = Sign("""{"v":2,"licenseId":"0f8b1c52-6e1a-4d0e-9a3b-5c1d2e3f4a5b","licensee":"Acme Federal","issuedAt":"2026-10-01","expires":"2027-10-01","seats":25,"lightSeats":10,"modules":["billing","capture","made-up-later"],"trial":true}""");
 
         Assert.StartsWith("WB2.", key);
         Assert.True(LicenseKeys.TryVerify(key, PublicKey, out var claims, out var problem), problem);
         Assert.Equal(("Acme Federal", Edition.Business, 25, 10, new DateOnly(2027, 10, 1), true, 2), (claims!.Licensee, claims.Edition, claims.Seats, claims.LightSeats, claims.ExpiresOn, claims.Trial, claims.Version));
         Assert.Equal(Guid.Parse("0f8b1c52-6e1a-4d0e-9a3b-5c1d2e3f4a5b"), claims.LicenseId);
         Assert.Equal(new DateOnly(2026, 10, 1), claims.IssuedOn);
-        Assert.Equal(["capture", "core", "finance"], claims.Modules!.Order().ToArray()); // core is implied; an id this build doesn't know is ignored.
+        Assert.Equal(["billing", "capture", "core"], claims.Modules!.Order().ToArray()); // core is implied; an id this build doesn't know is ignored.
     }
 
     [Fact]
@@ -70,18 +70,18 @@ public sealed class ModuleEntitlementTests
 
         Assert.False(LicenseKeys.TryVerify(Sign("""{"v":3,"licenseId":"0f8b1c52-6e1a-4d0e-9a3b-5c1d2e3f4a5b","licensee":"X","issuedAt":"2026-10-01","expires":"2027-10-01","seats":3}"""), PublicKey, out _, out var version));
         Assert.Contains("damaged", version);
-        var parts = Issue(modules: "finance").Split('.');
+        var parts = Issue(modules: "billing").Split('.');
         Assert.False(LicenseKeys.TryVerify($"WB2.{B64(Encoding.UTF8.GetBytes("""{"v":2,"licenseId":"0f8b1c52-6e1a-4d0e-9a3b-5c1d2e3f4a5b","licensee":"Me","issuedAt":"2026-10-01","expires":"2099-01-01","seats":9999,"modules":["enterprise"]}"""))}.{parts[2]}", PublicKey, out _, out _));
     }
 
     [Fact]
     public void The_modules_table_is_complete_and_only_modules_gated_today_are_enforced()
     {
-        Assert.Equal(["core", "finance", "capture", "workforce", "controls", "govcon", "enterprise"], ModuleCatalog.Default.Select(m => m.Id).ToArray());
+        Assert.Equal(["core", "billing", "accounting", "capture", "workforce", "projectcontrols", "materials", "govcon", "enterprise", "ai"], ModuleCatalog.Default.Select(m => m.Id).ToArray());
         Assert.Equal(["enterprise", "govcon"], ModuleCatalog.Default.Where(m => m.Enforced).Select(m => m.Id).Order().ToArray());
         Assert.All(ModuleCatalog.Default, m => Assert.False(string.IsNullOrWhiteSpace(m.Description)));
         Assert.All(FeatureCatalog.All, f => Assert.True(ModuleCatalog.IsKnown(f.Module)));
-        (string, string)[] expected = [("MultiCompany", "enterprise"), ("SingleSignOn", "enterprise"), ("Integrations", "enterprise"), ("CustomerLinks", "enterprise"), ("SupplierPortal", "finance"), ("ApprovalWorkflows", "enterprise"), ("IncurredCost", "govcon")];
+        (string, string)[] expected = [("MultiCompany", "enterprise"), ("SingleSignOn", "enterprise"), ("Integrations", "enterprise"), ("CustomerLinks", "enterprise"), ("SupplierPortal", "accounting"), ("ApprovalWorkflows", "enterprise"), ("IncurredCost", "govcon")];
         Assert.Equal(expected.Order(), FeatureCatalog.All.Select(f => (f.Feature.ToString(), f.Module)).Order());
     }
 
@@ -127,55 +127,52 @@ public sealed class ModuleEntitlementTests
         var status = await seeded.As(Admin).Host.Get<ILicenseService>().GetStatusAsync();
 
         Assert.Equal("Community", status.Edition);
-        Assert.All(new[] { "core", "finance", "capture", "workforce", "controls" }, id => Assert.True(status.HasModule(id)));
+        Assert.All(new[] { "core", "billing", "accounting", "capture", "workforce", "projectcontrols", "materials", "ai" }, id => Assert.True(status.HasModule(id)));
         Assert.All(new[] { "govcon", "enterprise" }, id => Assert.False(status.HasModule(id)));
         Assert.All(status.Modules!.Where(m => !m.Enforced), m => Assert.False(m.Licensed && m.Id != "core"));
-        await seeded.Host.Get<FeatureGate>().RequireModuleAsync(ModuleIds.Finance, default); // Doesn't throw.
+        await seeded.Host.Get<FeatureGate>().RequireModuleAsync(ModuleIds.Billing, default); // Doesn't throw.
     }
 
     [Fact]
     public async Task Flipping_a_modules_flag_is_all_it_takes_to_enforce_it()
     {
-        await using var seeded = await HostAsync(FinanceEnforced());
+        await using var seeded = await HostAsync(BillingEnforced());
         var licenses = seeded.As(Admin).Host.Get<ILicenseService>();
         var gate = seeded.Host.Get<FeatureGate>();
 
         var community = await licenses.GetStatusAsync();
-        Assert.False(community.HasModule("finance"));
-        var refused = await Assert.ThrowsAsync<WorkbenchEditionException>(() => gate.RequireModuleAsync(ModuleIds.Finance, default));
-        Assert.Contains("Finance module", refused.Message);
+        Assert.False(community.HasModule("billing"));
+        var refused = await Assert.ThrowsAsync<WorkbenchEditionException>(() => gate.RequireModuleAsync(ModuleIds.Billing, default));
+        Assert.Contains("Billing module", refused.Message);
 
         var capture = await licenses.ActivateAsync(new ActivateLicenseRequest(Issue(modules: ModuleIds.Capture)));
-        Assert.False(capture.HasModule("finance"));
+        Assert.False(capture.HasModule("billing"));
         Assert.True(capture.HasModule("capture"));
 
-        var withFinance = await licenses.ActivateAsync(new ActivateLicenseRequest(Issue(modules: ModuleIds.Finance)));
-        Assert.True(withFinance.HasModule("finance"));
-        await gate.RequireModuleAsync(ModuleIds.Finance, default);
+        var withFinance = await licenses.ActivateAsync(new ActivateLicenseRequest(Issue(modules: ModuleIds.Billing)));
+        Assert.True(withFinance.HasModule("billing"));
+        await gate.RequireModuleAsync(ModuleIds.Billing, default);
 
         // Its pages follow the same answer.
-        var hidden = NavCatalog.MenuEntries(new NavAccess(null, UnavailableModules: new HashSet<string> { "finance" }));
-        Assert.DoesNotContain(hidden, e => e.ModuleId == "finance");
+        var hidden = NavCatalog.MenuEntries(new NavAccess(null, UnavailableModules: new HashSet<string> { "billing" }));
+        Assert.DoesNotContain(hidden, e => e.ModuleId == "billing");
     }
 
     [Fact]
     public void Pages_of_an_unavailable_module_leave_the_menu_and_the_palette_but_other_pages_stay()
     {
         var everything = new NavAccess(new CurrentUserInfo("a@example.com", "A", OrgRoles.Admin, null));
-        var without = everything with { UnavailableModules = new HashSet<string> { "finance", "capture", "workforce", "controls" } };
+        var without = everything with { UnavailableModules = new HashSet<string> { "billing", "accounting", "capture", "workforce", "projectcontrols", "materials", "govcon", "enterprise" } };
 
         var before = NavCatalog.PaletteEntries(everything).ToList();
         var after = NavCatalog.PaletteEntries(without).ToList();
 
-        Assert.Contains(before, e => e.ModuleId == "finance");
-        Assert.Contains(before, e => e.ModuleId == "capture");
-        Assert.Contains(before, e => e.ModuleId == "workforce");
-        Assert.Contains(before, e => e.ModuleId == "controls");
+        Assert.All(new[] { "billing", "accounting", "capture", "workforce", "materials", "govcon", "enterprise" }, id => Assert.Contains(before, e => e.ModuleId == id)); // Project controls has no menu page of its own: it lives on the project.
         Assert.DoesNotContain(after, e => e.ModuleId != "core");
         Assert.Contains(after, e => e.Href == "time");
         Assert.Contains(after, e => e.Href == "hr"); // The directory is core; only HR administration is Workforce.
         Assert.Equal(before.Count(e => e.ModuleId == "core"), after.Count);
-        Assert.Equal("finance", NavCatalog.OwnerOf("accounting/journal/123")?.ModuleId); // The page guard finds the module of a URL.
+        Assert.Equal("accounting", NavCatalog.OwnerOf("accounting/journal/123")?.ModuleId); // The page guard finds the module of a URL.
     }
 
     [Fact]
@@ -261,7 +258,7 @@ public sealed class ModuleEntitlementTests
 public sealed class LicenseBannerTests
 {
     private static LicenseStatusDto Status(bool trial, int? daysLeft) => new("Business", EditionSource.Key, "Acme", null, false, 5, 1, null, [],
-        [new ModuleStatusDto("finance", "Finance", "…", true, false, false)], 0, 0, trial, daysLeft);
+        [new ModuleStatusDto("accounting", "Accounting", "…", true, false, false)], 0, 0, trial, daysLeft);
 
     private static Bunit.BunitContext Context(LicenseStatusDto status, OrgRoles roles)
     {
@@ -308,7 +305,7 @@ public sealed class LicenseBannerTests
         var message = ctx.Render<Workbench.Ui.Layout.ModuleNeeded>(p => p.Add(c => c.Entry, entry));
 
         var text = message.Find("[data-testid=module-needed]").TextContent;
-        Assert.Contains("Journal entries needs the Finance module", text);
+        Assert.Contains("Journal entries needs the Accounting module", text);
         Assert.Contains("Setup › License", text);
     }
 }
