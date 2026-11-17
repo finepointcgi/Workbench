@@ -81,18 +81,20 @@ public sealed class MrpTests
     [Fact]
     public async Task The_planning_run_firms_buys_into_submitted_requisitions_and_makes_into_work_orders()
     {
+        // Firming clamps dates that are already past to the real today, so plan from the real today.
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
         await using var kit = await MaterialsKit.CreateAsync();
         var bolt = await kit.PartAsync("BOLT", method: PartCostMethod.Standard, standard: 1.5m, leadTime: 10, vendor: kit.Kit.Acme.Id);
         var frame = await kit.PartAsync("FRAME", PartSourceKind.Make, leadTime: 5);
         await kit.Manufacturing.SaveBomAsync(null, new SaveBomRequest(frame.Id, "A", [new SaveBomComponentRequest(bolt.Id, 4)]));
         await kit.StockAsync(bolt.Id, 10, 0);
-        await kit.Parts.AddRequirementAsync(new SaveMaterialRequirementRequest(kit.Kit.Fx.Wbs1, frame.Id, 3, Day.AddDays(30)));
+        await kit.Parts.AddRequirementAsync(new SaveMaterialRequirementRequest(kit.Kit.Fx.Wbs1, frame.Id, 3, today.AddDays(30)));
 
-        var run = await kit.Mrp.RunAsync(new RunMrpRequest(90, Day));
+        var run = await kit.Mrp.RunAsync(new RunMrpRequest(90, today));
         var make = run.PlannedOrders.Single(p => p.PartId == frame.Id);
-        Assert.Equal((PlannedOrderType.Make, 3m, Day.AddDays(25), "1001"), (make.Kind, make.Quantity, make.ReleaseDate, make.ProjectCode));
+        Assert.Equal((PlannedOrderType.Make, 3m, today.AddDays(25), "1001"), (make.Kind, make.Quantity, make.ReleaseDate, make.ProjectCode));
         var buy = run.PlannedOrders.Single(p => p.PartId == bolt.Id);
-        Assert.Equal((PlannedOrderType.Buy, 2m, Day.AddDays(15), "Acme Federal"), (buy.Kind, buy.Quantity, buy.ReleaseDate, buy.PreferredVendor));
+        Assert.Equal((PlannedOrderType.Buy, 2m, today.AddDays(15), "Acme Federal"), (buy.Kind, buy.Quantity, buy.ReleaseDate, buy.PreferredVendor));
 
         var firmed = await kit.Mrp.FirmAsync(new FirmPlannedOrdersRequest([make.Id, buy.Id]));
         var reqNumber = Assert.Single(firmed.Requisitions);
@@ -106,10 +108,10 @@ public sealed class MrpTests
 
         kit.As(MaterialsUser);
         var wo = (await kit.Manufacturing.ListWorkOrdersAsync(new WorkOrderQuery(Search: woNumber))).Single();
-        Assert.Equal((WorkOrderState.Planned, 3m, Day.AddDays(30)), (wo.Status, wo.Quantity, wo.DueDate));
+        Assert.Equal((WorkOrderState.Planned, 3m, today.AddDays(30)), (wo.Status, wo.Quantity, wo.DueDate));
 
         // Rerun: the requisition and the planned work order now cover everything.
-        var again = await kit.Mrp.RunAsync(new RunMrpRequest(90, Day));
+        var again = await kit.Mrp.RunAsync(new RunMrpRequest(90, today));
         Assert.Empty(again.PlannedOrders);
         var latest = await kit.Mrp.GetLatestAsync();
         Assert.Equal(again.Id, latest!.Id);
