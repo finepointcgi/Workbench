@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>License admin</title>
+<style>
+:root{--bg:#fff;--fg:#1c2530;--muted:#5d6b7a;--card:#f4f6f9;--accent:#1f5fbf;--bad:#b3261e}
+@media(prefers-color-scheme:dark){:root{--bg:#14181d;--fg:#e6ebf0;--muted:#9aa7b5;--card:#1e252d;--accent:#6aa5ff;--bad:#ff8a80}}
+body{font:15px/1.5 system-ui,sans-serif;background:var(--bg);color:var(--fg);max-width:60rem;margin:1.5rem auto;padding:0 1rem}
+section{background:var(--card);border-radius:8px;padding:1rem;margin:1rem 0}
+input,select,button,textarea{font:inherit;padding:.35rem .5rem;border-radius:6px;border:1px solid var(--muted);background:var(--bg);color:var(--fg)}
+button{background:var(--accent);color:#fff;border:0;cursor:pointer}
+label{display:inline-block;margin:.2rem .6rem .2rem 0}
+pre{white-space:pre-wrap;word-break:break-all;background:var(--bg);padding:.6rem;border-radius:6px;max-height:16rem;overflow:auto}
+.err{color:var(--bad)} .muted{color:var(--muted)}
+</style></head><body>
+<h1>License admin</h1>
+<p class="muted">The key you enter stays in this tab (session storage) and is sent as <code>X-Admin-Key</code>.</p>
+<section><label>Admin key <input id="key" type="password" size="40"></label> <button onclick="saveKey()">Use</button> <button onclick="load()">Refresh list</button></section>
+
+<section><h2>Customers</h2>
+<form onsubmit="return act(event,'POST','/customers',{name:v('cName'),email:v('cEmail'),notes:v('cNotes')})">
+<label>Name <input id="cName" required></label><label>Email <input id="cEmail" type="email" required></label><label>Notes <input id="cNotes"></label><button>Create customer</button></form>
+<div id="customers"></div></section>
+
+<section><h2>Subscription</h2>
+<form onsubmit="return act(event,'POST','/customers/'+v('sCust')+'/subscriptions',{modules:mods('sMods'),seats:+v('sSeats'),lightSeats:+v('sLight'),termMonths:+v('sMonths'),trial:c('sTrial')})">
+<label>Customer <select id="sCust"></select></label>
+<label>Modules <input id="sMods" placeholder="finance,capture" size="24"></label>
+<label>Seats <input id="sSeats" type="number" min="0" value="10" style="width:5rem"></label>
+<label>Light <input id="sLight" type="number" min="0" value="0" style="width:5rem"></label>
+<label>Months <input id="sMonths" type="number" min="1" value="12" style="width:5rem"></label>
+<label><input id="sTrial" type="checkbox"> trial</label><button>Create subscription + key</button></form>
+<form onsubmit="return act(event,'POST','/subscriptions/'+v('xSub')+'/extend',{months:+v('xMonths')})">
+<label>Subscription id <input id="xSub" size="38"></label><label>Extend months <input id="xMonths" type="number" min="1" value="12" style="width:5rem"></label><button>Extend</button>
+<button type="button" onclick="act(event,'POST','/subscriptions/'+v('xSub')+'/cancel',{})">Cancel</button>
+<button type="button" onclick="act(event,'POST','/subscriptions/'+v('xSub')+'/reissue',{email:false})">Reissue key</button></form></section>
+
+<section><h2>Offline key (air-gapped)</h2>
+<form onsubmit="return act(event,'POST','/licenses/offline',{customerId:v('oCust'),modules:mods('oMods'),seats:+v('oSeats'),lightSeats:+v('oLight'),days:+v('oDays')})">
+<label>Customer <select id="oCust"></select></label><label>Modules <input id="oMods" placeholder="govcon,finance" size="24"></label>
+<label>Seats <input id="oSeats" type="number" min="0" value="25" style="width:5rem"></label><label>Light <input id="oLight" type="number" min="0" value="0" style="width:5rem"></label>
+<label>Days <input id="oDays" type="number" min="1" value="365" style="width:5rem"></label><button>Issue key</button></form></section>
+
+<section><h2>Revoke / history</h2>
+<label>License id <input id="lId" size="38"></label><label>Reason <input id="lReason"></label>
+<button onclick="act(event,'POST','/licenses/'+v('lId')+'/revoke',{reason:v('lReason')})">Revoke</button>
+<button onclick="act(event,'GET','/licenses/'+v('lId')+'/history')">History</button>
+<button onclick="act(event,'GET','/history')">Recent keys</button>
+<button onclick="act(event,'GET','/revocations')">Revocation list</button></section>
+
+<section><h2>Result</h2><pre id="out">Nothing yet.</pre></section>
+<script>
+const v=i=>document.getElementById(i).value.trim(), c=i=>document.getElementById(i).checked;
+const mods=i=>v(i).split(',').map(s=>s.trim()).filter(Boolean);
+const out=document.getElementById('out');
+document.getElementById('key').value=sessionStorage.getItem('adminKey')||'';
+function saveKey(){sessionStorage.setItem('adminKey',v('key'));load()}
+async function call(method,path,body){
+  const r=await fetch('/admin/api'+path,{method,headers:{'X-Admin-Key':sessionStorage.getItem('adminKey')||'','Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});
+  const t=await r.text(); let j; try{j=JSON.parse(t)}catch{j=t}
+  if(!r.ok) throw new Error((j&&j.detail)||(j&&j.title)||r.status);
+  return j;
+}
+async function act(e,method,path,body){
+  e&&e.preventDefault&&e.preventDefault();
+  try{out.className='';out.textContent=JSON.stringify(await call(method,path,body),null,2);load()}catch(x){out.className='err';out.textContent=x.message}
+  return false;
+}
+async function load(){
+  try{
+    const cs=await call('GET','/customers');
+    document.getElementById('customers').innerHTML=cs.map(c=>`<div><b>${esc(c.name)}</b> ${esc(c.email)} <code>${c.id}</code> <a href="#" onclick="act(event,'GET','/customers/${c.id}')">open</a></div>`).join('')||'<p class="muted">No customers yet.</p>';
+    for(const id of ['sCust','oCust']) document.getElementById(id).innerHTML=cs.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  }catch(x){out.className='err';out.textContent=x.message}
+}
+const esc=s=>String(s??'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
+if(sessionStorage.getItem('adminKey')) load();
+</script></body></html>
