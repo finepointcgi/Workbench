@@ -29,12 +29,14 @@ window.PRICING = {
   showPrices: false,                 // false = "Ask for a quote" everywhere; true = show the values below
   unit: "per person per month",
   prices: {                          // PLACEHOLDERS: empty on purpose, nothing here is a quote
-    fullSeat:  "",                   // a full seat on the paid modules
+    fullSeat:  "",                   // a full seat
     lightSeat: "",                   // a light seat (time, expenses, leave only)
-    finance:   "",
+    billing:   "",                   // per seat of that module (a person counts only where their role uses it)
+    accounting:"",
     capture:   "",
     workforce: "",
-    controls:  "",
+    projectcontrols:"",
+    materials: "",
     govpack:   "",
     enterprise:"",
     hosted:    ""                    // extra for hosting, if any
@@ -228,7 +230,7 @@ window.PRICING = {
           <ul><li>Billing types including cost-plus and SF 1443, with PIEE (WAWF) export</li><li>Incurred cost submission package</li><li>NIST SP 800-171 readiness documents</li></ul>
         </div>
       </div>
-      <p class="note">Billing for agencies on retainers, and some other commercial billing styles, are still being added. Ask us whether your pattern is covered today.</p>
+      <p class="note">Retainers, milestones and recurring billing are in the Billing and revenue module. Ask us whether your billing pattern is covered.</p>
     </div>
   </section>
 
@@ -266,16 +268,19 @@ window.PRICING = {
   <section id="modules">
     <div class="wrap">
       <h2>Turn on only what you need</h2>
-      <p class="sub">Workbench is sold in modules. The core is free. Add the modules your firm uses; the government contracting pack is only for firms that need it.</p>
+      <p class="sub">Workbench is sold in modules. The core is free forever. Add the modules your firm uses; the government contracting pack is only for firms that need it.</p>
       <p class="legend"><span class="pill now">Available</span> the features exist and run today. Licensing them as separate modules is being rolled out: <strong>today's licence keys are Community and Business</strong> (see <a href="#pricing">pricing</a>), and we will tell you exactly what a key covers before you buy.</p>
       <div class="grid">
-        <div class="card"><span class="tag">Core &middot; free</span><h3>Run the day</h3><p>Timesheets, expenses and receipts, leave, projects, the Plan, sheets, boards and dashboards, people and HR basics, standard approvals, the audit log and the importers. One company, unlimited people, self-hosted.</p></div>
-        <div class="card"><span class="tag">Finance</span><h3>Time through to the books</h3><p>General ledger and close, billing and receivables, payables and purchasing, cash and bank reconciliation, fixed assets, revenue recognition, budgets and multi-currency.</p></div>
-        <div class="card"><span class="tag">Capture / BD</span><h3>Win work, then deliver it</h3><p>An opportunity pipeline and proposal pricing, so the price you bid starts from the same rates you bill with.</p></div>
-        <div class="card"><span class="tag">Workforce</span><h3>People as the product</h3><p>Onboarding, benefits, leave, per diem and travel, staffing against projects and utilization reporting, with a payroll provider hand-off (Paylocity first).</p></div>
-        <div class="card"><span class="tag">Controls</span><h3>Keep programs on budget</h3><p>Earned value: baselines, variances and estimates at completion, next to the schedule and the hours.</p></div>
-        <div class="card"><span class="tag">Government contracting pack</span><h3>Built for the audit</h3><p>DCAA, CAS and CPSR readiness, indirect rates, incurred cost, ceilings and funding, PIEE (WAWF) billing and NIST SP 800-171 readiness. See <a href="#government">below</a>.</p></div>
-        <div class="card"><span class="tag">Enterprise</span><h3>For larger firms</h3><p>Single sign-on and SCIM provisioning, more than one company, integrations (Jira, GitLab, Slack, Teams), customer view links, the supplier portal and custom approval workflows.</p></div>
+        <div class="card"><span class="tag">Core &middot; free forever</span><h3>Run the day</h3><p>Time, timesheets, expenses and receipts, leave, projects and the Plan, sheets and dashboards, users, roles and MFA, the audit log, importers and file exports of your own data. Self-hosted, no seat limit unless you set one.</p></div>
+        <div class="card"><span class="tag">Billing and revenue</span><h3>From approved time to cash</h3><p>Invoices, receivables and aging, customer payments, milestones, retainers and recurring billing, revenue recognition, and a push to QuickBooks or Xero.</p></div>
+        <div class="card"><span class="tag">Accounting</span><h3>The books</h3><p>General ledger and close, payables, purchasing, cash and bank reconciliation, fixed assets, sales tax, multi-currency, budgets and indirect rates.</p></div>
+        <div class="card"><span class="tag">Capture</span><h3>Win work, then deliver it</h3><p>An opportunity pipeline with forecast, gates, and proposals with pricing, so the price you bid starts from the same rates you bill with.</p></div>
+        <div class="card"><span class="tag">Workforce</span><h3>People as the product</h3><p>HR records, compensation and benefits, onboarding, payroll with a Paylocity hand-off, and capacity, utilization and skills across projects.</p></div>
+        <div class="card"><span class="tag">Project controls</span><h3>Keep programs on budget</h3><p>Earned value, the risk register, ceilings and closeout, and schedule health, next to the plan and the hours.</p></div>
+        <div class="card"><span class="tag">Materials and manufacturing</span><h3>Parts to shipment</h3><p>Inventory, bills of materials, work orders, MRP, quality, sales orders and shipping.</p></div>
+        <div class="card"><span class="tag">Government contracting pack</span><h3>Built for the audit</h3><p>DCAA and CPSR readiness, CAS, CMMC, incurred cost and funding reports. See <a href="#government">below</a>.</p></div>
+        <div class="card"><span class="tag">Enterprise</span><h3>For larger firms</h3><p>Single sign-on and SCIM, more than one company, integrations, custom approval workflows, the automation builder, API keys and audit retention.</p></div>
+        <div class="card"><span class="tag">AI assistant &middot; free</span><h3>Bring your own key</h3><p>The built-in assistant is free on every edition when your organization supplies its own API key.</p></div>
       </div>
     </div>
   </section>
@@ -283,7 +288,7 @@ window.PRICING = {
   <section id="government">
     <div class="wrap">
       <h2>Government contracting pack</h2>
-      <p class="sub">A government contractor has to show an auditor its books on demand. The audit log and the readiness pages are free in every edition, and you can never be locked out of them. If you are not a contractor you will not see any of it.</p>
+      <p class="sub">A government contractor has to show an auditor its books on demand. The audit log is free forever, and a lapsed licence never locks you out of reading your records. If you are not a contractor you will not see any of it.</p>
       <figure class="shot"><img src="img/projects.jpg" alt="The Projects list with a health badge, funding used and spend against budget for each project" width="800" height="500" loading="lazy"><figcaption>Every project shows its health, how much funding is used and what it has spent.</figcaption></figure>
       <figure class="shot"><img src="img/invoice.jpg" alt="An invoice with its general ledger entry, balance, and PIEE (WAWF) export for the contracting officer" width="800" height="500" loading="lazy"><figcaption>An invoice: posted to the ledger, with the file you upload to PIEE (WAWF) and a flag for unallowable cost.</figcaption></figure>
       <figure class="shot"><img src="img/migration.jpg" alt="The go-live migration checklist for moving from Costpoint, with import steps for chart of accounts and organizations" width="800" height="500" loading="lazy"><figcaption>Moving from Costpoint: import each kind of data in order, check the totals, run a month in parallel.</figcaption></figure>
@@ -308,7 +313,7 @@ window.PRICING = {
         <tr><th scope="row">Time to invoice</th><td>Often re-keyed between files and systems</td><td>One system, usually after a configuration project</td><td>One system; approved hours flow to billing and the ledger</td></tr>
         <tr><th scope="row">Projects and plans</th><td>Usually a separate tool or a spreadsheet</td><td>Varies; often a separate module or product</td><td>Plan, sheets, boards and timesheets on the same records</td></tr>
         <tr><th scope="row">Day-to-day use</th><td>Familiar</td><td>Often built for specialists</td><td>Phone-first time entry; a short menu for each role</td></tr>
-        <tr><th scope="row">Audit trail</th><td>Depends on how disciplined the files are</td><td>Usually built in</td><td>Audit log on records that matter; free in every edition</td></tr>
+        <tr><th scope="row">Audit trail</th><td>Depends on how disciplined the files are</td><td>Usually built in</td><td>Audit log on records that matter; free forever</td></tr>
         <tr><th scope="row">Where it runs</th><td>Desktop and cloud services</td><td>Vendor-hosted or on your servers, varies</td><td>Your server, or hosted by us on request</td></tr>
         <tr><th scope="row">Starting cost</th><td>Low</td><td>Typically a quote and an implementation</td><td>Free to self-host; paid modules are priced per person</td></tr>
         <tr><th scope="row">Leaving</th><td>Your files</td><td>Varies</td><td>PostgreSQL database you control, with export tools</td></tr>
@@ -322,17 +327,19 @@ window.PRICING = {
     <div class="wrap">
       <h2>Pricing</h2>
       <p class="sub">The free version is a complete system for one company. You pay when you add the modules or the people that need them. <strong>Prices are not published yet</strong>: ask us for a quote and we will give you one in writing.</p>
-      <div class="tablewrap"><table class="cmp"><caption>Modules and what each costs <span class="note">(price per full seat, per month, once published)</span></caption><thead><tr><th scope="col">Module</th><th scope="col">Where it runs</th><th scope="col">Price</th></tr></thead><tbody>
-        <tr><th scope="row">Core</th><td>Self-hosted</td><td><strong>Free</strong>, unlimited people, one company</td></tr>
-        <tr><th scope="row">Finance</th><td>Self-hosted or hosted</td><td><span class="qprice" data-price="finance">Ask for a quote</span></td></tr>
-        <tr><th scope="row">Capture / BD</th><td>Self-hosted or hosted</td><td><span class="qprice" data-price="capture">Ask for a quote</span></td></tr>
+      <div class="tablewrap"><table class="cmp"><caption>Modules and what each costs <span class="note">(price per seat of the module, per month, once published)</span></caption><thead><tr><th scope="col">Module</th><th scope="col">Where it runs</th><th scope="col">Price</th></tr></thead><tbody>
+        <tr><th scope="row">Core</th><td>Self-hosted</td><td><strong>Free forever</strong>, one company</td></tr>
+        <tr><th scope="row">Billing and revenue</th><td>Self-hosted or hosted</td><td><span class="qprice" data-price="billing">Ask for a quote</span></td></tr>
+        <tr><th scope="row">Accounting</th><td>Self-hosted or hosted</td><td><span class="qprice" data-price="accounting">Ask for a quote</span></td></tr>
+        <tr><th scope="row">Capture</th><td>Self-hosted or hosted</td><td><span class="qprice" data-price="capture">Ask for a quote</span></td></tr>
         <tr><th scope="row">Workforce</th><td>Self-hosted or hosted</td><td><span class="qprice" data-price="workforce">Ask for a quote</span></td></tr>
-        <tr><th scope="row">Controls</th><td>Self-hosted or hosted</td><td><span class="qprice" data-price="controls">Ask for a quote</span></td></tr>
+        <tr><th scope="row">Project controls</th><td>Self-hosted or hosted</td><td><span class="qprice" data-price="projectcontrols">Ask for a quote</span></td></tr>
+        <tr><th scope="row">Materials and manufacturing</th><td>Self-hosted or hosted</td><td><span class="qprice" data-price="materials">Ask for a quote</span></td></tr>
         <tr><th scope="row">Government contracting pack</th><td>Self-hosted or hosted</td><td><span class="qprice" data-price="govpack">Ask for a quote</span></td></tr>
         <tr><th scope="row">Enterprise</th><td>Self-hosted or hosted</td><td><span class="qprice" data-price="enterprise">Ask for a quote</span></td></tr>
       </tbody></table></div>
       <div class="grid two" style="margin-top:24px">
-        <div class="card"><h3>Full seats and light seats</h3><p>Today every active person is one seat, whether they only enter time or run the finance team, and API keys take no seat. We plan a cheaper <strong>light seat</strong> for people who only enter time, expenses and leave; it is not in the licence keys yet. Full seat: <span class="qprice" data-price="fullSeat">ask for a quote</span>. Light seat: <span class="qprice" data-price="lightSeat">ask for a quote</span>.</p></div>
+        <div class="card"><h3>Seats count per module</h3><p>A person counts toward a module only if their role uses it, so you do not pay for finance seats for people who never open finance. People who only enter their own time, expenses and leave are <strong>light seats</strong>. API keys take no seat. Full seat: <span class="qprice" data-price="fullSeat">ask for a quote</span>. Light seat: <span class="qprice" data-price="lightSeat">ask for a quote</span>.</p></div>
         <div class="card"><h3>Hosted or self-hosted</h3><p>Self-host on your own server with PostgreSQL, free for Core, and a licence key is checked on your own server without calling us. Or we host it for you with a separate database per customer; hosting is arranged on request. Hosting extra: <span class="qprice" data-price="hosted">ask for a quote</span>.</p></div>
         <div class="card"><h3>Trial</h3><p>Try the live demo with sample data now, or run Core yourself on your own data for as long as you like. A trial key with the paid modules turned on is available on request.</p></div>
         <div class="card"><h3>If you stop paying</h3><p>You keep Core and everything you entered. After a 14-day grace period only the paid features stop changing; you can still read all of it, and nothing is deleted.</p></div>
@@ -360,9 +367,9 @@ window.PRICING = {
     <div class="wrap">
       <h2>Questions</h2>
       <details><summary>Can I host it myself, or will you host it?</summary><p>Both. Self-hosting is free for Core and runs on your own server with PostgreSQL. Hosting by us is available on request, with a separate database for each customer. Hosted terms, regions and service levels are still being written, so ask us for the current position.</p></details>
-      <details><summary>Can I get my data out?</summary><p>Yes. It sits in a PostgreSQL database you control, and there are importers and export tools. The importers, the audit log and the readiness pages are free in every edition, so a lapsed licence never locks you out of your records.</p></details>
+      <details><summary>Can I get my data out?</summary><p>Yes. It sits in a PostgreSQL database you control, and there are importers and export tools. The importers, file exports and the audit log are free forever, so a lapsed licence never locks you out of your records.</p></details>
       <details><summary>Does it work in an air-gapped or closed network?</summary><p>Yes. A licence key is verified on your own server against a public key built into the product, so a self-hosted install never contacts us. A key changes only when you enter a new one. A connected licence option is on our list but is not required.</p></details>
-      <details><summary>Does it support single sign-on?</summary><p>Yes, with Microsoft Entra ID and Okta, and SCIM provisioning. Single sign-on is part of the Business edition today and of Enterprise in the module model.</p></details>
+      <details><summary>Does it support single sign-on?</summary><p>Yes, with Microsoft Entra ID and Okta, and SCIM provisioning. Single sign-on is part of Business today and of the Enterprise module.</p></details>
       <details><summary>How secure is it?</summary><p>It has roles, an audit log, single sign-on and SCIM. We keep a written information security policy set modelled on ISO/IEC 27001, with a risk register and a mapping of controls, and you can <a href="https://github.com/finepointcgi/workbench/blob/master/docs/iso/README.md">read it</a>. It is not a certification: there is no ISO 27001 or SOC 2 report, and a third-party security review has not been done yet. We will say so until it has.</p></details>
       <details><summary>Is it only for government contractors?</summary><p>No. The government contracting pack is optional, and a firm that does not turn it on does not see it.</p></details>
       <details><summary>Can I use it with my existing payroll?</summary><p>There is a payroll provider integration, starting with Paylocity. Tell us what you use.</p></details>
