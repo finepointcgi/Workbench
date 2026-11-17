@@ -188,10 +188,17 @@ public static class PermissionCatalog
     public const string AreaFields = "Sensitive fields";
 
     /// <summary>Areas in display order.</summary>
-    public static IReadOnlyList<string> Areas { get; } =
+    public static IReadOnlyList<string> Areas => Union().Areas;
+
+    /// <summary>The built-in areas, without any a loaded module adds.</summary>
+    public static IReadOnlyList<string> BuiltInAreas { get; } =
         [AreaAdministration, AreaApprovals, AreaSetup, AreaTime, AreaProjects, AreaAccounting, AreaBilling, AreaPayables, AreaCash, AreaPayroll, AreaTravel, AreaPeople, AreaGrowth, AreaMaterials, AreaSheets, AreaFields];
 
-    public static IReadOnlyList<PermissionDefinition> All { get; } =
+    /// <summary>Every permission: the built-in catalog, then those the loaded modules add (<see cref="Modules.ModuleRegistry"/>).</summary>
+    public static IReadOnlyList<PermissionDefinition> All => Union().All;
+
+    /// <summary>The built-in catalog alone.</summary>
+    public static IReadOnlyList<PermissionDefinition> BuiltIn { get; } =
     [
         new(Permission.AdminUsers, AreaAdministration, "Administer users", "Invite people, deactivate and reactivate accounts, sign people out everywhere, link users to employees and assign roles.", A, Sensitive: true),
         new(Permission.AdminRoles, AreaAdministration, "Manage roles", "Create, edit, clone and delete custom roles and choose their permissions.", A, Sensitive: true),
@@ -314,11 +321,27 @@ public static class PermissionCatalog
         new(Permission.FieldsPricingFee, AreaFields, "See fee and margin", "Fee, fee rate, margin and price in proposal pricing, and the cost volume export. Without it pricing shows cost only.", OrgRoles.Pricing | F, Sensitive: true),
     ];
 
-    private static readonly FrozenDictionary<string, PermissionDefinition> ByKey = All.ToFrozenDictionary(p => p.Key, StringComparer.Ordinal);
+    private sealed record UnionView(Modules.ModuleSet Set, IReadOnlyList<string> Areas, IReadOnlyList<PermissionDefinition> All, FrozenDictionary<string, PermissionDefinition> ByKey);
 
-    public static PermissionDefinition? Find(string key) => ByKey.GetValueOrDefault(key);
+    private static UnionView? _union;
 
-    public static bool Exists(string key) => ByKey.ContainsKey(key);
+    /// <summary>The built-in catalog with the loaded modules' permissions, rebuilt only when the module set changes.</summary>
+    private static UnionView Union()
+    {
+        var set = Modules.ModuleRegistry.Current;
+        if (_union is { } cached && ReferenceEquals(cached.Set, set))
+        {
+            return cached;
+        }
+
+        var all = set.IsEmpty ? BuiltIn : [.. BuiltIn, .. set.Modules.SelectMany(m => m.Permissions)];
+        var areas = set.IsEmpty ? BuiltInAreas : [.. BuiltInAreas, .. set.Modules.SelectMany(m => m.PermissionAreas).Where(a => !BuiltInAreas.Contains(a)).Distinct()];
+        return _union = new UnionView(set, areas, all, all.ToFrozenDictionary(p => p.Key, StringComparer.Ordinal));
+    }
+
+    public static PermissionDefinition? Find(string key) => Union().ByKey.GetValueOrDefault(key);
+
+    public static bool Exists(string key) => Union().ByKey.ContainsKey(key);
 
     /// <summary>The permission's name, or the key itself for one that no longer exists.</summary>
     public static string NameOf(string key) => Find(key)?.Name ?? key;

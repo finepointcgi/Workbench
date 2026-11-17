@@ -47,6 +47,13 @@
     <ProjectReference Include="..\..\src\Workbench.ApiClient\Workbench.ApiClient.csproj" />
     <ProjectReference Include="..\..\src\Workbench.Migrations.PostgreSql\Workbench.Migrations.PostgreSql.csproj" />
     <ProjectReference Include="..\..\src\Workbench.Migrations.Sqlite\Workbench.Migrations.Sqlite.csproj" />
+    <ProjectReference Include="..\..\src\Workbench.Modules.Abstractions\Workbench.Modules.Abstractions.csproj" />
+    <!-- The sample license module stays out of the host's references: the module loader tests load it from a folder, like a real plugin. -->
+    <ProjectReference Include="..\Workbench.SampleModule\Workbench.SampleModule.csproj" ReferenceOutputAssembly="false" OutputItemType="SampleModuleOutput" />
   </ItemGroup>
+
+  <Target Name="CopySampleModule" AfterTargets="CopyFilesToOutputDirectory">
+    <Copy SourceFiles="@(SampleModuleOutput)" DestinationFolder="$(OutDir)modules-sample" />
+  </Target>
 
 </Project>

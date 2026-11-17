@@ -1,7 +1,13 @@
 @* Shared by the web host (Interactive Server) and the desktop app (Blazor Hybrid). *@
-<Router AppAssembly="typeof(Routes).Assembly" NotFoundPage="typeof(Pages.NotFound)">
+<Router AppAssembly="typeof(Routes).Assembly" AdditionalAssemblies="RoutableAssemblies()" NotFoundPage="typeof(Pages.NotFound)">
     <Found Context="routeData">
         <RouteView RouteData="routeData" DefaultLayout="typeof(MainLayout)" />
         <FocusOnNavigate RouteData="routeData" Selector="h1" />
     </Found>
 </Router>
+
+@code {
+    /// <summary>The routable pages of license modules loaded from the modules folder (none when no module is loaded).</summary>
+    private static IEnumerable<System.Reflection.Assembly> RoutableAssemblies() =>
+        Workbench.Contracts.Modules.ModuleRegistry.Current.Modules.SelectMany(m => m.RoutableAssemblies).Distinct();
+}
