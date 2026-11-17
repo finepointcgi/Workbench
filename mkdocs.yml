@@ -163,6 +163,7 @@ nav:
       - Multiple companies: admin-guide/companies.md
       - License refresh (connected installs): admin-guide/license-refresh.md
       - Hosting and operations: admin-guide/hosting.md
+      - License server: admin-guide/license-server.md
       - Hosted signup and trials: admin-guide/hosted-signup.md
   - Commercial:
       - Modules and pricing (draft): commercial/modules-and-pricing.md
