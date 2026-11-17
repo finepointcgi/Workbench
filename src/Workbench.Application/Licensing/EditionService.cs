@@ -122,6 +122,14 @@ public sealed class EditionService(IWorkbenchDbContextFactory dbFactory, IHosted
     public bool HasModule(EditionState state, string moduleId) =>
         IsLicensed(state, moduleId) || !(options.Modules.FirstOrDefault(m => m.Id == moduleId)?.Enforced ?? false);
 
+    /// <summary>
+    /// True when <paramref name="moduleId"/> is enforced for its whole self (<see cref="ModuleInfo.Enforced"/> and <see cref="ModuleInfo.WholeModule"/>):
+    /// its pages leave the menu and every change to its services is refused without the license. False for a module whose only
+    /// enforced part is its named features (govcon and enterprise today), and for every module that isn't enforced.
+    /// </summary>
+    public bool Requires(string moduleId) =>
+        options.Modules.FirstOrDefault(m => m.Id == moduleId) is { Enforced: true, WholeModule: true };
+
     public async Task<bool> HasModuleAsync(string moduleId, CancellationToken ct) => HasModule(await GetAsync(ct), moduleId);
 
     /// <summary>Active people, split into full and light. API keys are not people and are not counted.</summary>
@@ -240,6 +248,11 @@ public sealed class FeatureGate(EditionService editions)
     /// </summary>
     public async Task RequireModuleAsync(string moduleId, CancellationToken ct)
     {
+        if (!editions.Requires(moduleId))
+        {
+            return; // Not enforced: no need to read the license.
+        }
+
         var state = await editions.GetAsync(ct);
         if (!editions.HasModule(state, moduleId))
         {
