@@ -74,6 +74,7 @@ public static class DependencyInjection
         services.AddSourcingClients(serverBaseAddress);
         services.AddBankFileClients(serverBaseAddress);
         services.AddAccountingExportClients(serverBaseAddress);
+        services.AddAccountingLiveClients(serverBaseAddress);
         services.AddSalesTaxClients(serverBaseAddress);
         services.AddIntegrationClients(serverBaseAddress);
         services.AddComplianceClients(serverBaseAddress);
