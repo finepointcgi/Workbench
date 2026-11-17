@@ -1,5 +1,6 @@
 using MudBlazor;
 using Workbench.Contracts.Identity;
+using Workbench.Contracts.Licensing;
 using P = Workbench.Contracts.Identity.Permission;
 
 namespace Workbench.Ui.Navigation;
@@ -50,8 +51,17 @@ public sealed record NavEntry(
     bool InMenu = true,
     bool Government = false)
 {
-    /// <summary><see cref="Government"/> pages (federal contracting only) also need the organization's government features switch on.</summary>
-    public bool IsVisible(NavAccess access) => Rule.Allows(access) && (!Government || access.ShowGovernment);
+    /// <summary>
+    /// The license module the page belongs to, from the one table in <see cref="ModuleMap"/> (the page, else its group, else its
+    /// section). A test fails for any page the table doesn't cover; until it is added the page counts as core.
+    /// </summary>
+    public string ModuleId => ModuleMap.ForNav(Section, Group, Href) ?? ModuleKeys.Core;
+
+    /// <summary>
+    /// Shown to the user and open to them: their permissions allow it, the organization's license includes its module, and
+    /// <see cref="Government"/> pages (federal contracting only) also need the organization's government features switch on.
+    /// </summary>
+    public bool IsVisible(NavAccess access) => Rule.Allows(access) && access.HasModule(ModuleId) && (!Government || access.ShowGovernment);
 }
 
 /// <summary>One menu item: a page, or a group of pages (<see cref="IsGroup"/>) reached as one link, with tabs on its pages.</summary>

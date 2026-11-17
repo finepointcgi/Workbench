@@ -157,7 +157,8 @@ public sealed class InviteService(
     TimeProvider clock,
     Identity.Passwords.PasswordAccounts passwords,
     Identity.Passwords.AccountLinks links,
-    Licensing.EditionService editions) : IInviteService
+    Licensing.EditionService editions,
+    Licensing.ModuleSeatService? moduleSeats = null) : IInviteService
 {
     public async Task<IReadOnlyList<InviteDto>> ListAsync(CancellationToken cancellationToken = default)
     {
@@ -184,7 +185,11 @@ public sealed class InviteService(
             throw new ArgumentException($"{email} already has an account. Change their roles or reactivate them instead.", nameof(request));
         }
 
-        await editions.RequireFreeSeatAsync(db, cancellationToken);
+        await editions.RequireFreeSeatAsync(db, await Licensing.EditionService.IsLightGrantAsync(db, request.Roles, request.CustomRoleIds ?? [], cancellationToken), cancellationToken);
+        if (moduleSeats is not null)
+        {
+            await moduleSeats.RequireAsync(db, [.. BuiltInRoles.IdsOf(request.Roles), .. request.CustomRoleIds ?? []], null, true, cancellationToken);
+        }
 
         // One pending invite per email: a new one replaces the old.
         var pending = await db.Set<UserInvite>()
