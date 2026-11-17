@@ -29,28 +29,28 @@
                         Planned <b>@PlanPeopleFormat.Money(money.Project.Planned)</b>
                         @if (money.Project.Ceiling is { } ceiling)
                         {
-                            <span> of @PlanPeopleFormat.Money(ceiling) ceiling</span>
+                            <span> @Tm.Reword($"of {PlanPeopleFormat.Money(ceiling)} ceiling")</span>
                         }
                         @if (money.Project.Funded is { } funded)
                         {
-                            <span> · @PlanPeopleFormat.Money(funded) funded</span>
+                            <span> · @Tm.Reword($"{PlanPeopleFormat.Money(funded)} funded")</span>
                         }
                         @if (money.Project.Left is { } left)
                         {
-                            <span> · @(left >= 0 ? $"{PlanPeopleFormat.Money(left)} left" : $"{PlanPeopleFormat.Money(-left)} over the ceiling")</span>
+                            <span> · @(left >= 0 ? $"{PlanPeopleFormat.Money(left)} left" : $"{PlanPeopleFormat.Money(-left)} {Tm.Reword("over the ceiling")}")</span>
                         }
                     </span>
                     @if (money.Project.Status != PlanMoneyStatus.Ok)
                     {
-                        <span class="wb-plan-detail">@MoneyWords(money.Project.Status)</span>
+                        <span class="wb-plan-detail">@Tm.Reword(MoneyWords(money.Project.Status))</span>
                     }
                     @if (money.Lines.Any(l => l.ClinNumber is not null))
                     {
                         <div class="wb-plan-clins" data-testid="plan-money-clins">
                             @foreach (var line in money.Lines.Where(l => l.ClinNumber is not null))
                             {
-                                <span class="@($"wb-plan-clin {MoneyClass(line.Status)}")" title="@MoneyWords(line.Status)">
-                                    CLIN @line.ClinNumber: @PlanPeopleFormat.Money(line.Planned)@(line.Ceiling is { } lineCeiling ? $" of {PlanPeopleFormat.Money(lineCeiling)}" : "")@(line.Funded is { } lineFunded ? $" · {PlanPeopleFormat.Money(lineFunded)} funded" : "")
+                                <span class="@($"wb-plan-clin {MoneyClass(line.Status)}")" title="@Tm.Reword(MoneyWords(line.Status))">
+                                    @Tm.Term("Clin") @line.ClinNumber: @PlanPeopleFormat.Money(line.Planned)@(line.Ceiling is { } lineCeiling ? $" of {PlanPeopleFormat.Money(lineCeiling)}" : "")@(line.Funded is { } lineFunded ? $" · {PlanPeopleFormat.Money(lineFunded)} {Tm.Term("funded")}" : "")
                                 </span>
                             }
                         </div>
@@ -200,10 +200,10 @@ else if (_error is not null)
             @if (totals.Money is { } basis)
             {
                 <div class="mb-2" data-testid="plan-money-basis">
-                    <span class="wb-plan-detail d-block">@(basis.Project.Status == PlanMoneyStatus.Ok ? MoneyWords(basis.Project.Status) + " " : "")Priced as @basis.Basis.@(shown.Totals.Money is { } was && was.Project.Planned != basis.Project.Planned ? $" Was {PlanPeopleFormat.Money(was.Project.Planned)}." : "")</span>
+                    <span class="wb-plan-detail d-block">@(basis.Project.Status == PlanMoneyStatus.Ok ? Tm.Reword(MoneyWords(basis.Project.Status)) + " " : "")Priced as @basis.Basis.@(shown.Totals.Money is { } was && was.Project.Planned != basis.Project.Planned ? $" Was {PlanPeopleFormat.Money(was.Project.Planned)}." : "")</span>
                     @foreach (var note in basis.Notes)
                     {
-                        <span class="wb-plan-detail d-block">@note</span>
+                        <span class="wb-plan-detail d-block">@Tm.Reword(note)</span>
                     }
                 </div>
             }
@@ -256,7 +256,7 @@ else if (_error is not null)
 
             @foreach (var note in shown.Notes)
             {
-                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-1">@note</MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mt-1">@Tm.Reword(note)</MudText>
             }
             @if (shown.NotOnATask.Count > 0)
             {
@@ -278,6 +278,7 @@ else if (_error is not null)
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [Parameter, EditorRequired] public Guid ProjectId { get; set; }
     [Parameter, EditorRequired] public Guid SheetId { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }

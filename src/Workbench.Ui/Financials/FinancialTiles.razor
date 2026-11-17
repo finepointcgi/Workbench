@@ -5,11 +5,11 @@
     {
         <MudItem xs="6" sm="4" md="2">
             <MudPaper Outlined="true" Class="pa-3" Style="height: 100%">
-                <MudText Typo="Typo.caption" Class="mud-text-secondary" HtmlTag="div"><Term Key="@(tile.TermKey ?? "")">@tile.Label</Term></MudText>
+                <MudText Typo="Typo.caption" Class="mud-text-secondary" HtmlTag="div"><Term Key="@(tile.TermKey ?? "")">@Tm.Reword(tile.Label)</Term></MudText>
                 <MudText Typo="Typo.h6" Class="@tile.Class">@tile.Value</MudText>
                 @if (tile.Detail is not null)
                 {
-                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@tile.Detail</MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@Tm.Reword(tile.Detail)</MudText>
                 }
             </MudPaper>
         </MudItem>
@@ -17,6 +17,7 @@
 </MudGrid>
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [Parameter, EditorRequired]
     public ProjectFinancialSummaryDto Summary { get; set; } = default!;
 

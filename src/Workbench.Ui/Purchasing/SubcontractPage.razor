@@ -48,8 +48,8 @@ else
     <MudGrid Spacing="2" Class="mb-3">
         @foreach (var (label, value, warn) in new[]
         {
-            ("Ceiling", s.CeilingValue, false), ("Funded", s.FundedValue, false), ("Billed to date", s.BilledToDate, false),
-            ("Remaining funding", s.RemainingFunding, s.RemainingFunding < 0), ("Remaining ceiling", s.RemainingCeiling, false), ("Retainage held", s.RetainageHeld, false),
+            (Tm.Reword("Ceiling"), s.CeilingValue, false), (Tm.Reword("Funded"), s.FundedValue, false), ("Billed to date", s.BilledToDate, false),
+            (Tm.Reword("Remaining funding"), s.RemainingFunding, s.RemainingFunding < 0), (Tm.Reword("Remaining ceiling"), s.RemainingCeiling, false), ("Retainage held", s.RetainageHeld, false),
             ("Retainage released", s.RetainageReleased, false),
         })
         {
@@ -65,9 +65,9 @@ else
     <MudGrid Spacing="3">
         <MudItem xs="12" lg="6">
             <MudPaper Outlined="true" Class="pa-4">
-                <MudText Typo="Typo.h6" Class="mb-2">Funding and modifications</MudText>
+                <MudText Typo="Typo.h6" Class="mb-2">@Tm.Reword("Funding and modifications")</MudText>
                 <MudSimpleTable Dense="true" Elevation="0" data-testid="funding">
-                    <thead><tr><th>Mod</th><th>Effective</th><th>Description</th><th style="text-align:right">Funding</th><th style="text-align:right"><Term Key="ceiling">Ceiling</Term></th><th>By</th></tr></thead>
+                    <thead><tr><th>Mod</th><th>Effective</th><th>Description</th><th style="text-align:right">@Tm.Reword("Funding")</th><th style="text-align:right"><Term Key="ceiling">@Tm.Reword("Ceiling")</Term></th><th>By</th></tr></thead>
                     <tbody>
                         @foreach (var f in d.Funding)
                         {
@@ -83,11 +83,11 @@ else
                 {
                     <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" AlignItems="AlignItems.End" Class="mt-3">
                         <MudTextField T="string" @bind-Value="_modNumber" Label="Mod number" Style="max-width:110px" />
-                        <MudNumericField T="decimal" @bind-Value="_modFunded" Label="Funding change" Format="N2" Style="max-width:150px" />
-                        <MudNumericField T="decimal" @bind-Value="_modCeiling" Label="Ceiling change" Format="N2" Style="max-width:150px" />
+                        <MudNumericField T="decimal" @bind-Value="_modFunded" Label="@Tm.Reword("Funding change")" Format="N2" Style="max-width:150px" />
+                        <MudNumericField T="decimal" @bind-Value="_modCeiling" Label="@Tm.Reword("Ceiling change")" Format="N2" Style="max-width:150px" />
                         <MudTextField T="string" @bind-Value="_modDescription" Label="Description" Style="min-width:200px" />
                         <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="AddFundingAsync" data-testid="add-funding"
-                                   Disabled="@(string.IsNullOrWhiteSpace(_modNumber) || string.IsNullOrWhiteSpace(_modDescription))">Add modification</MudButton>
+                                   Disabled="@(string.IsNullOrWhiteSpace(_modNumber) || string.IsNullOrWhiteSpace(_modDescription))">@Tm.Reword("Add modification")</MudButton>
                     </MudStack>
                 }
             </MudPaper>
@@ -181,6 +181,7 @@ else
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [Parameter] public Guid SubcontractId { get; set; }
 
     private SubcontractDetailDto? _detail;

@@ -14,8 +14,7 @@
                 @if (Conversation.Turns.Count == 0)
                 {
                     <MudText Typo="Typo.body2" Class="mb-3">
-                        Ask about your projects, budgets, earned value, funding, ceilings, timesheets and approvals. Answers use only what
-                        you can open in Workbench and list the pages they came from.
+                        @Tm.Reword("Ask about your projects, budgets, earned value, funding, ceilings, timesheets and approvals. Answers use only what you can open in Workbench and list the pages they came from.")
                     </MudText>
                 }
 
@@ -102,6 +101,7 @@
 </MudDialog>
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
 
     [Parameter, EditorRequired] public AssistantConversation Conversation { get; set; } = default!;
