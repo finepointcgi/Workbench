@@ -11,7 +11,6 @@ using Workbench.Contracts.Costpoint;
 using Workbench.Contracts.Currencies;
 using Workbench.Contracts.Evm;
 using Workbench.Contracts.Hr;
-using Workbench.Contracts.IncurredCost;
 using Workbench.Contracts.IndirectRates;
 using Workbench.Contracts.Migration;
 using Workbench.Contracts.Modules;
@@ -20,7 +19,6 @@ using Workbench.Contracts.Purchasing;
 using Workbench.Contracts.Risks;
 using Workbench.Contracts.Scheduling;
 using Workbench.Contracts.Security;
-using Workbench.Contracts.TotalTime;
 using Workbench.Contracts.Travel;
 
 namespace Workbench.Contracts.Licensing;
@@ -80,7 +78,6 @@ public static class ModuleMap
         .. Segments(ModuleKeys.Workforce, "hr", "payroll", "resourcing"),
         .. Segments(ModuleKeys.ProjectControls, "evm", "ceilings", "ceiling-overrides", "rate-ceilings", "closeout", "risks"),
         .. Segments(ModuleKeys.Materials, "materials", "quality", "engineering-changes", "sales-orders", "shipping"),
-        .. Segments(ModuleKeys.GovCon, "incurred-cost", "total-time", "compliance", "parallel-run"),
         .. Segments(ModuleKeys.Enterprise,
             "companies", "integrations", "customization", "automations", "approval-workflows", "access-reviews", "retention", "edi", "costpoint"),
     ]);
@@ -98,7 +95,6 @@ public static class ModuleMap
     {
         ["admin."] = ModuleKeys.Core,
         ["admin.retention"] = ModuleKeys.Enterprise,
-        ["admin.compliance"] = ModuleKeys.GovCon,
         ["admin.integrations"] = ModuleKeys.Enterprise,
         ["admin.customization"] = ModuleKeys.Enterprise,
         ["admin.automations"] = ModuleKeys.Enterprise,
@@ -108,7 +104,6 @@ public static class ModuleMap
         ["setup.currencies"] = ModuleKeys.Accounting,
         ["setup.companies"] = ModuleKeys.Enterprise,
         ["time."] = ModuleKeys.Core,
-        ["time.total_time"] = ModuleKeys.GovCon,
         ["labor."] = ModuleKeys.Core,
         ["leave."] = ModuleKeys.Core,
         ["projects."] = ModuleKeys.Core,
@@ -118,7 +113,6 @@ public static class ModuleMap
         ["gl."] = ModuleKeys.Accounting,
         ["planning."] = ModuleKeys.Accounting,
         ["revenue."] = ModuleKeys.Billing,
-        ["compliance."] = ModuleKeys.GovCon,
         ["compliance.indirect_rates"] = ModuleKeys.Accounting,
         ["tax."] = ModuleKeys.Accounting,
         ["assets."] = ModuleKeys.Accounting,
@@ -188,7 +182,6 @@ public static class ModuleMap
         ["finance/Payroll"] = ModuleKeys.Workforce,
         ["finance/Planning"] = ModuleKeys.Accounting,
         ["admin/Customization"] = ModuleKeys.Enterprise,
-        ["admin/Compliance"] = ModuleKeys.GovCon,
     };
 
     /// <summary>Single pages (by href) that differ from their group or section. Wins over both.</summary>
@@ -202,7 +195,7 @@ public static class ModuleMap
             "accounting/revenue/projects", "accounting/revenue/reports"),
         .. Segments(ModuleKeys.Workforce, "resourcing", "hr/benefits/me", "payroll"),
         .. Segments(ModuleKeys.Capture, "pricing"),
-        .. Segments(ModuleKeys.GovCon, "accounting/incurred-cost", "accounting/total-time", "reports/standard/funding-status", "setup/migration/parallel-run"),
+        .. Segments(ModuleKeys.GovCon, "reports/standard/funding-status"),
         .. Segments(ModuleKeys.Enterprise, "setup/companies", "accounting/consolidated", "admin/integrations", "admin/integrations/edi", "setup/approval-workflows"),
     ]);
 
@@ -253,8 +246,7 @@ public static class ModuleMap
         ["Ceilings"] = ModuleKeys.ProjectControls, ["Closeout"] = ModuleKeys.ProjectControls, ["Evm"] = ModuleKeys.ProjectControls, ["Risks"] = ModuleKeys.ProjectControls,
         // materials
         ["Materials"] = ModuleKeys.Materials, ["Quality"] = ModuleKeys.Materials,
-        // govcon
-        ["Compliance"] = ModuleKeys.GovCon, ["IncurredCost"] = ModuleKeys.GovCon, ["TotalTime"] = ModuleKeys.GovCon,
+        // govcon: the Compliance, IncurredCost and TotalTime namespaces and the parallel run live in the government contracting module (its own rows).
         // enterprise
         ["Automations"] = ModuleKeys.Enterprise, ["Companies"] = ModuleKeys.Enterprise, ["Customization"] = ModuleKeys.Enterprise,
         ["Integrations"] = ModuleKeys.Enterprise, ["Integrations.GitLab"] = ModuleKeys.Enterprise, ["Integrations.Jira"] = ModuleKeys.Enterprise,
@@ -276,7 +268,6 @@ public static class ModuleMap
         [typeof(IGovernmentBillingService)] = ModuleKeys.GovCon,
         [typeof(IHrReportService)] = ModuleKeys.Core,
         [typeof(IHrAccessService)] = ModuleKeys.Core,
-        [typeof(IParallelRunService)] = ModuleKeys.GovCon,
         [typeof(IAccessReviewService)] = ModuleKeys.Enterprise,
         [typeof(IRetentionService)] = ModuleKeys.Enterprise,
         [typeof(IEdiService)] = ModuleKeys.Enterprise,

@@ -5,7 +5,10 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Workbench.Migrations.PostgreSql.WorkbenchDb
 {
-    /// <inheritdoc />
+    /// <remarks>
+    /// The tables of the government contracting module (CPSR files, CAS disclosure, CMMC, incurred cost) were taken out of this migration:
+    /// the module creates them (docs/operations/module-extraction-govcon.md). Databases that already ran it are unaffected.
+    /// </remarks>
     public partial class Wave7RevenueIceReportsEvmCeilingsApprovals : Migration
     {
         /// <inheritdoc />
@@ -261,37 +264,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                         principalTable: "WbsElement",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "IncurredCostSubmissions",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    FiscalYear = table.Column<int>(type: "integer", nullable: false),
-                    Status = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
-                    Revision = table.Column<int>(type: "integer", nullable: false),
-                    SchedulesJson = table.Column<string>(type: "character varying(5000000)", maxLength: 5000000, nullable: false, collation: "C"),
-                    LastDiffJson = table.Column<string>(type: "character varying(200000)", maxLength: 200000, nullable: true, collation: "C"),
-                    GeneratedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
-                    GeneratedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    ReviewedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
-                    ReviewedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    CertifiedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
-                    CertifiedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    CertifierName = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true, collation: "C"),
-                    CertifierTitle = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true, collation: "C"),
-                    CertificateText = table.Column<string>(type: "character varying(8000)", maxLength: 8000, nullable: true, collation: "C"),
-                    SubmittedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
-                    SubmittedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    SubmissionReference = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true, collation: "C"),
-                    CreatedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
-                    CreatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_IncurredCostSubmissions", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -736,30 +708,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                 });
 
             migrationBuilder.CreateTable(
-                name: "IncurredCostInputs",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    SubmissionId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Schedule = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false, collation: "C"),
-                    RowKey = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false, collation: "C"),
-                    Column = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false, collation: "C"),
-                    Value = table.Column<string>(type: "character varying(4000)", maxLength: 4000, nullable: true, collation: "C"),
-                    UpdatedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_IncurredCostInputs", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_IncurredCostInputs_IncurredCostSubmissions_SubmissionId",
-                        column: x => x.SubmissionId,
-                        principalTable: "IncurredCostSubmissions",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "RevenueRunLine",
                 columns: table => new
                 {
@@ -1177,18 +1125,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                 column: "WbsElementId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_IncurredCostInputs_SubmissionId_Schedule_RowKey_Column",
-                table: "IncurredCostInputs",
-                columns: new[] { "SubmissionId", "Schedule", "RowKey", "Column" },
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_IncurredCostSubmissions_FiscalYear",
-                table: "IncurredCostSubmissions",
-                column: "FiscalYear",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
                 name: "IX_OrgUnitApprover_EmployeeId",
                 table: "OrgUnitApprover",
                 column: "EmployeeId");
@@ -1331,9 +1267,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                 name: "EvmVarianceAnalysis");
 
             migrationBuilder.DropTable(
-                name: "IncurredCostInputs");
-
-            migrationBuilder.DropTable(
                 name: "OrgUnitApprover");
 
             migrationBuilder.DropTable(
@@ -1371,9 +1304,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
 
             migrationBuilder.DropTable(
                 name: "EvmStatusPeriod");
-
-            migrationBuilder.DropTable(
-                name: "IncurredCostSubmissions");
 
             migrationBuilder.DropTable(
                 name: "SavedReports");

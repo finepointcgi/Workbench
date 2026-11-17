@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Workbench.Application;
 using Workbench.Application.Identity;
 using Workbench.Domain;
 using Workbench.Domain.Identity;
@@ -192,7 +193,7 @@ public static class DatabaseInitializer
         await ResourcingSeed.SeedAsync(db, cancellationToken);
         await ResourcingSeed.SeedSkillsAsync(db, cancellationToken);
         await RevenueSeed.SeedAsync(db, services, cancellationToken);
-        await IncurredCostSeed.SeedAsync(db, cancellationToken); // Incurred cost: a FY2026 draft from the seeded books (last: reads every ledger seed).
+        await ModuleSeedsAsync(ModuleSeedStage.AfterRevenue);
         await EvmSeed.SeedAsync(db, services, cancellationToken); // Earned value on 1001: PMB, a closed period, a VAR and baseline changes.
         await CeilingsSeed.SeedAsync(db, cancellationToken);
         await ProjectManagerSeed.SeedAsync(db, cancellationToken); // Sam Patel (Project manager only) runs 1002; a few assigned tasks.
@@ -204,7 +205,7 @@ public static class DatabaseInitializer
         await PricingSeed.SeedAsync(db, services, cancellationToken); // Proposal pricing: Riley Quinn (Pricing role), forward pricing rates, PRP-2027-014 with a scenario and version 1.
         await AssistantSeed.SeedAsync(db, cancellationToken); // Timesheet flags: the analyst's pending timesheet gets weekend hours, a late day and a moved-hours revision.
         await PlanningSeed.SeedAsync(db, services, cancellationToken); // Planning: this year's adopted budget, next year's cycle (ENG submitted, OPS drafting), rent and accrual recurring journals.
-        await TotalTimeSeed.SeedAsync(db, cancellationToken); // Total time accounting: Robin Hale (E1050, exempt) with a 50-hour week on 1001 and 1002; the Hybrid labor cost method.
+        await ModuleSeedsAsync(ModuleSeedStage.AfterPlanning);
         await CurrencySeed.SeedAsync(db, services, cancellationToken); // Multicurrency: EUR and GBP with rates, a posted EUR vendor bill (BTG) and an approved GBP invoice (UKMOD).
         await CompanySeed.SeedAsync(db, services, cancellationToken); // Multicompany: subsidiary FED (contract, project 4001, Jordan Blake E1041) and two weeks of intercompany labor with MAIN.
         await GovernmentBillingSeed.SeedAsync(db, factory, cancellationToken); // Government billing: progress payments on W56HZV-26-C-0042 (4101), performance-based payments on N00019-26-C-0117 (4201).
@@ -214,10 +215,21 @@ public static class DatabaseInitializer
         await ShopFloorSeed.SeedAsync(db, services, cancellationToken); // Shop floor: RES-KIT backflushed on a PCB build, freight allocated to receipt 1, CAGE frozen for a count, ASM overloaded next week.
         await SourcingSeed.SeedAsync(db, services, cancellationToken); // Sourcing: RFQ-000001 (three quotes, awarded to PRIMA on an issued PO), PRIMA's portal contact Jordan Reyes, DIGI as an EDI partner.
         await BankFilesTaxSeed.SeedAsync(db, services, cancellationToken); // Bank files and sales tax: ACH settings, vendor NETS with approved ACH details, a bill with use tax and an approved ACH run; Fairfax/MD/DC rates and a taxed NVDC invoice.
-        await TaxBooksComplianceSeed.SeedAsync(db, services, cancellationToken); // Tax books on two assets, an asset transfer, three POs with partial CPSR files and a draft DS-1.
+        await TaxBooksSeed.SeedAsync(db, services, cancellationToken); // Tax books on two assets, an asset transfer, three CPSR sample POs.
+        await ModuleSeedsAsync(ModuleSeedStage.AfterTaxBooks);
         await CustomizationSeed.SeedAsync(db, cancellationToken); // Customization: "Program office" and "Customer POC" on projects, "Clearance sponsor" and a sensitive "Badge number" on employees, sub-statuses under active projects.
         await AutomationSeed.SeedAsync(db, cancellationToken); // Admin › Automation: funding under 25% → PM, receipts over $75 (validation), timesheet approval escalation after 2 days.
         await LayoutsSeed.SeedAsync(db, cancellationToken); // Customization: a shared "My open projects" view on Projects and a Finance home page (KPIs, to-dos, shortcuts, a chart of that view).
+        await ModuleSeedsAsync(ModuleSeedStage.End);
+
+        // Sample data of the license modules that are loaded (nothing without any), at the points in the order above where each belongs.
+        async Task ModuleSeedsAsync(ModuleSeedStage stage)
+        {
+            foreach (var seed in services.GetServices<IModuleSeed>().Where(m => m.Stage == stage))
+            {
+                await seed.SeedAsync(db, services, cancellationToken);
+            }
+        }
     }
 
     /// <summary>

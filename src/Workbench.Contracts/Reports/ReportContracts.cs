@@ -71,7 +71,6 @@ public static class StandardReportKeys
 
     // Listed in the catalog so Reports is the one place to look, but they're pages with their own screens, not reports to run: not in All.
     public const string EstimatesAtCompletion = "estimates-at-completion";
-    public const string IncurredCost = "incurred-cost";
 
     public static readonly IReadOnlyList<string> All =
         [ProjectStatus, LaborDistribution, IndirectRateVariance, FundingStatus, TimesheetCompliance, ArAging, ApAging];

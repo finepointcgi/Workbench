@@ -1,0 +1,15 @@
+@* A named place on a page where license modules can add components (UiSlotContribution). Renders nothing when no module has one there. *@
+@inject IEnumerable<UiSlotContribution> Contributions
+
+@foreach (var contribution in Contributions.Where(c => c.Slot == Name).OrderBy(c => c.Order))
+{
+    <DynamicComponent Type="contribution.Component" Parameters="Parameters" />
+}
+
+@code {
+    /// <summary>The slot's name.</summary>
+    [Parameter, EditorRequired] public string Name { get; set; } = "";
+
+    /// <summary>Passed to every component in the slot.</summary>
+    [Parameter] public IDictionary<string, object?>? Parameters { get; set; }
+}

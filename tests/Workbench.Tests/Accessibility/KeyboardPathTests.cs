@@ -103,17 +103,6 @@ public sealed class KeyboardPathTests
         Assert.Equal(ColumnWidthDialog.MinWidth, (await reference.Result)!.Data);
     }
 
-    [Fact]
-    public async Task Certifying_officials_name_declares_its_purpose()
-    {
-        await using var ctx = CreateContext(new FakeDependencyService());
-        var provider = ctx.Render<MudDialogProvider>();
-        var service = ctx.Services.GetRequiredService<IDialogService>();
-        await provider.InvokeAsync(() => service.ShowAsync<Workbench.Ui.IncurredCost.CertifyDialog>("Certify"));
-
-        Assert.Equal("name", provider.Find("input[autocomplete='name']").GetAttribute("autocomplete"));
-    }
-
     private static BunitContext CreateContext(FakeDependencyService dependencies) => CreateContext(dependencies, out _);
 
     private static BunitContext CreateContext(FakeDependencyService dependencies, out IRenderedComponent<MudPopoverProvider> popovers)

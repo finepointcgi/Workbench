@@ -123,6 +123,11 @@ app.UseWhen(
     context => !AuthenticationSetup.IsApiRequest(context.Request) && AuthenticationSetup.IsPageNavigation(context.Request),
     branch => branch.UseStatusCodePagesWithRedirects("/not-found"));
 app.UseHttpsRedirection();
+foreach (var (requestPath, physicalPath) in modules.StaticAssets())
+{
+    // Files of a license module's pages (its wwwroot), served where a referenced Razor class library's would be.
+    app.UseStaticFiles(new Microsoft.AspNetCore.Builder.StaticFileOptions { FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(physicalPath), RequestPath = requestPath });
+}
 app.UseRequestLocalization(new Microsoft.AspNetCore.Builder.RequestLocalizationOptions()
     .SetDefaultCulture("en-US").AddSupportedCultures("en-US").AddSupportedUICultures("en-US")); // the request's culture, which Blazor's circuit takes
 app.UseAuthentication();

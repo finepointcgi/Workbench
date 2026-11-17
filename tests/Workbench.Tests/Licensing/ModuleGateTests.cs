@@ -156,7 +156,6 @@ public sealed class ModuleGateTests
         "IJiraConnectionService.SaveAsync", "IGitLabConnectionService.SaveAsync", "ISlackNotificationService.ConnectAsync", "ITeamsNotificationService.ConnectAsync",
         "ICustomerShareLinkService.CreateAsync", "ISupplierPortalAdminService.AddContactAsync", "ISupplierPortalAdminService.SendSignInLinkAsync",
         "ISupplierPortalAdminService.ReactivateContactAsync", "IApprovalWorkflowService.SaveAsync", "IApprovalWorkflowService.CreateRecordWorkflowAsync",
-        "IIncurredCostService.CreateAsync", "IIncurredCostService.RegenerateAsync",
     ];
 
     [Fact]

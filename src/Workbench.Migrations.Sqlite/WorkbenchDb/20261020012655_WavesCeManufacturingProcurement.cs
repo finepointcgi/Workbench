@@ -5,7 +5,10 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Workbench.Migrations.Sqlite.WorkbenchDb
 {
-    /// <inheritdoc />
+    /// <remarks>
+    /// The tables of the government contracting module (CPSR files, CAS disclosure, CMMC, incurred cost) were taken out of this migration:
+    /// the module creates them (docs/operations/module-extraction-govcon.md). Databases that already ran it are unaffected.
+    /// </remarks>
     public partial class WavesCeManufacturingProcurement : Migration
     {
         /// <inheritdoc />
@@ -250,35 +253,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_CapacityScheduleRun", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "DisclosureStatements",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Form = table.Column<string>(type: "TEXT", maxLength: 8, nullable: false),
-                    Version = table.Column<int>(type: "INTEGER", nullable: false),
-                    Title = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    Status = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    EffectiveFrom = table.Column<DateOnly>(type: "TEXT", nullable: true),
-                    EffectiveTo = table.Column<DateOnly>(type: "TEXT", nullable: true),
-                    PreviousVersionId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    ChangeSummary = table.Column<string>(type: "TEXT", maxLength: 4000, nullable: true),
-                    CreatedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    CreatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    MadeEffectiveBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    MadeEffectiveAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_DisclosureStatements", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_DisclosureStatements_DisclosureStatements_PreviousVersionId",
-                        column: x => x.PreviousVersionId,
-                        principalTable: "DisclosureStatements",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -620,44 +594,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_PositivePayLayouts", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "ProcurementFiles",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    PurchaseOrderId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    SubcontractId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    Competition = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    QuotesSolicited = table.Column<int>(type: "INTEGER", nullable: true),
-                    QuotesReceived = table.Column<int>(type: "INTEGER", nullable: true),
-                    SoleSourceJustification = table.Column<string>(type: "TEXT", maxLength: 4000, nullable: true),
-                    PriceAnalysis = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    PriceAnalysisNotes = table.Column<string>(type: "TEXT", maxLength: 4000, nullable: true),
-                    FlowdownClauses = table.Column<string>(type: "TEXT", maxLength: 2000, nullable: false),
-                    DebarmentCheckedOn = table.Column<DateOnly>(type: "TEXT", nullable: true),
-                    DebarmentResult = table.Column<string>(type: "TEXT", maxLength: 200, nullable: true),
-                    SmallBusinessReportPeriod = table.Column<string>(type: "TEXT", maxLength: 64, nullable: true),
-                    Notes = table.Column<string>(type: "TEXT", maxLength: 4000, nullable: true),
-                    UpdatedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_ProcurementFiles", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_ProcurementFiles_PurchaseOrder_PurchaseOrderId",
-                        column: x => x.PurchaseOrderId,
-                        principalTable: "PurchaseOrder",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_ProcurementFiles_Subcontract_SubcontractId",
-                        column: x => x.SubcontractId,
-                        principalTable: "Subcontract",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -1213,29 +1149,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 });
 
             migrationBuilder.CreateTable(
-                name: "DisclosureAnswers",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    StatementId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ItemKey = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
-                    Choice = table.Column<string>(type: "TEXT", maxLength: 64, nullable: true),
-                    Text = table.Column<string>(type: "TEXT", maxLength: 8000, nullable: true),
-                    UpdatedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_DisclosureAnswers", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_DisclosureAnswers_DisclosureStatements_StatementId",
-                        column: x => x.StatementId,
-                        principalTable: "DisclosureStatements",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "EdiMessage",
                 columns: table => new
                 {
@@ -1583,29 +1496,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         principalTable: "PhysicalInventory",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "ProcurementFileApprovals",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    FileId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Level = table.Column<int>(type: "INTEGER", nullable: false),
-                    LevelName = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    ApprovedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    ApprovedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    Comment = table.Column<string>(type: "TEXT", maxLength: 1000, nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_ProcurementFileApprovals", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_ProcurementFileApprovals_ProcurementFiles_FileId",
-                        column: x => x.FileId,
-                        principalTable: "ProcurementFiles",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -3151,23 +3041,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 column: "ShipToJurisdictionId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_DisclosureAnswers_StatementId_ItemKey",
-                table: "DisclosureAnswers",
-                columns: new[] { "StatementId", "ItemKey" },
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_DisclosureStatements_Form_Version",
-                table: "DisclosureStatements",
-                columns: new[] { "Form", "Version" },
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_DisclosureStatements_PreviousVersionId",
-                table: "DisclosureStatements",
-                column: "PreviousVersionId");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_EdiMessage_CreatedAtUtc",
                 table: "EdiMessage",
                 column: "CreatedAtUtc");
@@ -3564,23 +3437,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "IX_PositivePayLayouts_Name",
                 table: "PositivePayLayouts",
                 column: "Name",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_ProcurementFileApprovals_FileId",
-                table: "ProcurementFileApprovals",
-                column: "FileId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_ProcurementFiles_PurchaseOrderId",
-                table: "ProcurementFiles",
-                column: "PurchaseOrderId",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_ProcurementFiles_SubcontractId",
-                table: "ProcurementFiles",
-                column: "SubcontractId",
                 unique: true);
 
             migrationBuilder.CreateIndex(
@@ -4389,9 +4245,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "CustomerTaxProfiles");
 
             migrationBuilder.DropTable(
-                name: "DisclosureAnswers");
-
-            migrationBuilder.DropTable(
                 name: "EdiMessage");
 
             migrationBuilder.DropTable(
@@ -4423,9 +4276,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
 
             migrationBuilder.DropTable(
                 name: "PositivePayLayouts");
-
-            migrationBuilder.DropTable(
-                name: "ProcurementFileApprovals");
 
             migrationBuilder.DropTable(
                 name: "PurchaseOrderAcknowledgementLine");
@@ -4503,9 +4353,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "WorkCenterCapacityException");
 
             migrationBuilder.DropTable(
-                name: "DisclosureStatements");
-
-            migrationBuilder.DropTable(
                 name: "EdiPartner");
 
             migrationBuilder.DropTable(
@@ -4528,9 +4375,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
 
             migrationBuilder.DropTable(
                 name: "PhysicalInventory");
-
-            migrationBuilder.DropTable(
-                name: "ProcurementFiles");
 
             migrationBuilder.DropTable(
                 name: "PurchaseOrderAcknowledgement");
