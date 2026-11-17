@@ -160,9 +160,9 @@ public sealed class CommercialImportTests
         Assert.Equal(OpportunityStage.Lost, stages["Granite Peak outage reporting"]);
         Assert.Equal(OpportunityStage.Proposal, stages["Harborview supplier portal"]); // Proposal/Price Quote
         var renewal = deals.Single(d => d.Name == "Redwood claims workflow modernization");
-        Assert.Equal((OpportunityKind.Recompete, 640_000m, 90, "Jamie Ortiz is not used"), (renewal.Kind, renewal.EstimatedValue, renewal.Pwin, "Jamie Ortiz is not used"));
+        Assert.Equal((OpportunityKind.Recompete, 640_000m, 90), (renewal.Kind, renewal.EstimatedValue, renewal.Pwin));
         Assert.Contains("Next step: Legal review of MSA", renewal.Description);
-        Assert.Equal(accounts.ListAccountsAsync().Result.Single(a => a.Name == "Redwood Mutual Insurance").Id, renewal.AgencyAccountId);
+        Assert.Equal((await accounts.ListAccountsAsync()).Single(a => a.Name == "Redwood Mutual Insurance").Id, renewal.AgencyAccountId);
     }
 
     [Fact]

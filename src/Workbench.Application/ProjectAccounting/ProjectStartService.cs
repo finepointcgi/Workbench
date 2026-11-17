@@ -47,6 +47,38 @@ public sealed class ProjectStartService(
         new("product", "Build and deliver",
             "Requirements through delivery for a product or system.",
             ["Requirements", "Design", "Build", "Test", "Deliver", "  Training", "  Handover"]),
+
+        // Industry starters for firms that sell time, deliverables or retainers rather than government contracts.
+        new("consulting", "Consulting engagement",
+            "Discovery, design, delivery and handover, with engagement management alongside.",
+            ["Engagement management", "  Planning and kickoff", "  Status reporting and steering committee",
+             "Discovery", "  Stakeholder interviews", "  Current-state assessment", "  Findings readout",
+             "Design", "  Options and recommendation", "  Target design", "  Design sign-off",
+             "Delivery", "  Build and configure", "  Pilot", "  Rollout support",
+             "Handover", "  Documentation and training", "  Handover and close-out"],
+            ["Engagement Partner", "Engagement Manager", "Senior Consultant", "Consultant", "Analyst"]),
+        new("retainer", "Agency retainer",
+            "A monthly retainer: planning, the month's deliverables, and reporting, repeated each month.",
+            ["Account management", "  Monthly planning and priorities", "  Client calls and status",
+             "Monthly deliverables", "  Strategy and briefs", "  Creative and content production", "  Campaign build and launch",
+             "Reporting and review", "  Monthly performance report", "  Retainer review and next month's plan"],
+            ["Account Director", "Account Manager", "Strategist", "Creative Director", "Designer", "Copywriter"]),
+        new("implementation", "Software implementation",
+            "Requirements through go-live and hypercare for a packaged or custom system.",
+            ["Project management", "  Kickoff and plan", "  Status reporting and risks",
+             "Requirements and design", "  Requirements workshops", "  Solution design",
+             "Configuration and build", "  Core configuration", "  Integrations", "  Data migration",
+             "Testing", "  System test", "  User acceptance test",
+             "Training and go-live", "  Training", "  Cutover and go-live",
+             "Hypercare", "  Issue triage and fixes", "  Transition to support"],
+            ["Implementation Lead", "Solution Architect", "Developer", "Data Migration Analyst", "QA Analyst", "Trainer"]),
+        new("engineering", "Engineering design phases",
+            "Concept, preliminary design, detailed design and construction support.",
+            ["Concept design", "  Site and requirements review", "  Concept options and cost estimate",
+             "Preliminary design", "  Preliminary drawings and calculations", "  Design review",
+             "Detailed design", "  Detailed drawings and specifications", "  Quality review and permit set",
+             "Construction support", "  Bid support and submittals", "  Site visits and requests for information", "  Record drawings"],
+            ["Principal Engineer", "Project Engineer", "Design Engineer", "CAD Designer", "QA/QC Reviewer"]),
     ];
 
     public Task<IReadOnlyList<ProjectTemplateDto>> ListTemplatesAsync(CancellationToken cancellationToken = default) => Task.FromResult(Templates);
@@ -152,8 +184,20 @@ public sealed class ProjectStartService(
             await planTerms.SaveTermsAsync(project.Id, terms, cancellationToken);
         }
 
-        await FinishAsync(project, request.LaborCategoryIds, manager, me, cancellationToken);
+        var categories = request.LaborCategoryIds
+            ?? (template?.LaborCategories is { Count: > 0 } names ? await TemplateCategoriesAsync(names, cancellationToken) : null);
+        await FinishAsync(project, categories, manager, me, cancellationToken);
         return await projects.GetProjectAsync(project.Id, cancellationToken) ?? project;
+    }
+
+    /// <summary>The active labor categories whose name is one of the template's roles; null when none match (the contract's categories apply).</summary>
+    private async Task<IReadOnlyList<Guid>?> TemplateCategoriesAsync(IReadOnlyList<string> names, CancellationToken cancellationToken)
+    {
+        await using var db = await dbFactory.CreateAsync(cancellationToken);
+        var wanted = names.Select(n => n.Trim().ToUpperInvariant()).ToHashSet();
+        var active = await db.Set<LaborCategory>().AsNoTracking().Where(c => c.IsActive).Select(c => new { c.Id, c.Name }).ToListAsync(cancellationToken);
+        var ids = active.Where(c => wanted.Contains(c.Name.Trim().ToUpperInvariant())).Select(c => c.Id).ToList();
+        return ids.Count == 0 ? null : ids;
     }
 
     /// <summary>
