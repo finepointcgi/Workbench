@@ -6,18 +6,18 @@
 <MudGrid Spacing="3">
     <MudItem xs="12" lg="5">
         <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
-            <MudText Typo="Typo.h6" HtmlTag="h2">Modifications</MudText>
+            <MudText Typo="Typo.h6" HtmlTag="h2">@Tm.Reword("Modifications")</MudText>
             <MudSpacer />
             @if (CanEdit)
             {
-                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="NewDraft" data-testid="mod-new">New modification</MudButton>
+                <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="NewDraft" data-testid="mod-new">@Tm.Reword("New modification")</MudButton>
             }
         </MudStack>
         <MudPaper Outlined="true">
             <MudList T="Guid" Dense="true">
                 @if (_mods.Count == 0)
                 {
-                    <MudListItem T="Guid" Disabled="true">No modifications yet.</MudListItem>
+                    <MudListItem T="Guid" Disabled="true">@Tm.Reword("No modifications yet.")</MudListItem>
                 }
                 @foreach (var mod in _mods)
                 {
@@ -98,7 +98,7 @@
                             <MudItem xs="6" sm="3">
                                 @if (row.Kind == ModificationChangeKind.AddClin)
                                 {
-                                    <MudTextField @bind-Value="row.ClinNumber" Label="New CLIN" Immediate="true" Margin="Margin.Dense" data-testid="change-clin" />
+                                    <MudTextField @bind-Value="row.ClinNumber" Label="@Tm.Reword("New CLIN")" Immediate="true" Margin="Margin.Dense" data-testid="change-clin" />
                                 }
                                 else
                                 {
@@ -174,13 +174,14 @@
         else
         {
             <MudPaper Outlined="true" Class="pa-4">
-                <MudText Class="mud-text-secondary">Select a modification to see its changes@(CanEdit ? ", or start a new one" : "").</MudText>
+                <MudText Class="mud-text-secondary">@Tm.Reword("Select a modification to see its changes")@(CanEdit ? ", or start a new one" : "").</MudText>
             </MudPaper>
         }
     </MudItem>
 </MudGrid>
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [Parameter, EditorRequired]
     public ContractDto Contract { get; set; } = default!;
 

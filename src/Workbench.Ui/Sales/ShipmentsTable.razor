@@ -4,7 +4,7 @@
     <thead>
         <tr>
             <th scope="col">Shipment</th><th scope="col">DD250 no.</th>
-            @if (ShowOrder) { <th scope="col">Order</th><th scope="col">Customer</th><th scope="col">Contract</th> }
+            @if (ShowOrder) { <th scope="col">Order</th><th scope="col">Customer</th><th scope="col">@Tm.Reword("Contract")</th> }
             <th scope="col">Shipped</th><th scope="col">Carrier / tracking</th><th scope="col" style="text-align:right">Packages</th><th scope="col" style="text-align:right">Weight (lb)</th><th scope="col" style="text-align:right">Value</th><th scope="col">Invoice</th><th scope="col">Status</th>
         </tr>
     </thead>
@@ -33,6 +33,7 @@
 </MudSimpleTable>
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [Parameter, EditorRequired] public IReadOnlyList<ShipmentSummaryDto> Shipments { get; set; } = [];
     [Parameter] public bool ShowOrder { get; set; } = true;
 }

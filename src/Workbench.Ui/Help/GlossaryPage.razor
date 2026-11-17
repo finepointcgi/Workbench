@@ -5,7 +5,7 @@
 
 <MudButton Href="help" Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Filled.ArrowBack" Class="mb-2 ml-n2">Help center</MudButton>
 <MudText Typo="Typo.h4" HtmlTag="h1">Glossary</MudText>
-<MudText Class="mud-text-secondary mb-4">Plain-English meanings of the government contracting and accounting terms Workbench uses.</MudText>
+<MudText Class="mud-text-secondary mb-4">@Tm.Reword("Plain-English meanings of the government contracting and accounting terms Workbench uses.")</MudText>
 
 <div role="search" class="mb-4" style="max-width:420px">
     <MudTextField T="string" @bind-Value="_filter" Immediate="true" Label="Find a term" Variant="Variant.Outlined" Clearable="true"
@@ -21,18 +21,19 @@
     {
         <div class="wb-glossary-entry" id="@entry.Key" data-testid="glossary-entry">
             <dt>
-                <strong>@entry.Term</strong>
+                <strong>@Tm.Reword(entry.Term)</strong>
                 @if (!string.Equals(entry.Name, entry.Term, StringComparison.OrdinalIgnoreCase))
                 {
-                    <span class="mud-text-secondary"> · @entry.Name</span>
+                    <span class="mud-text-secondary"> · @Tm.Reword(entry.Name)</span>
                 }
             </dt>
-            <dd>@entry.Explanation</dd>
+            <dd>@Tm.Reword(entry.Explanation)</dd>
         </div>
     }
 </dl>
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     private string? _filter;
 
     /// <summary>Distinct terms (the dictionary has a few aliases with the same wording), alphabetical, filtered by word.</summary>

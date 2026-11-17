@@ -9,9 +9,7 @@
 
 <MudText Typo="Typo.h4" HtmlTag="h1" Class="mb-1">Timesheet flags</MudText>
 <MudText Class="mud-text-secondary mb-4">
-    Timesheets that differ from the person's usual charging or allocations, have weekend or holiday hours, round-number
-    padding, late entries or revisions, or charges to closed or ceiling-limited codes. Flags are prompts for review: they
-    never block submitting or approving. You see the timesheets of the people you supervise (Timekeepers and Finance see everyone's).
+    @Tm.Reword("Timesheets that differ from the person's usual charging or allocations, have weekend or holiday hours, round-number padding, late entries or revisions, or charges to closed or ceiling-limited codes. Flags are prompts for review: they never block submitting or approving. You see the timesheets of the people you supervise (Timekeepers and Finance see everyone's).")
 </MudText>
 
 <MudGrid Class="mb-2">
@@ -74,6 +72,7 @@ else if (_rows is not null)
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [SupplyParameterFromQuery(Name = "from")] public string? FromQuery { get; set; }
 
     [SupplyParameterFromQuery(Name = "to")] public string? ToQuery { get; set; }

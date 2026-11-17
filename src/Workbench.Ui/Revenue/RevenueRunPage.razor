@@ -62,7 +62,7 @@ else
                                 : (c.RecognizedToDate, c.BilledToDate, c.PeriodRevenue, c.UnbilledBalance, c.BillingsInExcessBalance, c.LossProvisionBalance);
                             <tr>
                                 <td><MudLink Href="@($"accounting/revenue/projects/{c.ProjectId}")">@c.ProjectCode</MudLink> @c.ProjectName<div class="mud-text-secondary" style="font-size:12px">@c.ContractNumber</div></td>
-                                <td>@string.Join(", ", c.Lines.Select(l => (l.ClinNumber is null ? "" : $"CLIN {l.ClinNumber}: ") + RevenueFormat.Label(l.Method)))</td>
+                                <td>@string.Join(", ", c.Lines.Select(l => (l.ClinNumber is null ? "" : $"{Tm.Term("Clin")} {l.ClinNumber}: ") + RevenueFormat.Label(l.Method)))</td>
                                 <td style="text-align:right">@RevenueFormat.Amount(shown.Item1)</td>
                                 <td style="text-align:right">@RevenueFormat.Amount(shown.Item2)</td>
                                 <td style="text-align:right">@RevenueFormat.Amount(shown.Item3)</td>
@@ -158,6 +158,7 @@ else
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     private IReadOnlyList<FiscalPeriodDto> _periods = [];
     private IReadOnlyList<RevenueRunDto> _runs = [];
     private RevenuePreviewDto? _preview;

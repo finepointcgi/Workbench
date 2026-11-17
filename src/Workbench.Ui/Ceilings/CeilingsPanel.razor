@@ -14,7 +14,7 @@ else if (_error is not null)
 else
 {
     <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2" Wrap="Wrap.Wrap">
-        <MudText Typo="Typo.h6" HtmlTag="h2"><Term Key="ceiling">Ceilings</Term></MudText>
+        <MudText Typo="Typo.h6" HtmlTag="h2"><Term Key="ceiling">@Tm.Reword("Ceilings")</Term></MudText>
         <MudText Typo="Typo.caption" Class="mud-text-secondary">
             Hours = time on record · cost = labor at cost + submitted/approved ODCs + open PO commitments · billed = approved invoices
         </MudText>
@@ -25,19 +25,19 @@ else
             {
                 <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.NotificationsActive" OnClick="CheckAlertsAsync" data-testid="ceiling-check-alerts">Check alerts</MudButton>
             }
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="() => EditAsync(null)" data-testid="ceiling-add">Add ceiling</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="() => EditAsync(null)" data-testid="ceiling-add">@Tm.Reword("Add ceiling")</MudButton>
         }
     </MudStack>
 
     @if (_ceilings.Count == 0)
     {
-        <MudPaper Outlined="true" Class="pa-4"><MudText Class="mud-text-secondary">No ceilings yet. A ceiling caps the hours, cost or billing allowed; add one to get warned before it's reached.</MudText></MudPaper>
+        <MudPaper Outlined="true" Class="pa-4"><MudText Class="mud-text-secondary">@Tm.Reword("No ceilings yet. A ceiling caps the hours, cost or billing allowed; add one to get warned before it's reached.")</MudText></MudPaper>
     }
     else
     {
         <MudTable Items="_ceilings" Dense="true" Hover="true" Outlined="true" Elevation="0" data-testid="ceiling-table">
             <HeaderContent>
-                <MudTh><Term Key="ceiling">Ceiling</Term></MudTh>
+                <MudTh><Term Key="ceiling">@Tm.Reword("Ceiling")</Term></MudTh>
                 <MudTh>Mode</MudTh>
                 <MudTh>Consumed</MudTh>
                 <MudTh>Overrides</MudTh>
@@ -46,7 +46,7 @@ else
             <RowTemplate>
                 <MudTd>
                     <MudText Typo="Typo.body2" Class="@(context.Ceiling.IsActive ? "" : "mud-text-secondary")"><b>@context.Ceiling.Label</b></MudText>
-                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@CeilingFormat.Scope(context.Ceiling.Scope)@(context.Ceiling.IsActive ? "" : " · inactive")@(context.Ceiling.Notes is { } n ? $" · {n}" : "")</MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@Tm.Reword(CeilingFormat.Scope(context.Ceiling.Scope))@(context.Ceiling.IsActive ? "" : " · inactive")@(context.Ceiling.Notes is { } n ? $" · {n}" : "")</MudText>
                 </MudTd>
                 <MudTd>
                     <MudChip T="string" Size="Size.Small" Color="@(context.Ceiling.Mode == CeilingMode.Block ? Color.Error : Color.Default)">@context.Ceiling.Mode</MudChip>
@@ -117,7 +117,7 @@ else
         </MudStack>
         @if (_rates.Count == 0)
         {
-            <MudPaper Outlined="true" Class="pa-4"><MudText Class="mud-text-secondary">No rate or fee caps. Add one if the contract limits indirect rates or fee.</MudText></MudPaper>
+            <MudPaper Outlined="true" Class="pa-4"><MudText Class="mud-text-secondary">@Tm.Reword("No rate or fee caps. Add one if the contract limits indirect rates or fee.")</MudText></MudPaper>
         }
         else
         {
@@ -143,6 +143,7 @@ else
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [Parameter]
     public Guid? ContractId { get; set; }
 
@@ -180,7 +181,7 @@ else
         }
         catch (UnauthorizedAccessException)
         {
-            _error = "Only Finance, administrators and the project's manager can see its ceilings.";
+            _error = Tm.Reword("Only Finance, administrators and the project's manager can see its ceilings.");
         }
         catch (Exception ex)
         {
@@ -198,7 +199,7 @@ else
             { d => d.ProjectId, ProjectId },
             { d => d.Existing, existing },
         };
-        var dialog = await DialogService.ShowAsync<CeilingDialog>(existing is null ? "Add ceiling" : "Edit ceiling", parameters, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        var dialog = await DialogService.ShowAsync<CeilingDialog>(Tm.Reword(existing is null ? "Add ceiling" : "Edit ceiling"), parameters, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
         if (await dialog.Result is { Canceled: false })
         {
             await LoadAsync();
@@ -208,7 +209,7 @@ else
     private async Task OverrideAsync(CeilingStatusDto ceiling)
     {
         var parameters = new DialogParameters<CeilingOverrideDialog> { { d => d.Ceiling, ceiling } };
-        var dialog = await DialogService.ShowAsync<CeilingOverrideDialog>($"Override: {ceiling.Ceiling.Label}", parameters, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
+        var dialog = await DialogService.ShowAsync<CeilingOverrideDialog>(Tm.Reword($"Override: {ceiling.Ceiling.Label}"), parameters, new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
         if (await dialog.Result is { Canceled: false })
         {
             await LoadAsync();
@@ -217,7 +218,7 @@ else
 
     private async Task RevokeAsync(CeilingOverrideDto o)
     {
-        var parameters = new DialogParameters<Workbench.Ui.Setup.ReasonDialog> { { d => d.Message, "Revoke this override? The ceiling applies again at once." }, { d => d.ConfirmText, "Revoke" } };
+        var parameters = new DialogParameters<Workbench.Ui.Setup.ReasonDialog> { { d => d.Message, Tm.Reword("Revoke this override? The ceiling applies again at once.") }, { d => d.ConfirmText, "Revoke" } };
         var dialog = await DialogService.ShowAsync<Workbench.Ui.Setup.ReasonDialog>("Revoke override", parameters);
         if (await dialog.Result is { Canceled: false, Data: string reason })
         {
@@ -227,7 +228,7 @@ else
 
     private async Task DeactivateAsync(CeilingDto ceiling)
     {
-        if (await DialogService.ShowMessageBoxAsync("Deactivate ceiling", $"Deactivate {ceiling.Label}? It stops counting and blocking.", yesText: "Deactivate", cancelText: "Cancel") == true)
+        if (await DialogService.ShowMessageBoxAsync(Tm.Reword("Deactivate ceiling"), $"Deactivate {ceiling.Label}? It stops counting and blocking.", yesText: "Deactivate", cancelText: "Cancel") == true)
         {
             await RunAsync(() => Ceilings.DeactivateAsync(ceiling.Id), "Ceiling deactivated.");
         }

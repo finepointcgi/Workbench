@@ -3,14 +3,15 @@
 @using Workbench.Ui.Navigation
 @inject NavigationManager Navigation
 @inject IServiceProvider Services
+@inject MudBlazor.ISnackbar Snackbar
 
 <ThemeTokens Dark="_darkMode" />
 <MudThemeProvider Theme="WorkbenchTheme.Default" @bind-IsDarkMode="_darkMode" />
+<CascadingValue Value="_terms" TValue="Workbench.Contracts.Company.ITerms">
 <MudPopoverProvider />
 <MudDialogProvider CloseOnEscapeKey="true" DefaultFocus="DefaultFocus.FirstChild" />
 <MudSnackbarProvider />
 
-<CascadingValue Value="_terms" TValue="Workbench.Contracts.Company.ITerms">
 <a class="wb-skip-link" href="@SkipHref" @onclick="SkipToMainAsync" @onclick:preventDefault>Skip to main content</a>
 <MudLayout>
     <MudAppBar Elevation="0">
@@ -62,6 +63,10 @@
             if (Services.GetService<Workbench.Contracts.Company.ICompanyProfileService>() is { } profiles)
             {
                 _terms = Workbench.Contracts.Company.CompanyTerms.For((await profiles.GetAsync()).Type);
+                if (Snackbar is Workbench.Ui.Company.TermsSnackbar words)
+                {
+                    words.Terms = _terms;
+                }
             }
         }
         catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or InvalidOperationException or Workbench.Contracts.WorkbenchForbiddenException)

@@ -9,6 +9,7 @@
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     // These draw their own breadcrumbs or own their header (project pages belong to the Projects hub).
     private static readonly string[] OwnBreadcrumbs = ["expenses/", "payroll/runs/", "projects/"];
 
@@ -18,14 +19,17 @@
 
     protected override void OnInitialized() => Navigation.LocationChanged += OnLocationChanged;
 
-    protected override void OnParametersSet() => _items = Build(Navigation.ToBaseRelativePath(Navigation.Uri), Access);
+    protected override void OnParametersSet() => _items = Reworded(Build(Navigation.ToBaseRelativePath(Navigation.Uri), Access));
 
     private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) =>
         _ = InvokeAsync(() =>
         {
-            _items = Build(Navigation.ToBaseRelativePath(e.Location), Access);
+            _items = Reworded(Build(Navigation.ToBaseRelativePath(e.Location), Access));
             StateHasChanged();
         });
+
+    private List<BreadcrumbItem> Reworded(List<BreadcrumbItem> items) =>
+        Tm is null ? items : [.. items.Select(i => new BreadcrumbItem(Tm.Reword(i.Text), i.Href, i.Disabled))];
 
     /// <summary>The trail for <paramref name="relativePath"/>, or nothing for top-level pages.</summary>
     public static List<BreadcrumbItem> Build(string relativePath, NavAccess access)

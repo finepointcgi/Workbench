@@ -10,11 +10,11 @@
             <MudButton Variant="Variant.Text" Href="@($"billing/contracts/{ContractId}")" EndIcon="@Icons.Material.Filled.ArrowForward">Billing</MudButton>
         </MudStack>
         <MudProgressLinear Value="@Percent" Color="@(_summary.BilledToDate > _summary.FundedValue ? Color.Error : Color.Primary)" Size="Size.Large" Rounded="true" Class="mb-2"
-                           aria-label="Share of funded value billed" />
+                           aria-label="@Tm.Reword("Share of funded value billed")" />
         <MudSimpleTable Dense="true" Elevation="0">
             <tbody>
                 <tr><td>Billed to date</td><td style="text-align:right" data-testid="billed-amount">@BillingFormat.Money(_summary.BilledToDate)</td></tr>
-                <tr><td>Funded value</td><td style="text-align:right">@BillingFormat.Money(_summary.FundedValue)</td></tr>
+                <tr><td>@Tm.Reword("Funded value")</td><td style="text-align:right">@BillingFormat.Money(_summary.FundedValue)</td></tr>
                 <tr><td>Paid</td><td style="text-align:right">@BillingFormat.Money(_summary.Paid)</td></tr>
                 <tr><td>Outstanding (AR)</td><td style="text-align:right">@BillingFormat.Money(_summary.Outstanding)</td></tr>
                 @if (_summary.WithheldToDate > 0)
@@ -30,7 +30,7 @@
         @if (_summary.Clins.Count > 0)
         {
             <MudSimpleTable Dense="true" Elevation="0" Class="mt-2">
-                <thead><tr><th><Term Key="clin">CLIN</Term></th><th style="text-align:right">Billed</th><th style="text-align:right"><Term Key="funded">Funded</Term></th></tr></thead>
+                <thead><tr><th><Term Key="clin">@Tm.Reword("CLIN")</Term></th><th style="text-align:right">Billed</th><th style="text-align:right"><Term Key="funded">@Tm.Reword("Funded")</Term></th></tr></thead>
                 <tbody>
                     @foreach (var c in _summary.Clins)
                     {
@@ -44,6 +44,7 @@
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [Parameter, EditorRequired]
     public Guid ContractId { get; set; }
 

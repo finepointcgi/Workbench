@@ -111,7 +111,7 @@ else
                     <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
                         <MudText Typo="Typo.h6" HtmlTag="h2">Bill rates</MudText>
                         <MudSpacer />
-                        <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.ContentCopy" OnClick="CopyRatesAsync" data-testid="copy-rates">Copy from a contract</MudButton>
+                        <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.ContentCopy" OnClick="CopyRatesAsync" data-testid="copy-rates">@Tm.Reword("Copy from a contract")</MudButton>
                         <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="AddRateAsync">Add bill rate</MudButton>
                     </MudStack>
                     <MudSimpleTable Dense="true" Hover="true">
@@ -148,7 +148,7 @@ else
             }
             else
             {
-                <MudPaper Outlined="true" Class="pa-4"><MudText Class="mud-text-secondary">Save the contract to add bill rates.</MudText></MudPaper>
+                <MudPaper Outlined="true" Class="pa-4"><MudText Class="mud-text-secondary">@Tm.Reword("Save the contract to add bill rates.")</MudText></MudPaper>
             }
         </MudItem>
     </MudGrid>
@@ -162,7 +162,7 @@ else
         <MudTabPanel Text="@Tm.Reword("CLINs")" data-testid="tab-clins">
             <Workbench.Ui.Setup.Clins.ClinsTab Contract="detail" Clins="_clins" Status="_fundingStatus" Changed="ReloadDetailAsync" />
         </MudTabPanel>
-        <MudTabPanel Text="Modifications" data-testid="tab-mods">
+        <MudTabPanel Text="@Tm.Reword("Modifications")" data-testid="tab-mods">
             <Workbench.Ui.Setup.Clins.ModificationsTab Contract="detail" Clins="_clins" Changed="ReloadDetailAsync" />
         </MudTabPanel>
         <MudTabPanel Text="@Tm.Reword("Funding history")" data-testid="tab-history">
@@ -335,7 +335,7 @@ else
         var others = (await Contracts.ListContractsAsync()).Where(c => c.Id != _contract!.Id).OrderBy(c => c.ContractNumber, StringComparer.Ordinal).ToList();
         if (others.Count == 0)
         {
-            Snackbar.Add("There's no other contract to copy rates from.", Severity.Info);
+            Snackbar.Add(Tm.Reword("There's no other contract to copy rates from."), Severity.Info);
             return;
         }
 

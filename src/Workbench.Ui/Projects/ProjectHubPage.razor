@@ -49,7 +49,7 @@ else
                      AriaLabel="More project pages" data-testid="project-more">
                 @foreach (var slug in _more)
                 {
-                    <MudMenuItem Href="@($"projects/{ProjectId}/{slug}")" data-testid="@($"more-{slug}")">@ProjectsFormat.Tabs.First(t => t.Slug == slug).Label</MudMenuItem>
+                    <MudMenuItem Href="@($"projects/{ProjectId}/{slug}")" data-testid="@($"more-{slug}")">@Tm.Reword(ProjectsFormat.Tabs.First(t => t.Slug == slug).Label)</MudMenuItem>
                 }
             </MudMenu>
         </div>
@@ -58,7 +58,7 @@ else
              ActivePanelIndex="_tabs.IndexOf(_tab)" ActivePanelIndexChanged="OnTabChanged" data-testid="project-tabs">
         @foreach (var slug in _tabs)
         {
-            <MudTabPanel Text="@ProjectsFormat.Tabs.First(t => t.Slug == slug).Label" @key="slug" data-testid="@($"tab-{slug}")">
+            <MudTabPanel Text="@Tm.Reword(ProjectsFormat.Tabs.First(t => t.Slug == slug).Label)" @key="slug" data-testid="@($"tab-{slug}")">
                 @if (slug == _tab)
                 {
                     @TabContent(slug)

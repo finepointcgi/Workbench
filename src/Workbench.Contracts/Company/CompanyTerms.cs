@@ -58,6 +58,7 @@ public sealed class CompanyTerms : ITerms
         ["option year"] = ("option year", "renewal term", "option period"),
         ["funding status"] = ("funding status", "budget status", "budget status"),
         ["contract funding"] = ("contract funding", "agreement budget", "contract budget"),
+        ["limitation of funds"] = ("limitation of funds", "budget limit", "budget limit"),
         ["contract setup"] = ("contract setup", "agreement setup", "contract setup"),
     };
 

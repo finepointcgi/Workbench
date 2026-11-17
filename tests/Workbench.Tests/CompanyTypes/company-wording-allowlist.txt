@@ -1,0 +1,47 @@
+# Razor files or literals the commercial-wording guard skips on purpose.
+# A bare path is a whole file (relative to src/Workbench.Ui); "path|text" is one literal;
+# "server-text|text" skips a phrase in server-built text (reports).
+# Everything here is either hidden from commercial company types, or names a federal rule the page is about.
+
+# Federal forms and filings (hidden from commercial types with "Show government contracting features" off)
+Billing/Sf1034Voucher.razor
+Billing/Sf1443View.razor
+Billing/GovernmentBillingCard.razor
+Billing/PieePanel.razor
+Billing/PerformanceEventDialog.razor
+Billing/PerformanceEventsCard.razor
+Billing/ProgressPaymentsPage.razor
+Sales/Dd250Page.razor
+Sales/ShipmentPage.razor
+IncurredCost/CertifyDialog.razor
+IncurredCost/NewPackageDialog.razor
+IncurredCost/IncurredCostListPage.razor
+Pages/Admin/DcaaReadiness.razor
+Compliance/ProcurementFileDialog.razor
+Crm/LeadsPage.razor
+Company/CompanyTypeCard.razor
+
+# Names of federal rules on cost pages (the concept, unallowable costs, applies only to cost-type federal work)
+Accounting/AccountDialog.razor|DCAA reports
+Odcs/VendorOdcDialog.razor|FAR 31.205
+Odcs/ExpenseLineDialog.razor|FAR 31.205
+Travel/AttachCardChargeDialog.razor|FAR 31.205
+IndirectRates/RatesTab.razor|DCAA-approved
+IndirectRates/RateDialog.razor|DCAA-approved
+Pricing/RatesTab.razor|DFARS
+Materials/MaterialReportsPage.razor|FAR 52.245-1
+Assets/AssetsPage.razor|FAR 52.245-1
+Assets/AssetDialog.razor|FAR 52.245-1
+
+# Examples, product names and registries
+Resourcing/SkillsPanel.razor|DCAA audits
+Purchasing/VendorDialog.razor|SAM.gov
+Crm/OpportunityDetailsForm.razor|SAM.gov
+Crm/SettingsPage.razor|Funding is identified
+Customization/StatusLabelsTab.razor|awaiting_funding
+Setup/LicensePage.razor|DCAA readiness
+Setup/Import/ImportWizard.razor
+Setup/Import/UnanetMappingGuide.razor
+
+# Server-built text (reports)
+server-text|DCAA
