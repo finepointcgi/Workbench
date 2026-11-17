@@ -21,6 +21,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Workbench.LicenseServer\Workbench.LicenseServer.csproj" />
+    <ProjectReference Include="..\..\src\Workbench.Application\Workbench.Application.csproj" />
+    <ProjectReference Include="..\..\src\Workbench.Contracts\Workbench.Contracts.csproj" />
   </ItemGroup>
 
 </Project>
