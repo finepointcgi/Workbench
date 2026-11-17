@@ -135,6 +135,7 @@ public static class NavCatalog
         new(People, "HR administration", "Positions", "hr/positions", Icons.Material.Filled.WorkOutline, NavRule.Need(P.HrWorkforceView, P.HrPositionsManage), Keywords: "approved positions headcount open requisitions salary range"),
         new(People, "HR administration", "Onboarding and offboarding", "hr/onboarding", Icons.Material.Filled.Checklist, NavRule.Need(P.HrOnboardingManage), Detail: "Checklist", Keywords: "new hire checklist termination exit"),
         new(People, "HR administration", "Personnel requests", "hr/requests", Icons.Material.Filled.MarkEmailUnread, NavRule.Need(P.HrRecordsManage), Keywords: "change requests employee updates"),
+        new(People, "HR administration", "Import from Paylocity", "hr/paylocity-roster", Icons.Material.Filled.GroupAdd, NavRule.Need(P.HrRecordsManage), Keywords: "paylocity roster employee import csv new hires terminations rehires"),
         new(People, "HR administration", "Compensation", "hr/compensation", Icons.Material.Filled.Paid, NavRule.Need(P.HrWorkforceView, P.HrCompensationManage), Keywords: "salary raise merit cycle pay change"),
         new(People, "HR administration", "Benefits administration", "hr/benefits", Icons.Material.Filled.MedicalServices, NavRule.Need(P.HrWorkforceView, P.HrBenefitsManage), Keywords: "plans tiers open enrollment deductions paylocity fringe"),
         new(People, "Directory", "Directory", "hr", Icons.Material.Filled.People, NavRule.Everyone, MatchAll: true, Detail: "Employee", Keywords: "employees personnel hr records"),
@@ -200,6 +201,7 @@ public static class NavCatalog
         new(Finance, "Assets", "Asset transfers", "assets/transfers", Icons.Material.Filled.SwapHoriz, NavRule.Need(P.AssetsManage), Keywords: "move asset location custodian organization company intercompany history", InMenu: false),
 
         new(Finance, "Payroll", "Payroll", "payroll", Icons.Material.Filled.Payments, NavRule.Need(P.PayrollRun), Detail: "Payroll run", Keywords: "paylocity pay runs"),
+        new(Finance, "Payroll", "Paylocity", "payroll/paylocity", Icons.Material.Filled.SyncAlt, NavRule.Need(P.PayrollSetup), Keywords: "paylocity mapping earning codes cost centers export history checksum"),
 
         new(Finance, "Revenue & compliance", "Revenue", "accounting/revenue", Icons.Material.Filled.TrendingUp, NavRule.Need(P.RevenueManage), MatchAll: true, Keywords: "revenue recognition run"),
         new(Finance, "Revenue & compliance", "Revenue estimates", "accounting/revenue/estimates", Icons.Material.Filled.Calculate, NavRule.Need(P.RevenueManage), Keywords: "eac etc", InMenu: false),

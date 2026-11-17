@@ -16466,6 +16466,62 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                     b.ToTable("PayPeriod");
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Payroll.PaylocityCostCenterMapping", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .UseCollation("C");
+
+                    b.Property<Guid>("OrgUnitId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .UseCollation("C");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrgUnitId")
+                        .IsUnique();
+
+                    b.ToTable("PaylocityCostCenterMapping");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Payroll.PaylocityRosterSetting", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("OwnedFields")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .UseCollation("C");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .UseCollation("C");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("PaylocityRosterSetting");
+                });
+
             modelBuilder.Entity("Workbench.Domain.Payroll.PayrollExportLine", b =>
                 {
                     b.Property<Guid>("Id")
@@ -16501,6 +16557,87 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                     b.HasIndex("RunId");
 
                     b.ToTable("PayrollExportLine");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Payroll.PayrollExportRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .UseCollation("C");
+
+                    b.Property<int>("EmployeeCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("ExportedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ExportedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .UseCollation("C");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(260)
+                        .HasColumnType("character varying(260)")
+                        .UseCollation("C");
+
+                    b.Property<int>("FlaggedCount")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsReExport")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("LineCount")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Method")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .UseCollation("C");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .UseCollation("C");
+
+                    b.Property<Guid>("PayGroupId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("PayPeriodId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Sequence")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Sha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .UseCollation("C");
+
+                    b.Property<decimal>("TotalHours")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PayGroupId", "PayPeriodId");
+
+                    b.HasIndex("RunId", "Sequence")
+                        .IsUnique();
+
+                    b.ToTable("PayrollExportRecord");
                 });
 
             modelBuilder.Entity("Workbench.Domain.Payroll.PayrollFileLayout", b =>
@@ -28863,6 +29000,15 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Payroll.PaylocityCostCenterMapping", b =>
+                {
+                    b.HasOne("Workbench.Domain.ProjectAccounting.OrgUnit", null)
+                        .WithMany()
+                        .HasForeignKey("OrgUnitId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Workbench.Domain.Payroll.PayrollExportLine", b =>
                 {
                     b.HasOne("Workbench.Domain.ProjectAccounting.Employee", null)
@@ -28875,6 +29021,15 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                         .WithMany("ExportLines")
                         .HasForeignKey("RunId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Payroll.PayrollExportRecord", b =>
+                {
+                    b.HasOne("Workbench.Domain.Payroll.PayrollRun", null)
+                        .WithMany()
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 
