@@ -1,0 +1,164 @@
+@using Workbench.Contracts.AccountingExport
+@inject IAccountingMappingService Mappings
+@inject ISnackbar Snackbar
+
+<MudText Class="mud-text-secondary mb-3">
+    Say what each Workbench account, customer, vendor, project and invoice line type is called in your accounting software. Names must match the
+    destination exactly. Accounts, customers, vendors and items that are in use and unmapped stop an export until you map them (or choose to export anyway).
+    @if (_target == AccountingTarget.Xero)
+    {
+        <span> For Xero, the code is the account code; for a project (tracking option) it is the tracking category's name.</span>
+    }
+</MudText>
+
+<MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center" Class="mb-3">
+    <MudSelect T="AccountingTarget" Value="_target" ValueChanged="OnTargetChanged" Label="Mappings for" Dense="true" Style="min-width:180px" data-testid="map-target">
+        <MudSelectItem T="AccountingTarget" Value="AccountingTarget.QuickBooks">QuickBooks (Online and Desktop)</MudSelectItem>
+        <MudSelectItem T="AccountingTarget" Value="AccountingTarget.Xero">Xero</MudSelectItem>
+        <MudSelectItem T="AccountingTarget" Value="AccountingTarget.Generic">Generic files</MudSelectItem>
+    </MudSelect>
+    <MudSelect T="AccountingMapKind" Value="_kind" ValueChanged="v => { _kind = v; }" Label="Show" Dense="true" Style="min-width:180px" data-testid="map-kind">
+        @foreach (var k in Enum.GetValues<AccountingMapKind>())
+        {
+            <MudSelectItem T="AccountingMapKind" Value="k">@KindLabel(k)</MudSelectItem>
+        }
+    </MudSelect>
+    <MudCheckBox T="bool" @bind-Value="_onlyUnmapped" Label="Only unmapped" />
+    <MudCheckBox T="bool" @bind-Value="_onlyUsed" Label="Only in use" />
+    <MudButton Variant="Variant.Text" OnClick="FillBlanks" data-testid="map-fill">Fill blanks with Workbench names</MudButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="@(_busy || _edits.Count == 0)" data-testid="map-save">Save @(_edits.Count == 0 ? "" : $"({_edits.Count})")</MudButton>
+</MudStack>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_error</MudAlert>
+}
+else if (_set is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudAlert Severity="@(_set.UnmappedInUse > 0 ? Severity.Warning : Severity.Success)" Variant="Variant.Outlined" Class="mb-3" data-testid="map-summary">
+        @(_set.UnmappedInUse > 0 ? $"{_set.UnmappedInUse} account, customer, vendor or item in use has no mapping and will block exports." : "Everything in use is mapped.")
+        @_set.Unmapped of @_set.Rows.Count names are unmapped in all.
+    </MudAlert>
+    <MudSimpleTable Dense="true" Hover="true" Style="max-height:60vh;overflow:auto" aria-label="Mappings">
+        <thead>
+            <tr>
+                <th scope="col">Workbench</th>
+                <th scope="col">Name in @TargetLabel</th>
+                <th scope="col">@(CodeLabel)</th>
+                <th scope="col">In use</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var row in Rows)
+            {
+                var key = (row.Kind, row.SourceKey);
+                var name = _edits.TryGetValue(key, out var e) ? e.Name : row.DestinationName;
+                var code = _edits.TryGetValue(key, out var e2) ? e2.Code : row.DestinationCode;
+                <tr data-testid="@($"map-row-{row.SourceKey}")">
+                    <td>@row.SourceKey @row.SourceName</td>
+                    <td><MudTextField T="string" Value="name" ValueChanged="v => Edit(row, v, code)" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="200" aria-label="@($"Name in {TargetLabel} for {row.SourceKey} {row.SourceName}")" data-testid="@($"map-name-{row.SourceKey}")" /></td>
+                    <td><MudTextField T="string" Value="code" ValueChanged="v => Edit(row, name, v)" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="50" aria-label="@($"{CodeLabel} for {row.SourceKey} {row.SourceName}")" /></td>
+                    <td>@(row.InUse ? "Yes" : "")</td>
+                </tr>
+            }
+        </tbody>
+    </MudSimpleTable>
+}
+
+@code {
+    private AccountingTarget _target = AccountingTarget.QuickBooks;
+    private AccountingMapKind _kind = AccountingMapKind.Account;
+    private bool _onlyUnmapped;
+    private bool _onlyUsed;
+    private bool _busy;
+    private string? _error;
+    private AccountingMappingSetDto? _set;
+    private readonly Dictionary<(AccountingMapKind, string), (string? Name, string? Code)> _edits = [];
+
+    private string TargetLabel => _target switch { AccountingTarget.QuickBooks => "QuickBooks", AccountingTarget.Xero => "Xero", _ => "the destination" };
+
+    private string CodeLabel => _target == AccountingTarget.Xero ? (_kind == AccountingMapKind.Class ? "Tracking category" : "Code") : "Code (optional)";
+
+    private IEnumerable<AccountingMappingRowDto> Rows =>
+        (_set?.Rows ?? []).Where(r => r.Kind == _kind && (!_onlyUnmapped || (!r.IsMapped && !HasEdit(r))) && (!_onlyUsed || r.InUse));
+
+    private bool HasEdit(AccountingMappingRowDto r) => _edits.TryGetValue((r.Kind, r.SourceKey), out var e) && !string.IsNullOrWhiteSpace(e.Name);
+
+    private static string KindLabel(AccountingMapKind k) => k switch
+    {
+        AccountingMapKind.Account => "GL accounts",
+        AccountingMapKind.Customer => "Customers",
+        AccountingMapKind.Vendor => "Vendors",
+        AccountingMapKind.TaxCode => "Tax codes",
+        AccountingMapKind.Class => "Classes / tracking (projects)",
+        _ => "Invoice items",
+    };
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task OnTargetChanged(AccountingTarget t)
+    {
+        _target = t;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _error = null;
+        _set = null;
+        _edits.Clear();
+        try
+        {
+            _set = await Mappings.GetAsync(_target);
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or UnauthorizedAccessException or HttpRequestException or TaskCanceledException)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private void Edit(AccountingMappingRowDto row, string? name, string? code)
+    {
+        if (string.Equals(name ?? "", row.DestinationName ?? "") && string.Equals(code ?? "", row.DestinationCode ?? ""))
+        {
+            _edits.Remove((row.Kind, row.SourceKey));
+        }
+        else
+        {
+            _edits[(row.Kind, row.SourceKey)] = (name, code);
+        }
+    }
+
+    private void FillBlanks()
+    {
+        foreach (var r in Rows.Where(r => !r.IsMapped && !HasEdit(r)).ToList())
+        {
+            var code = _target == AccountingTarget.Xero && r.Kind == AccountingMapKind.Account ? r.SourceKey : null;
+            _edits[(r.Kind, r.SourceKey)] = (r.SourceName.Length > 200 ? r.SourceName[..200] : r.SourceName, code);
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        try
+        {
+            var entries = _edits.Select(e => new AccountingMappingEntry(e.Key.Item1, e.Key.Item2, e.Value.Name, e.Value.Code)).ToList();
+            _set = await Mappings.SaveAsync(_target, new SaveAccountingMappingsRequest(entries));
+            _edits.Clear();
+            Snackbar.Add($"Saved {entries.Count} mapping{(entries.Count == 1 ? "" : "s")}.", Severity.Success);
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or UnauthorizedAccessException or HttpRequestException or TaskCanceledException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

@@ -1,0 +1,4 @@
+Invoice,Type,Date,Due date,Terms (days),Customer,Contract,Line,Line type,Description,Item,Account number,Account,Quantity,Rate,Amount,Class,Invoice total
+INV-1001,Invoice,2026-01-10,2026-02-09,30,Acme Corp,C-100,1,Labor,"Senior engineer, January",Consulting,4020,Services Revenue,10,100.00,1000.00,Headquarters,1250.00
+INV-1001,Invoice,2026-01-10,2026-02-09,30,Acme Corp,C-100,2,Odc,Travel,Reimbursable,4020,Services Revenue,1,250.00,250.00,,1250.00
+CM-1002,Credit memo,2026-01-20,2026-01-20,0,Acme Corp,C-100,1,Odc,Travel credit,Reimbursable,4020,Services Revenue,1,-250.00,-250.00,,-250.00

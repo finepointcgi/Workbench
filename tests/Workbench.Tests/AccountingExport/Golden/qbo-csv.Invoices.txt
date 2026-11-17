@@ -1,0 +1,3 @@
+Invoice No.,Customer,Invoice Date,Due Date,Terms,Memo,Item(Product/Service),Item Description,Item Quantity,Item Rate,Item Amount,Item Tax Code,Class
+INV-1001,Acme Corp,01/10/2026,02/09/2026,Net 30,C-100,Consulting,"Senior engineer, January",10,100.00,1000.00,Tax Exempt,Headquarters
+INV-1001,Acme Corp,01/10/2026,02/09/2026,Net 30,C-100,Reimbursable,Travel,1,250.00,250.00,Tax Exempt,
