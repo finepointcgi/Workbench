@@ -34,7 +34,7 @@ public sealed class PaylocityExchangeTests
             new("1001", "Morgan, Pat", "PTO", 8m, "ENG"),
             new("1001", "Morgan, Pat", "REG", 0m, "ENG"),
         ]));
-        Assert.Equal(Fixture("hours-golden.csv"), csv);
+        Assert.Equal(Fixture("hours-golden.csv").ReplaceLineEndings("\r\n"), csv); // git may store the fixture with LF
     }
 
     [Fact]
