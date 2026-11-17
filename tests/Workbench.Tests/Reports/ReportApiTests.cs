@@ -10,7 +10,7 @@ namespace Workbench.Tests.Reports;
 public sealed class ReportApiTests
 {
     [Fact]
-    public async Task Estimates_at_completion_and_incurred_cost_are_listed_to_open_not_to_run()
+    public async Task Estimates_at_completion_is_listed_to_open_not_to_run()
     {
         await using var factory = new WorkbenchWebFactory("Development", testAuth: true);
         using var finance = factory.CreateClientAs("pm@example.com");
@@ -18,10 +18,10 @@ public sealed class ReportApiTests
 
         var catalog = await new HttpStandardReportService(finance).ListAsync();
         var eac = catalog.Single(r => r.Key == StandardReportKeys.EstimatesAtCompletion);
-        var ice = catalog.Single(r => r.Key == StandardReportKeys.IncurredCost);
-        Assert.All(new[] { eac, ice }, r => Assert.True(r.Available && r.PageOnly && r.PageLink is not null));
-        Assert.Equal(["accounting/revenue/estimates", "accounting/incurred-cost"], new[] { eac.PageLink, ice.PageLink });
-        Assert.DoesNotContain(catalog.Where(r => !r.PageOnly), r => r.Key is StandardReportKeys.EstimatesAtCompletion or StandardReportKeys.IncurredCost);
+        Assert.True(eac.Available && eac.PageOnly && eac.PageLink is not null);
+        Assert.Equal("accounting/revenue/estimates", eac.PageLink);
+        Assert.DoesNotContain(catalog.Where(r => !r.PageOnly), r => r.Key == StandardReportKeys.EstimatesAtCompletion);
+        Assert.DoesNotContain(catalog, r => r.Key == "incurred-cost"); // The incurred cost page is listed by the government contracting module, which is not loaded here.
 
         await Assert.ThrowsAsync<ArgumentException>(() => new HttpStandardReportService(finance).RunAsync(StandardReportKeys.EstimatesAtCompletion, new ReportParameters()));
         Assert.All((await new HttpStandardReportService(employee).ListAsync()).Where(r => r.PageOnly), r => Assert.False(r.Available));

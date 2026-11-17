@@ -2,7 +2,7 @@
 
 A license module (billing, accounting, capture, workforce, project controls, materials, government contracting, enterprise) can live outside this repository as a set of assemblies. The host finds them in a folder at startup, loads the ones the license includes, and the product then behaves as if the module had always been built in: its services, API paths, pages, menu entries, permissions, API key scopes, tables and migrations all take part.
 
-Nothing in this repository has moved. Today every module is still built in, and with an empty modules folder the product behaves exactly as before. This page is the contract a module author builds against and the rules the host follows.
+The `govcon` module was the first to move out ([module-extraction-govcon.md](module-extraction-govcon.md)); the other modules are still built in. With an empty modules folder the product is the shipped product, without government contracting. This page is the contract a module author builds against and the rules the host follows.
 
 ## What a module contributes
 
@@ -19,6 +19,11 @@ A module is a class that implements `IWorkbenchModule` (`src/Workbench.Modules.A
 | Blazor pages | `Describe().RoutableAssemblies` | Passed to the router and to `MapRazorComponents` as additional assemblies. |
 | Services | `ConfigureServices(services, context)` | Runs after the core services and before the permission and edition decorators. |
 | API endpoints | `MapEndpoints(api)` | `api` is the `/api/v1` group: already authorized, with the host's error mapping. |
+| Edition feature gates | `Describe().FeatureGates` | Changes on the module's services that also need an edition feature (`ModuleFeatureGate`), applied with the edition gates. |
+| Places on core pages | `UiSlotContribution` registered in `ConfigureServices` | A core page renders `<UiSlot Name="..."/>`; every contribution with that name is rendered there (slots: `timesheet.summary`, `setup.migration.actions`). |
+| Reports hub pages | `StandardReportPage` registered in `ConfigureServices` | Listed under Reports as a page to open. |
+| Sample data | `IModuleSeed` registered in `ConfigureServices` | Run by the development seed at its `ModuleSeedStage`. |
+| Static files | the module folder's `wwwroot` | Served at `/_content/<routable assembly name>`. |
 | Entities | `ModelAssemblies`, `OnModelCreating` | Added to the host's EF model, so services use `Set<T>()` like core ones. |
 | Migrations | `Migrations` | The module's own context, migrations assemblies and history table (below). |
 
@@ -92,7 +97,18 @@ What the sample covers, and what it does not: the tests run a real module's migr
 
 ## Not in this change
 
-* No feature has moved; the in-repo modules still register through `AddWorkbenchApplication`.
+* Only `govcon` has moved (and not its government billing); the other in-repo modules still register through `AddWorkbenchApplication`.
 * The worker (`Workbench.Worker`) does not load modules yet; background jobs a module owns need it to.
 * The desktop app reads routable pages from the same registry but does not load modules.
 * Reading a license key stored in the database at startup, and signing module assemblies.
+
+## Extraction lessons
+
+From extracting `govcon` ([module-extraction-govcon.md](module-extraction-govcon.md)); the order and effort for the remaining modules are in the pull request report.
+
+* **The seam held for services, endpoints, menu, permissions, API key scopes, entities, migrations and pages.** What needed new extension points was *core pages and core data flows that hosted the module's pieces*: the timesheet header, a button on a setup page, the Reports hub, the sample data, edition feature gates.
+* **The expensive coupling is never the module's own files; it is a core engine that calls the module.** Here: GL posting costs labor through total time accounting (the engine stayed), and invoicing calls government financing at ten places (government billing stayed). Look for these first: grep core for the module's namespaces from `Application`, not from `Ui`.
+* **Contract namespaces of a moved module must not be core namespaces** or `ModuleMap` assigns them to core.
+* **`internal` helpers shared by two modules have to become a real public API**; the first extraction already widened seven types.
+* **Migration ownership is a per-module decision made once.** The recipe used here (release ownership with an empty core migration, edit the old creating migrations, idempotent module baseline, compare the previous release's DDL with the baseline) works for any module whose tables only reference core tables.
+* **Tests that use core kits need the kits' internals** (`InternalsVisibleTo`) and the module loaded before the first test (a module initializer).

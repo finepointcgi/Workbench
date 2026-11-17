@@ -16,7 +16,6 @@ public sealed class BuiltInRoleParityTests
         [Permission.AdminRoles] = r => r.IsAdmin(),
         [Permission.AdminSecurity] = r => r.IsAdmin(),
         [Permission.AdminRetention] = r => r.IsAdmin(),
-        [Permission.AdminCompliance] = r => r.IsAdmin(),
         [Permission.AdminIntegrations] = r => r.IsAdmin(),
         [Permission.AdminAssistant] = r => r.IsAdmin(),
         [Permission.AdminSupport] = r => r.IsAdmin(),
@@ -43,7 +42,6 @@ public sealed class BuiltInRoleParityTests
         [Permission.TimeTeam] = r => r.IsAdmin() || r.HasFlag(OrgRoles.Timekeeper), // NavAccess.ShowTeamTime
         [Permission.LaborCostView] = r => r.IsFinance(),
         [Permission.LaborCostRatesManage] = r => r.IsFinance(),
-        [Permission.TimeTotalTime] = r => r.IsFinance(),
         [Permission.LeaveBalancesManage] = r => r.IsFinance(),
         [Permission.LeavePoliciesManage] = r => r.IsAdmin(),
         [Permission.ProjectsViewAll] = r => r.IsFinance() || r.IsResourceManager(), // Project visibility's "every project" (Finance, Admin, Resource manager).
@@ -65,8 +63,6 @@ public sealed class BuiltInRoleParityTests
         [Permission.BudgetsManage] = r => r.IsFinance(),
         [Permission.RevenueManage] = r => r.IsFinance(),
         [Permission.IndirectRatesManage] = r => r.IsFinance(),
-        [Permission.IncurredCostManage] = r => r.IsFinance(),
-        [Permission.CasCpsrManage] = r => r.IsFinance(),
         [Permission.SalesTaxManage] = r => r.IsFinance(),
         [Permission.AssetsManage] = r => r.IsFinance(),
         [Permission.AssetsDepreciationRun] = r => r.IsFinance(),

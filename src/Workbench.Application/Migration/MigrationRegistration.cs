@@ -6,7 +6,7 @@ namespace Workbench.Application.Migration;
 public static class MigrationRegistration
 {
     /// <summary>
-    /// The go-live checklist and the parallel-run reconciliation. Reads the import history and Workbench's reports, so
+    /// The go-live checklist and the reconciliation runs (the Costpoint parallel run is part of the government contracting module). Reads the import history and Workbench's reports, so
     /// call it after AddWorkbenchImports and the accounting modules, above AddWorkbenchIdentity (whose
     /// <c>AddWorkbenchMigrationPermissions</c> makes both Finance/Admin only).
     /// </summary>
@@ -16,8 +16,6 @@ public static class MigrationRegistration
         services.AddScoped<UnanetReconcileCauses>();
         services.AddScoped<IReconciliationService, ReconciliationService>();
         services.AddScoped<IMigrationService, MigrationService>();
-        services.AddScoped<ParallelRunExplainer>();
-        services.AddScoped<IParallelRunService, ParallelRunService>();
         return services;
     }
 }

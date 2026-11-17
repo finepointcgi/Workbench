@@ -25,6 +25,12 @@ public sealed record ModuleNavEntry(
     bool Government = false);
 
 /// <summary>
+/// A change on one of the module's service interfaces that needs an edition feature (a <c>Feature</c> name from Workbench.Domain, such as
+/// <c>IncurredCost</c>) on top of the module being licensed. <see cref="Methods"/> are method names of <see cref="Service"/>.
+/// </summary>
+public sealed record ModuleFeatureGate(Type Service, string Feature, IReadOnlyList<string> Methods);
+
+/// <summary>
 /// <b>Everything a module says about itself that the rest of the product reads as data</b>: the rows it adds to <c>ModuleMap</c>,
 /// its menu entries, permissions, API key areas and the assemblies that hold its routable pages. The behavior (services, endpoints,
 /// model) is on <c>IWorkbenchModule</c> (Workbench.Modules.Abstractions). Every list defaults to empty.
@@ -56,6 +62,9 @@ public sealed record ModuleContribution
     /// in-repo services. <see cref="ServiceInterfacesIn"/> collects them from an assembly.
     /// </summary>
     public IReadOnlyList<Type> ServiceInterfaces { get; init; } = [];
+
+    /// <summary>Edition features that gate particular changes on the module's services, on top of the module gate every change already gets.</summary>
+    public IReadOnlyList<ModuleFeatureGate> FeatureGates { get; init; } = [];
 
     // ── Menu, permissions, API keys ────────────────────────────────────────────────────────────────
 

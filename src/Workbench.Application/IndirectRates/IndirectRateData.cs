@@ -7,7 +7,7 @@ using Workbench.Domain.ProjectAccounting;
 namespace Workbench.Application.IndirectRates;
 
 /// <summary>The rates applied to one fiscal year: the basis actually used and each pool's rate (0 for <see cref="Missing"/> pools).</summary>
-internal sealed record RateSet(int FiscalYear, IndirectRateBasis Basis, IReadOnlyDictionary<IndirectPool, decimal> Rates, IReadOnlyList<IndirectPool> Missing)
+public sealed record RateSet(int FiscalYear, IndirectRateBasis Basis, IReadOnlyDictionary<IndirectPool, decimal> Rates, IReadOnlyList<IndirectPool> Missing)
 {
     public decimal Of(IndirectPool pool) => Rates.GetValueOrDefault(pool);
 
@@ -15,7 +15,7 @@ internal sealed record RateSet(int FiscalYear, IndirectRateBasis Basis, IReadOnl
 }
 
 /// <summary>Active pool setups (in cascade order), the rates in force and the fiscal calendar, loaded once per operation.</summary>
-internal sealed class RateBook
+public sealed class RateBook
 {
     private List<IndirectRate> _rates = [];
 
@@ -136,7 +136,7 @@ internal static class DirectCosts
 }
 
 /// <summary>Which GL accounts make up each pool, and the direct-cost base accounts.</summary>
-internal sealed class PoolAccountMap
+public sealed class PoolAccountMap
 {
     public required Dictionary<IndirectPool, HashSet<Guid>> Pools { get; init; }
     public required HashSet<Guid> DirectLabor { get; init; }

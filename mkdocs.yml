@@ -200,6 +200,7 @@ nav:
           - Monitoring: operations/monitoring.md
           - Alerts: operations/alerts.md
           - License modules as plugins: operations/module-plugins.md
+          - "Extracting a module: government contracting": operations/module-extraction-govcon.md
           - Performance: operations/performance.md
           - Runbooks: operations/runbooks.md
           - Incident response: operations/incident-response.md

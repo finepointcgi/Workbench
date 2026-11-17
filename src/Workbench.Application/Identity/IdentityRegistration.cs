@@ -89,7 +89,6 @@ public static class IdentityRegistration
         services.AddWorkbenchPayrollPermissions(); // Payroll: Finance or Admin only (pay rates masked unless revealed).
         services.AddWorkbenchPerDiemResourcingPermissions(); // Per diem imports Finance/Admin; allocations PMs (own projects) and resource managers (all).
         services.AddWorkbenchRevenuePermissions(); // Revenue: setup, runs and reports Finance/Admin; PMs read their projects and submit their EACs and deliveries.
-        services.AddWorkbenchIncurredCostPermissions(); // Incurred cost submissions: Finance or Admin only.
         services.AddWorkbenchReportPermissions(); // Reports: signed in; row/field rules inside the reports; exports are security events.
         services.AddWorkbenchEvmPermissions(); // Earned value: Finance, Admin or the project's PM; BCR approval and period reopen Finance/Admin.
         services.AddWorkbenchCeilingPermissions(); // Ceilings and closeout: reads Finance/Admin/PMs; changes Finance/Admin (PMs may override where allowed).
@@ -105,7 +104,6 @@ public static class IdentityRegistration
         services.AddWorkbenchPricingPermissions(); // Proposal pricing: Finance, Admin or the Pricing role; the won handoff Finance/Admin.
         services.AddWorkbenchAssistantPermissions(); // Assistant: ask signed in (tools check the user's access); settings/usage/audit Admin; narratives Finance/Admin/PM; flags filtered to reviewees.
         services.AddWorkbenchPlanningPermissions(); // Recurring journals, GL budgets, budget vs actual: Finance/Admin; planning cycles Finance/Admin, org unit owners their own budget.
-        services.AddWorkbenchTotalTimePermissions(); // Total time accounting: method and reports Finance/Admin; a timesheet's hours summary whoever can see the timesheet.
         services.AddWorkbenchCurrencyPermissions(); // Multicurrency: reads signed in; rates, setup, revaluation and the report Finance/Admin.
         services.AddWorkbenchSalesShippingPermissions(); // Sales orders: Materials/Finance/Admin change, Business development reads; shipping Materials/Finance/Admin; delivery invoices Finance/Admin.
         services.AddWorkbenchQualityPermissions(); // Quality and engineering changes: read Materials/Finance/Admin, change Materials/Admin; dispositions and ECOs decided by their workflow.
@@ -114,7 +112,6 @@ public static class IdentityRegistration
         services.AddWorkbenchBankFilePermissions(); // Bank payment files and vendor bank details: Finance or Admin; a vendor bank change is approved by someone other than its requester.
         services.AddWorkbenchAccountingExportPermissions(); // Accounting exports and their mappings: the "Export to accounting software" permission (Finance, Admin).
         services.AddWorkbenchSalesTaxPermissions(); // Sales and use tax: Finance or Admin.
-        services.AddWorkbenchCompliancePermissions(); // CPSR files and readiness, CAS disclosure statements and the 401/402 check: Finance or Admin.
         services.AddWorkbenchCompanyPermissions(); // Multicompany: companies/intercompany/consolidation Finance/Admin, access lists Admin; company-owned records limited to the user's companies (outermost).
         services.AddWorkbenchTravelPermissions(); // Travel and cards: travelers their own trips and charges, approvers what routes to them, Finance/Admin everything; card setup and reconciliation Finance/Admin.
         services.AddWorkbenchIntegrationPermissions(); // Integrations: webhooks, API keys and connectors are Admin-only and closed to API keys themselves.

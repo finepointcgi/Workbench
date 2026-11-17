@@ -10,7 +10,6 @@ using Workbench.Application.ContractDetail;
 using Workbench.Application.Costpoint;
 using Workbench.Application.Identity;
 using Workbench.Application.Imports;
-using Workbench.Application.IncurredCost;
 using Workbench.Application.IndirectRates;
 using Workbench.Application.Leave;
 using Workbench.Application.Odcs;
@@ -41,10 +40,13 @@ public static class DependencyInjection
     /// <param name="registerModules">
     /// Registers the license modules loaded from the modules folder (<c>ModuleHost.ConfigureServices</c>). It runs after every in-repo
     /// feature and before <c>AddWorkbenchIdentity</c> and the edition gates, so a module's services are wrapped with the same permission
-    /// and edition checks as the in-repo ones, and may decorate them. Null (the default) is a host without modules.
+    /// and edition checks as the in-repo ones, and may decorate them. Null (the default) registers the modules the process has loaded, which is none unless a loader ran.
     /// </param>
     public static IServiceCollection AddWorkbenchApplication(this IServiceCollection services, Action<IServiceCollection>? registerModules = null)
     {
+        // A host that doesn't pass its own registration still gets the modules the process has loaded (none unless a loader ran): a container
+        // built by hand, such as a test's, sees the same services as the web host.
+        registerModules ??= modules => Workbench.Plugins.ModuleHost.Current.ConfigureServices(modules, new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
         services.AddSingleton(TimeProvider.System);
         services.AddScoped<ISheetService, SheetService>();
         services.AddScoped<IItemService, ItemService>();
@@ -78,7 +80,6 @@ public static class DependencyInjection
         services.AddWorkbenchPerDiem(); // Per diem rates and travel per diem; decorates IExpenseReportService (after AddWorkbenchOdcs), above AddWorkbenchIdentity.
         services.AddWorkbenchResourcing(); // Allocations, capacity, utilization and allocation-based ETC; above AddWorkbenchIdentity.
         services.AddWorkbenchRevenue(); // Revenue recognition: runs post through the GL (JournalSource.Revenue) and add a close check; after billing, above AddWorkbenchIdentity.
-        services.AddWorkbenchIncurredCost(); // Incurred cost submission (ICE schedules): reads the GL, pools, billing and AP; above AddWorkbenchIdentity.
         services.AddWorkbenchReports(); // Standard reports, report writer, saved reports and schedules; above AddWorkbenchIdentity.
         services.AddWorkbenchEvm(); // Earned value (PMB, status, VARs, BCRs, IPMDAR exports); ACWP via IBurdenedCostService; above AddWorkbenchIdentity.
         services.AddWorkbenchCeilings(); // Ceilings, rate caps and closeout; decorates time, ODCs, expenses, AP bills, POs and invoices; above AddWorkbenchIdentity.
@@ -97,7 +98,6 @@ public static class DependencyInjection
         Pricing.PricingRegistration.AddWorkbenchPricing(services); // Proposal pricing (price models, scenarios, locked versions, cost volume, won handoff); above AddWorkbenchIdentity.
         Assistant.AssistantRegistration.AddWorkbenchAssistant(services); // AI assistant (off by default), PM narratives and timesheet flags; tools read through the permission-checked services; above AddWorkbenchIdentity.
         Planning.PlanningRegistration.AddWorkbenchPlanning(services); // Recurring journals (post through the GL), corporate GL budgets, budget vs actual, planning cycles (approval handler); above AddWorkbenchIdentity.
-        TotalTime.TotalTimeRegistration.AddWorkbenchTotalTime(services); // Total time accounting: labor cost method (Standard/TTA/Hybrid) and uncompensated overtime reports; above AddWorkbenchIdentity.
         Currencies.CurrencyRegistration.AddWorkbenchCurrencies(services); // Multicurrency: currencies, rates, revaluation (posts through the GL, adds a close check); above AddWorkbenchIdentity.
         Companies.CompanyRegistration.AddWorkbenchCompanies(services); // Multicompany: companies, intercompany accounts, consolidation; the ledger's company rules live in GeneralLedger; above AddWorkbenchIdentity.
         Travel.TravelRegistration.AddWorkbenchTravel(services); // Travel authorizations and corporate cards; decorates IExpenseReportService (after AddWorkbenchOdcs), card lines post to the card liability; above AddWorkbenchIdentity.
@@ -109,7 +109,6 @@ public static class DependencyInjection
         AccountingLive.AccountingLiveRegistration.AddWorkbenchAccountingLive(services); // Live push to QuickBooks Online and Xero (OAuth 2.0); above AddWorkbenchIdentity.
         SalesTax.SalesTaxRegistration.AddWorkbenchSalesTax(services); // Sales and use tax: rates, codes, exemptions, invoice tax at approval, use tax on posted bills, the return; above AddWorkbenchIdentity.
         Integrations.IntegrationRegistration.AddWorkbenchIntegrations(services); // Webhooks (outbox + dispatcher), API keys and connectors (Teams, Slack, GL export, report export); Admin-only; above AddWorkbenchIdentity.
-        Compliance.ComplianceRegistration.AddWorkbenchCompliance(services); // CPSR procurement files and readiness, CAS disclosure statements (DS-1) and the 401/402 check; above AddWorkbenchIdentity.
         Calendar.CalendarRegistration.AddWorkbenchCalendarFeed(services); // Read-only per-person .ics calendar feed (leave, holidays, due tasks, milestones, timesheet due dates).
 
         services.AddWorkbenchSourcing(); // RFQs and quotes, the supplier portal and EDI; decorates IPurchaseOrderService (850 on issue); above AddWorkbenchIdentity.

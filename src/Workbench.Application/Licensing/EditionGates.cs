@@ -5,8 +5,8 @@ using Workbench.Contracts.Approvals;
 using Workbench.Contracts.Billing;
 using Workbench.Contracts.Companies;
 using Workbench.Contracts.Identity;
-using Workbench.Contracts.IncurredCost;
 using Workbench.Contracts.Licensing;
+using Workbench.Contracts.Modules;
 using Workbench.Contracts.Integrations;
 using Workbench.Contracts.Integrations.GitLab;
 using Workbench.Contracts.Integrations.Jira;
@@ -41,8 +41,8 @@ public static class EditionGates
             nameof(ISupplierPortalAdminService.AddContactAsync), nameof(ISupplierPortalAdminService.SendSignInLinkAsync), nameof(ISupplierPortalAdminService.ReactivateContactAsync));
         services.Gate<IApprovalWorkflowService>(Feature.ApprovalWorkflows,
             nameof(IApprovalWorkflowService.SaveAsync), nameof(IApprovalWorkflowService.CreateRecordWorkflowAsync));
-        services.Gate<IIncurredCostService>(Feature.IncurredCost, nameof(IIncurredCostService.CreateAsync), nameof(IIncurredCostService.RegenerateAsync));
         services.AddWorkbenchModuleGates();
+        services.AddWorkbenchModuleFeatureGates();
         return services;
     }
 
@@ -64,6 +64,32 @@ public static class EditionGates
         }
 
         return services;
+    }
+
+    /// <summary>The feature gates the loaded modules ask for (<see cref="ModuleContribution.FeatureGates"/>), applied like the built-in ones above.</summary>
+    public static IServiceCollection AddWorkbenchModuleFeatureGates(this IServiceCollection services)
+    {
+        foreach (var gate in ModuleRegistry.Current.Modules.SelectMany(m => m.FeatureGates))
+        {
+            var feature = Enum.Parse<Feature>(gate.Feature);
+            typeof(EditionGates).GetMethod(nameof(GateFeature), BindingFlags.NonPublic | BindingFlags.Static)!
+                .MakeGenericMethod(gate.Service).Invoke(null, [services, feature, gate.Methods.ToArray()]);
+        }
+
+        return services;
+    }
+
+    /// <summary>Like <see cref="Gate{T}"/>, but a service nothing registered is skipped (a host that builds its own container without the modules).</summary>
+    private static void GateFeature<T>(IServiceCollection services, Feature feature, string[] methods)
+        where T : class
+    {
+        var gated = methods.ToHashSet();
+        foreach (var name in gated.Where(n => typeof(T).GetMethod(n) is null && !typeof(T).GetInterfaces().Any(i => i.GetMethod(n) is not null)))
+        {
+            throw new InvalidOperationException($"{typeof(T).Name} has no method {name} to gate.");
+        }
+
+        Wrap<T>(services, required: false, (proxy, inner, sp) => proxy.Setup(inner, sp.GetRequiredService<FeatureGate>(), feature, gated));
     }
 
     private static void GateModule<T>(IServiceCollection services, string module)

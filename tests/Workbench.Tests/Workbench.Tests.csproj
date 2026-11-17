@@ -40,6 +40,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The private module repository's tests reuse this project's kits (TestDb, fixtures, the web factory): see docs/operations/module-extraction-govcon.md. -->
+    <InternalsVisibleTo Include="Workbench.Module.GovCon.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\Workbench.Application\Workbench.Application.csproj" />
     <ProjectReference Include="..\..\src\Workbench.Infrastructure\Workbench.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\Workbench.Ui\Workbench.Ui.csproj" />

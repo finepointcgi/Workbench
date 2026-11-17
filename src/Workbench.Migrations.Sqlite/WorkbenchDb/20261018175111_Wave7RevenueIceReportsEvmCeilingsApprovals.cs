@@ -5,7 +5,10 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Workbench.Migrations.Sqlite.WorkbenchDb
 {
-    /// <inheritdoc />
+    /// <remarks>
+    /// The tables of the government contracting module (CPSR files, CAS disclosure, CMMC, incurred cost) were taken out of this migration:
+    /// the module creates them (docs/operations/module-extraction-govcon.md). Databases that already ran it are unaffected.
+    /// </remarks>
     public partial class Wave7RevenueIceReportsEvmCeilingsApprovals : Migration
     {
         /// <inheritdoc />
@@ -261,37 +264,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         principalTable: "WbsElement",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "IncurredCostSubmissions",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    FiscalYear = table.Column<int>(type: "INTEGER", nullable: false),
-                    Status = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
-                    Revision = table.Column<int>(type: "INTEGER", nullable: false),
-                    SchedulesJson = table.Column<string>(type: "TEXT", maxLength: 5000000, nullable: false),
-                    LastDiffJson = table.Column<string>(type: "TEXT", maxLength: 200000, nullable: true),
-                    GeneratedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    GeneratedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    ReviewedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    ReviewedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    CertifiedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    CertifiedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    CertifierName = table.Column<string>(type: "TEXT", maxLength: 200, nullable: true),
-                    CertifierTitle = table.Column<string>(type: "TEXT", maxLength: 200, nullable: true),
-                    CertificateText = table.Column<string>(type: "TEXT", maxLength: 8000, nullable: true),
-                    SubmittedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    SubmittedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    SubmissionReference = table.Column<string>(type: "TEXT", maxLength: 200, nullable: true),
-                    CreatedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    CreatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_IncurredCostSubmissions", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -736,30 +708,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 });
 
             migrationBuilder.CreateTable(
-                name: "IncurredCostInputs",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    SubmissionId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Schedule = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    RowKey = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    Column = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    Value = table.Column<string>(type: "TEXT", maxLength: 4000, nullable: true),
-                    UpdatedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_IncurredCostInputs", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_IncurredCostInputs_IncurredCostSubmissions_SubmissionId",
-                        column: x => x.SubmissionId,
-                        principalTable: "IncurredCostSubmissions",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "RevenueRunLine",
                 columns: table => new
                 {
@@ -1177,18 +1125,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 column: "WbsElementId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_IncurredCostInputs_SubmissionId_Schedule_RowKey_Column",
-                table: "IncurredCostInputs",
-                columns: new[] { "SubmissionId", "Schedule", "RowKey", "Column" },
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_IncurredCostSubmissions_FiscalYear",
-                table: "IncurredCostSubmissions",
-                column: "FiscalYear",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
                 name: "IX_OrgUnitApprover_EmployeeId",
                 table: "OrgUnitApprover",
                 column: "EmployeeId");
@@ -1331,9 +1267,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "EvmVarianceAnalysis");
 
             migrationBuilder.DropTable(
-                name: "IncurredCostInputs");
-
-            migrationBuilder.DropTable(
                 name: "OrgUnitApprover");
 
             migrationBuilder.DropTable(
@@ -1371,9 +1304,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
 
             migrationBuilder.DropTable(
                 name: "EvmStatusPeriod");
-
-            migrationBuilder.DropTable(
-                name: "IncurredCostSubmissions");
 
             migrationBuilder.DropTable(
                 name: "SavedReports");
