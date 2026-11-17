@@ -18,11 +18,14 @@ public enum EditionSource
 
 public sealed record FeatureStatusDto(string Key, string Name, string Description, bool Included, string Module = "");
 
-/// <param name="Id">The module id: <c>core</c>, <c>finance</c>, <c>capture</c>, <c>workforce</c>, <c>controls</c>, <c>govcon</c> or <c>enterprise</c>.</param>
+/// <param name="Id">The module id: <c>core</c>, <c>billing</c>, <c>accounting</c>, <c>capture</c>, <c>workforce</c>, <c>projectcontrols</c>, <c>materials</c>, <c>govcon</c>, <c>enterprise</c> or <c>ai</c>.</param>
 /// <param name="Enforced">False when everyone has the module whatever the license says.</param>
 /// <param name="Licensed">The license (or plan) includes the module.</param>
 /// <param name="Available">The organization may use it: licensed, or not enforced. Menus and pages follow this.</param>
-public sealed record ModuleStatusDto(string Id, string Name, string Description, bool Enforced, bool Licensed, bool Available);
+/// <param name="SeatsUsed">People whose roles grant any permission in this module (core has none: its seats are the full and light seats).</param>
+/// <param name="WholeModule">False for an enforced module whose pages stay in the menu and whose services stay open, because only its named features need the license (govcon and enterprise today). The menu hides a module only when it is unavailable and this is true.</param>
+/// <param name="SeatsAllowed">Seats the license gives the module; null when nothing limits it (not enforced, not licensed, or no key).</param>
+public sealed record ModuleStatusDto(string Id, string Name, string Description, bool Enforced, bool Licensed, bool Available, int SeatsUsed = 0, int? SeatsAllowed = null, bool WholeModule = true);
 
 /// <summary>
 /// How a connected install's key refresh from the license server is going. Null in the status when this install is offline
@@ -70,6 +73,7 @@ public sealed record LicenseStatusDto(
     int LightSeatsUsed = 0,
     bool Trial = false,
     int? DaysLeft = null,
+    bool ReadOnly = false,
     LicenseRefreshDto? Refresh = null)
 {
     /// <summary>True when the organization may use <paramref name="moduleId"/>; every module when the server didn't say.</summary>

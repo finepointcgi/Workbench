@@ -127,6 +127,8 @@ app.MapWorkbenchAccountEndpoints();
 app.MapWorkbenchHealthChecks();
 app.MapWorkbenchScim();
 app.MapWorkbenchApi();
+app.MapWorkbenchOrganizationExport(); // Hosted: the way out for a lapsed organization (docs/admin-guide/hosted-signup.md).
+app.MapWorkbenchSignup(); // Hosted signup /signup and the license server's /api/v1/host/entitlements (MultiTenant; docs/admin-guide/hosted-signup.md).
 app.MapWorkbenchSupplierPortal();
 app.MapWorkbenchPublicForms(); // Public form links /f/{token} (wave E).
 app.MapWorkbenchCustomerView(); // Customer links /c/{token}: one contract's funding and invoice status, read only.

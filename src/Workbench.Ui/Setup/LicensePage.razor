@@ -70,7 +70,7 @@ else
             <MudText Typo="Typo.h6" HtmlTag="h2">Modules</MudText>
             <MudText Class="mud-text-secondary mb-2">A license lists the modules it includes. A module that isn't part of the price yet is open to everyone.</MudText>
             <MudSimpleTable Dense="true" aria-label="Modules" data-testid="license-modules">
-                <thead><tr><th scope="col">Module</th><th scope="col">What it covers</th><th scope="col">Your license</th></tr></thead>
+                <thead><tr><th scope="col">Module</th><th scope="col">What it covers</th><th scope="col">Your license</th><th scope="col">Seats</th></tr></thead>
                 <tbody>
                     @foreach (var m in modules)
                     {
@@ -81,6 +81,7 @@ else
                                 <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@(m.Available ? Color.Success : Color.Default)"
                                          Icon="@(m.Available ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Lock)">@ModuleState(m)</MudChip>
                             </td>
+                            <td data-testid="@($"license-module-seats-{m.Id}")">@ModuleSeats(m)</td>
                         </tr>
                     }
                 </tbody>
@@ -173,6 +174,9 @@ else
     };
 
     private static string ModuleState(ModuleStatusDto m) => m.Licensed ? "Licensed" : m.Available ? "Open to everyone" : "Not in your license";
+
+    private static string ModuleSeats(ModuleStatusDto m) =>
+        m.Id == "core" ? "" : m.SeatsAllowed is { } allowed ? $"{m.SeatsUsed} of {allowed}" : m.SeatsUsed == 0 ? "" : $"{m.SeatsUsed} in use";
 
     private string ModuleName(string id) => _status?.Modules?.FirstOrDefault(m => m.Id == id)?.Name ?? id;
 

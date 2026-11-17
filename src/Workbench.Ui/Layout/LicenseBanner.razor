@@ -4,12 +4,30 @@
 @inject ILicenseService Licenses
 @inject NavigationManager Navigation
 
-@* Tells administrators a trial is about to end (7 days or fewer) or has ended. Others never see it. *@
-@if (_message is not null)
+@* Tells administrators a trial is about to end (7 days or fewer) or has ended. Others never see it, except a hosted organization
+   that has gone read-only (lapsed trial, cancelled or suspended): everyone is told why they can't save, and administrators get the export. *@
+@if (_readOnly is not null)
+{
+    <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-3" data-testid="readonly-banner">
+        @_readOnly
+        @if (_isAdmin)
+        {
+            <MudLink Href="api/v1/organization/export" Target="_blank" Class="ml-1" data-testid="export-link">Export all my data</MudLink>
+        }
+    </MudAlert>
+}
+else if (_message is not null)
 {
     <MudAlert Severity="@(_lapsed ? Severity.Warning : Severity.Info)" Dense="true" Class="mb-3" data-testid="license-banner">
         @_message
-        <MudLink Href="setup/license" Class="ml-1">@_link</MudLink>
+        @if (_hosted)
+        {
+            <span class="ml-1">Contact your Workbench provider to subscribe.</span>
+        }
+        else
+        {
+            <MudLink Href="setup/license" Class="ml-1">@_link</MudLink>
+        }
     </MudAlert>
 }
 
@@ -17,8 +35,11 @@
     [Parameter] public NavAccess Access { get; set; } = NavAccess.Anonymous;
 
     private string? _message;
+    private string? _readOnly;
     private bool _lapsed;
     private string _link = "Add a license key";
+    private bool _hosted;
+    private bool _isAdmin;
 
     private static string Since(LicenseRefreshDto r) => r.LastSuccessUtc is { } ok ? ok.ToString("d MMM yyyy") : "it was activated";
 
@@ -26,15 +47,29 @@
     {
         _message = null;
         _link = "Add a license key";
-        if (!Access.Can(Permission.AdminOrganization))
-        {
-            return;
-        }
-
+        _readOnly = null;
+        _isAdmin = Access.Can(Permission.AdminOrganization);
         try
         {
             var status = await Licenses.GetStatusAsync();
-            if (status.Refresh is { Stale: true } refresh)
+            _hosted = status.Source == EditionSource.HostedPlan;
+            if (status.ReadOnly)
+            {
+                _readOnly = status.Problem ?? "This organization is read-only.";
+                return;
+            }
+
+            if (!_isAdmin)
+            {
+                return;
+            }
+
+            if (_hosted && status.InGracePeriod && status.Problem is { } overdue)
+            {
+                _lapsed = true;
+                _message = overdue;
+            }
+            else if (status.Refresh is { Stale: true } refresh)
             {
                 _lapsed = true;
                 _message = refresh.Outcome == "refused"

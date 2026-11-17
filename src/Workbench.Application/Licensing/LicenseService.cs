@@ -22,7 +22,7 @@ public sealed class LicenseService(IWorkbenchDbContextFactory dbFactory, Edition
             .Select(m => new ModuleStatusDto(m.Id, m.Name, m.Description, m.Enforced, EditionService.IsLicensed(state, m.Id), editions.HasModule(state, m.Id)))
             .ToList();
         return new LicenseStatusDto(state.Edition.ToString(), state.Source, state.Licensee, state.ExpiresOn, state.InGracePeriod,
-            state.SeatLimit, usage.FullSeatsInUse, state.Problem, features, modules, state.LightSeatLimit, usage.LightSeatsInUse, state.Trial, state.DaysLeft, refresh.Describe(stored));
+            state.SeatLimit, usage.FullSeatsInUse, state.Problem, features, modules, state.LightSeatLimit, usage.LightSeatsInUse, state.Trial, state.DaysLeft, state.ReadOnly, refresh.Describe(stored));
     }
 
     public async Task<LicenseStatusDto> ActivateAsync(ActivateLicenseRequest request, CancellationToken cancellationToken = default)

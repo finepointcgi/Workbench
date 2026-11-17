@@ -19,9 +19,16 @@ public sealed record LicenseClaims(
     bool Trial = false,
     Guid? LicenseId = null,
     DateOnly? IssuedOn = null,
-    int Version = 1)
+    int Version = 1,
+    IReadOnlyDictionary<string, int>? ModuleSeats = null)
 {
     public bool IncludesModule(string id) => id == ModuleIds.Core || Modules is null || Modules.Contains(id);
+
+    /// <summary>
+    /// The seats of <paramref name="module"/>: its entry in the key's optional <c>moduleSeats</c>, otherwise <see cref="Seats"/>
+    /// (a key without <c>moduleSeats</c>, and every WB1 key, behaves as before).
+    /// </summary>
+    public int SeatsFor(string module) => ModuleSeats is not null && ModuleSeats.TryGetValue(module, out var seats) ? seats : Seats;
 }
 
 /// <summary>Where the server finds the public half of the key pair that signs licenses.</summary>
@@ -61,6 +68,12 @@ public sealed class LicenseOptions
 
     /// <summary>Days after the expiry date that Business keeps working, with a warning, so a late renewal never stops payroll.</summary>
     public int GraceDays { get; set; } = 14;
+
+    /// <summary>
+    /// <c>License:CommunityMaxPeople</c>. The most people (active, plus pending invitations) the free Community edition may have
+    /// when no license key is in use. 0, the default, is unlimited. Business, a hosted plan and an expired key are never affected.
+    /// </summary>
+    public int CommunityMaxPeople { get; set; }
 
     /// <summary>The modules and their Enforced flags. Defaults to <see cref="ModuleCatalog.Default"/>; tests replace it to prove a flag works when flipped.</summary>
     public IReadOnlyList<ModuleInfo> Modules { get; set; } = ModuleCatalog.Default;
@@ -114,7 +127,7 @@ public static class LicenseKeys
         root.GetProperty("seats").GetInt32(),
         ParseDate(root.GetProperty("expires").GetString()!));
 
-    /// <summary>The WB2 payload: <c>v</c> 2, <c>licenseId</c>, <c>licensee</c>, <c>issuedAt</c>, <c>expires</c>, <c>seats</c>, <c>lightSeats</c>, <c>modules</c>, <c>trial</c>.</summary>
+    /// <summary>The WB2 payload: <c>v</c> 2, <c>licenseId</c>, <c>licensee</c>, <c>issuedAt</c>, <c>expires</c>, <c>seats</c>, <c>lightSeats</c>, <c>modules</c>, <c>trial</c>, and the optional <c>moduleSeats</c>.</summary>
     private static LicenseClaims ReadV2(JsonElement root)
     {
         if (root.GetProperty("v").GetInt32() != 2)
@@ -123,7 +136,7 @@ public static class LicenseKeys
         }
 
         var modules = root.TryGetProperty("modules", out var list) && list.ValueKind == JsonValueKind.Array
-            ? list.EnumerateArray().Select(m => m.GetString()?.Trim().ToLowerInvariant()).Where(m => !string.IsNullOrEmpty(m)).Select(m => m!).ToHashSet()
+            ? list.EnumerateArray().Select(m => m.GetString()?.Trim().ToLowerInvariant()).Where(m => !string.IsNullOrEmpty(m)).SelectMany(m => Expand(m!)).ToHashSet()
             : [];
         modules.Remove(ModuleIds.Core);
         modules.IntersectWith(ModuleCatalog.AllIds); // A module this build doesn't know (a newer key) is ignored, not an error.
@@ -138,7 +151,44 @@ public static class LicenseKeys
             root.TryGetProperty("trial", out var trial) && trial.ValueKind == JsonValueKind.True,
             Guid.Parse(root.GetProperty("licenseId").GetString()!),
             root.TryGetProperty("issuedAt", out var issued) && issued.GetString() is { } i ? ParseDate(i) : null,
-            2);
+            2,
+            ReadModuleSeats(root));
+    }
+
+    /// <summary>A module id as a key carries it: an id from before the catalog was split means what it now maps to (<c>finance</c> is billing and accounting, <c>controls</c> is enterprise).</summary>
+    private static IEnumerable<string> Expand(string id) => ModuleIds.Legacy.TryGetValue(id, out var current) ? current : [id];
+
+    /// <summary>
+    /// The optional <c>moduleSeats</c> object (module id to seats). Ids go through the same legacy mapping as <c>modules</c>, an
+    /// explicit current id wins over a legacy one, and an id this build doesn't know or a value that isn't a whole number is ignored.
+    /// Null when absent, which means every module's seats are <c>seats</c>.
+    /// </summary>
+    private static IReadOnlyDictionary<string, int>? ReadModuleSeats(JsonElement root)
+    {
+        if (!root.TryGetProperty("moduleSeats", out var seats) || seats.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        var result = new Dictionary<string, int>();
+        foreach (var legacyPass in new[] { true, false }) // Legacy ids first, so an explicit current id overrides them.
+        {
+            foreach (var entry in seats.EnumerateObject())
+            {
+                var id = entry.Name.Trim().ToLowerInvariant();
+                if (ModuleIds.Legacy.ContainsKey(id) != legacyPass || entry.Value.ValueKind != JsonValueKind.Number || !entry.Value.TryGetInt32(out var count))
+                {
+                    continue;
+                }
+
+                foreach (var target in Expand(id).Where(m => m != ModuleIds.Core && ModuleCatalog.IsKnown(m)))
+                {
+                    result[target] = Math.Max(0, count);
+                }
+            }
+        }
+
+        return result;
     }
 
     /// <summary>An ISO date (<c>2027-11-01</c>); a full timestamp is accepted too and its date used.</summary>
