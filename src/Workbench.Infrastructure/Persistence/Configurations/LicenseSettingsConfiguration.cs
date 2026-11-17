@@ -10,5 +10,8 @@ internal sealed class LicenseSettingsConfiguration : IEntityTypeConfiguration<Li
     {
         b.Property(s => s.Key).HasMaxLength(4000);
         b.Property(s => s.ActivatedBy).HasMaxLength(320);
+        b.Property(s => s.InstallId).HasMaxLength(100);
+        b.Property(s => s.LastRefreshOutcome).HasMaxLength(20);
+        b.Property(s => s.LastRefreshMessage).HasMaxLength(500);
     }
 }
