@@ -22,7 +22,8 @@ public sealed class StripeOptions
 
 /// <summary>
 /// What a Stripe price grants. <c>Role</c> is <c>Seats</c> (quantity x <see cref="SeatsPerUnit"/> full seats), <c>LightSeats</c>
-/// (quantity x <see cref="SeatsPerUnit"/> light seats) or <c>Modules</c> (turns <see cref="Modules"/> on, plus the seats it includes once).
+/// (quantity x <see cref="SeatsPerUnit"/> light seats), <c>ModuleSeats</c> (turns <see cref="Modules"/> on with quantity x <see cref="SeatsPerUnit"/>
+/// seats for just those modules) or <c>Modules</c> (turns <see cref="Modules"/> on, plus the seats it includes once).
 /// </summary>
 public sealed class PriceMapping
 {

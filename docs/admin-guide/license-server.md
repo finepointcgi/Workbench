@@ -32,8 +32,13 @@ The signature is ECDSA P-256 over the exact payload bytes (SHA-256, IEEE P1363 f
 | `licensee` | The customer's name |
 | `issuedAt`, `expires` | ISO dates (`2027-01-31`) |
 | `seats`, `lightSeats` | Full seats and light (view/self-service) seats |
-| `modules` | Any of `finance`, `capture`, `workforce`, `controls`, `govcon`, `enterprise`. `core` is implied |
+| `modules` | Any of `billing`, `accounting`, `capture`, `workforce`, `projectcontrols`, `materials`, `govcon`, `enterprise`, `ai`. `core` is implied |
+| `moduleSeats` | Optional. Object of module id to seats (a non-negative integer), for modules whose seats differ from `seats`. Absent: `seats` applies to every module. The server writes it only for modules in `modules` with a count different from `seats`, so a key with no per-module seats has no such member |
 | `trial` | `true` for a trial |
+
+Example payload: `{"v":2,"licenseId":"...","licensee":"...","issuedAt":"2027-01-01","expires":"2028-01-01","seats":25,"lightSeats":10,"modules":["accounting","billing"],"moduleSeats":{"accounting":10,"billing":5},"trial":false}`.
+
+The retired module ids `finance` and `controls` are no longer issued (the admin API answers 400). Readers map old keys: `finance` is `billing` + `accounting`, `controls` is `enterprise`.
 
 The public half of the signing key is what the product embeds to verify keys; the server publishes it at `GET /v1/public-key`.
 
@@ -109,12 +114,12 @@ Open `/admin/` and paste the admin key (it is kept only in that browser tab). Th
 | --- | --- |
 | `POST /admin/api/customers` `{name, email, notes}` | Create a customer |
 | `GET /admin/api/customers`, `GET /admin/api/customers/{id}` | List; one customer with subscriptions and licenses |
-| `POST /admin/api/customers/{id}/subscriptions` `{modules, seats, lightSeats, termMonths \| termEnd, trial}` | Create a subscription and its first key |
-| `PATCH /admin/api/subscriptions/{id}` `{modules, seats, lightSeats}` | Change entitlements and issue a new key |
+| `POST /admin/api/customers/{id}/subscriptions` `{modules, seats, lightSeats, moduleSeats, termMonths \| termEnd, trial}` | Create a subscription and its first key. `moduleSeats` is e.g. `{"accounting": 10}` |
+| `PATCH /admin/api/subscriptions/{id}` `{modules, seats, lightSeats, moduleSeats}` | Change entitlements and issue a new key (`moduleSeats` replaces the whole map) |
 | `POST /admin/api/subscriptions/{id}/extend` `{months \| termEnd}` | Extend the paid-through date (also reactivates a lapsed one) |
 | `POST /admin/api/subscriptions/{id}/cancel` | Cancel now: connected installs get `402 subscription_canceled` |
 | `POST /admin/api/subscriptions/{id}/reissue` `{email}` | Issue the current key again, optionally emailing it |
-| `POST /admin/api/licenses/offline` `{customerId, modules, seats, lightSeats, days \| expires, trial}` | An offline key |
+| `POST /admin/api/licenses/offline` `{customerId, modules, seats, lightSeats, moduleSeats, days \| expires, trial}` | An offline key |
 | `POST /admin/api/licenses/{id}/revoke` `{reason}` | Revoke a license (keeps the history) |
 | `GET /admin/api/licenses/{id}/history`, `/history`, `/revocations` | Issued keys and activations; recent keys; revoked ids |
 
@@ -141,15 +146,18 @@ Tell the server what each price sells. A price has a `Role`:
 - `Seats`: quantity × `SeatsPerUnit` (default 1) **full seats**.
 - `LightSeats`: quantity × `SeatsPerUnit` **light seats**.
 - `Modules`: turns the listed `Modules` on, and adds `IncludedSeats` / `IncludedLightSeats` once.
+- `ModuleSeats`: turns the listed `Modules` on with quantity × `SeatsPerUnit` seats for just those modules (a per-module seat count). `seats` stays the base from `Seats`/`Modules` prices; if no price gives base seats, `seats` is the largest per-module count. Only counts that differ from `seats` go into `moduleSeats`.
 
 ```bash
 Stripe__Prices__price_1Abc__Role=Seats
 Stripe__Prices__price_1Def__Role=Modules
-Stripe__Prices__price_1Def__Modules__0=finance
+Stripe__Prices__price_1Def__Modules__0=billing
 Stripe__Prices__price_1Ghi__Role=Modules            # a bundle that includes 5 seats
 Stripe__Prices__price_1Ghi__Modules__0=govcon
-Stripe__Prices__price_1Ghi__Modules__1=controls
+Stripe__Prices__price_1Ghi__Modules__1=enterprise
 Stripe__Prices__price_1Ghi__IncludedSeats=5
+Stripe__Prices__price_1Jkl__Role=ModuleSeats        # accounting sold per seat: quantity 10 = 10 accounting seats
+Stripe__Prices__price_1Jkl__Modules__0=accounting
 ```
 
 How events behave:
@@ -170,7 +178,7 @@ A price that is not in `Stripe:Prices` is logged and ignored; a subscription wit
 `POST /v1/activate` and `POST /v1/refresh` take JSON `{licenseId, installId, seatsInUse, lightSeatsInUse, version}` and return a fresh key that lasts `Keys:RefreshDays`:
 
 ```json
-{ "key": "WB2....", "expires": "2027-01-15", "refreshAfter": "2027-01-08", "modules": ["finance"], "seats": 25, "lightSeats": 5, "trial": false, "warnings": [] }
+{ "key": "WB2....", "expires": "2027-01-15", "refreshAfter": "2027-01-08", "modules": ["accounting", "billing"], "seats": 25, "moduleSeats": { "accounting": 10 }, "lightSeats": 5, "trial": false, "warnings": [] }
 ```
 
 Seat changes in Stripe or the admin page show up on the next refresh. `warnings` says when reported seats exceed the license; the server does not block
@@ -188,7 +196,7 @@ over-use, the product decides. Failures:
 
 ## Customer portal
 
-`/portal`: the customer enters their email and receives a one-time link (valid 15 minutes). The portal shows each subscription (modules, seats, status, paid-through date),
+`/portal`: the customer enters their email and receives a one-time link (valid 15 minutes). The portal shows each subscription (modules, seats and any per-module seats, status, paid-through date),
 downloads the **current** key (a fresh one if the entitlement changed since the last), and, for Stripe customers, opens Stripe's billing portal.
 The sign-in form answers the same whether or not the address is known.
 

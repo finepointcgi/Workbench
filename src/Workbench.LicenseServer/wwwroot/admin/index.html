@@ -24,7 +24,7 @@ pre{white-space:pre-wrap;word-break:break-all;background:var(--bg);padding:.6rem
 <section><h2>Subscription</h2>
 <form onsubmit="return act(event,'POST','/customers/'+v('sCust')+'/subscriptions',{modules:mods('sMods'),seats:+v('sSeats'),lightSeats:+v('sLight'),termMonths:+v('sMonths'),trial:c('sTrial')})">
 <label>Customer <select id="sCust"></select></label>
-<label>Modules <input id="sMods" placeholder="finance,capture" size="24"></label>
+<label>Modules <input id="sMods" placeholder="billing,accounting" size="24"></label>
 <label>Seats <input id="sSeats" type="number" min="0" value="10" style="width:5rem"></label>
 <label>Light <input id="sLight" type="number" min="0" value="0" style="width:5rem"></label>
 <label>Months <input id="sMonths" type="number" min="1" value="12" style="width:5rem"></label>
@@ -36,7 +36,7 @@ pre{white-space:pre-wrap;word-break:break-all;background:var(--bg);padding:.6rem
 
 <section><h2>Offline key (air-gapped)</h2>
 <form onsubmit="return act(event,'POST','/licenses/offline',{customerId:v('oCust'),modules:mods('oMods'),seats:+v('oSeats'),lightSeats:+v('oLight'),days:+v('oDays')})">
-<label>Customer <select id="oCust"></select></label><label>Modules <input id="oMods" placeholder="govcon,finance" size="24"></label>
+<label>Customer <select id="oCust"></select></label><label>Modules <input id="oMods" placeholder="govcon,enterprise" size="24"></label>
 <label>Seats <input id="oSeats" type="number" min="0" value="25" style="width:5rem"></label><label>Light <input id="oLight" type="number" min="0" value="0" style="width:5rem"></label>
 <label>Days <input id="oDays" type="number" min="1" value="365" style="width:5rem"></label><button>Issue key</button></form></section>
 

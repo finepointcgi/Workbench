@@ -39,6 +39,7 @@ public abstract class LicenseDb(DbContextOptions options) : DbContext(options)
         m.Entity<Subscription>(e =>
         {
             e.Property(x => x.Modules).HasMaxLength(200);
+            e.Property(x => x.ModuleSeats).HasMaxLength(400);
             e.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
             e.Property(x => x.Source).HasMaxLength(20);
             e.Property(x => x.StripeSubscriptionId).HasMaxLength(100);
@@ -51,6 +52,7 @@ public abstract class LicenseDb(DbContextOptions options) : DbContext(options)
         {
             e.Property(x => x.Licensee).HasMaxLength(200);
             e.Property(x => x.Modules).HasMaxLength(200);
+            e.Property(x => x.ModuleSeats).HasMaxLength(400);
             e.Property(x => x.Kind).HasConversion<string>().HasMaxLength(20);
             e.Property(x => x.RevokedReason).HasMaxLength(500);
             e.HasIndex(x => x.CustomerId);
@@ -62,6 +64,7 @@ public abstract class LicenseDb(DbContextOptions options) : DbContext(options)
             e.Property(x => x.Reason).HasMaxLength(200);
             e.Property(x => x.IssuedBy).HasMaxLength(20);
             e.Property(x => x.Modules).HasMaxLength(200);
+            e.Property(x => x.ModuleSeats).HasMaxLength(400);
             e.Property(x => x.Key).HasMaxLength(4000);
             e.HasIndex(x => new { x.LicenseId, x.IssuedUtc });
             e.HasOne<License>().WithMany().HasForeignKey(x => x.LicenseId).OnDelete(DeleteBehavior.Restrict);

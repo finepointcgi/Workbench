@@ -31,7 +31,7 @@ public class PortalTests
     public async Task Sign_in_by_link_shows_the_subscription_and_downloads_a_valid_key()
     {
         using var server = new TestServer();
-        var (_, _, licenseId, _) = await server.NewSubscriptionAsync(["finance", "capture"], seats: 15, name: "Portal Co", email: "boss@portal.test");
+        var (_, _, licenseId, _) = await server.NewSubscriptionAsync(["billing", "capture"], seats: 15, name: "Portal Co", email: "boss@portal.test");
         var (c, cookie) = await SignInAsync(server, "Boss@Portal.test");
 
         var page = await (await c.SendAsync(With(cookie, HttpMethod.Get, "/portal"))).Content.ReadAsStringAsync();
@@ -50,8 +50,8 @@ public class PortalTests
     public async Task The_portal_needs_a_session_and_hides_other_customers()
     {
         using var server = new TestServer();
-        var (_, _, licenseId, _) = await server.NewSubscriptionAsync(["finance"], email: "a@one.test");
-        await server.NewSubscriptionAsync(["finance"], name: "Other", email: "b@two.test");
+        var (_, _, licenseId, _) = await server.NewSubscriptionAsync(["billing"], email: "a@one.test");
+        await server.NewSubscriptionAsync(["billing"], name: "Other", email: "b@two.test");
 
         var anon = server.Plain();
         Assert.Contains("Email me a link", await anon.GetStringAsync("/portal"));
@@ -76,7 +76,7 @@ public class PortalTests
     public async Task A_stripe_customer_can_open_the_billing_portal_to_change_seats()
     {
         using var server = new TestServer();
-        server.Stripe.Subscriptions["sub_1"] = new("sub_1", "cus_1", "active", DateTime.UtcNow, DateTime.UtcNow.AddMonths(1), false, [new(TestServer.SeatPrice, 5), new(TestServer.FinancePrice, 1)]);
+        server.Stripe.Subscriptions["sub_1"] = new("sub_1", "cus_1", "active", DateTime.UtcNow, DateTime.UtcNow.AddMonths(1), false, [new(TestServer.SeatPrice, 5), new(TestServer.BillingPrice, 1)]);
         var payload = System.Text.Json.JsonSerializer.Serialize(new { id = "evt_1", type = "checkout.session.completed", data = new { @object = new { mode = "subscription", subscription = "sub_1", customer = "cus_1", customer_details = new { email = "pay@stripe.test", name = "Stripe Co" } } } });
         var hook = new HttpRequestMessage(HttpMethod.Post, "/stripe/webhook") { Content = new StringContent(payload) };
         hook.Headers.Add("Stripe-Signature", Stripe.StripeSignature.Header(payload, TestServer.WebhookSecret, DateTimeOffset.UtcNow));

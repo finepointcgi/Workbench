@@ -8,7 +8,11 @@ namespace Workbench.LicenseServer.Endpoints;
 public sealed record ConnectedRequest(Guid LicenseId, string InstallId, int SeatsInUse = 0, int LightSeatsInUse = 0, string? Version = null);
 
 /// <summary>What a connected install gets back: a fresh short-lived key and when to ask again.</summary>
-public sealed record ConnectedResponse(string Key, DateOnly Expires, DateOnly RefreshAfter, string[] Modules, int Seats, int LightSeats, bool Trial, string[] Warnings);
+public sealed record ConnectedResponse(string Key, DateOnly Expires, DateOnly RefreshAfter, string[] Modules, int Seats, int LightSeats, bool Trial, string[] Warnings)
+{
+    /// <summary>Seats of the modules whose seats differ from <see cref="Seats"/>; empty when none do.</summary>
+    public IReadOnlyDictionary<string, int> ModuleSeats { get; init; } = new Dictionary<string, int>();
+}
 
 public static class ConnectedEndpoints
 {
@@ -65,6 +69,6 @@ public static class ConnectedEndpoints
         if (r.SeatsInUse > e.Seats) warnings.Add($"{r.SeatsInUse} full seats are in use but the license covers {e.Seats}.");
         if (r.LightSeatsInUse > e.LightSeats) warnings.Add($"{r.LightSeatsInUse} light seats are in use but the license covers {e.LightSeats}.");
         var refreshAfter = svc.Today.AddDays(Math.Max(1, keys.RefreshDays / 2));
-        return Results.Ok(new ConnectedResponse(svc.Sign(license, e), e.Expires, refreshAfter < e.Expires ? refreshAfter : e.Expires, e.Modules, e.Seats, e.LightSeats, e.Trial, [.. warnings]));
+        return Results.Ok(new ConnectedResponse(svc.Sign(license, e), e.Expires, refreshAfter < e.Expires ? refreshAfter : e.Expires, e.Modules, e.Seats, e.LightSeats, e.Trial, [.. warnings]) { ModuleSeats = e.ModuleSeats });
     }
 }

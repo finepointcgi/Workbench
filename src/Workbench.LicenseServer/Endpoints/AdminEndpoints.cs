@@ -9,10 +9,10 @@ using Workbench.LicenseServer.Mail;
 namespace Workbench.LicenseServer.Endpoints;
 
 public sealed record CreateCustomerRequest(string Name, string Email, string? Notes);
-public sealed record CreateSubscriptionRequest(string[] Modules, int Seats, int LightSeats = 0, DateOnly? TermStart = null, DateOnly? TermEnd = null, int? TermMonths = null, bool Trial = false);
-public sealed record UpdateSubscriptionRequest(string[]? Modules, int? Seats, int? LightSeats);
+public sealed record CreateSubscriptionRequest(string[] Modules, int Seats, int LightSeats = 0, DateOnly? TermStart = null, DateOnly? TermEnd = null, int? TermMonths = null, bool Trial = false, Dictionary<string, int>? ModuleSeats = null);
+public sealed record UpdateSubscriptionRequest(string[]? Modules, int? Seats, int? LightSeats, Dictionary<string, int>? ModuleSeats = null);
 public sealed record ExtendRequest(DateOnly? TermEnd = null, int? Months = null);
-public sealed record OfflineKeyRequest(Guid CustomerId, string[] Modules, int Seats, int LightSeats = 0, DateOnly? Expires = null, int? Days = null, bool Trial = false, string? Licensee = null);
+public sealed record OfflineKeyRequest(Guid CustomerId, string[] Modules, int Seats, int LightSeats = 0, DateOnly? Expires = null, int? Days = null, bool Trial = false, string? Licensee = null, Dictionary<string, int>? ModuleSeats = null);
 public sealed record RevokeRequest(string? Reason);
 public sealed record EmailKeyRequest(bool Email = false);
 
@@ -60,7 +60,7 @@ public static class AdminEndpoints
             var now = clock.GetUtcNow().UtcDateTime;
             var sub = new Subscription
             {
-                CustomerId = id, Modules = Modules.Join(modules), Seats = r.Seats, LightSeats = r.LightSeats, IsTrial = r.Trial, Source = "Manual",
+                CustomerId = id, Modules = Modules.Join(modules), Seats = r.Seats, LightSeats = r.LightSeats, ModuleSeats = Modules.JoinSeats(r.ModuleSeats), IsTrial = r.Trial, Source = "Manual",
                 Status = r.Trial ? SubscriptionStatus.Trialing : SubscriptionStatus.Active, CreatedUtc = now, UpdatedUtc = now,
                 TermStartUtc = start.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc), TermEndUtc = end.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc),
             };
@@ -78,6 +78,7 @@ public static class AdminEndpoints
             if (r.Modules != null) sub.Modules = Modules.Join(r.Modules);
             if (r.Seats is { } seats) sub.Seats = seats >= 0 ? seats : throw new ArgumentException("Seats can't be negative.");
             if (r.LightSeats is { } light) sub.LightSeats = light >= 0 ? light : throw new ArgumentException("Light seats can't be negative.");
+            if (r.ModuleSeats != null) sub.ModuleSeats = Modules.JoinSeats(r.ModuleSeats);
             sub.UpdatedUtc = clock.GetUtcNow().UtcDateTime;
             await db.SaveChangesAsync();
             return Results.Ok(await ReissueAsync(sub, "Entitlements changed", db, svc));
@@ -131,7 +132,7 @@ public static class AdminEndpoints
             var license = new License
             {
                 CustomerId = customer.Id, Kind = LicenseKind.Offline, Licensee = string.IsNullOrWhiteSpace(r.Licensee) ? customer.Name : r.Licensee.Trim(),
-                Modules = Modules.Join(r.Modules), Seats = r.Seats, LightSeats = r.LightSeats, IsTrial = r.Trial,
+                Modules = Modules.Join(r.Modules), Seats = r.Seats, LightSeats = r.LightSeats, ModuleSeats = Modules.JoinSeats(r.ModuleSeats), IsTrial = r.Trial,
                 ExpiresOn = expires.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc), CreatedUtc = clock.GetUtcNow().UtcDateTime,
             };
             db.Licenses.Add(license);
@@ -164,7 +165,7 @@ public static class AdminEndpoints
 
         admin.MapGet("/history", async (LicenseDb db) =>
             (await db.IssuedKeys.AsNoTracking().ToListAsync()).OrderByDescending(k => k.IssuedUtc).Take(200)
-                .Select(k => new { k.Id, k.LicenseId, k.Reason, k.IssuedBy, k.Modules, k.Seats, k.LightSeats, k.IsTrial, k.ExpiresOn, k.IssuedUtc }));
+                .Select(k => new { k.Id, k.LicenseId, k.Reason, k.IssuedBy, k.Modules, k.Seats, k.LightSeats, k.ModuleSeats, k.IsTrial, k.ExpiresOn, k.IssuedUtc }));
 
         admin.MapGet("/revocations", async (LicenseDb db) =>
             (await db.Licenses.AsNoTracking().Where(l => l.RevokedUtc != null).ToListAsync()).Select(l => new { licenseId = l.Id, l.RevokedUtc, l.RevokedReason }));

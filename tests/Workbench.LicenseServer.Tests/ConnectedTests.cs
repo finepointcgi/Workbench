@@ -15,7 +15,7 @@ public class ConnectedTests
     public async Task Activate_and_refresh_return_a_short_lived_key_and_record_the_install()
     {
         using var server = new TestServer();
-        var (_, _, licenseId, portalKey) = await server.NewSubscriptionAsync(["finance"], seats: 10, light: 2);
+        var (_, _, licenseId, portalKey) = await server.NewSubscriptionAsync(["billing"], seats: 10, light: 2);
         var c = server.CreateClient();
 
         var act = await c.PostAsJsonAsync("/v1/activate", new { licenseId, installId = "prod-1", seatsInUse = 7, lightSeatsInUse = 1, version = "1.4.0" });
@@ -23,7 +23,7 @@ public class ConnectedTests
         var body = await ReadAsync(act);
         Assert.True(Wb2Verifier.TryVerify(body.GetProperty("key").GetString(), server.PublicKeyPem, out var claims));
         Assert.Equal(licenseId, claims!.LicenseId);
-        Assert.Equal(["finance"], claims.Modules);
+        Assert.Equal(["billing"], claims.Modules);
         Assert.Equal(2, claims.LightSeats);
         Assert.Equal(claims.IssuedAt.AddDays(14), claims.Expires);   // short-lived
         Assert.True(Wb2Verifier.TryVerify(portalKey, server.PublicKeyPem, out var longer));
@@ -45,7 +45,7 @@ public class ConnectedTests
     public async Task A_refresh_picks_up_a_seat_change_straight_away()
     {
         using var server = new TestServer();
-        var (_, subId, licenseId, _) = await server.NewSubscriptionAsync(["finance"], seats: 10);
+        var (_, subId, licenseId, _) = await server.NewSubscriptionAsync(["billing"], seats: 10);
         var c = server.CreateClient();
         await c.PostAsJsonAsync("/v1/activate", new { licenseId, installId = "i1" });
         await server.Admin().PatchAsJsonAsync($"/admin/api/subscriptions/{subId}", new { seats = 50 });
@@ -57,7 +57,7 @@ public class ConnectedTests
     public async Task Refresh_without_activation_and_unknown_licenses_are_404()
     {
         using var server = new TestServer();
-        var (_, _, licenseId, _) = await server.NewSubscriptionAsync(["finance"]);
+        var (_, _, licenseId, _) = await server.NewSubscriptionAsync(["billing"]);
         var c = server.CreateClient();
         var r = await c.PostAsJsonAsync("/v1/refresh", new { licenseId, installId = "never-activated" });
         Assert.Equal(HttpStatusCode.NotFound, r.StatusCode);
@@ -70,7 +70,7 @@ public class ConnectedTests
     public async Task A_lapsed_or_canceled_subscription_gets_402_with_a_reason()
     {
         using var server = new TestServer();
-        var (_, subId, licenseId, _) = await server.NewSubscriptionAsync(["finance"]);
+        var (_, subId, licenseId, _) = await server.NewSubscriptionAsync(["billing"]);
         var c = server.CreateClient();
         Assert.Equal(HttpStatusCode.OK, (await c.PostAsJsonAsync("/v1/activate", new { licenseId, installId = "i1" })).StatusCode);
 
@@ -94,7 +94,7 @@ public class ConnectedTests
     public async Task A_revoked_license_is_refused()
     {
         using var server = new TestServer();
-        var (_, _, licenseId, _) = await server.NewSubscriptionAsync(["finance"]);
+        var (_, _, licenseId, _) = await server.NewSubscriptionAsync(["billing"]);
         var c = server.CreateClient();
         await c.PostAsJsonAsync("/v1/activate", new { licenseId, installId = "i1" });
         await server.Admin().PostAsJsonAsync($"/admin/api/licenses/{licenseId}/revoke", new { reason = "fraud" });
@@ -107,7 +107,7 @@ public class ConnectedTests
     public async Task Installs_are_capped_but_the_same_install_can_reactivate()
     {
         using var server = new TestServer(new() { ["Keys:MaxInstalls"] = "2" });
-        var (_, _, licenseId, _) = await server.NewSubscriptionAsync(["finance"]);
+        var (_, _, licenseId, _) = await server.NewSubscriptionAsync(["billing"]);
         var c = server.CreateClient();
         Assert.Equal(HttpStatusCode.OK, (await c.PostAsJsonAsync("/v1/activate", new { licenseId, installId = "a" })).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await c.PostAsJsonAsync("/v1/activate", new { licenseId, installId = "b" })).StatusCode);
@@ -134,5 +134,20 @@ public class ConnectedTests
         var s = await db.Subscriptions.SingleAsync(x => x.Id == subId);
         edit(s);
         await db.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task A_refresh_carries_per_module_seats_into_the_key_and_the_response()
+    {
+        using var server = new TestServer();
+        var (_, subId, licenseId, _) = await server.NewSubscriptionAsync(["billing", "accounting"], seats: 25);
+        var c = server.CreateClient();
+        await c.PostAsJsonAsync("/v1/activate", new { licenseId, installId = "i1" });
+        await server.Admin().PatchAsJsonAsync($"/admin/api/subscriptions/{subId}", new { moduleSeats = new Dictionary<string, int> { ["accounting"] = 10, ["billing"] = 25 } });
+        var body = await ReadAsync(await c.PostAsJsonAsync("/v1/refresh", new { licenseId, installId = "i1" }));
+        Assert.Equal(10, body.GetProperty("moduleSeats").GetProperty("accounting").GetInt32());
+        Assert.False(body.GetProperty("moduleSeats").TryGetProperty("billing", out _)); // equal to seats: not listed
+        Assert.True(Wb2Verifier.TryVerify(body.GetProperty("key").GetString(), server.PublicKeyPem, out var claims));
+        Assert.Equal(new Dictionary<string, int> { ["accounting"] = 10 }, claims!.ModuleSeats);
     }
 }

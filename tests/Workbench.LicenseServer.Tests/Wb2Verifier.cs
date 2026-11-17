@@ -3,7 +3,11 @@ using System.Text.Json;
 
 namespace Workbench.LicenseServer.Tests;
 
-public sealed record Wb2Claims(int V, Guid LicenseId, string Licensee, DateOnly IssuedAt, DateOnly Expires, int Seats, int LightSeats, string[] Modules, bool Trial);
+public sealed record Wb2Claims(int V, Guid LicenseId, string Licensee, DateOnly IssuedAt, DateOnly Expires, int Seats, int LightSeats, string[] Modules, bool Trial)
+{
+    /// <summary>The optional <c>moduleSeats</c> member (module id to seats); empty when absent.</summary>
+    public Dictionary<string, int> ModuleSeats { get; init; } = [];
+}
 
 /// <summary>
 /// An independent reader of the WB2 format, written from the spec only (not from the server's code): this is the shape the in-product
@@ -28,7 +32,11 @@ public static class Wb2Verifier
             claims = new Wb2Claims(r.GetProperty("v").GetInt32(), Guid.Parse(r.GetProperty("licenseId").GetString()!), r.GetProperty("licensee").GetString()!,
                 DateOnly.Parse(r.GetProperty("issuedAt").GetString()!), DateOnly.Parse(r.GetProperty("expires").GetString()!),
                 r.GetProperty("seats").GetInt32(), r.GetProperty("lightSeats").GetInt32(),
-                r.GetProperty("modules").EnumerateArray().Select(m => m.GetString()!).ToArray(), r.GetProperty("trial").GetBoolean());
+                r.GetProperty("modules").EnumerateArray().Select(m => m.GetString()!).ToArray(), r.GetProperty("trial").GetBoolean())
+            {
+                ModuleSeats = r.TryGetProperty("moduleSeats", out var ms) && ms.ValueKind == JsonValueKind.Object
+                    ? ms.EnumerateObject().Where(p => p.Value.ValueKind == JsonValueKind.Number).ToDictionary(p => p.Name, p => p.Value.GetInt32()) : [],
+            };
             return true;
         }
         catch (Exception ex) when (ex is FormatException or JsonException or CryptographicException or KeyNotFoundException or InvalidOperationException)

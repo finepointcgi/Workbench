@@ -5,7 +5,8 @@ using Microsoft.Extensions.Options;
 namespace Workbench.LicenseServer.Licensing;
 
 /// <summary>What goes into a WB2 key. <see cref="Modules"/> are normalized (core is implied).</summary>
-public sealed record KeyClaims(Guid LicenseId, string Licensee, DateOnly IssuedAt, DateOnly Expires, int Seats, int LightSeats, string[] Modules, bool Trial);
+public sealed record KeyClaims(Guid LicenseId, string Licensee, DateOnly IssuedAt, DateOnly Expires, int Seats, int LightSeats, string[] Modules, bool Trial,
+    IReadOnlyDictionary<string, int>? ModuleSeats = null);
 
 /// <summary>
 /// Signs <c>WB2.&lt;base64url(payload JSON)&gt;.&lt;base64url(signature)&gt;</c>: ECDSA P-256 over the exact payload bytes, SHA-256, IEEE P1363
@@ -36,7 +37,11 @@ public sealed class LicenseSigner : ILicenseSigner, IDisposable
 
     public string PublicKeyPem { get; }
 
-    public string Sign(KeyClaims c)
+    /// <summary>
+    /// The payload JSON, signed as written. <c>moduleSeats</c> is emitted only for modules in the key whose seats differ from <c>seats</c>,
+    /// and not at all when there are none, so a key without per-module seats is byte-for-byte what it was before.
+    /// </summary>
+    public static byte[] BuildPayload(KeyClaims c)
     {
         var buffer = new MemoryStream();
         using (var json = new Utf8JsonWriter(buffer))
@@ -52,11 +57,24 @@ public sealed class LicenseSigner : ILicenseSigner, IDisposable
             json.WriteStartArray("modules");
             foreach (var m in Modules.Normalize(c.Modules)) json.WriteStringValue(m);
             json.WriteEndArray();
+            var included = Modules.Normalize(c.Modules);
+            var differing = (c.ModuleSeats ?? new Dictionary<string, int>()).Where(kv => included.Contains(kv.Key) && kv.Value != c.Seats).OrderBy(kv => kv.Key, StringComparer.Ordinal).ToList();
+            if (differing.Count > 0)
+            {
+                json.WriteStartObject("moduleSeats");
+                foreach (var (module, seats) in differing) json.WriteNumber(module, seats);
+                json.WriteEndObject();
+            }
             json.WriteBoolean("trial", c.Trial);
             json.WriteEndObject();
         }
 
-        var payload = buffer.ToArray();
+        return buffer.ToArray();
+    }
+
+    public string Sign(KeyClaims c)
+    {
+        var payload = BuildPayload(c);
         var sig = _key.SignData(payload, HashAlgorithmName.SHA256, DSASignatureFormat.IeeeP1363FixedFieldConcatenation);
         return $"WB2.{B64(payload)}.{B64(sig)}";
     }

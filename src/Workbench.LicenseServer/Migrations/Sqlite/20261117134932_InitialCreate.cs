@@ -53,6 +53,7 @@ namespace Workbench.LicenseServer.Migrations.Sqlite
                     Modules = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
                     Seats = table.Column<int>(type: "INTEGER", nullable: false),
                     LightSeats = table.Column<int>(type: "INTEGER", nullable: false),
+                    ModuleSeats = table.Column<string>(type: "TEXT", maxLength: 400, nullable: false),
                     IsTrial = table.Column<bool>(type: "INTEGER", nullable: false),
                     ExpiresOn = table.Column<DateTime>(type: "TEXT", nullable: true),
                     CreatedUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
@@ -100,6 +101,7 @@ namespace Workbench.LicenseServer.Migrations.Sqlite
                     Modules = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
                     Seats = table.Column<int>(type: "INTEGER", nullable: false),
                     LightSeats = table.Column<int>(type: "INTEGER", nullable: false),
+                    ModuleSeats = table.Column<string>(type: "TEXT", maxLength: 400, nullable: false),
                     Status = table.Column<string>(type: "TEXT", maxLength: 20, nullable: false),
                     IsTrial = table.Column<bool>(type: "INTEGER", nullable: false),
                     TermStartUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
@@ -159,6 +161,7 @@ namespace Workbench.LicenseServer.Migrations.Sqlite
                     Modules = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
                     Seats = table.Column<int>(type: "INTEGER", nullable: false),
                     LightSeats = table.Column<int>(type: "INTEGER", nullable: false),
+                    ModuleSeats = table.Column<string>(type: "TEXT", maxLength: 400, nullable: false),
                     IsTrial = table.Column<bool>(type: "INTEGER", nullable: false),
                     ExpiresOn = table.Column<DateTime>(type: "TEXT", nullable: false),
                     IssuedUtc = table.Column<DateTime>(type: "TEXT", nullable: false)

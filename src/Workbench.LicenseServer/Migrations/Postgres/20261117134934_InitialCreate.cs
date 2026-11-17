@@ -53,6 +53,7 @@ namespace Workbench.LicenseServer.Migrations.Postgres
                     Modules = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
                     Seats = table.Column<int>(type: "integer", nullable: false),
                     LightSeats = table.Column<int>(type: "integer", nullable: false),
+                    ModuleSeats = table.Column<string>(type: "character varying(400)", maxLength: 400, nullable: false),
                     IsTrial = table.Column<bool>(type: "boolean", nullable: false),
                     ExpiresOn = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     CreatedUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
@@ -100,6 +101,7 @@ namespace Workbench.LicenseServer.Migrations.Postgres
                     Modules = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
                     Seats = table.Column<int>(type: "integer", nullable: false),
                     LightSeats = table.Column<int>(type: "integer", nullable: false),
+                    ModuleSeats = table.Column<string>(type: "character varying(400)", maxLength: 400, nullable: false),
                     Status = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
                     IsTrial = table.Column<bool>(type: "boolean", nullable: false),
                     TermStartUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
@@ -159,6 +161,7 @@ namespace Workbench.LicenseServer.Migrations.Postgres
                     Modules = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false),
                     Seats = table.Column<int>(type: "integer", nullable: false),
                     LightSeats = table.Column<int>(type: "integer", nullable: false),
+                    ModuleSeats = table.Column<string>(type: "character varying(400)", maxLength: 400, nullable: false),
                     IsTrial = table.Column<bool>(type: "boolean", nullable: false),
                     ExpiresOn = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     IssuedUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)

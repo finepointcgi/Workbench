@@ -107,10 +107,11 @@ public sealed class StripeWebhookHandler(LicenseDb db, LicenseService licenses, 
             db.Subscriptions.Add(sub);
         }
 
-        var before = (sub.Modules, sub.Seats, sub.LightSeats, sub.TermEndUtc, sub.Status);
+        var before = (sub.Modules, sub.Seats, sub.LightSeats, sub.ModuleSeats, sub.TermEndUtc, sub.Status);
         sub.Modules = Modules.Join(grant.Modules);
         sub.Seats = grant.Seats;
         sub.LightSeats = grant.LightSeats;
+        sub.ModuleSeats = Modules.JoinSeats(grant.ModuleSeats);
         sub.Status = status.Value;
         sub.IsTrial = status == SubscriptionStatus.Trialing;
         sub.CancelAtPeriodEnd = s.CancelAtPeriodEnd;
@@ -120,7 +121,7 @@ public sealed class StripeWebhookHandler(LicenseDb db, LicenseService licenses, 
         await db.SaveChangesAsync(ct);
 
         var license = await licenses.EnsureSubscriptionLicenseAsync(sub, ct);
-        if (!isNew && before == (sub.Modules, sub.Seats, sub.LightSeats, sub.TermEndUtc, sub.Status)) return "no entitlement change";
+        if (!isNew && before == (sub.Modules, sub.Seats, sub.LightSeats, sub.ModuleSeats, sub.TermEndUtc, sub.Status)) return "no entitlement change";
         if (sub.Status == SubscriptionStatus.Canceled) return "canceled";
 
         var key = await licenses.IssueAsync(license, isNew ? "Stripe: new subscription" : "Stripe: subscription changed", "stripe", ct);
@@ -151,10 +152,15 @@ public sealed class StripeWebhookHandler(LicenseDb db, LicenseService licenses, 
         return c;
     }
 
-    /// <summary>Adds up what the subscription's prices grant; null when none of them are configured.</summary>
-    private (string[] Modules, int Seats, int LightSeats)? Map(IReadOnlyList<StripeItem> items)
+    /// <summary>
+    /// Adds up what the subscription's prices grant; null when none of them are configured. Seats are the base for every module;
+    /// a <c>ModuleSeats</c> price sets the seats of just its modules (quantity x SeatsPerUnit, summed across prices). When no price
+    /// grants base seats, they are the largest per-module count, so <c>seats</c> is never below what any module has.
+    /// </summary>
+    private (string[] Modules, int Seats, int LightSeats, SortedDictionary<string, int> ModuleSeats)? Map(IReadOnlyList<StripeItem> items)
     {
         var modules = new List<string>();
+        var perModule = new Dictionary<string, int>();
         int seats = 0, light = 0;
         var any = false;
         foreach (var it in items)
@@ -165,9 +171,14 @@ public sealed class StripeWebhookHandler(LicenseDb db, LicenseService licenses, 
             {
                 case "seats": seats += it.Quantity * m.SeatsPerUnit; break;
                 case "lightseats": light += it.Quantity * m.SeatsPerUnit; break;
+                case "moduleseats":
+                    foreach (var id in Modules.Normalize(m.Modules)) { modules.Add(id); perModule[id] = perModule.GetValueOrDefault(id) + it.Quantity * m.SeatsPerUnit; }
+                    break;
                 default: modules.AddRange(m.Modules); seats += m.IncludedSeats; light += m.IncludedLightSeats; break;
             }
         }
-        return any ? (Modules.Normalize(modules), seats, light) : null;
+        if (!any) return null;
+        if (seats == 0 && perModule.Count > 0) seats = perModule.Values.Max();
+        return (Modules.Normalize(modules), seats, light, Modules.NormalizeSeats(perModule.Where(kv => kv.Value != seats)));
     }
 }

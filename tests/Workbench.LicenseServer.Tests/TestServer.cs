@@ -38,7 +38,9 @@ public sealed class TestServer : WebApplicationFactory<Program>
     public const string WebhookSecret = "whsec_test_secret";
     public const string SeatPrice = "price_seat";
     public const string LightPrice = "price_light";
-    public const string FinancePrice = "price_finance";
+    public const string BillingPrice = "price_billing";
+    public const string AccountingSeatsPrice = "price_accounting_seats";
+    public const string CaptureSeatsPrice = "price_capture_seats";
     public const string BundlePrice = "price_govcon_bundle";
 
     private readonly string? _sqlitePath;
@@ -81,11 +83,15 @@ public sealed class TestServer : WebApplicationFactory<Program>
             ["Stripe:WebhookSecret"] = WebhookSecret,
             [$"Stripe:Prices:{SeatPrice}:Role"] = "Seats",
             [$"Stripe:Prices:{LightPrice}:Role"] = "LightSeats",
-            [$"Stripe:Prices:{FinancePrice}:Role"] = "Modules",
-            [$"Stripe:Prices:{FinancePrice}:Modules:0"] = "finance",
+            [$"Stripe:Prices:{BillingPrice}:Role"] = "Modules",
+            [$"Stripe:Prices:{BillingPrice}:Modules:0"] = "billing",
+            [$"Stripe:Prices:{AccountingSeatsPrice}:Role"] = "ModuleSeats",
+            [$"Stripe:Prices:{AccountingSeatsPrice}:Modules:0"] = "accounting",
+            [$"Stripe:Prices:{CaptureSeatsPrice}:Role"] = "ModuleSeats",
+            [$"Stripe:Prices:{CaptureSeatsPrice}:Modules:0"] = "capture",
             [$"Stripe:Prices:{BundlePrice}:Role"] = "Modules",
             [$"Stripe:Prices:{BundlePrice}:Modules:0"] = "govcon",
-            [$"Stripe:Prices:{BundlePrice}:Modules:1"] = "controls",
+            [$"Stripe:Prices:{BundlePrice}:Modules:1"] = "enterprise",
             [$"Stripe:Prices:{BundlePrice}:IncludedSeats"] = "5",
             ["Portal:PublicBaseUrl"] = "https://license.test",
             ["Database:Provider"] = _pgDb != null ? "PostgreSql" : "Sqlite",

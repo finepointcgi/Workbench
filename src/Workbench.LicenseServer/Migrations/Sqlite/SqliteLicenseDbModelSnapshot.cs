@@ -126,6 +126,11 @@ namespace Workbench.LicenseServer.Migrations.Sqlite
                     b.Property<int>("LightSeats")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("ModuleSeats")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Modules")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -176,6 +181,11 @@ namespace Workbench.LicenseServer.Migrations.Sqlite
 
                     b.Property<int>("LightSeats")
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("ModuleSeats")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Modules")
                         .IsRequired()
@@ -278,6 +288,11 @@ namespace Workbench.LicenseServer.Migrations.Sqlite
 
                     b.Property<int>("LightSeats")
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("ModuleSeats")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Modules")
                         .IsRequired()

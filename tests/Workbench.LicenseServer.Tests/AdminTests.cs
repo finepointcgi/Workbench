@@ -35,19 +35,19 @@ public class AdminTests
     {
         using var server = new TestServer();
         var admin = server.Admin();
-        var (customerId, subId, licenseId, _) = await server.NewSubscriptionAsync(["finance"], months: 6);
+        var (customerId, subId, licenseId, _) = await server.NewSubscriptionAsync(["billing"], months: 6);
 
         var dup = await admin.PostAsJsonAsync("/admin/api/customers", new { name = "Again", email = "OPS@acme.test" });
         Assert.Equal(HttpStatusCode.Conflict, dup.StatusCode);
         var bad = await admin.PostAsJsonAsync($"/admin/api/customers/{customerId}/subscriptions", new { modules = new[] { "payroll" }, seats = 1 });
         Assert.Equal(HttpStatusCode.BadRequest, bad.StatusCode);
 
-        var changed = await admin.PatchAsJsonAsync($"/admin/api/subscriptions/{subId}", new { seats = 25, modules = new[] { "finance", "capture" } });
+        var changed = await admin.PatchAsJsonAsync($"/admin/api/subscriptions/{subId}", new { seats = 25, modules = new[] { "billing", "capture" } });
         Assert.Equal(HttpStatusCode.OK, changed.StatusCode);
         var extended = await server.PostAsync(admin, $"/admin/api/subscriptions/{subId}/extend", new { months = 12 });
         Assert.True(Wb2Verifier.TryVerify(extended.GetProperty("key").GetString(), server.PublicKeyPem, out var claims));
         Assert.Equal(25, claims!.Seats);
-        Assert.Equal(["capture", "finance"], claims.Modules);
+        Assert.Equal(["billing", "capture"], claims.Modules);
         Assert.True(claims.Expires > claims.IssuedAt.AddMonths(17));
 
         var history = JsonDocument.Parse(await admin.GetStringAsync($"/admin/api/licenses/{licenseId}/history")).RootElement;
@@ -65,7 +65,7 @@ public class AdminTests
         var admin = server.Admin();
         var customer = await server.PostAsync(admin, "/admin/api/customers", new { name = "Fort Secure", email = "it@fort.test" });
         var offline = await server.PostAsync(admin, "/admin/api/licenses/offline",
-            new { customerId = customer.GetProperty("id").GetGuid(), modules = new[] { "govcon", "controls" }, seats = 40, days = 365 });
+            new { customerId = customer.GetProperty("id").GetGuid(), modules = new[] { "govcon", "enterprise" }, seats = 40, days = 365 });
         var licenseId = offline.GetProperty("licenseId").GetGuid();
         Assert.True(Wb2Verifier.TryVerify(offline.GetProperty("key").GetString(), server.PublicKeyPem, out var claims));
         Assert.Equal("Fort Secure", claims!.Licensee);

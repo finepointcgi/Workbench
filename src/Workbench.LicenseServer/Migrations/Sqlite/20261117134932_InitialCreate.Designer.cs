@@ -11,7 +11,7 @@ using Workbench.LicenseServer.Data;
 namespace Workbench.LicenseServer.Migrations.Sqlite
 {
     [DbContext(typeof(SqliteLicenseDb))]
-    [Migration("20261117033655_InitialCreate")]
+    [Migration("20261117134932_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -129,6 +129,11 @@ namespace Workbench.LicenseServer.Migrations.Sqlite
                     b.Property<int>("LightSeats")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("ModuleSeats")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Modules")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -179,6 +184,11 @@ namespace Workbench.LicenseServer.Migrations.Sqlite
 
                     b.Property<int>("LightSeats")
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("ModuleSeats")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Modules")
                         .IsRequired()
@@ -281,6 +291,11 @@ namespace Workbench.LicenseServer.Migrations.Sqlite
 
                     b.Property<int>("LightSeats")
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("ModuleSeats")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Modules")
                         .IsRequired()

@@ -23,7 +23,7 @@ public class StripeTests
 
     private static StripeSubscription Sub(string id, string status = "active", int seats = 10, DateTime? end = null, params string[] extraPrices)
     {
-        var items = new List<StripeItem> { new(TestServer.SeatPrice, seats), new(TestServer.FinancePrice, 1) };
+        var items = new List<StripeItem> { new(TestServer.SeatPrice, seats), new(TestServer.BillingPrice, 1) };
         items.AddRange(extraPrices.Select(p => new StripeItem(p, 1)));
         return new(id, "cus_1", status, DateTime.UtcNow.Date, end ?? DateTime.UtcNow.Date.AddMonths(1), false, items);
     }
@@ -73,7 +73,7 @@ public class StripeTests
         Assert.True(Wb2Verifier.TryVerify(key, server.PublicKeyPem, out var claims));
         Assert.Equal("Corp Inc", claims!.Licensee);
         Assert.Equal(13, claims.Seats); // 8 priced seats + 5 included in the bundle
-        Assert.Equal(["controls", "finance", "govcon"], claims.Modules);
+        Assert.Equal(["billing", "enterprise", "govcon"], claims.Modules);
         Assert.False(claims.Trial);
 
         await using var scope = server.Services.CreateAsyncScope();
@@ -146,7 +146,7 @@ public class StripeTests
         var sub = JsonDocument.Parse($$$"""
             {"id":"sub_9","customer":"cus_9","status":"active","cancel_at_period_end":false,
              "items":{"data":[{"price":{"id":"{{{TestServer.SeatPrice}}}"},"quantity":4,"current_period_start":{{{end - 2592000}}},"current_period_end":{{{end}}}},
-                              {"price":{"id":"{{{TestServer.FinancePrice}}}"},"quantity":1,"current_period_start":{{{end - 2592000}}},"current_period_end":{{{end}}}}]}}
+                              {"price":{"id":"{{{TestServer.BillingPrice}}}"},"quantity":1,"current_period_start":{{{end - 2592000}}},"current_period_end":{{{end}}}}]}}
             """).RootElement;
         var parsed = StripeSubscription.FromJson(sub);
         Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(end).UtcDateTime, parsed.PeriodEnd);
@@ -183,6 +183,32 @@ public class StripeTests
         var only = await db.Customers.SingleAsync();
         Assert.Equal(existing.GetProperty("id").GetGuid(), only.Id);
         Assert.Equal("cus_1", only.StripeCustomerId);
+    }
+
+    [Fact]
+    public async Task A_ModuleSeats_price_gives_just_that_module_its_own_seat_count()
+    {
+        using var server = new TestServer();
+        // 25 base seats, billing, plus accounting sold as 10 seats: accounting differs from seats, billing doesn't.
+        server.Stripe.Subscriptions["sub_1"] = new("sub_1", "cus_1", "active", DateTime.UtcNow.Date, DateTime.UtcNow.Date.AddMonths(1), false,
+            [new(TestServer.SeatPrice, 25), new(TestServer.BillingPrice, 1), new(TestServer.AccountingSeatsPrice, 10)]);
+        await SendAsync(server, Event("evt_1", "checkout.session.completed", Checkout()));
+        Assert.True(Wb2Verifier.TryVerify(Assert.Single(server.Mail.Sent).Body.Split('\n').Single(l => l.StartsWith("WB2.")), server.PublicKeyPem, out var claims));
+        Assert.Equal(25, claims!.Seats);
+        Assert.Equal(["accounting", "billing"], claims.Modules);
+        Assert.Equal(new Dictionary<string, int> { ["accounting"] = 10 }, claims.ModuleSeats);
+    }
+
+    [Fact]
+    public async Task Without_base_seats_the_largest_module_count_is_the_seats()
+    {
+        using var server = new TestServer();
+        server.Stripe.Subscriptions["sub_1"] = new("sub_1", "cus_1", "active", DateTime.UtcNow.Date, DateTime.UtcNow.Date.AddMonths(1), false,
+            [new(TestServer.AccountingSeatsPrice, 10), new(TestServer.CaptureSeatsPrice, 4)]);
+        await SendAsync(server, Event("evt_1", "checkout.session.completed", Checkout()));
+        Assert.True(Wb2Verifier.TryVerify(Assert.Single(server.Mail.Sent).Body.Split('\n').Single(l => l.StartsWith("WB2.")), server.PublicKeyPem, out var claims));
+        Assert.Equal(10, claims!.Seats);
+        Assert.Equal(new Dictionary<string, int> { ["capture"] = 4 }, claims.ModuleSeats);
     }
 
     private static object SubJson(StripeSubscription s) => new

@@ -32,7 +32,7 @@ public static class PortalEndpoints
             {
                 var lic = licenses.FirstOrDefault(l => l.SubscriptionId == s.Id);
                 sb.Append($"<div class=card><b>{E(string.IsNullOrEmpty(s.Modules) ? "Core" : "Core + " + s.Modules.Replace(",", ", "))}</b> <span class=pill>{s.Status}{(s.IsTrial ? " (trial)" : "")}</span>");
-                sb.Append($"<br>{s.Seats} full seats, {s.LightSeats} light seats<br>Paid through {s.TermEndUtc:yyyy-MM-dd}{(s.CancelAtPeriodEnd ? " (ends then)" : "")}");
+                sb.Append($"<br>{s.Seats} full seats, {s.LightSeats} light seats{E(PerModule(s.ModuleSeats))}<br>Paid through {s.TermEndUtc:yyyy-MM-dd}{(s.CancelAtPeriodEnd ? " (ends then)" : "")}");
                 if (lic != null && lic.RevokedUtc == null && s.Status != SubscriptionStatus.Canceled)
                     sb.Append($"<br><a class=btn href=\"/portal/key/{lic.Id}\">Download current key</a>");
                 sb.Append("</div>");
@@ -131,6 +131,9 @@ public static class PortalEndpoints
         }
         catch (CryptographicException) { return null; }
     }
+
+    private static string PerModule(string stored) =>
+        Modules.ParseSeats(stored) is { Count: > 0 } m ? " (" + string.Join(", ", m.Select(kv => $"{kv.Key}: {kv.Value}")) + ")" : "";
 
     private static string Hash(string token) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
     private static string Base64Url(byte[] b) => Convert.ToBase64String(b).TrimEnd('=').Replace('+', '-').Replace('/', '_');

@@ -21,6 +21,8 @@ public sealed class Subscription
     public string Modules { get; set; } = "";
     public int Seats { get; set; }
     public int LightSeats { get; set; }
+    /// <summary>Per-module seats that differ from <see cref="Seats"/>, as <c>accounting=10,billing=5</c>. Empty: every module has <see cref="Seats"/>.</summary>
+    public string ModuleSeats { get; set; } = "";
     public SubscriptionStatus Status { get; set; } = SubscriptionStatus.Active;
     public bool IsTrial { get; set; }
     public DateTime TermStartUtc { get; set; }
@@ -54,6 +56,7 @@ public sealed class License
     public string Modules { get; set; } = "";
     public int Seats { get; set; }
     public int LightSeats { get; set; }
+    public string ModuleSeats { get; set; } = "";
     public bool IsTrial { get; set; }
     public DateTime? ExpiresOn { get; set; }
     public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
@@ -73,6 +76,7 @@ public sealed class IssuedKey
     public string Modules { get; set; } = "";
     public int Seats { get; set; }
     public int LightSeats { get; set; }
+    public string ModuleSeats { get; set; } = "";
     public bool IsTrial { get; set; }
     public DateTime ExpiresOn { get; set; }
     public DateTime IssuedUtc { get; set; } = DateTime.UtcNow;
