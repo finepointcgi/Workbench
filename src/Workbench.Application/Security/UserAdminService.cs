@@ -184,7 +184,7 @@ public sealed class InviteService(
             throw new ArgumentException($"{email} already has an account. Change their roles or reactivate them instead.", nameof(request));
         }
 
-        await editions.RequireFreeSeatAsync(db, cancellationToken);
+        await editions.RequireFreeSeatAsync(db, await Licensing.EditionService.IsLightGrantAsync(db, request.Roles, request.CustomRoleIds ?? [], cancellationToken), cancellationToken);
 
         // One pending invite per email: a new one replaces the old.
         var pending = await db.Set<UserInvite>()

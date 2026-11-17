@@ -16,10 +16,20 @@ public enum EditionSource
     Configuration,
 }
 
-public sealed record FeatureStatusDto(string Key, string Name, string Description, bool Included);
+public sealed record FeatureStatusDto(string Key, string Name, string Description, bool Included, string Module = "");
 
-/// <param name="SeatLimit">Null when seats aren't limited.</param>
-/// <param name="SeatsUsed">Active people. Everyone who can sign in takes a seat; API keys do not.</param>
+/// <param name="Id">The module id: <c>core</c>, <c>finance</c>, <c>capture</c>, <c>workforce</c>, <c>controls</c>, <c>govcon</c> or <c>enterprise</c>.</param>
+/// <param name="Enforced">False when everyone has the module whatever the license says.</param>
+/// <param name="Licensed">The license (or plan) includes the module.</param>
+/// <param name="Available">The organization may use it: licensed, or not enforced. Menus and pages follow this.</param>
+public sealed record ModuleStatusDto(string Id, string Name, string Description, bool Enforced, bool Licensed, bool Available);
+
+/// <param name="SeatLimit">Full seats the license covers. Null when seats aren't limited.</param>
+/// <param name="SeatsUsed">Full seats in use: people with more than Employee access, plus light people once the light seats are full. API keys do not take a seat.</param>
+/// <param name="LightSeatLimit">Light seats (people who only enter their own time, expenses and leave). Zero when the license has none.</param>
+/// <param name="LightSeatsUsed">Light people in a light seat.</param>
+/// <param name="Trial">The key is a time-boxed trial.</param>
+/// <param name="DaysLeft">Days until the key expires (0 on its last day, negative once past); null without a key.</param>
 public sealed record LicenseStatusDto(
     string Edition,
     EditionSource Source,
@@ -29,7 +39,16 @@ public sealed record LicenseStatusDto(
     int? SeatLimit,
     int SeatsUsed,
     string? Problem,
-    IReadOnlyList<FeatureStatusDto> Features);
+    IReadOnlyList<FeatureStatusDto> Features,
+    IReadOnlyList<ModuleStatusDto>? Modules = null,
+    int LightSeatLimit = 0,
+    int LightSeatsUsed = 0,
+    bool Trial = false,
+    int? DaysLeft = null)
+{
+    /// <summary>True when the organization may use <paramref name="moduleId"/>; every module when the server didn't say.</summary>
+    public bool HasModule(string moduleId) => Modules is null || Modules.FirstOrDefault(m => m.Id == moduleId)?.Available != false;
+}
 
 public sealed record ActivateLicenseRequest(string Key);
 

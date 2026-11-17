@@ -1,0 +1,45 @@
+@using Workbench.Contracts.Identity
+@using Workbench.Contracts.Licensing
+@using Workbench.Ui.Navigation
+@inject ILicenseService Licenses
+@inject NavigationManager Navigation
+
+@* Tells administrators a trial is about to end (7 days or fewer) or has ended. Others never see it. *@
+@if (_message is not null)
+{
+    <MudAlert Severity="@(_lapsed ? Severity.Warning : Severity.Info)" Dense="true" Class="mb-3" data-testid="license-banner">
+        @_message
+        <MudLink Href="setup/license" Class="ml-1">Add a license key</MudLink>
+    </MudAlert>
+}
+
+@code {
+    [Parameter] public NavAccess Access { get; set; } = NavAccess.Anonymous;
+
+    private string? _message;
+    private bool _lapsed;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _message = null;
+        if (!Access.Can(Permission.AdminOrganization))
+        {
+            return;
+        }
+
+        try
+        {
+            var status = await Licenses.GetStatusAsync();
+            if (status is { Trial: true, DaysLeft: { } days } && days <= 7)
+            {
+                _lapsed = days < 0;
+                _message = _lapsed
+                    ? "Your Workbench trial has ended, so Business features are off. Your data is untouched."
+                    : days == 0 ? "Your Workbench trial ends today." : $"Your Workbench trial ends in {days} {(days == 1 ? "day" : "days")}.";
+            }
+        }
+        catch (Exception ex) when (NavAccess.IsExpected(ex))
+        {
+        }
+    }
+}

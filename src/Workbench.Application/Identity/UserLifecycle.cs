@@ -105,7 +105,7 @@ public sealed class UserLifecycle(
 
         if (active)
         {
-            await editions.RequireFreeSeatAsync(db, cancellationToken);
+            await editions.RequireFreeSeatAsync(db, await Licensing.EditionService.IsLightGrantAsync(db, roles, [], cancellationToken), cancellationToken);
         }
 
         var now = clock.GetUtcNow().UtcDateTime;
@@ -262,7 +262,7 @@ public sealed class UserLifecycle(
         }
         else
         {
-            await editions.RequireFreeSeatAsync(db, cancellationToken);
+            await editions.RequireFreeSeatAsync(db, await Licensing.EditionService.IsLightPersonAsync(db, user.Id, cancellationToken), cancellationToken);
             user.IsActive = true;
             user.DeactivatedAtUtc = null;
             user.DeactivatedBy = null;
