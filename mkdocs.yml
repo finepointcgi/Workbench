@@ -2,7 +2,7 @@
 # Preview locally:  pip install -r docs/requirements.txt && mkdocs serve
 # Screenshots come from tools/docs-screenshots (see its README).
 site_name: Workbench Guide
-site_description: User and administrator guide for Workbench, the project ERP and work-management system for government contractors.
+site_description: User and administrator guide for Workbench, the project ERP and work-management system for professional services, engineering and government contractors.
 site_url: https://finepointcgi.github.io/Workbench/guide/
 repo_url: https://github.com/finepointcgi/Workbench
 repo_name: finepointcgi/Workbench
@@ -162,6 +162,13 @@ nav:
       - Audit log and support requests: admin-guide/audit-and-support.md
       - Multiple companies: admin-guide/companies.md
       - Hosting and operations: admin-guide/hosting.md
+  - Commercial:
+      - Modules and pricing (draft): commercial/modules-and-pricing.md
+      - Software license and subscription agreement (draft): commercial/end-user-terms-draft.md
+      - Data processing addendum (draft): commercial/data-processing-addendum-draft.md
+      - Service levels (draft): commercial/service-levels-draft.md
+      - SOC 2 readiness: commercial/soc2-readiness.md
+      - Website copy suggestions (draft): commercial/website-copy-suggestions.md
   - Reference:
       - Quick start: quick-start.md
       - Editions: editions.md
