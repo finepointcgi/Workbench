@@ -630,8 +630,9 @@ public sealed class CaptureExecOpportunityImporter : CaptureExecImporter
     /// Creates (<paramref name="id"/> null) or updates an opportunity straight in the database: the same validation as the
     /// service, but imported stages and outcomes are history (no gates, no B&amp;P code, no notifications).
     /// </summary>
-    private static async Task<Guid> SaveAsync(ImportContext context, IWorkbenchDbContextFactory factory, AuditRecorder audit, TimeProvider clock, Guid? id,
-        SaveOpportunityRequest request, Outcome outcome, string? sourceId, CancellationToken ct)
+    internal static async Task<Guid> SaveAsync(ImportContext context, IWorkbenchDbContextFactory factory, AuditRecorder audit, TimeProvider clock, Guid? id,
+        SaveOpportunityRequest request, Outcome outcome, string? sourceId, CancellationToken ct,
+        D.OpportunitySource source = D.OpportunitySource.CaptureExec, string system = "Capture Exec")
     {
         await using var db = await factory.CreateAsync(ct);
         var now = clock.GetUtcNow().UtcDateTime;
@@ -643,7 +644,7 @@ public sealed class CaptureExecOpportunityImporter : CaptureExecImporter
         }
         else
         {
-            opportunity = await OpportunityService.NewAsync(db, actor, now, D.OpportunitySource.CaptureExec, ct);
+            opportunity = await OpportunityService.NewAsync(db, actor, now, source, ct);
             db.Set<D.Opportunity>().Add(opportunity);
         }
 
@@ -666,7 +667,7 @@ public sealed class CaptureExecOpportunityImporter : CaptureExecImporter
         await OpportunityService.ApplyAsync(db, opportunity, request, ct);
         if (sourceId is not null)
         {
-            opportunity.SourceId = sourceId.Length <= 100 ? sourceId : throw new ArgumentException("The Capture Exec ID can be at most 100 characters.");
+            opportunity.SourceId = sourceId.Length <= 100 ? sourceId : throw new ArgumentException($"The {system} ID can be at most 100 characters.");
         }
 
         opportunity.UpdatedAtUtc = now;
@@ -679,7 +680,7 @@ public sealed class CaptureExecOpportunityImporter : CaptureExecImporter
         }
         else if (opportunity.Stage != to)
         {
-            change = new D.OpportunityStageChange { OpportunityId = opportunity.Id, From = opportunity.Stage, To = to, ChangedBy = actor, ChangedAtUtc = now, Note = "Imported from Capture Exec" };
+            change = new D.OpportunityStageChange { OpportunityId = opportunity.Id, From = opportunity.Stage, To = to, ChangedBy = actor, ChangedAtUtc = now, Note = $"Imported from {system}" };
             db.Set<D.OpportunityStageChange>().Add(change);
             opportunity.Stage = to;
             opportunity.StageChangedAtUtc = now;
@@ -694,7 +695,7 @@ public sealed class CaptureExecOpportunityImporter : CaptureExecImporter
         }
 
         audit.Record(db, OpportunityService.AuditEntityType, opportunity.Id, id is null ? "Created" : "Updated", before, OpportunityService.Snapshot(opportunity),
-            Reason(context, "opportunity"));
+            $"Imported opportunity from {system} (import job {context.Job.Id.ToString()[..8]})");
         await db.SaveChangesAsync(ct);
         if (change is not null)
         {

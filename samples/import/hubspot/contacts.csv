@@ -1,0 +1,5 @@
+Record ID,First name,Last name,Email,Phone number,Job title,Company name,Associated Company,Contact owner,Lifecycle stage,City,State/Region
+8101,Nadia,Petrov,nadia.petrov@brightwater-logistics.example,+1 303 555 0143,VP Operations,Brightwater Logistics,Brightwater Logistics,Jamie Ortiz,Opportunity,Denver,Colorado
+8102,Marcus,Webb,marcus.webb@brightwater-logistics.example,,IT Procurement Manager,Brightwater Logistics,Brightwater Logistics,Jamie Ortiz,Lead,Denver,Colorado
+8103,Elena,Marsh,elena.marsh@lumenharbor.example,+1 206 555 0178,Chief Digital Officer,Lumen Harbor Health,Lumen Harbor Health,Jamie Ortiz,Opportunity,Seattle,Washington
+8104,Owen,Hart,owen.hart@tallgrass-retail.example,,Head of E-commerce,Tallgrass Retail Group,Tallgrass Retail Group,Taylor Brooks,Opportunity,Chicago,Illinois

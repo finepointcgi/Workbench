@@ -205,9 +205,10 @@ public sealed class OpportunityService(
         {
             var agency = await db.Set<D.CrmAccount>().AsNoTracking().FirstOrDefaultAsync(a => a.Id == agencyId, ct)
                 ?? throw new ArgumentException("Choose an existing agency account.");
-            if (agency.Kind is not (D.CrmAccountKind.Agency or D.CrmAccountKind.Office))
+            // Government agencies and offices, and commercial companies (kind Other or Prime); not competitors or teaming partners.
+            if (agency.Kind is D.CrmAccountKind.Competitor or D.CrmAccountKind.Partner)
             {
-                throw new ArgumentException($"{agency.Name} isn't a government agency or office.");
+                throw new ArgumentException($"{agency.Name} is a competitor or partner, not the customer.");
             }
         }
 

@@ -21,7 +21,7 @@ public enum SetAside
     Other,
 }
 
-public enum OpportunitySource { Manual, SamGov, CsvImport, CaptureExec }
+public enum OpportunitySource { Manual, SamGov, CsvImport, CaptureExec, HubSpot, Salesforce }
 
 public enum OutcomeReason
 {
