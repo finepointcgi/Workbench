@@ -47,9 +47,25 @@ public sealed record NavEntry(
     bool MatchAll = false,
     string? Detail = null,
     string? Keywords = null,
-    bool InMenu = true)
+    bool InMenu = true,
+    string? Module = null)
 {
-    public bool IsVisible(NavAccess access) => Rule.Allows(access);
+    /// <summary>
+    /// The license module the page belongs to: <see cref="Module"/> when set, otherwise by where it sits. The Finance and
+    /// Business development sections, HR administration, and the audit log and compliance pages are each one module; pages
+    /// of the gated enterprise and govcon modules stay visible (they only block changing things), so nothing is listed here for them.
+    /// </summary>
+    public string ModuleId => Module ?? (Section, Group, Href) switch
+    {
+        (NavCatalog.Finance, _, _) => "finance",
+        (NavCatalog.Growth, _, _) => "capture",
+        (NavCatalog.People, "HR administration", _) => "workforce",
+        (NavCatalog.Admin, "Compliance", _) or (NavCatalog.Admin, _, "setup/audit") => "controls",
+        _ => "core",
+    };
+
+    /// <summary>Shown to the user and open to them: their permissions allow it and the organization's license includes its module.</summary>
+    public bool IsVisible(NavAccess access) => Rule.Allows(access) && access.HasModule(ModuleId);
 }
 
 /// <summary>One menu item: a page, or a group of pages (<see cref="IsGroup"/>) reached as one link, with tabs on its pages.</summary>

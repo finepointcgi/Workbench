@@ -31,13 +31,47 @@ else
             <MudText>@Source()</MudText>
         </MudStack>
 
+        @if (_status.Trial)
+        {
+            <MudAlert Severity="@(_status.DaysLeft < 0 ? Severity.Warning : Severity.Info)" Dense="true" Class="mt-3" data-testid="license-trial">@TrialText()</MudAlert>
+        }
+
         <MudText Class="mt-3" data-testid="license-seats">
-            <b>@_status.SeatsUsed</b> @(_status.SeatsUsed == 1 ? "seat" : "seats") in use@(_status.SeatLimit is { } l ? $" of {l}" : "").
+            <b>@_status.SeatsUsed</b> full @(_status.SeatsUsed == 1 ? "seat" : "seats") in use@(_status.SeatLimit is { } l ? $" of {l}" : "").
+            @if (_status.LightSeatLimit > 0 || _status.LightSeatsUsed > 0)
+            {
+                <span data-testid="license-light-seats"><b>@_status.LightSeatsUsed</b> light @(_status.LightSeatsUsed == 1 ? "seat" : "seats") in use of @_status.LightSeatLimit.</span>
+            }
         </MudText>
         <MudText Typo="Typo.body2" Class="mud-text-secondary">
-            Every active person takes a seat. Deactivate someone who has left and their seat is free again. API keys do not take a seat.
+            Every active person takes a seat. Someone who only enters their own time, expenses and leave is a light person and takes a light seat while one is free.
+            Deactivate someone who has left and their seat is free again. API keys do not take a seat.
         </MudText>
     </MudPaper>
+
+    @if (_status.Modules is { Count: > 0 } modules)
+    {
+        <MudPaper Outlined="true" Class="pa-4 mb-4">
+            <MudText Typo="Typo.h6" HtmlTag="h2">Modules</MudText>
+            <MudText Class="mud-text-secondary mb-2">A license lists the modules it includes. A module that isn't part of the price yet is open to everyone.</MudText>
+            <MudSimpleTable Dense="true" aria-label="Modules" data-testid="license-modules">
+                <thead><tr><th scope="col">Module</th><th scope="col">What it covers</th><th scope="col">Your license</th></tr></thead>
+                <tbody>
+                    @foreach (var m in modules)
+                    {
+                        <tr>
+                            <td>@m.Name</td>
+                            <td>@m.Description</td>
+                            <td>
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@(m.Available ? Color.Success : Color.Default)"
+                                         Icon="@(m.Available ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Lock)">@ModuleState(m)</MudChip>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </MudPaper>
+    }
 
     <MudPaper Outlined="true" Class="pa-4 mb-4">
         <MudText Typo="Typo.h6" HtmlTag="h2">What each edition includes</MudText>
@@ -55,7 +89,7 @@ else
                         <td>@f.Description</td>
                         <td>
                             <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@(f.Included ? Color.Success : Color.Default)"
-                                     Icon="@(f.Included ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Lock)">@(f.Included ? "Included" : "Business")</MudChip>
+                                     Icon="@(f.Included ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Lock)">@(f.Included ? "Included" : _business ? "Needs " + ModuleName(f.Module) : "Business")</MudChip>
                         </td>
                     </tr>
                 }
@@ -68,7 +102,7 @@ else
         <MudPaper Outlined="true" Class="pa-4">
             <MudText Typo="Typo.h6" HtmlTag="h2">@(_status.Source == EditionSource.Key ? "Replace the license key" : "Add a license key")</MudText>
             <MudText Class="mud-text-secondary mb-2">Paste the key you were given. It is checked on this server; nothing is sent anywhere.</MudText>
-            <MudTextField @bind-Value="_key" Immediate="true" Label="License key" Lines="3" Variant="Variant.Outlined" Placeholder="WB1…" data-testid="license-key" />
+            <MudTextField @bind-Value="_key" Immediate="true" Label="License key" Lines="3" Variant="Variant.Outlined" Placeholder="WB2…" data-testid="license-key" />
             <MudStack Row="true" Class="mt-2">
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="@(string.IsNullOrWhiteSpace(_key) || _busy)" OnClick="ActivateAsync" data-testid="license-activate">Activate</MudButton>
                 @if (_status.Source == EditionSource.Key)
@@ -105,6 +139,18 @@ else
             _error = SetupFormat.Error(ex);
         }
     }
+
+    private static string ModuleState(ModuleStatusDto m) => m.Licensed ? "Licensed" : m.Available ? "Open to everyone" : "Not in your license";
+
+    private string ModuleName(string id) => _status?.Modules?.FirstOrDefault(m => m.Id == id)?.Name ?? id;
+
+    private string TrialText() => _status?.DaysLeft switch
+    {
+        < 0 => "Your trial has ended. Business features are off; add a license key to carry on. Your data is untouched.",
+        0 => "Your trial ends today.",
+        { } d => $"Trial: {d} {(d == 1 ? "day" : "days")} left.",
+        _ => "This is a trial license.",
+    };
 
     private string Source() => _status switch
     {

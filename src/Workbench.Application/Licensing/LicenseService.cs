@@ -12,12 +12,16 @@ public sealed class LicenseService(IWorkbenchDbContextFactory dbFactory, Edition
     {
         var state = await editions.GetAsync(cancellationToken);
         await using var db = await dbFactory.CreateAsync(cancellationToken);
-        var used = await EditionService.CountSeatsAsync(db, cancellationToken);
+        var usage = await editions.UsageAsync(db, state, includePending: false, cancellationToken);
         var features = FeatureCatalog.All
-            .Select(f => new FeatureStatusDto(f.Feature.ToString(), f.Name, f.Description, FeatureCatalog.IsIncluded(state.Edition, f.Feature)))
+            .Select(f => new FeatureStatusDto(f.Feature.ToString(), f.Name, f.Description,
+                FeatureCatalog.IsIncluded(state.Edition, f.Feature) && EditionService.IsLicensed(state, f.Module), f.Module))
+            .ToList();
+        var modules = editions.Modules
+            .Select(m => new ModuleStatusDto(m.Id, m.Name, m.Description, m.Enforced, EditionService.IsLicensed(state, m.Id), editions.HasModule(state, m.Id)))
             .ToList();
         return new LicenseStatusDto(state.Edition.ToString(), state.Source, state.Licensee, state.ExpiresOn, state.InGracePeriod,
-            state.SeatLimit, used, state.Problem, features);
+            state.SeatLimit, usage.FullSeatsInUse, state.Problem, features, modules, state.LightSeatLimit, usage.LightSeatsInUse, state.Trial, state.DaysLeft);
     }
 
     public async Task<LicenseStatusDto> ActivateAsync(ActivateLicenseRequest request, CancellationToken cancellationToken = default)
@@ -27,17 +31,19 @@ public sealed class LicenseService(IWorkbenchDbContextFactory dbFactory, Edition
             throw new ArgumentException(problem);
         }
 
-        if (DateOnly.FromDateTime(clock.GetLocalNow().DateTime) > claims.ExpiresOn.AddDays(options.GraceDays))
+        if (DateOnly.FromDateTime(clock.GetLocalNow().DateTime) > claims.ExpiresOn.AddDays(claims.Trial ? 0 : options.GraceDays))
         {
             throw new ArgumentException($"That license expired on {claims.ExpiresOn:d MMM yyyy}.");
         }
 
         await using (var db = await dbFactory.CreateAsync(cancellationToken))
         {
-            var used = await EditionService.CountSeatsAsync(db, cancellationToken);
-            if (used > claims.Seats)
+            var usage = await editions.UsageAsync(db, new EditionState(claims.Edition, EditionSource.Key, claims.Licensee, claims.ExpiresOn, false, claims.Seats, null, null, claims.LightSeats), includePending: false, cancellationToken);
+            if (usage.FullSeatsInUse > claims.Seats)
             {
-                throw new ArgumentException($"That license has {claims.Seats} seats but {used} people are active. Ask for a larger license, or deactivate some people first.");
+                throw new ArgumentException(claims.LightSeats == 0
+                    ? $"That license has {claims.Seats} seats but {usage.People} people are active. Ask for a larger license, or deactivate some people first."
+                    : $"That license has {claims.Seats} full and {claims.LightSeats} light seats but {usage.FullPeople} full and {usage.LightPeople} light people are active. Ask for a larger license, or deactivate some people first.");
             }
 
             var row = await db.Set<LicenseSettings>().OrderBy(s => s.Id).FirstOrDefaultAsync(cancellationToken);
