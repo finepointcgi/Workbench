@@ -34,7 +34,7 @@
                 <MudSelect T="EvmBudgetSourceKind" @bind-Value="line.Source" Label="From" Dense="true" Variant="Variant.Outlined" Style="min-width: 200px">
                     <MudSelectItem T="EvmBudgetSourceKind" Value="EvmBudgetSourceKind.ManagementReserve">Management reserve</MudSelectItem>
                     <MudSelectItem T="EvmBudgetSourceKind" Value="EvmBudgetSourceKind.UndistributedBudget">Undistributed budget</MudSelectItem>
-                    <MudSelectItem T="EvmBudgetSourceKind" Value="EvmBudgetSourceKind.ContractChange">Contract change</MudSelectItem>
+                    <MudSelectItem T="EvmBudgetSourceKind" Value="EvmBudgetSourceKind.ContractChange">@Tm.Reword("Contract change")</MudSelectItem>
                 </MudSelect>
                 <MudNumericField T="decimal" @bind-Value="line.Amount" Label="Budget change" Margin="Margin.Dense" Variant="Variant.Outlined" Style="max-width: 150px" />
                 <MudDatePicker DateFormat="yyyy-MM-dd" Label="New start" Date="line.Start" DateChanged="d => line.Start = d" Margin="Margin.Dense" Variant="Variant.Outlined" Style="max-width: 160px" Clearable="true" />
@@ -129,6 +129,7 @@ else
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [Parameter, EditorRequired]
     public Guid ProjectId { get; set; }
 

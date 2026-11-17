@@ -97,7 +97,7 @@ else
     }
     @if (bill.FundingOverrideReason is not null)
     {
-        <MudAlert Severity="Severity.Info" Class="mb-3">Over the subcontract's funded value; overridden by @bill.FundingOverrideBy: @bill.FundingOverrideReason</MudAlert>
+        <MudAlert Severity="Severity.Info" Class="mb-3">@Tm.Reword("Over the subcontract's funded value; overridden by") @bill.FundingOverrideBy: @bill.FundingOverrideReason</MudAlert>
     }
 
     @if (b.CurrencyCode is { } currency)
@@ -173,6 +173,7 @@ else
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [CascadingParameter]
     public FinanceAccess? Access { get; set; }
 

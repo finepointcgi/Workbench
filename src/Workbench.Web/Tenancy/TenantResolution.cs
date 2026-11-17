@@ -90,14 +90,15 @@ public sealed class TenantResolutionMiddleware(RequestDelegate next, TenancyOpti
         var path = context.Request.Path;
         if (path == "/")
         {
-            context.Response.Redirect("/host");
+            // With signup on, the base domain's front page is the signup form; the host admin goes straight to /host.
+            context.Response.Redirect(options.Signup.Enabled ? "/signup" : "/host");
             return;
         }
 
         if (IsHostOnlyPath(path) || path.StartsWithSegments("/account") || path.StartsWithSegments("/health")
             || path.StartsWithSegments("/_blazor") || path.StartsWithSegments("/_framework") || path.StartsWithSegments("/_content")
             || path.StartsWithSegments("/not-found") || path.StartsWithSegments("/signin-oidc") || path.StartsWithSegments("/signout-callback-oidc")
-            || path.StartsWithSegments("/webhooks/email")
+            || path.StartsWithSegments("/webhooks/email") || path.StartsWithSegments("/signup")
             || Path.HasExtension(path.Value))
         {
             context.Items[HostKey] = true;

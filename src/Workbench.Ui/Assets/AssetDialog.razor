@@ -67,7 +67,7 @@
             @if (_gfp || _cap)
             {
                 <MudItem xs="6" md="3">
-                    <MudSelect T="Guid?" @bind-Value="_contractId" Label="Contract" Dense="true" Required="true">
+                    <MudSelect T="Guid?" @bind-Value="_contractId" Label="@Tm.Reword("Contract")" Dense="true" Required="true">
                         @foreach (var c in _contracts)
                         {
                             <MudSelectItem T="Guid?" Value="c.Id">@c.ContractNumber</MudSelectItem>
@@ -86,6 +86,7 @@
 </MudDialog>
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
 
     private IReadOnlyList<AssetCategoryDto> _categories = [];

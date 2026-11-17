@@ -7,6 +7,8 @@
 <MudText Class="mud-text-secondary mb-4">Set up your company in Workbench. The first time, work through the checklist in order; each step ticks itself off once it's done.</MudText>
 <MudText Class="mb-4" data-testid="getting-started-guide">New here? <MudLink Href="help/admin-getting-started">Read the getting-started guide</MudLink>: what to set up first, who to involve, and how long each step takes.</MudText>
 
+<Workbench.Ui.Company.CompanyTypeCard FirstRunOnly="true" />
+
 <MudGrid Spacing="3">
     <MudItem xs="12" md="7">
         <MudPaper Outlined="true" Class="pa-4">
@@ -19,9 +21,7 @@
                 }
             </MudStack>
             <MudAlert Severity="Severity.Info" Dense="true" Class="mb-3" Icon="@Icons.Material.Filled.UploadFile" data-testid="checklist-import">
-                Moving from Costpoint or Smartsheet? <MudLink Href="setup/import" Typo="Typo.body2"><b>Import your data</b></MudLink>: organizations, people and rates,
-                contracts and CLINs, projects with their WBS, budgets and Smartsheet plans. Each import can be rolled back.
-                Going live? Follow the <MudLink Href="setup/migration" Typo="Typo.body2"><b>go-live checklist</b></MudLink> and reconcile a parallel month.
+                Moving from Costpoint or Smartsheet? <MudLink Href="setup/import" Typo="Typo.body2"><b>Import your data</b></MudLink>@Tm.Reword(": organizations, people and rates, contracts and CLINs, projects with their WBS, budgets and Smartsheet plans. Each import can be rolled back. Going live? Follow the") <MudLink Href="setup/migration" Typo="Typo.body2"><b>go-live checklist</b></MudLink> and reconcile a parallel month.
             </MudAlert>
             @if (_checklist is null)
             {
@@ -80,7 +80,7 @@
                 <MudNavLink Href="setup/org-units" Icon="@Icons.Material.Filled.AccountTree">Org units</MudNavLink>
                 <MudNavLink Href="setup/labor-categories" Icon="@Icons.Material.Filled.Badge">Labor categories</MudNavLink>
                 <MudNavLink Href="setup/customers" Icon="@Icons.Material.Filled.Business">Customers</MudNavLink>
-                <MudNavLink Href="setup/contracts" Icon="@Icons.Material.Filled.Description">Contracts and bill rates</MudNavLink>
+                <MudNavLink Href="setup/contracts" Icon="@Icons.Material.Filled.Description">@Tm.Reword("Contracts and bill rates")</MudNavLink>
                 <MudNavLink Href="setup/projects" Icon="@Icons.Material.Filled.Work">Projects, WBS and plan sheets</MudNavLink>
                 <MudNavLink Href="setup/fiscal-calendar" Icon="@Icons.Material.Filled.CalendarMonth">Fiscal calendar</MudNavLink>
                 <MudNavLink Href="setup/approval-workflows" Icon="@Icons.Material.Filled.AltRoute">Approval workflows</MudNavLink>
@@ -91,7 +91,7 @@
                 <MudNavLink Href="accounting/indirect-rates" Icon="@Icons.Material.Filled.Percent">Indirect rates</MudNavLink>
                 <MudNavLink Href="cash" Icon="@Icons.Material.Filled.AccountBalanceWallet">Bank accounts</MudNavLink>
                 <MudNavLink Href="payroll" Icon="@Icons.Material.Filled.Payments">Payroll provider</MudNavLink>
-                <MudNavLink Href="billing/contracts" Icon="@Icons.Material.Filled.RequestQuote">Contract billing details</MudNavLink>
+                <MudNavLink Href="billing/contracts" Icon="@Icons.Material.Filled.RequestQuote">@Tm.Reword("Contract billing details")</MudNavLink>
                 <MudNavLink Href="setup/audit" Icon="@Icons.Material.Filled.History">Audit log</MudNavLink>
                 <MudNavLink Href="setup/import" Icon="@Icons.Material.Filled.UploadFile">Import from Costpoint or Smartsheet</MudNavLink>
                 <MudNavLink Href="setup/migration" Icon="@Icons.Material.Filled.Flag">Go-live migration and reconciliation</MudNavLink>
@@ -101,6 +101,7 @@
 </MudGrid>
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     private SetupChecklistDto? _checklist;
 
     private IReadOnlyList<SetupStep> Steps => _checklist is not { } c ? [] : SetupSteps.For(c);

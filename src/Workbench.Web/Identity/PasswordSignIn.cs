@@ -33,6 +33,7 @@ public static class PasswordSignIn
     public const string ForgotPath = "/account/forgot-password";
     public const string ResetPath = "/account/reset-password";
     public const string AcceptInvitePath = "/account/accept-invite";
+    public const string MagicPath = "/account/magic";
     public const string SecurityPath = "/account/security";
 
     private const string StageClaim = "wb_pending";
@@ -327,6 +328,44 @@ public static class PasswordSignIn
             return await ContinueAsync(http, found.Invite.Email, mfaEnrolled: false, "/", reauth: false);
         }).AllowAnonymous().ExcludeFromDescription();
 
+        // The emailed one-time sign-in link of a self-service signup (and its resend). The GET only shows a button, so a mail
+        // scanner that opens the link can't use it up; the POST uses the token and signs in.
+        app.MapGet(MagicPath, async (HttpContext http, PasswordAccounts passwords, string? token) =>
+        {
+            if (!Available(http))
+            {
+                return Results.NotFound();
+            }
+
+            if (await MagicLinkForAsync(http, passwords, token) is not { } row)
+            {
+                return MagicLinkGonePage();
+            }
+
+            var tokens = http.RequestServices.GetRequiredService<IAntiforgery>().GetAndStoreTokens(http);
+            return Page("Sign in", $"""
+                <h1>Sign in to Workbench</h1>
+                <p class="muted">Continue as {E(row.Email)}.</p>
+                {Form(tokens, MagicPath, $"""<input type="hidden" name="token" value="{E(token)}" /><button type="submit">Sign in</button>""")}
+                """);
+        }).AllowAnonymous().ExcludeFromDescription();
+
+        app.MapPost(MagicPath, async (HttpContext http, PasswordAccounts passwords, [FromForm] string? token) =>
+        {
+            if (!Available(http))
+            {
+                return Results.NotFound();
+            }
+
+            if (await MagicLinkForAsync(http, passwords, token) is not { } row || !await passwords.UseTokenAsync(row.Id, http.RequestAborted))
+            {
+                return MagicLinkGonePage();
+            }
+
+            var status = await passwords.GetStatusAsync(row.Email, http.RequestAborted);
+            return await ContinueAsync(http, row.Email, status.MfaEnabled, "/setup", reauth: false);
+        }).AllowAnonymous().ExcludeFromDescription();
+
         // ---------- Account security (signed in) ----------
 
         // Two parameters: a lambda taking only HttpContext would bind as a RequestDelegate and drop the returned page.
@@ -532,6 +571,27 @@ public static class PasswordSignIn
 
         return (row, invite);
     }
+
+    /// <summary>The magic-link token's row when it is valid and still has someone to sign in (an active user, or an invite that hasn't expired).</summary>
+    private static async Task<AccountToken?> MagicLinkForAsync(HttpContext http, PasswordAccounts passwords, string? token)
+    {
+        if (await passwords.FindTokenAsync(token, AccountTokenPurpose.MagicLink, http.RequestAborted) is not { } row)
+        {
+            return null;
+        }
+
+        var now = http.RequestServices.GetRequiredService<TimeProvider>().GetUtcNow().UtcDateTime;
+        await using var db = await http.RequestServices.GetRequiredService<IWorkbenchDbContextFactory>().CreateAsync(http.RequestAborted);
+        var person = await db.Set<AppUser>().AnyAsync(u => u.Email == row.Email && u.IsActive, http.RequestAborted)
+            || await db.Set<UserInvite>().AnyAsync(i => i.Email == row.Email && i.AcceptedAtUtc == null && i.RevokedAtUtc == null && i.ExpiresAtUtc > now, http.RequestAborted);
+        return person ? row : null;
+    }
+
+    private static IResult MagicLinkGonePage() => Page("Link expired", $"""
+        <h1>This sign-in link has expired</h1>
+        <p>It works once, for a limited time. Ask for a new one: open the signup page again and enter the same address and email.</p>
+        <p><a href="{AccountEndpoints.SignInPath}">Back to sign in</a></p>
+        """, StatusCodes.Status410Gone);
 
     private static async Task<bool> OrganizationIdpRequiredAsync(SignInSettingsStore store, HttpContext http)
     {

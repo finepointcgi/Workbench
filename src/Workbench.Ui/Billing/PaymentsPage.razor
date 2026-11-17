@@ -60,7 +60,7 @@ else
             else
             {
                 <MudSimpleTable Dense="true" Class="mt-3" data-testid="open-invoices">
-                    <thead><tr><th>Invoice</th><th>Contract</th><th>Due</th><th style="text-align:right">Open balance</th><th style="text-align:right; width:180px">Apply</th><th></th></tr></thead>
+                    <thead><tr><th>Invoice</th><th>@Tm.Reword("Contract")</th><th>Due</th><th style="text-align:right">Open balance</th><th style="text-align:right; width:180px">Apply</th><th></th></tr></thead>
                     <tbody>
                         @foreach (var i in Visible)
                         {
@@ -138,6 +138,7 @@ else
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [SupplyParameterFromQuery(Name = "customer")]
     public Guid? Customer { get; set; }
 

@@ -35,6 +35,8 @@
     <!-- Golden files for the accounting export layouts. -->
     <None Include="AccountingExport\Golden\**" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Integrations\GitLab\Fixtures\**" CopyToOutputDirectory="PreserveNewest" />
+    <!-- A WB2 key issued by the license server's own signer, for the cross-check test. -->
+    <None Include="Licensing\Samples\**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

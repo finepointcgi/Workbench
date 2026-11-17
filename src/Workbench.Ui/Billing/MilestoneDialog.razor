@@ -2,7 +2,7 @@
 <MudDialog>
     <DialogContent>
         <MudStack Spacing="3">
-            <MudSelect T="Guid?" @bind-Value="_clinId" Label="FFP CLIN" Required="true">
+            <MudSelect T="Guid?" @bind-Value="_clinId" Label="@Tm.Reword("FFP CLIN")" Required="true">
                 @foreach (var c in Clins)
                 {
                     <MudSelectItem T="Guid?" Value="c.Id">@c.Number · @c.Description</MudSelectItem>
@@ -21,6 +21,7 @@
 </MudDialog>
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [CascadingParameter]
     private IMudDialogInstance MudDialog { get; set; } = default!;
 

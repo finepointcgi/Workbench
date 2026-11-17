@@ -37,10 +37,10 @@
         </MudSelect>
     </FormField>
     <FormField Key="contractVehicle" Xs="6" Md="3" Context="field">
-        <MudTextField T="string" @bind-Value="Model.ContractVehicle" Label="Contract vehicle" MaxLength="200" ReadOnly="ReadOnly" HelperText="e.g. GSA MAS, OASIS+, standalone" Required="field.Required" />
+        <MudTextField T="string" @bind-Value="Model.ContractVehicle" Label="@Tm.Reword("Contract vehicle")" MaxLength="200" ReadOnly="ReadOnly" HelperText="e.g. GSA MAS, OASIS+, standalone" Required="field.Required" />
     </FormField>
     <FormField Key="contractType" Xs="6" Md="3" Context="field">
-        <MudSelect T="ContractKind?" @bind-Value="Model.ContractType" Label="Contract type" Clearable="true" ReadOnly="ReadOnly" Required="field.Required">
+        <MudSelect T="ContractKind?" @bind-Value="Model.ContractType" Label="@Tm.Reword("Contract type")" Clearable="true" ReadOnly="ReadOnly" Required="field.Required">
             @foreach (var k in Enum.GetValues<ContractKind>())
             {
                 <MudSelectItem T="ContractKind?" Value="k">@CrmFormat.ContractKind(k)</MudSelectItem>
@@ -76,7 +76,7 @@
                          HelperText="Whole period, options included" />
     </FormField>
     <FormField Key="periodOfPerformanceMonths" Section="value" Xs="6" Md="3">
-        <MudNumericField T="int?" @bind-Value="Model.PeriodOfPerformanceMonths" Label="Period of performance (months)" Min="1" Max="600" ReadOnly="ReadOnly" />
+        <MudNumericField T="int?" @bind-Value="Model.PeriodOfPerformanceMonths" Label="@Tm.Reword("Period of performance (months)")" Min="1" Max="600" ReadOnly="ReadOnly" />
     </FormField>
     <FormField Key="estimatedAwardDate" Section="value" Xs="6" Md="3" Context="field">
         <MudDatePicker Label="Estimated award date" @bind-Date="Model.EstimatedAwardDate" DateFormat="yyyy-MM-dd" ReadOnly="ReadOnly" Clearable="true" Required="field.Required" />
@@ -119,6 +119,7 @@
 </ConfigurableForm>
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [Parameter, EditorRequired] public OpportunityModel Model { get; set; } = default!;
 
     [Parameter] public IReadOnlyList<CrmAccountDto> Accounts { get; set; } = [];

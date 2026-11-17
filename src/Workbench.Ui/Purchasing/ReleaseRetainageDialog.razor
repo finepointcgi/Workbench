@@ -28,7 +28,7 @@
             </MudStack>
             @if (_needsOverride)
             {
-                <MudTextField T="string" @bind-Value="_override" Label="Funding override reason (Finance)" Lines="2" MaxLength="1000" data-testid="release-override" />
+                <MudTextField T="string" @bind-Value="_override" Label="@Tm.Reword("Funding override reason (Finance)")" Lines="2" MaxLength="1000" data-testid="release-override" />
             }
             <MudText Typo="Typo.body2">Releasing <b>@PurchasingFormat.Amount(_rows.Sum(r => r.Amount))</b></MudText>
             @if (_error is not null)
@@ -44,6 +44,7 @@
 </MudDialog>
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
     [Parameter] public Guid SubcontractId { get; set; }
     [Parameter] public IReadOnlyList<RetainageBillDto> Retainage { get; set; } = [];

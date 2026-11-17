@@ -9,7 +9,7 @@
 
 <BillingHeader Title="@($"Progress payments{(_settings is null ? "" : " · " + _settings.ContractNumber)}")"
                Subtitle="Requests for progress payments based on cost (FAR 52.232-16) on SF 1443. Each request becomes an invoice; approving it bills the government.">
-    <MudButton Variant="Variant.Outlined" Href="@($"billing/contracts/{ContractId}")" StartIcon="@Icons.Material.Filled.ArrowBack">Contract billing</MudButton>
+    <MudButton Variant="Variant.Outlined" Href="@($"billing/contracts/{ContractId}")" StartIcon="@Icons.Material.Filled.ArrowBack">@Tm.Reword("Contract billing")</MudButton>
 </BillingHeader>
 
 @if (_error is not null)
@@ -24,7 +24,7 @@ else
 {
     @if (_settings.Financing != FinancingKind.ProgressPayments)
     {
-        <MudAlert Severity="Severity.Info" Class="mb-3">This contract doesn't use progress payments. Finance can turn them on under Government billing on the <MudLink Href="@($"billing/contracts/{ContractId}")">contract billing page</MudLink>.</MudAlert>
+        <MudAlert Severity="Severity.Info" Class="mb-3">@Tm.Reword("This contract doesn't use progress payments. Finance can turn them on under Government billing on the") <MudLink Href="@($"billing/contracts/{ContractId}")">@Tm.Reword("contract billing page")</MudLink>.</MudAlert>
     }
 
     <MudPaper Outlined="true" Class="pa-4 mb-3">
@@ -112,6 +112,7 @@ else
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [CascadingParameter]
     public FinanceAccess? Access { get; set; }
 

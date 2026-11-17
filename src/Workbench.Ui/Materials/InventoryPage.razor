@@ -4,7 +4,7 @@
 
 <PageTitle>Inventory · Materials · Workbench</PageTitle>
 
-<MaterialsHeader Title="Inventory" Subtitle="Stock on hand by location, lot, serial and owner. Contract inventory is issued only to its project; government-furnished material only to its project, never valued." />
+<MaterialsHeader Title="Inventory" Subtitle="@Tm.Reword("Stock on hand by location, lot, serial and owner. Contract inventory is issued only to its project; government-furnished material only to its project, never valued.")" />
 
 @if (_error is not null)
 {
@@ -30,6 +30,7 @@ else
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [CascadingParameter] public CurrentUserInfo? User { get; set; }
 
     private IReadOnlyList<InventoryBalanceDto> _balances = [];

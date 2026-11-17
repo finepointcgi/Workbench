@@ -104,12 +104,12 @@
             }
             @foreach (var column in _visible)
             {
-                <TemplateColumn T="T" Title="@column.Title" @key="column.Key"
+                <TemplateColumn T="T" Title="@Tm.Reword(column.Title)" @key="column.Key"
                                 HeaderStyle="@(column.AlignRight ? "text-align:right" : null)" CellStyle="@(column.AlignRight ? "text-align:right" : null)">
                     <HeaderTemplate>
                         <button type="button" class="wb-sort-button" style="@SortButtonStyle(column)" @onclick="() => ToggleSort(column)"
                                 aria-label="@SortLabel(column)" data-sort="@column.Key">
-                            <span>@column.Title</span>
+                            <span>@Tm.Reword(column.Title)</span>
                             @if (SortOf(column) is { } sort)
                             {
                                 <MudIcon Icon="@(sort.Descending ? Icons.Material.Filled.ArrowDownward : Icons.Material.Filled.ArrowUpward)" Size="Size.Small" aria-hidden="true" />
@@ -148,6 +148,8 @@
 </div>
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
+
     [Parameter, EditorRequired]
     public ListDefinition<T> Definition { get; set; } = default!;
 

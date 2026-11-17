@@ -22,6 +22,7 @@ branches, so these rules keep merges small and predictable.
    `ApiResponses.ReadAsync` / `EnsureOkAsync`, plus **one line** in `ApiClient/DependencyInjection.cs`.
    This is what the desktop app uses, so every UI-facing interface needs one.
 7. **UI** (`src/Workbench.Ui`): components inject contract interfaces only, never EF Core or Application types.
+   Words a commercial company reads differently (contract, CLIN, funding, ceiling) go through `Tm.Reword` / `Tm.Term`; a test fails on new federal literals (see `docs/admin-guide/company-type.md`).
 8. **Tests** (`tests/Workbench.Tests/<Feature>/`): service tests with `TestDb.CreateFactory()`; component tests with bUnit
    (`await using var ctx = new BunitContext(); ctx.JSInterop.Mode = JSRuntimeMode.Loose; ctx.Services.AddMudServices();`).
 

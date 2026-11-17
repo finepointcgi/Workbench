@@ -53,6 +53,9 @@ else
             <MudTh>Tenant</MudTh>
             <MudTh>Status</MudTh>
             <MudTh>Plan</MudTh>
+            <MudTh>Entitlement</MudTh>
+            <MudTh>Trial ends</MudTh>
+            <MudTh Style="text-align:right">Seats</MudTh>
             <MudTh Style="text-align:right">Database</MudTh>
             <MudTh>Last activity</MudTh>
             <MudTh>Created</MudTh>
@@ -64,11 +67,27 @@ else
                 <MudLink Href="@context.Url" Target="_blank" Typo="Typo.caption">@context.Slug</MudLink>
             </MudTd>
             <MudTd><MudChip T="string" Size="Size.Small" Color="StatusColor(context.Status)">@context.Status</MudChip></MudTd>
-            <MudTd>@context.Plan</MudTd>
+            <MudTd>@(context.Entitlement?.Plan ?? context.Plan)</MudTd>
+            <MudTd>
+                @if (context.Entitlement is { } e)
+                {
+                    <MudChip T="string" Size="Size.Small" Color="EntitlementColor(e)" data-testid="@($"entitlement-{context.Slug}")">@(e.ReadOnly ? "read-only · " : "")@e.Status</MudChip>
+                }
+                else
+                {
+                    <span>—</span>
+                }
+            </MudTd>
+            <MudTd>@(context.Entitlement?.Trial == true ? context.Entitlement.TrialEndsUtc?.ToString("yyyy-MM-dd") ?? "—" : "—")</MudTd>
+            <MudTd Style="text-align:right">@SeatText(context.Entitlement)</MudTd>
             <MudTd Style="text-align:right">@FormatBytes(context.DatabaseBytes)</MudTd>
             <MudTd>@(context.LastActivityUtc?.ToLocalTime().ToString("yyyy-MM-dd HH:mm") ?? "—")</MudTd>
             <MudTd>@context.CreatedAtUtc.ToLocalTime().ToString("yyyy-MM-dd")</MudTd>
             <MudTd>
+                @if (context.Status is "Active" or "Suspended")
+                {
+                    <MudButton Size="Size.Small" OnClick="() => Manage(context)">Manage</MudButton>
+                }
                 @if (context.Status == "Active")
                 {
                     <MudButton Size="Size.Small" Color="Color.Warning" OnClick="() => ChangeAsync(context, suspend: true)">Suspend</MudButton>
@@ -81,6 +100,45 @@ else
         </RowTemplate>
         <NoRecordsContent><MudText>No tenants yet.</MudText></NoRecordsContent>
     </MudTable>
+
+    @if (_managing is { } m)
+    {
+        <MudPaper Outlined="true" Class="pa-4 mt-4" data-testid="manage-panel">
+            <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Manage @m.DisplayName</MudText>
+            <MudText Class="mud-text-secondary mb-3">
+                Changes are written to the host audit log. A lapsed trial, cancelled or suspended entitlement makes the organization read-only;
+                nothing is deleted@(m.Entitlement?.RetentionEndsUtc is { } keep ? $", and its data may be deleted by a host admin after {keep:yyyy-MM-dd} (the retention period)" : "").
+            </MudText>
+            <MudGrid>
+                <MudItem xs="12" sm="3"><MudNumericField T="int" @bind-Value="_seats" Label="Seats" Min="0" /></MudItem>
+                <MudItem xs="12" sm="3"><MudNumericField T="int" @bind-Value="_lightSeats" Label="Light seats" Min="0" /></MudItem>
+                <MudItem xs="12" sm="3">
+                    <MudSelect T="string" @bind-Value="_status" Label="Entitlement status">
+                        <MudSelectItem Value="@("active")">active</MudSelectItem>
+                        <MudSelectItem Value="@("past_due")">past_due</MudSelectItem>
+                        <MudSelectItem Value="@("suspended")">suspended (read-only)</MudSelectItem>
+                        <MudSelectItem Value="@("cancelled")">cancelled (read-only)</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="3"><MudTextField @bind-Value="_reason" Label="Reason (audited)" /></MudItem>
+                <MudItem xs="12">
+                    <MudText Typo="Typo.subtitle2">Modules (Core is always included)</MudText>
+                    <MudStack Row="true" Wrap="Wrap.Wrap">
+                        @foreach (var module in Modules)
+                        {
+                            <MudCheckBox T="bool" Value="@_modules.Contains(module.Id)" ValueChanged="@(on => ToggleModule(module.Id, on))" Label="@module.Name" />
+                        }
+                    </MudStack>
+                </MudItem>
+            </MudGrid>
+            <MudStack Row="true" Class="mt-4" AlignItems="AlignItems.Center">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="SaveEntitlementAsync">Save</MudButton>
+                <MudNumericField T="int" @bind-Value="_extendDays" Label="Days" Min="1" Max="365" Style="max-width:110px" />
+                <MudButton Variant="Variant.Outlined" Disabled="_busy" OnClick="ExtendTrialAsync" data-testid="extend-trial">Extend trial</MudButton>
+                <MudButton Variant="Variant.Text" OnClick="() => _managing = null">Close</MudButton>
+            </MudStack>
+        </MudPaper>
+    }
 
     <MudText Typo="Typo.h6" HtmlTag="h2" Class="mt-6 mb-2">Host audit log</MudText>
     <MudTable Items="_audit" Dense="true" Outlined="true">
@@ -111,6 +169,16 @@ else
     private string? _adminName;
     private string? _plan;
     private string? _notes;
+    // The module ids of ModuleCatalog (Workbench.Domain.Licensing); the UI project doesn't reference the domain. Core is always included.
+    private static readonly (string Id, string Name)[] Modules =
+        [("finance", "Finance"), ("capture", "Capture"), ("workforce", "Workforce"), ("controls", "Controls"), ("govcon", "Government contracting"), ("enterprise", "Enterprise")];
+    private HostTenantDto? _managing;
+    private int _seats;
+    private int _lightSeats;
+    private string _status = "active";
+    private string? _reason;
+    private int _extendDays = 14;
+    private readonly HashSet<string> _modules = [];
 
     protected override async Task OnInitializedAsync()
     {
@@ -177,6 +245,77 @@ else
             _busy = false;
         }
     }
+
+    private void Manage(HostTenantDto tenant)
+    {
+        _managing = tenant;
+        _seats = tenant.Entitlement?.Seats ?? 0;
+        _lightSeats = tenant.Entitlement?.LightSeats ?? 0;
+        _status = tenant.Entitlement?.Status ?? "active";
+        _reason = null;
+        _modules.Clear();
+        foreach (var module in tenant.Entitlement?.Modules ?? [])
+        {
+            _modules.Add(module);
+        }
+    }
+
+    private void ToggleModule(string id, bool on)
+    {
+        _ = on ? _modules.Add(id) : _modules.Remove(id);
+    }
+
+    private async Task SaveEntitlementAsync()
+    {
+        if (_managing is not { } tenant)
+        {
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            await Host.SetEntitlementAsync(tenant.Id, new SetEntitlementRequest(Modules: _modules.Order().ToList(), Seats: _seats, LightSeats: _lightSeats, Status: _status, Reason: _reason));
+            Snackbar.Add($"Saved {tenant.DisplayName}'s entitlement.", Severity.Success);
+        });
+    }
+
+    private async Task ExtendTrialAsync()
+    {
+        if (_managing is not { } tenant)
+        {
+            return;
+        }
+
+        await RunAsync(async () =>
+        {
+            await Host.ExtendTrialAsync(tenant.Id, new ExtendTrialRequest(_extendDays, _reason));
+            Snackbar.Add($"Extended {tenant.DisplayName}'s trial by {_extendDays} days.", Severity.Success);
+        });
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        try
+        {
+            await action();
+            _managing = null;
+            await LoadAsync();
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or UnauthorizedAccessException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string SeatText(HostEntitlementDto? e) => e is null ? "—"
+        : $"{(e.SeatsInUse is { } used ? used.ToString() : "?")}/{e.Seats}" + (e.LightSeats > 0 ? $" + {(e.LightSeatsInUse is { } l ? l.ToString() : "?")}/{e.LightSeats} light" : "");
+
+    private static Color EntitlementColor(HostEntitlementDto e) => e.ReadOnly ? Color.Error : e.Status == "past_due" ? Color.Warning : e.Trial ? Color.Info : Color.Success;
 
     private static Color StatusColor(string status) => status switch
     {

@@ -12,8 +12,7 @@
     <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="NewAsync" Disabled="_busy" data-testid="new-proposal">New proposal</MudButton>
 </MudStack>
 <MudText Class="mud-text-secondary mb-4">
-    Price bids from your own books: labor at employee cost rates, your indirect rate cascade, escalation and fee. Compare scenarios against the
-    price-to-win, lock what you submit, and hand a won price off to the contract and budget.
+    @Tm.Reword("Price bids from your own books: labor at employee cost rates, your indirect rate cascade, escalation and fee. Compare scenarios against the price-to-win, lock what you submit, and hand a won price off to the contract and budget.")
 </MudText>
 
 @if (_error is not null)
@@ -68,6 +67,7 @@ else
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     private IReadOnlyList<ProposalSummaryDto>? _proposals;
     private string? _error;
     private bool _busy;

@@ -55,7 +55,7 @@ else
                 </table>
             </div>
             <table class="boxes">
-                <tr><th>Bill to</th><th>Contract</th><th>Period of service</th></tr>
+                <tr><th>Bill to</th><th>@Tm.Reword("Contract")</th><th>Period of service</th></tr>
                 <tr>
                     <td><Party Value="_print.Payer" /></td>
                     <td>@_print.ContractNumber<div class="small">@_print.ContractName · @_print.ContractType</div></td>
@@ -66,7 +66,7 @@ else
             <h2>Charges</h2>
             <table class="lines">
                 <thead>
-                    <tr><th>CLIN</th><th>Description</th><th class="num">Quantity</th><th class="num">Unit price</th><th class="num">Amount</th></tr>
+                    <tr><th>@Tm.Reword("CLIN")</th><th>Description</th><th class="num">Quantity</th><th class="num">Unit price</th><th class="num">Amount</th></tr>
                 </thead>
                 <tbody>
                     @foreach (var group in inv.Lines.GroupBy(l => l.ClinNumber))
@@ -82,7 +82,7 @@ else
                             </tr>
                         }
                         <tr class="subtotal">
-                            <td></td><td>CLIN @group.Key total</td><td></td><td></td><td class="num">@BillingFormat.Amount(group.Sum(l => l.Amount))</td>
+                            <td></td><td>@Tm.Term("Clin") @group.Key total</td><td></td><td></td><td class="num">@BillingFormat.Amount(group.Sum(l => l.Amount))</td>
                         </tr>
                     }
                 </tbody>
@@ -105,16 +105,16 @@ else
             <p class="pre">@inv.Notes</p>
         }
 
-        <h2>Billed to date by CLIN</h2>
+        <h2>@Tm.Reword("Billed to date by CLIN")</h2>
         <table class="lines">
-            <thead><tr><th>CLIN</th><th>Description</th><th class="num">This invoice</th><th class="num">Billed to date</th><th class="num">Funded</th></tr></thead>
+            <thead><tr><th>@Tm.Reword("CLIN")</th><th>Description</th><th class="num">This invoice</th><th class="num">Billed to date</th><th class="num">@Tm.Reword("Funded")</th></tr></thead>
             <tbody>
                 @foreach (var c in _print.ClinTotals)
                 {
                     <tr><td>@c.ClinNumber</td><td>@c.Description</td><td class="num">@BillingFormat.Amount(c.ThisInvoice)</td><td class="num">@BillingFormat.Amount(c.BilledToDate)</td><td class="num">@BillingFormat.Amount(c.FundedValue)</td></tr>
                 }
             </tbody>
-            <tfoot><tr><td></td><td>Contract billed to date</td><td></td><td class="num">@BillingFormat.Amount(_print.BilledToDate)</td><td></td></tr></tfoot>
+            <tfoot><tr><td></td><td>@Tm.Reword("Contract billed to date")</td><td></td><td class="num">@BillingFormat.Amount(_print.BilledToDate)</td><td></td></tr></tfoot>
         </table>
 
         @if (!IsSf1034)
@@ -132,7 +132,7 @@ else
             {
                 var hasRates = _print.Labor.Any(l => l.Rate != 0);
                 <table class="lines" data-testid="labor-detail">
-                    <thead><tr><th>CLIN</th><th>Employee</th><th>Labor category</th><th class="num">Hours</th>@if (hasRates){<th class="num">Rate</th><th class="num">Amount</th>}</tr></thead>
+                    <thead><tr><th>@Tm.Reword("CLIN")</th><th>Employee</th><th>Labor category</th><th class="num">Hours</th>@if (hasRates){<th class="num">Rate</th><th class="num">Amount</th>}</tr></thead>
                     <tbody>
                         @foreach (var l in _print.Labor)
                         {
@@ -161,7 +161,7 @@ else
             else
             {
                 <table class="lines" data-testid="odc-detail">
-                    <thead><tr><th>Date</th><th>CLIN</th><th>Type</th><th>Description</th><th>Vendor</th><th class="num">Amount</th></tr></thead>
+                    <thead><tr><th>Date</th><th>@Tm.Reword("CLIN")</th><th>Type</th><th>Description</th><th>Vendor</th><th class="num">Amount</th></tr></thead>
                     <tbody>
                         @foreach (var o in _print.Odcs)
                         {
@@ -176,6 +176,7 @@ else
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [Parameter]
     public Guid InvoiceId { get; set; }
 

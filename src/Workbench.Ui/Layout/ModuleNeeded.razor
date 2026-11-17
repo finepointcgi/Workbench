@@ -1,0 +1,43 @@
+@using Workbench.Contracts.Identity
+@using Workbench.Contracts.Licensing
+@using Workbench.Ui.Navigation
+@inject ILicenseService Licenses
+@inject ICurrentUserContext CurrentUser
+
+@* Shown instead of a page whose license module the organization doesn't have. Nothing is deleted; the data is still there. *@
+<MudAlert Severity="Severity.Info" Variant="Variant.Outlined" Class="mt-4" data-testid="module-needed">
+    <MudText Typo="Typo.h6" HtmlTag="h2">@Entry.Title needs the @ModuleName module</MudText>
+    <MudText Class="mt-1">
+        This page is part of the @ModuleName module, which isn't in your license.
+        @if (_canManage)
+        {
+            <span>Ask us to add it, then enter the new key under <MudLink Href="setup/license">Setup › License</MudLink>.</span>
+        }
+        else
+        {
+            <span>Ask an administrator to add it under Setup › License.</span>
+        }
+        Your data is untouched.
+    </MudText>
+</MudAlert>
+
+@code {
+    [Parameter, EditorRequired] public NavEntry Entry { get; set; } = null!;
+
+    private string _name = "";
+    private bool _canManage;
+
+    private string ModuleName => _name.Length > 0 ? _name : Entry.ModuleId;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            _name = (await Licenses.GetStatusAsync()).Modules?.FirstOrDefault(m => m.Id == Entry.ModuleId)?.Name ?? "";
+            _canManage = (await CurrentUser.GetAsync()).Can(Permission.AdminOrganization);
+        }
+        catch (Exception ex) when (NavAccess.IsExpected(ex))
+        {
+        }
+    }
+}

@@ -12,8 +12,8 @@
             Hours a week the open pursuits would need from their estimated award dates, by month. <b>Likely</b> weights each by its chance of winning;
             <b>If all won</b> counts every one. It's measured against the hours the people above have free now, so today's bookings that end sooner aren't counted.
         </MudText>
-        <MudNumericField T="decimal" Label="Contract $ per staffed hour" Value="_rate" ValueChanged="OnRateChangedAsync" Min="1" Max="2000" Style="max-width:240px" Class="mb-2"
-                         HelperText="Blended: contract value ÷ this = hours" data-testid="pipeline-rate" Immediate="true" DebounceInterval="500" />
+        <MudNumericField T="decimal" Label="@Tm.Reword("Contract $ per staffed hour")" Value="_rate" ValueChanged="OnRateChangedAsync" Min="1" Max="2000" Style="max-width:240px" Class="mb-2"
+                         HelperText="@Tm.Reword("Blended: contract value ÷ this = hours")" data-testid="pipeline-rate" Immediate="true" DebounceInterval="500" />
         <div style="overflow-x:auto">
             <MudSimpleTable Dense="true" Bordered="true" aria-label="Pipeline staffing demand by month against the free hours now" data-testid="pipeline-demand-table">
                 <thead>
@@ -94,6 +94,7 @@
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [Parameter, EditorRequired] public HeatMapDto Map { get; set; } = default!;
 
     private PipelineDemandDto? _demand;

@@ -23,7 +23,7 @@
             }
             @if (_kind is RateCapKind.FeeRate or RateCapKind.FeeAmount)
             {
-                <MudSelect T="Guid?" @bind-Value="_clinId" Label="CLIN" Clearable="true" HelperText="Empty: the whole contract.">
+                <MudSelect T="Guid?" @bind-Value="_clinId" Label="@Tm.Reword("CLIN")" Clearable="true" HelperText="@Tm.Reword("Empty: the whole contract.")">
                     @foreach (var c in _clins)
                     {
                         <MudSelectItem T="Guid?" Value="c.Id">@c.Number · @c.Description</MudSelectItem>
@@ -42,6 +42,7 @@
 </MudDialog>
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [CascadingParameter]
     private IMudDialogInstance MudDialog { get; set; } = default!;
 

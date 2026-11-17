@@ -8,6 +8,7 @@
     <Project Path="src/Workbench.Desktop/Workbench.Desktop.csproj" />
     <Project Path="src/Workbench.Domain/Workbench.Domain.csproj" />
     <Project Path="src/Workbench.Infrastructure/Workbench.Infrastructure.csproj" />
+    <Project Path="src/Workbench.LicenseServer/Workbench.LicenseServer.csproj" />
     <Project Path="src/Workbench.Migrations.PostgreSql/Workbench.Migrations.PostgreSql.csproj" />
     <Project Path="src/Workbench.Migrations.Sqlite/Workbench.Migrations.Sqlite.csproj" />
     <Project Path="src/Workbench.Ui/Workbench.Ui.csproj" />
@@ -18,6 +19,7 @@
     <Project Path="tools/Workbench.LoadData/Workbench.LoadData.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Workbench.LicenseServer.Tests/Workbench.LicenseServer.Tests.csproj" />
     <Project Path="tests/Workbench.Tests/Workbench.Tests.csproj" />
   </Folder>
 </Solution>

@@ -43,8 +43,7 @@ else
         }
     </MudStack>
     <MudText Typo="Typo.body2" HtmlTag="div" Class="mud-text-secondary mb-3" Style="max-width: 72ch">
-        Budget each WBS element in hours by <Term Key="labor-category">labor category</Term>, the way the contract is priced, plus dollars for other direct costs.
-        The Current version is the one staffing and financials compare against; a locked Baseline keeps the approved numbers.
+        Budget each WBS element in hours by <Term Key="labor-category">labor category</Term>@Tm.Reword(", the way the contract is priced, plus dollars for other direct costs. The Current version is the one staffing and financials compare against; a locked Baseline keeps the approved numbers.")
     </MudText>
 
     @if (_versions.Count == 0)
@@ -121,6 +120,7 @@ else
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [Parameter]
     public Guid ProjectId { get; set; }
 

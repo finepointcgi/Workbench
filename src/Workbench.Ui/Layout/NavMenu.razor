@@ -39,7 +39,7 @@
             {
                 if (item.IsGroup)
                 {
-                    <MudNavLink Href="@HrefOf(item)" Match="NavLinkMatch.Prefix" Icon="@item.First.Icon" data-testid="@($"nav-group-{item.Group}")" data-pages="@PagesOf(item)">@item.Group</MudNavLink>
+                    <MudNavLink Href="@HrefOf(item)" Match="NavLinkMatch.Prefix" Icon="@item.First.Icon" data-testid="@($"nav-group-{item.Group}")" data-pages="@PagesOf(item)">@Tm.Reword(item.Group)</MudNavLink>
                 }
                 else
                 {
@@ -51,6 +51,8 @@
 </MudNavMenu>
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
+
     private NavAccess _access = NavAccess.Anonymous;
     private readonly Dictionary<string, bool> _expanded = [];
     private NavEntry? _current;
@@ -65,7 +67,7 @@
     private string Label(NavEntry entry) =>
         entry.Href == "leave" && _access.LeavePending > 0 ? $"{entry.Title} ({_access.LeavePending})"
         : entry.Href == "purchasing/receiving" && _access.ReceivableCount > 0 ? $"{entry.Title} ({_access.ReceivableCount})"
-        : entry.Title;
+        : Tm.Reword(entry.Title);
 
     protected override async Task OnInitializedAsync()
     {

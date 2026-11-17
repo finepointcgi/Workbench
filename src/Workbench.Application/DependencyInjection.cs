@@ -54,6 +54,7 @@ public static class DependencyInjection
         services.AddWorkbenchMyWork();
         services.AddWorkbenchDashboards();
         services.AddWorkbenchTimekeeping();
+        services.AddScoped<OrgProfile.CompanyProfileService>().AddScoped<Contracts.Company.ICompanyProfileService>(sp => sp.GetRequiredService<OrgProfile.CompanyProfileService>());
         services.AddWorkbenchOdcs();
         services.AddWorkbenchFinancials();
         services.AddWorkbenchSetup();

@@ -1,5 +1,6 @@
 using MudBlazor;
 using Workbench.Contracts.Identity;
+using Workbench.Contracts.Licensing;
 using P = Workbench.Contracts.Identity.Permission;
 
 namespace Workbench.Ui.Navigation;
@@ -47,9 +48,20 @@ public sealed record NavEntry(
     bool MatchAll = false,
     string? Detail = null,
     string? Keywords = null,
-    bool InMenu = true)
+    bool InMenu = true,
+    bool Government = false)
 {
-    public bool IsVisible(NavAccess access) => Rule.Allows(access);
+    /// <summary>
+    /// The license module the page belongs to, from the one table in <see cref="ModuleMap"/> (the page, else its group, else its
+    /// section). A test fails for any page the table doesn't cover; until it is added the page counts as core.
+    /// </summary>
+    public string ModuleId => ModuleMap.ForNav(Section, Group, Href) ?? ModuleKeys.Core;
+
+    /// <summary>
+    /// Shown to the user and open to them: their permissions allow it, the organization's license includes its module, and
+    /// <see cref="Government"/> pages (federal contracting only) also need the organization's government features switch on.
+    /// </summary>
+    public bool IsVisible(NavAccess access) => Rule.Allows(access) && access.HasModule(ModuleId) && (!Government || access.ShowGovernment);
 }
 
 /// <summary>One menu item: a page, or a group of pages (<see cref="IsGroup"/>) reached as one link, with tabs on its pages.</summary>
@@ -133,7 +145,7 @@ public static class NavCatalog
         new(Growth, "Business development", "Pipeline", "bd", Icons.Material.Filled.ViewKanban, NavRule.Custom(a => a.ShowBusinessDevelopment, "Also capture and proposal managers (their own opportunities)", P.PipelineView), MatchAll: true, Keywords: "capture board opportunities crm win themes swot pwin color team"),
         new(Growth, "Business development", "Opportunities", "bd/opportunities", Icons.Material.Filled.Flag, NavRule.Custom(a => a.ShowBusinessDevelopment, "Also capture and proposal managers (their own opportunities)", P.PipelineView), Detail: "Opportunity", Keywords: "pursuits rfp solicitation capture"),
         new(Growth, "Business development", "Accounts and contacts", "bd/accounts", Icons.Material.Filled.Contacts, NavRule.Need(P.PipelineView), Detail: "Account", Keywords: "agencies offices primes partners competitors crm"),
-        new(Growth, "Business development", "Leads", "bd/leads", Icons.Material.Filled.TravelExplore, NavRule.Need(P.PipelineView), Keywords: "sam.gov saved searches import notices"),
+        new(Growth, "Business development", "Leads", "bd/leads", Icons.Material.Filled.TravelExplore, NavRule.Need(P.PipelineView), Keywords: "sam.gov saved searches import notices", Government: true),
         new(Growth, "Business development", "Forecast and win/loss", "bd/forecast", Icons.Material.Filled.Insights, NavRule.Need(P.PipelineView), Keywords: "pwin pgo weighted pipeline b&p spend"),
         new(Growth, "Business development", "Gates and settings", "bd/settings", Icons.Material.Filled.Rule, NavRule.Need(P.PipelineView), Keywords: "go no-go bid decision checklist b&p charge code capture exec captureexec import"),
 
@@ -191,7 +203,7 @@ public static class NavCatalog
         new(Finance, "Revenue & compliance", "Revenue", "accounting/revenue", Icons.Material.Filled.TrendingUp, NavRule.Need(P.RevenueManage), MatchAll: true, Keywords: "revenue recognition run"),
         new(Finance, "Revenue & compliance", "Revenue estimates", "accounting/revenue/estimates", Icons.Material.Filled.Calculate, NavRule.Need(P.RevenueManage), Keywords: "eac etc", InMenu: false),
         new(Finance, "Revenue & compliance", "Revenue setup", "accounting/revenue/setup", Icons.Material.Filled.Tune, NavRule.Need(P.RevenueManage), InMenu: false),
-        new(Finance, "Revenue & compliance", "Incurred cost", "accounting/incurred-cost", Icons.Material.Filled.Gavel, NavRule.Need(P.IncurredCostManage), Detail: "Submission", Keywords: "ice dcaa submission"),
+        new(Finance, "Revenue & compliance", "Incurred cost", "accounting/incurred-cost", Icons.Material.Filled.Gavel, NavRule.Need(P.IncurredCostManage), Detail: "Submission", Keywords: "ice dcaa submission", Government: true),
         new(Finance, "Revenue & compliance", "Indirect rates", "accounting/indirect-rates", Icons.Material.Filled.Percent, NavRule.Need(P.IndirectRatesManage), Keywords: "fringe overhead g&a pools"),
         new(Finance, "Revenue & compliance", "Total time accounting", "accounting/total-time", Icons.Material.Filled.MoreTime, NavRule.Need(P.TimeTotalTime), Keywords: "tta uncompensated overtime exempt salaried effective rate labor cost method"),
         new(Finance, "Planning", "Budgets", "planning/budgets", Icons.Material.Filled.TableChart, NavRule.Need(P.BudgetsManage), Detail: "Budget version", Keywords: "corporate gl budget versions original revised forecast spread"),
@@ -272,10 +284,10 @@ public static class NavCatalog
         new(Admin, "Integrations", "Import", "setup/import", Icons.Material.Filled.UploadFile, NavRule.Need(P.SetupImports), Detail: "Import", Keywords: "costpoint smartsheet unanet csv"),
         new(Admin, "Integrations", "Go-live migration", "setup/migration", Icons.Material.Filled.Flag, NavRule.Need(P.SetupImports), Detail: "Reconciliation", Keywords: "cutover cut-over costpoint parallel reconcile opening balances"),
         new(Admin, "Integrations", "Costpoint parallel run", "setup/migration/parallel-run", Icons.Material.Filled.FactCheck, NavRule.Need(P.SetupImports), Detail: "Costpoint", Keywords: "costpoint parallel month trial balance project cost reconcile differences cause"),
-        new(Admin, "Compliance", "DCAA readiness", "admin/dcaa-readiness", Icons.Material.Filled.Gavel, NavRule.Need(P.AdminCompliance), Keywords: "sf 1408 pre-award survey accounting system compliance cpa"),
-        new(Admin, "Compliance", "Purchasing system review", "admin/cpsr-readiness", Icons.Material.Filled.FactCheck, NavRule.Need(P.CasCpsrManage), Keywords: "cpsr purchasing system review procurement file competition quotes sole source flowdown debarment"),
-        new(Admin, "Compliance", "CMMC assessment", "admin/cmmc", Icons.Material.Filled.VerifiedUser, NavRule.Need(P.AdminCompliance), Keywords: "cmmc nist 800-171 sprs score cui poam plan of action milestones ssp dfars 7012 security"),
-        new(Admin, "Compliance", "CAS disclosure statement", "admin/cas-disclosure", Icons.Material.Filled.MenuBook, NavRule.Need(P.CasCpsrManage), Keywords: "cas ds-1 ds1 ds-2 disclosure statement 401 402 cost accounting standards consistency"),
+        new(Admin, "Compliance", "DCAA readiness", "admin/dcaa-readiness", Icons.Material.Filled.Gavel, NavRule.Need(P.AdminCompliance), Keywords: "sf 1408 pre-award survey accounting system compliance cpa", Government: true),
+        new(Admin, "Compliance", "Purchasing system review", "admin/cpsr-readiness", Icons.Material.Filled.FactCheck, NavRule.Need(P.CasCpsrManage), Keywords: "cpsr purchasing system review procurement file competition quotes sole source flowdown debarment", Government: true),
+        new(Admin, "Compliance", "CMMC assessment", "admin/cmmc", Icons.Material.Filled.VerifiedUser, NavRule.Need(P.AdminCompliance), Keywords: "cmmc nist 800-171 sprs score cui poam plan of action milestones ssp dfars 7012 security", Government: true),
+        new(Admin, "Compliance", "CAS disclosure statement", "admin/cas-disclosure", Icons.Material.Filled.MenuBook, NavRule.Need(P.CasCpsrManage), Keywords: "cas ds-1 ds1 ds-2 disclosure statement 401 402 cost accounting standards consistency", Government: true),
 
         // Findable with Ctrl+K only.
         new(Home, null, "Notifications", "notifications", Icons.Material.Filled.Notifications, NavRule.Everyone, Keywords: "alerts email digest settings", InMenu: false),

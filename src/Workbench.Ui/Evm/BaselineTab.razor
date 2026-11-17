@@ -40,7 +40,7 @@ else
                 <MudText Typo="Typo.body2" Class="mt-1">
                     Distributed @EvmFormat.Money(Baseline.DistributedBudget) + undistributed @EvmFormat.Money(Baseline.UndistributedBudget)
                     = PMB <b>@EvmFormat.Money(Baseline.PerformanceMeasurementBaseline)</b>; + management reserve @EvmFormat.Money(Baseline.ManagementReserve)
-                    = contract budget base <b>@EvmFormat.Money(Baseline.ContractBudgetBase)</b>
+                    = @Tm.Term("contract") budget base <b>@EvmFormat.Money(Baseline.ContractBudgetBase)</b>
                 </MudText>
                 @if (Baseline.HasClosedPeriods)
                 {
@@ -130,6 +130,7 @@ else
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [Parameter, EditorRequired]
     public Guid ProjectId { get; set; }
 
