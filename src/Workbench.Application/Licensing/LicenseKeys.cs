@@ -45,6 +45,20 @@ public sealed class LicenseOptions
 
     public string PublicKeyPem { get; set; } = DefaultPublicKeyPem;
 
+    /// <summary>
+    /// The license server a <i>connected</i> install refreshes its key from (<c>https://license.example.com</c>). Empty, the default,
+    /// means this install never phones home: it runs on the key it was given, which is how defense and air-gapped sites run.
+    /// </summary>
+    public string? ServerUrl { get; set; }
+
+    /// <summary>Hours between refreshes while they work.</summary>
+    public int RefreshIntervalHours { get; set; } = 24;
+
+    /// <summary>Days without a successful refresh before administrators see a banner. Entitlements are not changed by it; the key's own expiry governs.</summary>
+    public int RefreshStaleDays { get; set; } = 7;
+
+    public int RefreshTimeoutSeconds { get; set; } = 30;
+
     /// <summary>Days after the expiry date that Business keeps working, with a warning, so a late renewal never stops payroll.</summary>
     public int GraceDays { get; set; } = 14;
 

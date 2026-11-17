@@ -24,6 +24,31 @@ public sealed record FeatureStatusDto(string Key, string Name, string Descriptio
 /// <param name="Available">The organization may use it: licensed, or not enforced. Menus and pages follow this.</param>
 public sealed record ModuleStatusDto(string Id, string Name, string Description, bool Enforced, bool Licensed, bool Available);
 
+/// <summary>
+/// How a connected install's key refresh from the license server is going. Null in the status when this install is offline
+/// (no <c>License:ServerUrl</c>), the default for defense and air-gapped sites.
+/// </summary>
+/// <param name="Outcome"><c>refreshed</c>, <c>refused</c> (the server says the subscription is not entitled), <c>offline</c> (an offline key, never refreshed), <c>failed</c> (no usable answer), or null before the first attempt.</param>
+/// <param name="Message">The server's own reason when it refused (for example that the subscription lapsed), or what went wrong.</param>
+/// <param name="Stale">No successful refresh for the configured number of days while attempts keep failing or being refused. Only a warning: the key's own expiry still decides what the install may do.</param>
+public static class RefreshOutcomeNames
+{
+    public const string Refreshed = "refreshed";
+    public const string Refused = "refused";
+    public const string Offline = "offline";
+    public const string Failed = "failed";
+}
+
+public sealed record LicenseRefreshDto(
+    string ServerUrl,
+    DateTime? LastAttemptUtc,
+    DateTime? LastSuccessUtc,
+    string? Outcome,
+    string? Message,
+    int ConsecutiveFailures,
+    bool Stale,
+    int? DaysSinceSuccess);
+
 /// <param name="SeatLimit">Full seats the license covers. Null when seats aren't limited.</param>
 /// <param name="SeatsUsed">Full seats in use: people with more than Employee access, plus light people once the light seats are full. API keys do not take a seat.</param>
 /// <param name="LightSeatLimit">Light seats (people who only enter their own time, expenses and leave). Zero when the license has none.</param>
@@ -44,7 +69,8 @@ public sealed record LicenseStatusDto(
     int LightSeatLimit = 0,
     int LightSeatsUsed = 0,
     bool Trial = false,
-    int? DaysLeft = null)
+    int? DaysLeft = null,
+    LicenseRefreshDto? Refresh = null)
 {
     /// <summary>True when the organization may use <paramref name="moduleId"/>; every module when the server didn't say.</summary>
     public bool HasModule(string moduleId) => Modules is null || Modules.FirstOrDefault(m => m.Id == moduleId)?.Available != false;
