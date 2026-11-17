@@ -67,3 +67,42 @@ Change them only if you need to: see [Approval workflows](approval-workflows.md)
 For a full move from Costpoint (opening balances, a parallel month), use **Go-live migration**: see
 [Importing and go-live](import-and-migration.md#go-live-migration). Role-based training material (a one-hour agenda and a
 quick-reference card per role) is in [Training](../training/README.md).
+
+## Sample data and starter outlines
+
+**Choosing the demo data.** A development or demo host fills an empty database with sample data. Two sets ship:
+
+- **Government** (the default): a federal contractor with cost-plus contracts, Costpoint-style accounting and a capture
+  pipeline.
+- **Commercial**: *Kestrel Bay Consulting*, a nine-person professional-services firm (every name is invented). Three clients
+  (a time-and-materials analytics engagement, a monthly agency-style retainer, a fixed-fee redesign), a pipeline of eleven
+  commercial deals across every stage, three projects built from the starter outlines with their plans, staffing and an
+  approved budget, four weeks of timesheets, and four invoices (one part-paid, one paid, one sent and one draft). Dates are
+  relative to the day the database is created. The same people sign in as in the government demo (Dana Lee is the
+  administrator, Pat Morgan is Finance, Blake Diaz is business development).
+
+Pick it with the `Demo:Dataset` setting, set before the first start, on an **empty** database (a database that already has
+data keeps it):
+
+```bash
+Demo__Dataset=Commercial ASPNETCORE_ENVIRONMENT=Development dotnet run --project src/Workbench.Web --launch-profile http
+```
+
+For the public demo host set `Demo__Dataset=Commercial` next to `Demo__Enabled=true` (see
+[docs/demo-hosting.md](../demo-hosting.md)). `Government`, or no value, is the government set; any other value stops startup
+with a message, so a typo can't quietly seed the wrong data. Neither set is created in Production.
+
+**Starter outlines.** **New project › Copy from… › Starter outline** offers outlines beyond the original three, each with the
+roles the work usually needs:
+
+| Outline | Phases | Usual roles |
+|---|---|---|
+| Consulting engagement | Engagement management, Discovery, Design, Delivery, Handover | Engagement Partner, Engagement Manager, Senior Consultant, Consultant, Analyst |
+| Agency retainer | Account management, Monthly deliverables, Reporting and review | Account Director, Account Manager, Strategist, Creative Director, Designer, Copywriter |
+| Software implementation | Project management, Requirements and design, Configuration and build, Testing, Training and go-live, Hypercare | Implementation Lead, Solution Architect, Developer, Data Migration Analyst, QA Analyst, Trainer |
+| Engineering design phases | Concept design, Preliminary design, Detailed design, Construction support | Principal Engineer, Project Engineer, Design Engineer, CAD Designer, QA/QC Reviewer |
+
+When Finance starts a project on a contract from an outline, the roles that exist as active labor categories with the same
+name become the project's labor categories (otherwise the contract's apply). Add labor categories with those names under
+**Setup › Labor categories** to use this. Moving a pipeline across from another CRM: see
+[Importing deals](../user-guide/importing-deals.md).

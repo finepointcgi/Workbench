@@ -24,8 +24,12 @@ public enum ProjectStartFrom
     ImportExcel,
 }
 
-/// <summary>A starter outline. <paramref name="Outline"/> lists element names, indented two spaces per level.</summary>
-public sealed record ProjectTemplateDto(string Key, string Name, string Description, IReadOnlyList<string> Outline);
+/// <summary>
+/// A starter outline. <paramref name="Outline"/> lists element names, indented two spaces per level. <paramref name="LaborCategories"/>
+/// are the roles the work usually needs: when the project is on a contract and Finance hasn't picked categories, those that
+/// match an active labor category by name become the project's categories (the others are only suggestions).
+/// </summary>
+public sealed record ProjectTemplateDto(string Key, string Name, string Description, IReadOnlyList<string> Outline, IReadOnlyList<string>? LaborCategories = null);
 
 /// <summary>
 /// Starts a project; its manager is <paramref name="ProjectManagerId"/>, else its creator, and is asked to plan it when

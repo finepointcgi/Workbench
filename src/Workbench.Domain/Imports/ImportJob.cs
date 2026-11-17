@@ -17,6 +17,15 @@ public enum ImportSource
 
     /// <summary>Excel or CSV exports of Capture Exec companies, contacts and opportunities.</summary>
     CaptureExec,
+
+    /// <summary>HubSpot CRM exports of companies, contacts and deals.</summary>
+    HubSpot,
+
+    /// <summary>Salesforce exports (reports or Data Loader/Data Export CSVs) of accounts, contacts and opportunities.</summary>
+    Salesforce,
+
+    /// <summary>Any CSV or Excel list of companies, contacts and deals, mapped by hand.</summary>
+    GenericCsv,
 }
 
 /// <summary>What an import creates or updates.</summary>
