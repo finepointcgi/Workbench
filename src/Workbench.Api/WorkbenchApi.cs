@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 using Workbench.Contracts;
 
 namespace Workbench.Api;
@@ -93,6 +94,9 @@ public static class WorkbenchApi
         v1.MapAutomationBuilderEndpoints();
         v1.MapLayoutEndpoints();
         v1.MapSheetExtrasEndpoints();
+
+        // License modules loaded from the modules folder map theirs on the same group: authorized, with the same error mapping.
+        app.ServiceProvider.GetService<Workbench.Plugins.ModuleHost>()?.MapEndpoints(v1);
 
         return app;
     }

@@ -62,6 +62,7 @@ public sealed class DatabaseMigrator(IServiceProvider services, TenancyOptions t
                 }
 
                 await db.Database.MigrateAsync(cancellationToken);
+                await MigrateModulesAsync(db, cancellationToken); // Core first, then each license module's own migrations.
                 await MigrateDataAsync(db, cancellationToken);
                 return;
             }
@@ -87,7 +88,13 @@ public sealed class DatabaseMigrator(IServiceProvider services, TenancyOptions t
         logger.LogWarning("Moved the pre-migrations development database to {Backup} and created a new one.", backup);
         await using var fresh = await factory.CreateDbContextAsync(cancellationToken);
         await fresh.Database.MigrateAsync(cancellationToken);
+        await MigrateModulesAsync(fresh, cancellationToken);
     }
+
+    private Task MigrateModulesAsync(WorkbenchDbContext db, CancellationToken cancellationToken) =>
+        Workbench.Plugins.ModuleHost.Current.Modules.Any(m => m.Migrations is not null)
+            ? ModuleMigrator.MigrateAsync(Workbench.Plugins.ModuleHost.Current, services.GetRequiredService<WorkbenchDatabase>().Provider, db.Database.GetConnectionString()!, logger, Describe(), cancellationToken)
+            : Task.CompletedTask;
 
     /// <summary>Data migrations that run after the schema is current. Each is idempotent.</summary>
     private async Task MigrateDataAsync(WorkbenchDbContext db, CancellationToken cancellationToken)

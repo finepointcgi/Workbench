@@ -1,6 +1,7 @@
 using MudBlazor;
 using Workbench.Contracts.Identity;
 using Workbench.Contracts.Licensing;
+using Workbench.Contracts.Modules;
 using P = Workbench.Contracts.Identity.Permission;
 
 namespace Workbench.Ui.Navigation;
@@ -90,7 +91,44 @@ public static class NavCatalog
     public const string Materials = "materials";
     public const string Admin = "admin";
 
-    public static IReadOnlyList<NavSection> Sections { get; } =
+    /// <summary>Every menu section: the built-in ones, with the sections loaded modules add just before Reports.</summary>
+    public static IReadOnlyList<NavSection> Sections => Union().Sections;
+
+    /// <summary>Every page: the built-in ones, then those loaded modules add (<c>IWorkbenchModule.Describe</c>). Their module is the one that listed them.</summary>
+    public static IReadOnlyList<NavEntry> Entries => Union().Entries;
+
+    private sealed record UnionView(ModuleSet Set, IReadOnlyList<NavSection> Sections, IReadOnlyList<NavEntry> Entries);
+
+    private static UnionView? _union;
+
+    private static UnionView Union()
+    {
+        var set = ModuleRegistry.Current;
+        if (_union is { } cached && ReferenceEquals(cached.Set, set))
+        {
+            return cached;
+        }
+
+        if (set.IsEmpty)
+        {
+            return _union = new UnionView(set, BuiltInSections, BuiltInEntries);
+        }
+
+        var added = set.Modules.SelectMany(m => m.NewNavSections).Select(s => new NavSection(s.Key, s.Title, s.Icon, s.Href)).ToList();
+        var at = BuiltInSections.ToList().FindIndex(s => s.Key == Reports);
+        var sections = BuiltInSections.Take(at).Concat(added).Concat(BuiltInSections.Skip(at)).ToList();
+        var entries = BuiltInEntries.Concat(set.Modules.SelectMany(m => m.NavEntries).Select(e =>
+            new NavEntry(e.Section, e.Group, e.Title, e.Href, e.Icon, e.Permissions.Count == 0 ? NavRule.Everyone : NavRule.Need([.. e.Permissions]),
+                e.MatchAll, e.Detail, e.Keywords, e.InMenu, e.Government))).ToList();
+        return _union = new UnionView(set, sections, entries);
+    }
+
+    /// <summary>The section keys and pages the product itself has (what a module's menu entries are checked against).</summary>
+    public static IReadOnlyList<string> BuiltInSectionKeys => BuiltInSections.Select(s => s.Key).ToList();
+
+    public static IReadOnlyList<string> BuiltInHrefs => BuiltInEntries.Select(e => e.Href).ToList();
+
+    public static IReadOnlyList<NavSection> BuiltInSections { get; } =
     [
         new(Home, "Home", Icons.Material.Filled.Home, ""),
         new(MyWork, "My work", Icons.Material.Filled.Inbox),
@@ -105,7 +143,7 @@ public static class NavCatalog
         new(Admin, "Admin", Icons.Material.Filled.AdminPanelSettings),
     ];
 
-    public static IReadOnlyList<NavEntry> Entries { get; } =
+    public static IReadOnlyList<NavEntry> BuiltInEntries { get; } =
     [
         new(Home, null, "Home", "", Icons.Material.Filled.Home, NavRule.Public, MatchAll: true, Keywords: "my work start"),
 

@@ -199,6 +199,7 @@ nav:
           - Object storage: operations/object-storage.md
           - Monitoring: operations/monitoring.md
           - Alerts: operations/alerts.md
+          - License modules as plugins: operations/module-plugins.md
           - Performance: operations/performance.md
           - Runbooks: operations/runbooks.md
           - Incident response: operations/incident-response.md

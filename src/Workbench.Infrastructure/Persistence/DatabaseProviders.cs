@@ -44,6 +44,21 @@ public static class DatabaseProviders
                 break;
         }
 
+        if (Workbench.Plugins.ModuleHost.Current.HasModel)
+        {
+            // Modules add entities to the runtime model and keep their own migrations, so the core snapshot (checked in CI against the
+            // model without modules) legitimately differs from this model. EF Core would refuse to migrate over that.
+            options.ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
+            options.ReplaceService<Microsoft.EntityFrameworkCore.Infrastructure.IModelCacheKeyFactory, ModuleModelCacheKeyFactory>();
+        }
+
         return options;
     }
+}
+
+/// <summary>Keeps one EF model per module set, so a host that loads different modules never reuses another's model.</summary>
+internal sealed class ModuleModelCacheKeyFactory : Microsoft.EntityFrameworkCore.Infrastructure.IModelCacheKeyFactory
+{
+    public object Create(DbContext context, bool designTime) =>
+        (context.GetType(), designTime, Workbench.Plugins.ModuleHost.Current.ModelKey);
 }

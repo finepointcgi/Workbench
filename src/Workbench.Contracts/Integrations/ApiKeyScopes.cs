@@ -21,7 +21,34 @@ public static class ApiKeyScopes
     /// <summary>The area that lets AI assistants connect over the Model Context Protocol (<c>/api/v1/mcp</c>).</summary>
     public const string Mcp = "mcp";
 
-    public static IReadOnlyList<ApiKeyAreaDto> Areas { get; } =
+    /// <summary>Every area: the built-in ones (plus segments loaded modules add to them), then the areas modules add.</summary>
+    public static IReadOnlyList<ApiKeyAreaDto> Areas => Union().Areas;
+
+    private sealed record UnionView(Modules.ModuleSet Set, IReadOnlyList<ApiKeyAreaDto> Areas);
+
+    private static UnionView? _union;
+
+    private static UnionView Union()
+    {
+        var set = Modules.ModuleRegistry.Current;
+        if (_union is { } cached && ReferenceEquals(cached.Set, set))
+        {
+            return cached;
+        }
+
+        if (set.IsEmpty)
+        {
+            return _union = new UnionView(set, BuiltInAreas);
+        }
+
+        var extra = set.Modules.SelectMany(m => m.ApiKeySegments).GroupBy(kv => kv.Key).ToDictionary(g => g.Key, g => g.SelectMany(kv => kv.Value).ToList());
+        var areas = BuiltInAreas.Select(a => extra.TryGetValue(a.Key, out var more) ? a with { PathSegments = [.. a.PathSegments, .. more] } : a)
+            .Concat(set.Modules.SelectMany(m => m.ApiKeyAreas)).ToList();
+        return _union = new UnionView(set, areas);
+    }
+
+    /// <summary>The built-in areas alone.</summary>
+    public static IReadOnlyList<ApiKeyAreaDto> BuiltInAreas { get; } =
     [
         new("sheets", "Sheets, dashboards and tasks", "Sheets, items, columns, comments, workspaces, dashboards and assigned work.",
             ["sheets", "workspaces", "dashboards", "my-work", "my-tasks", "my-todo", "plan-template"]),

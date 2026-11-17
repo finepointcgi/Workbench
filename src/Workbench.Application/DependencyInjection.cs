@@ -38,7 +38,12 @@ namespace Workbench.Application;
 
 public static class DependencyInjection
 {
-    public static IServiceCollection AddWorkbenchApplication(this IServiceCollection services)
+    /// <param name="registerModules">
+    /// Registers the license modules loaded from the modules folder (<c>ModuleHost.ConfigureServices</c>). It runs after every in-repo
+    /// feature and before <c>AddWorkbenchIdentity</c> and the edition gates, so a module's services are wrapped with the same permission
+    /// and edition checks as the in-repo ones, and may decorate them. Null (the default) is a host without modules.
+    /// </param>
+    public static IServiceCollection AddWorkbenchApplication(this IServiceCollection services, Action<IServiceCollection>? registerModules = null)
     {
         services.AddSingleton(TimeProvider.System);
         services.AddScoped<ISheetService, SheetService>();
@@ -117,6 +122,7 @@ public static class DependencyInjection
         Automations.AutomationBuilderRegistration.AddWorkbenchAutomationBuilder(services); // Admin › Automation: cross-module automations (capture hook in AuditRecorder, queue, schedules, thresholds); above AddWorkbenchIdentity.
         Customization.LayoutsRegistration.AddWorkbenchLayouts(services); // Form layouts (required fields checked on save), list views, role home pages; after every form's service, above AddWorkbenchIdentity.
         services.AddWorkbenchSheetExtras(); // Wave E: linked rows, lookups, cross-sheet references, templates, copy, cross-sheet reports, forms; above AddWorkbenchIdentity.
+        registerModules?.Invoke(services); // License modules from outside the repository (docs/operations/module-plugins.md); above AddWorkbenchIdentity.
         // Keep AddWorkbenchIdentity last: its permission decorators must wrap the outermost existing decorator
         // (activity recording and any later feature's), so new decorators belong above this line.
         services.AddWorkbenchIdentity();

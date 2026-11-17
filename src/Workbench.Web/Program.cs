@@ -52,7 +52,12 @@ builder.Services.AddMudServices();
 Workbench.Ui.Company.TermsSnackbarRegistration.AddCompanyWordsInSnackbars(builder.Services);
 builder.Services.AddProblemDetails();
 
-builder.Services.AddWorkbenchApplication();
+// License modules from outside the repository (docs/operations/module-plugins.md). The license is checked before a module's assembly is loaded.
+var moduleLicensed = Workbench.Application.Licensing.ModuleEntitlement.Check(builder.Configuration, TimeProvider.System, out var moduleLicenseNote);
+var modules = Workbench.Plugins.ModuleHost.Load(Workbench.Plugins.ModuleHostOptions.From(builder.Configuration, moduleLicensed,
+    Workbench.Ui.Navigation.NavCatalog.BuiltInSectionKeys, Workbench.Ui.Navigation.NavCatalog.BuiltInHrefs));
+builder.Services.AddSingleton(modules);
+builder.Services.AddWorkbenchApplication(services => modules.ConfigureServices(services, builder.Configuration));
 var licenseOptions = new Workbench.Application.Licensing.LicenseOptions();
 builder.Configuration.GetSection(Workbench.Application.Licensing.LicenseOptions.SectionName).Bind(licenseOptions);
 Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.Replace(builder.Services, ServiceDescriptor.Singleton(licenseOptions)); // License:EditionOverride turns Business on for the demo; License:PublicKeyPem replaces the built-in public key.
@@ -69,6 +74,12 @@ builder.Services.AddWorkbenchNotificationsHub();
 builder.Services.AddCostpointSource(builder.Configuration);
 
 var app = builder.Build();
+if (modules.Results.Count > 0)
+{
+    app.Logger.LogInformation("Modules: {License}", moduleLicenseNote);
+    modules.LogResults(app.Logger);
+}
+
 if (migrateOnly)
 {
     await app.Services.GetRequiredService<DatabaseMigrator>().MigrateAsync();
@@ -141,7 +152,7 @@ app.MapWorkbenchGitLabWebhooks(); // GitLab issue, epic and milestone webhooks f
 app.MapWorkbenchCalendarFeed(); // Read-only per-person .ics feeds behind a private token.
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode()
-    .AddAdditionalAssemblies(typeof(Workbench.Ui.Routes).Assembly);
+    .AddAdditionalAssemblies([typeof(Workbench.Ui.Routes).Assembly, .. Workbench.Contracts.Modules.ModuleRegistry.Current.Modules.SelectMany(m => m.RoutableAssemblies)]);
 
 app.Run();
 return 0;

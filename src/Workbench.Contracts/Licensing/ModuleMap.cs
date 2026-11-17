@@ -14,6 +14,7 @@ using Workbench.Contracts.Hr;
 using Workbench.Contracts.IncurredCost;
 using Workbench.Contracts.IndirectRates;
 using Workbench.Contracts.Migration;
+using Workbench.Contracts.Modules;
 using Workbench.Contracts.Notifications;
 using Workbench.Contracts.Purchasing;
 using Workbench.Contracts.Risks;
@@ -84,7 +85,8 @@ public static class ModuleMap
             "companies", "integrations", "customization", "automations", "approval-workflows", "access-reviews", "retention", "edi", "costpoint"),
     ]);
 
-    public static string? ForApiSegment(string segment) => ApiSegments.GetValueOrDefault(segment);
+    /// <summary>The module of an API path segment: the built-in table, else the loaded plugins' rows (<see cref="ModuleRegistry"/>).</summary>
+    public static string? ForApiSegment(string segment) => ApiSegments.GetValueOrDefault(segment) ?? ModuleRegistry.Current.ForApiSegment(segment);
 
     // ───────────────────────────── Permissions ─────────────────────────────
 
@@ -152,7 +154,8 @@ public static class ModuleMap
             }
         }
 
-        return best;
+        var (plugin, pluginLength) = ModuleRegistry.Current.ForPermission(permissionKey);
+        return pluginLength > bestLength ? plugin : best;
     }
 
     // ───────────────────────────── Menu ─────────────────────────────
@@ -208,17 +211,18 @@ public static class ModuleMap
     /// </summary>
     public static string? ForNav(string section, string? group, string href)
     {
-        if (NavPages.TryGetValue(href, out var page))
+        var plugins = ModuleRegistry.Current;
+        if (NavPages.TryGetValue(href, out var page) || (page = plugins.ForNavPage(href)) is not null)
         {
             return page;
         }
 
-        if (group is not null && NavGroups.TryGetValue($"{section}/{group}", out var grouped))
+        if (group is not null && (NavGroups.TryGetValue($"{section}/{group}", out var grouped) || (grouped = plugins.ForNavGroup($"{section}/{group}")) is not null))
         {
             return grouped;
         }
 
-        return NavSections.GetValueOrDefault(section);
+        return NavSections.GetValueOrDefault(section) ?? plugins.ForNavSection(section);
     }
 
     // ───────────────────────────── Services ─────────────────────────────
@@ -283,7 +287,7 @@ public static class ModuleMap
     /// <summary>The module <paramref name="service"/> (a Contracts service interface) belongs to, or null when nothing says.</summary>
     public static string? ForService(Type service)
     {
-        if (ServiceTypes.TryGetValue(service, out var module))
+        if (ServiceTypes.TryGetValue(service, out var module) || (module = ModuleRegistry.Current.ForService(service)) is not null)
         {
             return module;
         }
@@ -293,12 +297,12 @@ public static class ModuleMap
         return ns.StartsWith(Prefix, StringComparison.Ordinal) ? ServiceNamespaces.GetValueOrDefault(ns[Prefix.Length..]) : null;
     }
 
-    /// <summary>Every service interface of the contracts project (public interfaces named <c>I…Service</c>): what the service gates and the coverage test walk.</summary>
+    /// <summary>The service interfaces of the contracts project (public interfaces named <c>I…Service</c>), without any module's.</summary>
+    public static IReadOnlyList<Type> BuiltInServiceInterfaces() => ModuleContribution.ServiceInterfacesIn(typeof(ModuleMap).Assembly);
+
+    /// <summary>Every service interface: the contracts project's, then the loaded modules' (<see cref="ModuleContribution.ServiceInterfaces"/>). What the service gates and the coverage test walk.</summary>
     public static IReadOnlyList<Type> ServiceInterfaces() =>
-        typeof(ModuleMap).Assembly.GetExportedTypes()
-            .Where(t => t is { IsInterface: true, IsGenericType: false } && t.Name.StartsWith('I') && t.Name.EndsWith("Service", StringComparison.Ordinal))
-            .OrderBy(t => t.FullName, StringComparer.Ordinal)
-            .ToList();
+        [.. BuiltInServiceInterfaces(), .. ModuleRegistry.Current.ServiceInterfaces.OrderBy(t => t.FullName, StringComparer.Ordinal)];
 
     /// <summary>The asynchronous methods of a service interface, including those it inherits (ordinary methods only: no property accessors).</summary>
     public static IReadOnlyList<System.Reflection.MethodInfo> AsyncMethods(Type service) =>
