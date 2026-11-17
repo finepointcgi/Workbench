@@ -23,6 +23,12 @@ public enum InvoiceType
 
     /// <summary>Performance-based payments (FAR 32.10) for completed events. Financing, not revenue.</summary>
     PerformanceBased,
+
+    /// <summary>A commercial retainer: a fixed amount for one period (see <see cref="AgreementBillingPlan"/>).</summary>
+    Retainer,
+
+    /// <summary>A recurring or subscription charge for one period (see <see cref="AgreementBillingPlan"/>).</summary>
+    Recurring,
 }
 
 public enum InvoiceStatus
@@ -74,6 +80,12 @@ public enum InvoiceLineKind
     Liquidation,
     /// <summary>Added by sales tax: the sales tax on the invoice (credited to the sales tax liability, never revenue).</summary>
     SalesTax,
+
+    /// <summary>A retainer period, or the overage on it.</summary>
+    Retainer,
+
+    /// <summary>A recurring or subscription charge for one period.</summary>
+    Recurring,
 }
 
 /// <summary>
@@ -112,6 +124,9 @@ public sealed class Invoice : Entity, Companies.ICompanyOwned
 
     /// <summary>Approved credit memos against this invoice.</summary>
     public decimal AmountCredited { get; set; }
+
+    /// <summary>Written off as uncollectible (see <see cref="InvoiceWriteOff"/>).</summary>
+    public decimal AmountWrittenOff { get; set; }
 
     /// <summary>On a credit memo: the invoice it credits.</summary>
     public Guid? CreditOfInvoiceId { get; set; }
@@ -162,7 +177,7 @@ public sealed class Invoice : Entity, Companies.ICompanyOwned
     public decimal TransactionBalance => IsOpenReceivable ? TransactionTotal - TransactionPaid - TransactionCredited : 0m;
 
     /// <summary>What the customer still owes.</summary>
-    public decimal Balance => IsOpenReceivable ? Total - AmountPaid - AmountCredited : 0m;
+    public decimal Balance => IsOpenReceivable ? Total - AmountPaid - AmountCredited - AmountWrittenOff : 0m;
 
     /// <summary>Approved, not void, and not a credit memo (credit memos are applied to their invoice when approved).</summary>
     public bool IsOpenReceivable => (Status is InvoiceStatus.Approved or InvoiceStatus.Sent or InvoiceStatus.PartiallyPaid) && Type != InvoiceType.CreditMemo;
@@ -184,7 +199,7 @@ public sealed class Invoice : Entity, Companies.ICompanyOwned
             return;
         }
 
-        var settled = AmountPaid + AmountCredited;
+        var settled = AmountPaid + AmountCredited + AmountWrittenOff;
         Status = settled >= Total && Total > 0 ? InvoiceStatus.Paid
             : AmountPaid > 0 ? InvoiceStatus.PartiallyPaid
             : SentAtUtc is not null ? InvoiceStatus.Sent
@@ -234,6 +249,9 @@ public enum BilledSourceKind
     Odc,
     Milestone,
     PerformanceEvent,
+
+    /// <summary>A stage of a commercial fixed-fee agreement (<see cref="AgreementMilestone"/>).</summary>
+    PlanMilestone,
 }
 
 /// <summary>
@@ -362,6 +380,12 @@ public sealed class Payment : Entity, Companies.ICompanyOwned
 
     /// <summary>Gain (positive) or loss (negative): the cash received less the receivable relieved.</summary>
     public decimal RealizedGainLoss { get; set; }
+
+    /// <summary>
+    /// Cash received beyond what was applied to invoices: a customer credit held against accounts receivable (the receipt
+    /// credited AR billed in full), applied to later invoices without a new journal entry. Functional-currency receipts only.
+    /// </summary>
+    public decimal UnappliedAmount { get; set; }
 }
 
 public sealed class PaymentApplication : Entity

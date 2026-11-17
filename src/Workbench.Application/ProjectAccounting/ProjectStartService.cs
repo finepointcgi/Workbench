@@ -308,6 +308,7 @@ public sealed class ProjectStartService(
             return;
         }
 
+        var line = (await OrgProfile.CompanyProfileService.LoadTermsAsync(dbFactory, cancellationToken)).Get("Clin"); // "Billing line 0001" for a commercial firm.
         var used = new List<string>();
         var elementFor = new Dictionary<Guid, Guid>();
         foreach (var clin in lines.Where(c => c.ParentNumber is null).OrderBy(c => c.Number, StringComparer.Ordinal))
@@ -315,7 +316,7 @@ public sealed class ProjectStartService(
             var code = WbsCodes.Next(project.Code, used);
             used.Add(code);
             var element = await projects.CreateWbsElementAsync(project.Id,
-                new SaveWbsElementRequest(null, code, $"CLIN {clin.Number} {clin.Description}".Trim()), cancellationToken);
+                new SaveWbsElementRequest(null, code, $"{line} {clin.Number} {clin.Description}".Trim()), cancellationToken);
             elementFor[clin.Id] = element.Id;
             try
             {

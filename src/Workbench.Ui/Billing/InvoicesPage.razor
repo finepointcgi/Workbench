@@ -5,7 +5,7 @@
 
 <PageTitle>Invoices · Billing · Workbench</PageTitle>
 
-<BillingHeader Title="Invoices" Subtitle="Customer invoices and credit memos by contract. Approving an invoice posts it to the general ledger; voiding reverses it and frees what it billed.">
+<BillingHeader Title="Invoices" Subtitle="@Tm.Reword("Customer invoices and credit memos by contract. Approving an invoice posts it to the general ledger; voiding reverses it and frees what it billed.")">
     <FinanceOnly Permission="@Workbench.Contracts.Identity.Permission.BillingInvoicesManage">
         <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="billing/new" data-testid="new-invoice">New invoice</MudButton>
     </FinanceOnly>
@@ -20,7 +20,7 @@ else
     <ConfigurableList T="InvoiceSummaryDto" Definition="_definition" Items="_invoices" Loading="_loading" SearchLabel="Search invoices" TestId="invoices"
                       RowClick="@(i => Navigation.NavigateTo($"billing/invoices/{i.Id}"))">
         <ToolBarContent>
-            <MudSelect T="Guid?" Value="_contractId" ValueChanged="v => SetAsync(() => _contractId = v)" Label="Contract" Clearable="true" Dense="true" Style="min-width:200px">
+            <MudSelect T="Guid?" Value="_contractId" ValueChanged="v => SetAsync(() => _contractId = v)" Label="@Tm.Reword("Contract")" Clearable="true" Dense="true" Style="min-width:200px">
                 @foreach (var c in _contracts)
                 {
                     <MudSelectItem T="Guid?" Value="c.Id">@c.ContractNumber</MudSelectItem>
@@ -40,7 +40,7 @@ else
             </MudSelect>
             <MudSwitch T="bool" Value="_openOnly" ValueChanged="v => SetAsync(() => _openOnly = v)" Color="Color.Primary" Label="Open balance only" />
         </ToolBarContent>
-        <NoRecordsContent><MudText Class="mud-text-secondary">No invoices match. Use New invoice to bill a contract for approved time and costs.</MudText></NoRecordsContent>
+        <NoRecordsContent><MudText Class="mud-text-secondary">@Tm.Reword("No invoices match. Use New invoice to bill a contract for approved time and costs.")</MudText></NoRecordsContent>
         <Summary>
             @if (context.Count > 0)
             {
@@ -56,6 +56,7 @@ else
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     private IReadOnlyList<BillingContractDto> _contracts = [];
     private IReadOnlyList<InvoiceSummaryDto> _invoices = [];
     private Guid? _contractId;

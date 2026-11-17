@@ -7,11 +7,11 @@
     var committedPct = Math.Min(Pct(clin.Incurred + clin.Committed, funded), 100) - Math.Min(incurredPct, 100);
     <div class="mb-4" data-testid="clin-funding-bar">
         <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap">
-            <MudText Typo="Typo.body2"><b>CLIN @clin.Number</b> · @clin.Description</MudText>
+            <MudText Typo="Typo.body2"><b>@Tm.Term("Clin") @clin.Number</b> · @clin.Description</MudText>
             <MudChip T="string" Size="Size.Small" Color="ClinFormat.Color(clin.Level)" Class="ma-0">@ClinFormat.Label(clin.Level)</MudChip>
             <MudSpacer />
             <MudText Typo="Typo.caption" Class="mud-text-secondary">
-                @ClinFormat.Money(clin.Incurred) incurred@(clin.Committed > 0 ? $" + {ClinFormat.Money(clin.Committed)} committed" : "") of @ClinFormat.Money(funded) funded
+                @ClinFormat.Money(clin.Incurred) incurred@(clin.Committed > 0 ? $" + {ClinFormat.Money(clin.Committed)} committed" : "") of @ClinFormat.Money(funded) @Tm.Term("funded")
                 · @ClinFormat.Percent(clin.PercentIncurred)
             </MudText>
         </MudStack>
@@ -36,6 +36,7 @@
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [Parameter, EditorRequired]
     public ContractFundingStatusDto Status { get; set; } = default!;
 

@@ -41,6 +41,7 @@ public static class WorkbenchApi
         v1.MapPurchasingEndpoints();
         v1.MapHostAdminEndpoints();
         v1.MapOrganizationSettingsEndpoints();
+        v1.MapCompanyProfileEndpoints();
         v1.MapImportEndpoints();
         v1.MapProcurementEndpoints();
         v1.MapAssetEndpoints();
@@ -71,12 +72,15 @@ public static class WorkbenchApi
         v1.MapCurrencyEndpoints();
         v1.MapCompanyEndpoints();
         v1.MapGovernmentBillingEndpoints();
+        v1.MapCommercialBillingEndpoints();
         v1.MapTravelEndpoints();
         v1.MapSalesShippingEndpoints();
         v1.MapQualityEndpoints();
         v1.MapShopFloorEndpoints();
         v1.MapSourcingEndpoints();
         v1.MapBankFileEndpoints();
+        v1.MapAccountingExportEndpoints();
+        v1.MapAccountingLiveEndpoints();
         v1.MapSalesTaxEndpoints();
         v1.MapIntegrationEndpoints();
         v1.MapJiraEndpoints(); // Jira sync: connection and project links (under /integrations).

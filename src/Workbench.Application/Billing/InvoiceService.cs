@@ -81,6 +81,7 @@ public sealed partial class InvoiceService(
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var lookups = await BillingLookups.LoadAsync(db, cancellationToken);
         var billed = (await db.Set<Invoice>().AsNoTracking().Include(i => i.Lines).ToListAsync(cancellationToken)).Where(i => i.IsBilled).ToList();
+        var plans = await db.Set<AgreementBillingPlan>().AsNoTracking().ToDictionaryAsync(p => p.ContractId, p => (AgreementBillingModel?)p.Model, cancellationToken);
         var performanceBased = (await db.Set<ContractGovernmentBilling>().AsNoTracking().Where(g => g.Financing == ContractFinancing.PerformanceBased)
             .Select(g => g.ContractId).ToListAsync(cancellationToken)).ToHashSet();
         return lookups.Contracts.Values
@@ -94,6 +95,20 @@ public sealed partial class InvoiceService(
                 if (performanceBased.Contains(c.Id))
                 {
                     types.Add(InvoiceKind.PerformanceBased);
+                }
+
+                // Agreements without CLINs: hours at the rate card, or milestones. Retainers and recurring charges bill by
+                // period from the agreement card, not from this wizard.
+                if (clins.Count == 0 && plans.GetValueOrDefault(c.Id) is { } plan)
+                {
+                    if (plan == AgreementBillingModel.TimeAndMaterials)
+                    {
+                        types.Add(InvoiceKind.TimeAndMaterials);
+                    }
+                    else if (plan == AgreementBillingModel.FixedFeeMilestones)
+                    {
+                        types.Add(InvoiceKind.FixedPriceMilestone);
+                    }
                 }
 
                 return new BillingContractDto(c.Id, c.ContractNumber, c.Name, c.CustomerId, lookups.Customers.GetValueOrDefault(c.CustomerId)?.Name ?? "",
@@ -440,6 +455,11 @@ public sealed partial class InvoiceService(
         if (invoice.AmountPaid != 0)
         {
             throw new InvalidOperationException($"Invoice {invoice.Number} has payments applied. Void the payments first.");
+        }
+
+        if (invoice.AmountWrittenOff != 0)
+        {
+            throw new InvalidOperationException($"Invoice {invoice.Number} has a write-off. Reverse the write-off first.");
         }
 
         var credits = await db.Set<Invoice>().AsNoTracking().Where(i => i.CreditOfInvoiceId == invoice.Id && i.Status != InvoiceStatus.Void).ToListAsync(cancellationToken);
@@ -805,6 +825,12 @@ public sealed partial class InvoiceService(
             e.InvoiceId = invoice.Id;
         }
 
+        var planMilestoneIds = gen.Lines.SelectMany(l => l.Sources).Where(s => s.Kind == BilledSourceKind.PlanMilestone).Select(s => s.SourceId).ToList();
+        foreach (var m in await db.Set<AgreementMilestone>().Where(m => planMilestoneIds.Contains(m.Id)).ToListAsync(ct))
+        {
+            m.InvoiceId = invoice.Id;
+        }
+
         invoice.RateNote = gen.RateNote;
         invoice.GenerationWarnings = gen.Warnings.Count == 0 ? null : string.Join("\n", gen.Warnings);
         if (invoice.GenerationWarnings is { Length: > 4000 } w)
@@ -843,6 +869,15 @@ public sealed partial class InvoiceService(
             foreach (var e in await db.Set<PerformanceBasedPaymentEvent>().Where(e => eventIds.Contains(e.Id)).ToListAsync(ct))
             {
                 e.InvoiceId = null;
+            }
+        }
+
+        var planIds = list.Where(s => s.Kind == BilledSourceKind.PlanMilestone).Select(s => s.SourceId).ToList();
+        if (planIds.Count > 0)
+        {
+            foreach (var m in await db.Set<AgreementMilestone>().Where(m => planIds.Contains(m.Id)).ToListAsync(ct))
+            {
+                m.InvoiceId = null;
             }
         }
     }

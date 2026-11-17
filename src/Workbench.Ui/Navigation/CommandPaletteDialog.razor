@@ -34,10 +34,10 @@
                      @onclick="() => Open(item)" @onmousemove="() => Select(index)">
                     <MudIcon Icon="@item.Icon" Size="Size.Small" aria-hidden="true" />
                     <div style="min-width:0">
-                        <MudText Typo="Typo.body2" Class="text-truncate">@item.Title</MudText>
+                        <MudText Typo="Typo.body2" Class="text-truncate">@(item.Kind is PaletteKind.Page or PaletteKind.Create ? Tm.Reword(item.Title) : item.Title)</MudText>
                         @if (item.Subtitle is not null)
                         {
-                            <MudText Typo="Typo.caption" Class="@(selected ? "" : "mud-text-secondary")">@item.Subtitle</MudText>
+                            <MudText Typo="Typo.caption" Class="@(selected ? "" : "mud-text-secondary")">@(item.Kind is PaletteKind.Page or PaletteKind.Create ? Tm.Reword(item.Subtitle!) : item.Subtitle)</MudText>
                         }
                     </div>
                     <MudSpacer />
@@ -52,6 +52,7 @@
 
 @code {
     [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
 
     [Parameter] public NavAccess Access { get; set; } = NavAccess.Anonymous;
 

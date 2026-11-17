@@ -4,7 +4,7 @@
     <DialogContent>
         <MudForm @ref="_form">
             <MudStack Spacing="3">
-                <MudSelect T="Guid?" @bind-Value="_sourceId" Label="Copy from" Required="true" RequiredError="Pick a contract." data-testid="copy-rates-source"
+                <MudSelect T="Guid?" @bind-Value="_sourceId" Label="Copy from" Required="true" RequiredError="@Tm.Reword("Pick a contract.")" data-testid="copy-rates-source"
                            HelperText="Its current rate for each labor category.">
                     @foreach (var c in Contracts.Where(c => c.Id != ContractId))
                     {
@@ -22,6 +22,7 @@
 </MudDialog>
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [CascadingParameter]
     private IMudDialogInstance MudDialog { get; set; } = default!;
 

@@ -20,7 +20,7 @@
         <thead>
             <tr>
                 <th scope="col">WBS</th>
-                <th scope="col">CLIN</th>
+                <th scope="col">@Tm.Reword("CLIN")</th>
                 <th scope="col">Labor category</th>
                 <th scope="col">Staff</th>
                 <th scope="col">Rate from</th>
@@ -177,6 +177,7 @@
 </MudSimpleTable>
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [Parameter, EditorRequired]
     public PriceModelDto Model { get; set; } = default!;
 

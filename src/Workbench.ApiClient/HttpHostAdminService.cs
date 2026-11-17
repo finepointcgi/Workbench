@@ -23,4 +23,10 @@ public sealed class HttpHostAdminService(HttpClient http) : IHostAdminService
 
     public async Task<IReadOnlyList<HostAuditEventDto>> ListAuditAsync(CancellationToken cancellationToken = default) =>
         await http.GetAsync("api/v1/host/audit", cancellationToken).ReadListAsync<HostAuditEventDto>(cancellationToken);
+
+    public async Task<HostTenantDto> SetEntitlementAsync(Guid tenantId, SetEntitlementRequest request, CancellationToken cancellationToken = default) =>
+        await (await http.PutAsJsonAsync($"api/v1/host/tenants/{tenantId}/entitlement", request, cancellationToken)).ReadAsync<HostTenantDto>(cancellationToken);
+
+    public async Task<HostTenantDto> ExtendTrialAsync(Guid tenantId, ExtendTrialRequest request, CancellationToken cancellationToken = default) =>
+        await (await http.PostAsJsonAsync($"api/v1/host/tenants/{tenantId}/extend-trial", request, cancellationToken)).ReadAsync<HostTenantDto>(cancellationToken);
 }

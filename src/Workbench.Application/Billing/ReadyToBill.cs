@@ -17,6 +17,11 @@ public sealed class ReadyToBill(InvoiceGenerator generator)
     internal async Task<ReadyToBillDto> GetAsync(IWorkbenchDbContext db, DateOnly today, CancellationToken ct)
     {
         var contractIds = await db.Set<Clin>().AsNoTracking().Select(c => c.ContractId).Distinct().ToListAsync(ct);
+        // Agreements without CLINs that bill hours or milestones (retainers and recurring charges have their own due list).
+        contractIds.AddRange(await db.Set<AgreementBillingPlan>().AsNoTracking()
+            .Where(p => p.Model == AgreementBillingModel.TimeAndMaterials || p.Model == AgreementBillingModel.FixedFeeMilestones)
+            .Select(p => p.ContractId).ToListAsync(ct));
+        contractIds = contractIds.Distinct().ToList();
         var rows = new List<ReadyToBillRowDto>();
         foreach (var id in contractIds)
         {
@@ -42,7 +47,7 @@ public sealed class ReadyToBill(InvoiceGenerator generator)
         var prior = await InvoiceGenerator.PriorInvoicesAsync(db, contractId, null, approvedOnly: true, ct);
         var from = ctx.Contract.PeriodStart < today ? ctx.Contract.PeriodStart : today;
         var found = new List<(InvoiceType Type, Generation Gen, DateOnly? Oldest)>();
-        foreach (var type in Types.Where(t => ctx.Clins.Any(c => c.IsExercised && InvoiceGenerator.Bills(t, c.Pricing))))
+        foreach (var type in Types.Where(t => ctx.Clins.Any(c => c.IsExercised && InvoiceGenerator.Bills(t, c.Pricing)) || PlanBills(ctx, t)))
         {
             // Exactly what PreviewAsync/GenerateDraftAsync build for a new draft: drafts hold their sources, so work on a draft
             // already isn't counted twice.
@@ -99,6 +104,11 @@ public sealed class ReadyToBill(InvoiceGenerator generator)
         return new ReadyToBillRowDto(contractId, ctx.Contract.ContractNumber, ctx.Contract.Name, ctx.Customer.Id, ctx.Customer.Name,
             drafts.Sum(d => d.Amount), oldest, Covers(worked.SelectMany(f => f.Gen.Lines)), blockers, drafts);
     }
+
+    /// <summary>An agreement without CLINs bills hours (T&amp;M model) or milestones (fixed fee model) through its plan.</summary>
+    private static bool PlanBills(BillingContext ctx, InvoiceType type) => ctx.Clins.Count == 0 && ctx.Plan is { } plan && (
+        (type == InvoiceType.TimeAndMaterials && plan.Model == AgreementBillingModel.TimeAndMaterials)
+        || (type == InvoiceType.FixedPriceMilestone && plan.Model == AgreementBillingModel.FixedFeeMilestones));
 
     private static string Covers(IEnumerable<DraftLine> lines)
     {

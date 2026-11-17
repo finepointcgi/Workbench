@@ -116,6 +116,8 @@ internal sealed class InvoiceCompanyConfiguration : CompanyColumnConfiguration<I
 
 internal sealed class PaymentCompanyConfiguration : CompanyColumnConfiguration<Payment>;
 
+internal sealed class InvoiceWriteOffCompanyConfiguration : CompanyColumnConfiguration<InvoiceWriteOff>;
+
 internal sealed class BankAccountCompanyConfiguration : CompanyColumnConfiguration<BankAccount>;
 
 internal sealed class FixedAssetCompanyConfiguration : CompanyColumnConfiguration<FixedAsset>;

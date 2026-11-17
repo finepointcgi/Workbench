@@ -1,0 +1,2 @@
+Date,Customer,Amount,Method,Reference,Deposit account number,Deposit account,Receivable account,Applied to,Notes
+2026-02-03,Acme Corp,1250.00,Check,CHK 4411,1010,Checking,Accounts Receivable,INV-1001: 1250.00,

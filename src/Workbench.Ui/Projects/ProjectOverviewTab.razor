@@ -12,10 +12,10 @@
         @foreach (var alert in Hub.Alerts)
         {
             <MudAlert Severity="ProjectsFormat.Severity(alert.Level)" Dense="true">
-                @alert.Message
+                @Tm.Reword(alert.Message)
                 @if (alert.Tab is { } tab && ProjectsFormat.Allows(Hub.Tabs, tab))
                 {
-                    <MudLink Href="@($"projects/{Hub.Project.Id}/{tab}")" Typo="Typo.body2" Class="ml-2">See @ProjectsFormat.Tabs.First(t => t.Slug == tab).Label</MudLink>
+                    <MudLink Href="@($"projects/{Hub.Project.Id}/{tab}")" Typo="Typo.body2" Class="ml-2">See @Tm.Reword(ProjectsFormat.Tabs.First(t => t.Slug == tab).Label)</MudLink>
                 }
             </MudAlert>
         }
@@ -25,10 +25,10 @@
 @if (_runway is { } run)
 {
     <MudAlert Severity="@(run.IsLow ? (run.Level == FundingLevel.Warning ? Severity.Warning : Severity.Error) : Severity.Normal)" Dense="true" Class="mb-4" data-testid="funding-line">
-        Funded @FinancialFormat.Money(run.Funded), spent/billed @FinancialFormat.Money(run.Spent)@(run.WeeksText is { } w ? $", about {w} of funding left at the current pace" : ", no spending pace to project yet").
+        @Tm.Reword("Funded") @FinancialFormat.Money(run.Funded), spent/billed @FinancialFormat.Money(run.Spent)@(run.WeeksText is { } w ? Tm.Reword($", about {w} of funding left at the current pace") : ", no spending pace to project yet").
         @if (run.IsLow)
         {
-            <text> Slow spending or ask Finance to request incremental funding.</text>
+            <text> @Tm.Reword("Slow spending or ask Finance to request incremental funding.")</text>
         }
     </MudAlert>
 }
@@ -53,9 +53,9 @@
                         Term="Estimate at completion (EAC) = actual cost + estimate to complete (ETC). ETC is the remaining budget unless a forecast version is chosen on Financials. Direct cost." />
         </MudItem>
         <MudItem xs="12" sm="6" md="3">
-            <NumberTile Label="Funding left" Value="@(m.FundingLeft is { } left ? FinancialFormat.Money(left) : "—")"
-                        Detail="@(m.FundedValue is { } funded ? $"{FinancialFormat.Money(funded)} funded{(m.PercentFundingUsed is { } u ? $", {FinancialFormat.Percent(u)} used" : "")}" : "Not on a contract")"
-                        Term="Funded (obligated) value of the contract less what all its projects have spent. Spending past it isn't covered by funding (Limitation of Funds)." />
+            <NumberTile Label="@Tm.Reword("Funding left")" Value="@(m.FundingLeft is { } left ? FinancialFormat.Money(left) : "—")"
+                        Detail="@Tm.Reword(m.FundedValue is { } funded ? $"{FinancialFormat.Money(funded)} funded{(m.PercentFundingUsed is { } u ? $", {FinancialFormat.Percent(u)} used" : "")}" : "Not on a contract")"
+                        Term="@Tm.Reword("Funded (obligated) value of the contract less what all its projects have spent. Spending past it isn't covered by funding (Limitation of Funds).")" />
         </MudItem>
     </MudGrid>
     <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-4">
@@ -166,6 +166,8 @@
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
+
     [Parameter, EditorRequired]
     public ProjectHubDto Hub { get; set; } = default!;
 

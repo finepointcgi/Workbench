@@ -55,7 +55,7 @@ else
 {
     @foreach (var note in _plan.Notes)
     {
-        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">@note</MudAlert>
+        <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">@Tm.Reword(note)</MudAlert>
     }
     @if (_plan.Overbooked.Count > 0)
     {
@@ -103,6 +103,7 @@ else
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [Parameter, EditorRequired] public Guid ProjectId { get; set; }
 
     /// <summary>Raised after staffing changes, so the page can refresh its setup steps and alerts.</summary>

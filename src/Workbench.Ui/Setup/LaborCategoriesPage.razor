@@ -5,7 +5,7 @@
 
 <PageTitle>Labor categories · Setup · Workbench</PageTitle>
 
-<SetupHeader Title="Labor categories" Subtitle="Used for budgets, charge assignments and contract bill rates. Deactivate a category instead of deleting it.">
+<SetupHeader Title="Labor categories" Subtitle="@Tm.Reword("Used for budgets, charge assignments and contract bill rates. Deactivate a category instead of deleting it.")">
     <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="() => EditAsync(null)">New category</MudButton>
 </SetupHeader>
 
@@ -37,6 +37,7 @@
 </MudDataGrid>
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     private IReadOnlyList<LaborCategoryDto> _categories = [];
     private bool _loading = true;
     private bool _showInactive;

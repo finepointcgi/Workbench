@@ -11,6 +11,13 @@ for each. On the right, **All setup screens** lists every setup page.
 
 Work through it in this order; each step depends on the one before.
 
+## 0. Say what kind of company you are (1 minute)
+
+The Setup page asks this first, until someone answers: **government contractor**, **professional services** or
+**engineering and construction**. It decides the words Workbench uses (agreement or contract, billing line or CLIN,
+authorized budget or funded value) and whether the federal-only pages show. Nothing in your data changes, and you can
+change it later under **Setup › Organization**. See [Company type and wording](company-type.md).
+
 ## 1. Sign-in and your administrators (30 minutes)
 
 - Connect your company sign-in so people use their usual work account, or use built-in Workbench accounts. See

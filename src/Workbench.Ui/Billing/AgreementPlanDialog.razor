@@ -1,0 +1,109 @@
+@* Sets how an agreement without CLINs bills: fixed fee with milestones, a retainer, a recurring charge, or time and materials. *@
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudSelect T="AgreementModel" @bind-Value="_model" Label="How does this agreement bill?" data-testid="plan-model">
+                @foreach (var m in Enum.GetValues<AgreementModel>())
+                {
+                    <MudSelectItem T="AgreementModel" Value="m">@BillingFormat.Label(m)</MudSelectItem>
+                }
+            </MudSelect>
+
+            @if (_model == AgreementModel.TimeAndMaterials)
+            {
+                <MudText Class="mud-text-secondary">Approved hours bill at the contract's rate card, plus expenses at cost. There's no ceiling or funding check.</MudText>
+            }
+            else if (_model == AgreementModel.FixedFeeMilestones)
+            {
+                <MudText Class="mud-text-secondary">Each milestone bills its amount when you mark it complete.</MudText>
+                <MudCheckBox T="bool" @bind-Value="_invoiceOnComplete" Label="Create a draft invoice when a milestone is marked complete" />
+            }
+            else
+            {
+                <MudStack Row="true" Spacing="2">
+                    <MudSelect T="BillingCadenceKind" @bind-Value="_cadence" Label="Billed">
+                        @foreach (var c in Enum.GetValues<BillingCadenceKind>())
+                        {
+                            <MudSelectItem T="BillingCadenceKind" Value="c">@BillingFormat.Label(c)</MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudNumericField T="decimal" @bind-Value="_amount" Label="Amount per period" Format="N2" HideSpinButtons="true" Min="0" data-testid="plan-amount" />
+                </MudStack>
+                <MudStack Row="true" Spacing="2">
+                    <MudDatePicker Label="First period starts" @bind-Date="_start" DateFormat="yyyy-MM-dd" />
+                    <MudDatePicker Label="Ends (optional)" @bind-Date="_end" DateFormat="yyyy-MM-dd" Clearable="true" />
+                </MudStack>
+                <MudTextField @bind-Value="_description" Label="Invoice line text" MaxLength="200" HelperText="@(_model == AgreementModel.Retainer ? "For example: Monthly advisory retainer" : "For example: Managed services")" />
+                <MudCheckBox T="bool" @bind-Value="_auto" Label="Create each period's draft invoice automatically (it still waits for approval)" />
+                @if (_model == AgreementModel.Retainer)
+                {
+                    <MudSelect T="UnusedHoursKind" @bind-Value="_unused" Label="Included hours">
+                        <MudSelectItem T="UnusedHoursKind" Value="UnusedHoursKind.Off">Don't track hours (default)</MudSelectItem>
+                        <MudSelectItem T="UnusedHoursKind" Value="UnusedHoursKind.Expire">Track hours; unused hours expire</MudSelectItem>
+                        <MudSelectItem T="UnusedHoursKind" Value="UnusedHoursKind.Rollover">Track hours; unused hours roll over</MudSelectItem>
+                    </MudSelect>
+                    @if (_unused != UnusedHoursKind.Off)
+                    {
+                        <MudStack Row="true" Spacing="2">
+                            <MudNumericField T="decimal?" @bind-Value="_included" Label="Hours included each period" Min="0" HideSpinButtons="true" />
+                            <MudNumericField T="decimal?" @bind-Value="_overage" Label="Rate for hours over" Format="N2" Min="0" HideSpinButtons="true" HelperText="Blank: over-hours aren't billed" />
+                        </MudStack>
+                    }
+                }
+            }
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(!Valid)" OnClick="Save" data-testid="plan-save">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public AgreementBillingPlanDto? Plan { get; set; }
+
+    private AgreementModel _model = AgreementModel.TimeAndMaterials;
+    private BillingCadenceKind _cadence = BillingCadenceKind.Monthly;
+    private decimal _amount;
+    private DateTime? _start = DateTime.Today.AddDays(1 - DateTime.Today.Day);
+    private DateTime? _end;
+    private string? _description;
+    private bool _invoiceOnComplete = true;
+    private bool _auto = true;
+    private UnusedHoursKind _unused;
+    private decimal? _included;
+    private decimal? _overage;
+
+    private bool Periodic => _model is AgreementModel.Retainer or AgreementModel.Recurring;
+
+    private bool Valid => !Periodic || (_amount > 0 && _start is not null && (_unused == UnusedHoursKind.Off || _included is > 0));
+
+    protected override void OnInitialized()
+    {
+        if (Plan is null)
+        {
+            return;
+        }
+
+        (_model, _cadence, _amount, _description, _invoiceOnComplete, _auto, _unused, _included, _overage) =
+            (Plan.Model, Plan.Cadence, Plan.Amount, Plan.Description, Plan.InvoiceOnComplete, Plan.AutoGenerate, Plan.UnusedHours, Plan.IncludedHours, Plan.OverageRate);
+        _start = Plan.StartDate == default ? _start : Plan.StartDate.ToDateTime(TimeOnly.MinValue);
+        _end = Plan.EndDate?.ToDateTime(TimeOnly.MinValue);
+    }
+
+    private void Save() => MudDialog.Close(DialogResult.Ok(new SaveAgreementBillingPlanRequest(
+        _model, _cadence,
+        Periodic && _start is { } s ? DateOnly.FromDateTime(s) : null,
+        Periodic && _end is { } e ? DateOnly.FromDateTime(e) : null,
+        Periodic ? _amount : 0m,
+        Periodic ? _description : null,
+        _invoiceOnComplete,
+        _model == AgreementModel.Retainer && _unused != UnusedHoursKind.Off ? _included : null,
+        _model == AgreementModel.Retainer ? _unused : UnusedHoursKind.Off,
+        _model == AgreementModel.Retainer && _unused != UnusedHoursKind.Off ? _overage : null,
+        _auto)));
+}

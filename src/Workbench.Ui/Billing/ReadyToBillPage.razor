@@ -5,7 +5,7 @@
 
 <PageTitle>Ready to bill · Billing · Workbench</PageTitle>
 
-<BillingHeader Title="Ready to bill" Subtitle="Contracts with approved time, expenses or completed milestones that no invoice has billed yet, oldest work first. The amount is what the draft invoice will contain." />
+<BillingHeader Title="Ready to bill" Subtitle="@Tm.Reword("Contracts with approved time, expenses or completed milestones that no invoice has billed yet, oldest work first. The amount is what the draft invoice will contain.")" />
 
 @if (_error is not null)
 {
@@ -24,13 +24,13 @@ else
     <MudPaper Outlined="true" Class="pa-4 mb-3" data-testid="ready-total">
         <MudText Typo="Typo.h5">@BillingFormat.Money(_data.Total) ready to bill</MudText>
         <MudText Typo="Typo.body2" Class="mud-text-secondary">
-            @_data.Rows.Count contract@(_data.Rows.Count == 1 ? "" : "s"), @_data.DraftableCount of them ready to draft now@(_data.Rows.Count > _data.DraftableCount ? "; the rest need something fixed first (shown in each row)" : "").
+            @_data.Rows.Count @Tm.Term(_data.Rows.Count == 1 ? "contract" : "contracts"), @_data.DraftableCount of them ready to draft now@(_data.Rows.Count > _data.DraftableCount ? "; the rest need something fixed first (shown in each row)" : "").
         </MudText>
     </MudPaper>
     <MudPaper Outlined="true" Style="overflow-x:auto">
         <MudSimpleTable Dense="true" data-testid="ready-rows">
             <thead>
-                <tr><th>Contract</th><th>Customer</th><th style="text-align:right">Ready to bill</th><th>Oldest work</th><th>What's holding it up</th><th></th></tr>
+                <tr><th>@Tm.Reword("Contract")</th><th>Customer</th><th style="text-align:right">Ready to bill</th><th>Oldest work</th><th>What's holding it up</th><th></th></tr>
             </thead>
             <tbody>
                 @foreach (var r in _data.Rows)
@@ -69,6 +69,7 @@ else
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     private ReadyToBillDto? _data;
     private string? _error;
     private bool _forbidden;

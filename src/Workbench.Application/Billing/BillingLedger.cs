@@ -27,6 +27,7 @@ public sealed class BillingLedger(GeneralLedger ledger)
     public const string ArBilled = "1110";
     public const string ArUnbilled = "1120";
     public const string ContractFinancing = "2320";
+    public const string BadDebt = "7040";
 
     public string Actor => ledger.Actor;
 
@@ -143,6 +144,46 @@ public sealed class BillingLedger(GeneralLedger ledger)
         var memo = payment.Reference is null ? null : $"Ref {payment.Reference}";
         return await PostAsync(db, payment.Id, payment.ReceivedOn, $"Cash receipt · {customerName}" + (memo is null ? "" : $" · {memo}"),
             (Cash, null, null, payment.Amount, memo), [(ArBilled, null, null, payment.Amount, memo)], ct, payment.CompanyId);
+    }
+
+    /// <summary>Posts a write-off: debit bad debt expense, credit AR billed.</summary>
+    public async Task<JournalEntry> PostWriteOffAsync(IWorkbenchDbContext db, InvoiceWriteOff writeOff, string invoiceNumber, string customerName, CancellationToken ct)
+    {
+        if (await ExistingAsync(db, writeOff.Id, ct) is { } existing)
+        {
+            return existing;
+        }
+
+        var memo = $"Write-off of invoice {invoiceNumber}";
+        return await PostAsync(db, writeOff.Id, writeOff.WrittenOffOn, $"{memo} · {customerName}",
+            (BadDebt, null, null, writeOff.Amount, writeOff.Reason.Length > 200 ? writeOff.Reason[..200] : writeOff.Reason),
+            [(ArBilled, null, null, writeOff.Amount, memo)], ct, writeOff.CompanyId);
+    }
+
+    /// <summary>
+    /// Adds 7040 (bad debt expense, unallowable) to a chart installed before commercial billing. Saves, so call it on its own
+    /// context before the posting unit of work. No-op without a chart.
+    /// </summary>
+    public static async Task EnsureBadDebtAccountAsync(IWorkbenchDbContext db, DateTime utcNow, CancellationToken ct)
+    {
+        if (await db.Set<Account>().AnyAsync(a => a.Number == BadDebt, ct) || !await db.Set<Account>().AnyAsync(ct))
+        {
+            return;
+        }
+
+        var parent = await db.Set<Account>().AsNoTracking().Where(a => a.Number == "7000").Select(a => (Guid?)a.Id).FirstOrDefaultAsync(ct);
+        db.Set<Account>().Add(new Account
+        {
+            Number = BadDebt,
+            Name = "Unallowable - bad debt expense",
+            Type = AccountType.Expense,
+            NormalBalance = Account.DefaultNormalBalance(AccountType.Expense),
+            ParentId = parent,
+            CostClass = CostClassification.Unallowable,
+            Description = "Receivables written off as uncollectible (FAR 31.205-3: bad debts are unallowable)",
+            CreatedAtUtc = utcNow,
+        });
+        await db.SaveChangesAsync(ct);
     }
 
     /// <summary>Posts the accrual dated <paramref name="date"/> and its reversal on <paramref name="reverseOn"/>.</summary>

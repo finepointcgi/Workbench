@@ -2,8 +2,8 @@
 <MudTable T="SubcontractDto" Items="Subcontracts" Loading="Loading" Dense="true" Hover="true" data-testid="subcontracts">
     <HeaderContent>
         <MudTh>Number</MudTh><MudTh>Vendor</MudTh><MudTh>Project</MudTh><MudTh>Type</MudTh><MudTh>Status</MudTh>
-        <MudTh Style="text-align:right"><Term Key="ceiling">Ceiling</Term></MudTh><MudTh Style="text-align:right"><Term Key="funded">Funded</Term></MudTh><MudTh Style="text-align:right">Billed to date</MudTh>
-        <MudTh Style="text-align:right">Remaining funding</MudTh><MudTh Style="text-align:right">Remaining ceiling</MudTh><MudTh Style="text-align:right">Retainage held</MudTh><MudTh>Flow-downs</MudTh>
+        <MudTh Style="text-align:right"><Term Key="ceiling">@Tm.Reword("Ceiling")</Term></MudTh><MudTh Style="text-align:right"><Term Key="funded">@Tm.Reword("Funded")</Term></MudTh><MudTh Style="text-align:right">Billed to date</MudTh>
+        <MudTh Style="text-align:right">@Tm.Reword("Remaining funding")</MudTh><MudTh Style="text-align:right">@Tm.Reword("Remaining ceiling")</MudTh><MudTh Style="text-align:right">Retainage held</MudTh><MudTh>Flow-downs</MudTh>
     </HeaderContent>
     <RowTemplate>
         <MudTd><MudLink Href="@($"purchasing/subcontracts/{context.Id}")">@context.Number</MudLink></MudTd>
@@ -19,10 +19,11 @@
         <MudTd Style="text-align:right">@PurchasingFormat.Amount(context.RetainageHeld)</MudTd>
         <MudTd>@context.FlowDownsIncluded / @context.FlowDownsTotal</MudTd>
     </RowTemplate>
-    <NoRecordsContent><MudText Class="mud-text-secondary">No subcontracts yet. Add one when another company does work on your contract.</MudText></NoRecordsContent>
+    <NoRecordsContent><MudText Class="mud-text-secondary">@Tm.Reword("No subcontracts yet. Add one when another company does work on your contract.")</MudText></NoRecordsContent>
 </MudTable>
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [Parameter] public IReadOnlyList<SubcontractDto> Subcontracts { get; set; } = [];
     [Parameter] public bool Loading { get; set; }
 }

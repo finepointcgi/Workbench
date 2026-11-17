@@ -1,0 +1,6 @@
+Number,Name,Type,Parent number,Name in destination,Code in destination,Description,Active
+1000,Assets,Asset,,Assets,000,,Yes
+1010,Cash - operating,Asset,1000,Checking,090,Main account,Yes
+2010,Accounts payable,Liability,1000,Accounts Payable,800,,Yes
+4020,Revenue - time and materials,Revenue,,Services Revenue,200,,Yes
+6230,Office and IT,Expense,,Office Expenses,461,,Yes

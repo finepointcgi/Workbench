@@ -15,7 +15,7 @@
             </MudStack>
             <MudTextField T="string" @bind-Value="_description" Label="Description" Required="true" />
             <MudStack Row="true" Spacing="3">
-                <MudSelect T="Guid?" @bind-Value="_contractId" Label="Prime contract" Clearable="true">
+                <MudSelect T="Guid?" @bind-Value="_contractId" Label="@Tm.Reword("Prime contract")" Clearable="true">
                     @foreach (var c in Contracts)
                     {
                         <MudSelectItem T="Guid?" Value="c.Id">@c.ContractNumber</MudSelectItem>
@@ -39,7 +39,7 @@
                 <MudDatePicker @bind-Date="_end" Label="Period end" DateFormat="yyyy-MM-dd" Editable="true" AutoClose="true" />
             </MudStack>
             <MudStack Row="true" Spacing="3">
-                <MudNumericField T="decimal" @bind-Value="_ceiling" Label="Ceiling" Format="N2" Min="0" Disabled="@(Existing is not null && Existing.Status != SubcontractState.Draft)"
+                <MudNumericField T="decimal" @bind-Value="_ceiling" Label="@Tm.Reword("Ceiling")" Format="N2" Min="0" Disabled="@(Existing is not null && Existing.Status != SubcontractState.Draft)"
                                  HelperText="@(Existing is not null && Existing.Status != SubcontractState.Draft ? "Change it with a modification." : null)" />
                 <MudNumericField T="decimal" @bind-Value="_retainage" Label="Retainage %" Format="0.##" Min="0" Max="100" HelperText="Held back from each invoice" />
             </MudStack>
@@ -56,6 +56,7 @@
 </MudDialog>
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
 
     [Parameter] public SubcontractDto? Existing { get; set; }

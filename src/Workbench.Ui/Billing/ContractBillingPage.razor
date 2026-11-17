@@ -8,7 +8,7 @@
 <PageTitle>@(_contract?.ContractNumber ?? "Contract") · Billing · Workbench</PageTitle>
 
 <BillingHeader Title="@(_contract is null ? "Contract billing" : $"{_contract.ContractNumber} · {_contract.Name}")">
-    <MudButton Variant="Variant.Outlined" Href="billing/contracts" StartIcon="@Icons.Material.Filled.ArrowBack">All contracts</MudButton>
+    <MudButton Variant="Variant.Outlined" Href="billing/contracts" StartIcon="@Icons.Material.Filled.ArrowBack">@Tm.Reword("All contracts")</MudButton>
     @if (_isFinance && _contract is not null)
     {
         <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="@($"billing/new?contract={ContractId}")">New invoice</MudButton>
@@ -27,6 +27,9 @@ else
 {
     <MudGrid Spacing="3">
         <MudItem xs="12" lg="7">
+            <AgreementBillingCard ContractId="ContractId" IsFinance="_isFinance" NoClins="@(_contract?.Clins.Count == 0)" Changed="AgreementChanged" @key="@($"agreement-{_refresh}")" />
+            @if (!_hasPlan)
+            {
             <MudPaper Outlined="true" Class="pa-4 mb-3">
                 <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
                     <MudText Typo="Typo.h6" HtmlTag="h2">FFP milestones</MudText>
@@ -38,12 +41,12 @@ else
                 </MudStack>
                 @if (FfpClins.Count == 0)
                 {
-                    <MudText Class="mud-text-secondary">This contract has no firm-fixed-price CLINs, so it has no billing milestones.</MudText>
+                    <MudText Class="mud-text-secondary">@Tm.Reword("This contract has no firm-fixed-price CLINs, so it has no billing milestones.")</MudText>
                 }
                 else
                 {
                     <MudSimpleTable Dense="true" Hover="true" data-testid="milestones">
-                        <thead><tr><th><Term Key="clin">CLIN</Term></th><th>Milestone</th><th>Planned</th><th>Completed</th><th style="text-align:right">Amount</th><th>Billed on</th><th></th></tr></thead>
+                        <thead><tr><th><Term Key="clin">@Tm.Reword("CLIN")</Term></th><th>Milestone</th><th>Planned</th><th>Completed</th><th style="text-align:right">Amount</th><th>Billed on</th><th></th></tr></thead>
                         <tbody>
                             @if (_milestones.Count == 0)
                             {
@@ -80,13 +83,14 @@ else
                     <MudText Typo="Typo.caption" Class="mud-text-secondary">Completed, unbilled milestones go on the next FFP milestone invoice.</MudText>
                 }
             </MudPaper>
+            }
 
             @if (_financing == FinancingKind.PerformanceBased)
             {
                 <PerformanceEventsCard ContractId="ContractId" IsFinance="_isFinance" Clins="_contract?.Clins ?? []" Changed="() => _refresh++" />
             }
 
-            @if (_isFinance)
+            @if (_isFinance && !_hasPlan)
             {
                 <GovernmentBillingCard ContractId="ContractId" Saved="GovernmentSaved" />
             }
@@ -104,7 +108,7 @@ else
                         <MudItem xs="6" sm="3"><MudNumericField T="int" @bind-Value="_customerTerms" Label="Customer default terms" Min="0" Max="365" HideSpinButtons="true" /></MudItem>
                         <MudItem xs="6" sm="3"><MudTextField @bind-Value="_cage" Label="CAGE code" MaxLength="5" /></MudItem>
                         <MudItem xs="12" sm="6"><MudTextField @bind-Value="_paying" Label="Paying office (DoDAAC)" /></MudItem>
-                        <MudItem xs="12" sm="6"><MudTextField @bind-Value="_admin" Label="Contract administration office" /></MudItem>
+                        <MudItem xs="12" sm="6"><MudTextField @bind-Value="_admin" Label="@Tm.Reword("Contract administration office")" /></MudItem>
                         <MudItem xs="12"><MudTextField @bind-Value="_address" Label="Customer billing address" Lines="2" /></MudItem>
                     </MudGrid>
                     <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="SaveSettingsAsync" Disabled="_busy">Save settings</MudButton>
@@ -117,9 +121,9 @@ else
             @if (_contract is not null)
             {
                 <MudPaper Outlined="true" Class="pa-4 mt-3">
-                    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">CLINs</MudText>
+                    <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">@Tm.Reword("CLINs")</MudText>
                     <MudSimpleTable Dense="true" Elevation="0">
-                        <thead><tr><th><Term Key="clin">CLIN</Term></th><th>Pricing</th><th style="text-align:right"><Term Key="fee">Fee</Term></th><th style="text-align:right"><Term Key="funded">Funded</Term></th><th style="text-align:right"><Term Key="ceiling">Ceiling</Term></th></tr></thead>
+                        <thead><tr><th><Term Key="clin">@Tm.Reword("CLIN")</Term></th><th>Pricing</th><th style="text-align:right"><Term Key="fee">Fee</Term></th><th style="text-align:right"><Term Key="funded">@Tm.Reword("Funded")</Term></th><th style="text-align:right"><Term Key="ceiling">@Tm.Reword("Ceiling")</Term></th></tr></thead>
                         <tbody>
                             @foreach (var c in _contract.Clins)
                             {
@@ -140,6 +144,7 @@ else
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [CascadingParameter]
     public FinanceAccess? Access { get; set; }
 
@@ -165,6 +170,7 @@ else
     private string? _admin;
     private string? _address;
     private FinancingKind _financing;
+    private bool _hasPlan;
 
     private IReadOnlyList<BillingClinDto> FfpClins => _contract?.Clins.Where(c => c.Pricing == "FFP").ToList() ?? [];
 
@@ -184,6 +190,15 @@ else
         catch (Exception ex)
         {
             (_error, _forbidden) = (BillingFormat.Error(ex), BillingFormat.IsForbidden(ex));
+        }
+    }
+
+    private void AgreementChanged(bool hasPlan)
+    {
+        if (_hasPlan != hasPlan)
+        {
+            _hasPlan = hasPlan;
+            StateHasChanged();
         }
     }
 

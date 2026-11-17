@@ -8,7 +8,7 @@
                 </MudSelect>
             </MudItem>
             <MudItem xs="12" sm="4">
-                <MudSelect T="Guid?" @bind-Value="_contractId" Label="Contract (optional)" Dense="true" Clearable="true" Disabled="_released">
+                <MudSelect T="Guid?" @bind-Value="_contractId" Label="@Tm.Reword("Contract (optional)")" Dense="true" Clearable="true" Disabled="_released">
                     @foreach (var c in Options.Contracts.Where(c => c.CustomerId == _customerId)) { <MudSelectItem T="Guid?" Value="c.Id">@c.Number · @c.Name</MudSelectItem> }
                 </MudSelect>
             </MudItem>
@@ -19,7 +19,7 @@
             </MudItem>
             <MudItem xs="12" sm="4">
                 <MudSelect T="Guid?" @bind-Value="_wbsId" Label="Charge cost-type shipments to" Dense="true" Clearable="true"
-                           HelperText="A direct WBS element of the project (needed for cost-type CLINs)">
+                           HelperText="@Tm.Reword("A direct WBS element of the project (needed for cost-type CLINs)")">
                     @foreach (var c in Options.ChargeCodes.Where(c => c.ProjectId == _projectId)) { <MudSelectItem T="Guid?" Value="c.WbsElementId">@c.ProjectCode @c.WbsCode · @c.Name</MudSelectItem> }
                 </MudSelect>
             </MudItem>
@@ -31,7 +31,7 @@
             <MudItem xs="12" sm="5"><MudTextField T="string" @bind-Value="_shipToAddress" Label="Address" Margin="Margin.Dense" Lines="2" MaxLength="500" /></MudItem>
             <MudItem xs="6" sm="3"><MudTextField T="string" @bind-Value="_shipToCode" Label="Ship-to DoDAAC" Margin="Margin.Dense" MaxLength="16" /></MudItem>
 
-            <MudItem xs="12"><MudText Typo="Typo.subtitle2" HtmlTag="h3">Government codes (DD250 and WAWF)</MudText></MudItem>
+            <MudItem xs="12"><MudText Typo="Typo.subtitle2" HtmlTag="h3">@Tm.Reword("Government codes (DD250 and WAWF)")</MudText></MudItem>
             <MudItem xs="6" sm="3"><MudTextField T="string" @bind-Value="_issuedBy" Label="Issued by DoDAAC" Margin="Margin.Dense" MaxLength="16" /></MudItem>
             <MudItem xs="6" sm="3"><MudTextField T="string" @bind-Value="_markFor" Label="Mark for" Margin="Margin.Dense" MaxLength="16" /></MudItem>
             <MudItem xs="6" sm="3"><MudTextField T="string" @bind-Value="_inspectBy" Label="Inspect by DoDAAC" Margin="Margin.Dense" MaxLength="16" /></MudItem>
@@ -67,7 +67,7 @@
                         </MudSelect>
                     </MudItem>
                     <MudItem xs="6" sm="2">
-                        <MudSelect T="Guid?" Value="l.ClinId" ValueChanged="v => ClinChanged(l, v)" Label="CLIN" Dense="true" Clearable="true" Disabled="clins.Count == 0">
+                        <MudSelect T="Guid?" Value="l.ClinId" ValueChanged="v => ClinChanged(l, v)" Label="@Tm.Reword("CLIN")" Dense="true" Clearable="true" Disabled="clins.Count == 0">
                             @foreach (var c in clins) { <MudSelectItem T="Guid?" Value="c.Id">@c.Number@(c.IsCostType ? " (cost type)" : "")</MudSelectItem> }
                         </MudSelect>
                     </MudItem>
@@ -92,6 +92,7 @@
 </MudDialog>
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
 
     [Parameter, EditorRequired] public SalesOptionsDto Options { get; set; } = default!;

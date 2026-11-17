@@ -23,7 +23,7 @@
                 <th scope="col">Type</th>
                 <th scope="col">Description</th>
                 <th scope="col">WBS</th>
-                <th scope="col">CLIN</th>
+                <th scope="col">@Tm.Reword("CLIN")</th>
                 <th scope="col">Period</th>
                 <th scope="col">Basis</th>
                 <th scope="col">Unallowable</th>
@@ -138,6 +138,7 @@
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [Parameter, EditorRequired]
     public PriceModelDto Model { get; set; } = default!;
 

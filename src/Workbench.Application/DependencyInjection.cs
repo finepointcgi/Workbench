@@ -54,6 +54,7 @@ public static class DependencyInjection
         services.AddWorkbenchMyWork();
         services.AddWorkbenchDashboards();
         services.AddWorkbenchTimekeeping();
+        services.AddScoped<OrgProfile.CompanyProfileService>().AddScoped<Contracts.Company.ICompanyProfileService>(sp => sp.GetRequiredService<OrgProfile.CompanyProfileService>());
         services.AddWorkbenchOdcs();
         services.AddWorkbenchFinancials();
         services.AddWorkbenchSetup();
@@ -98,6 +99,8 @@ public static class DependencyInjection
         Quality.QualityRegistration.AddWorkbenchQuality(services); // Quality (inspection, NCRs/MRB with approval handler, CARs) and engineering change control; after materials, above AddWorkbenchIdentity.
         Materials.ShopFloorRegistration.AddWorkbenchShopFloor(services); // Kitting, backflush, landed cost, physical inventory, finite capacity scheduling; posts through MaterialsLedger; above AddWorkbenchIdentity.
         BankFiles.BankFilesRegistration.AddWorkbenchBankFiles(services); // Vendor ACH details (approved changes), NACHA and positive pay files from payment runs, remittance advice; above AddWorkbenchIdentity.
+        AccountingExport.AccountingExportRegistration.AddWorkbenchAccountingExport(services); // QuickBooks, Xero and generic accounting files, account mapping, export history; Finance/Admin; above AddWorkbenchIdentity.
+        AccountingLive.AccountingLiveRegistration.AddWorkbenchAccountingLive(services); // Live push to QuickBooks Online and Xero (OAuth 2.0); above AddWorkbenchIdentity.
         SalesTax.SalesTaxRegistration.AddWorkbenchSalesTax(services); // Sales and use tax: rates, codes, exemptions, invoice tax at approval, use tax on posted bills, the return; above AddWorkbenchIdentity.
         Integrations.IntegrationRegistration.AddWorkbenchIntegrations(services); // Webhooks (outbox + dispatcher), API keys and connectors (Teams, Slack, GL export, report export); Admin-only; above AddWorkbenchIdentity.
         Compliance.ComplianceRegistration.AddWorkbenchCompliance(services); // CPSR procurement files and readiness, CAS disclosure statements (DS-1) and the 401/402 check; above AddWorkbenchIdentity.

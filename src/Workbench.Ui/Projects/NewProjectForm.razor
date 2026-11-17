@@ -17,15 +17,15 @@
         <MudRadioGroup T="ProjectStartFrom" Value="_from" ValueChanged="SetFrom" aria-label="Start from">
             <MudText Typo="Typo.subtitle2" Class="mb-1">Start from</MudText>
             <MudRadio T="ProjectStartFrom" Value="ProjectStartFrom.Blank" Color="Color.Primary" data-testid="start-blank">Nothing (a blank plan)</MudRadio>
-            <MudRadio T="ProjectStartFrom" Value="ProjectStartFrom.Contract" Color="Color.Primary" Disabled="_contracts.Count == 0" data-testid="start-contract">A contract</MudRadio>
+            <MudRadio T="ProjectStartFrom" Value="ProjectStartFrom.Contract" Color="Color.Primary" Disabled="_contracts.Count == 0" data-testid="start-contract">@Tm.Reword("A contract")</MudRadio>
             <MudRadio T="ProjectStartFrom" Value="ProjectStartFrom.CopyProject" Color="Color.Primary" data-testid="start-copy">A copy of a project or a starter outline</MudRadio>
             <MudRadio T="ProjectStartFrom" Value="ProjectStartFrom.ImportExcel" Color="Color.Primary" data-testid="start-import">An Excel plan</MudRadio>
         </MudRadioGroup>
 
         @if (_from == ProjectStartFrom.Contract)
         {
-            <MudSelect T="Guid?" Value="_contractId" ValueChanged="ContractChangedAsync" Label="Contract" Required="true" RequiredError="Pick the contract." data-testid="start-contract-pick"
-                       HelperText="Its dates set the project's, its CLINs become the top of the WBS, and its labor-category hours start the budget.">
+            <MudSelect T="Guid?" Value="_contractId" ValueChanged="ContractChangedAsync" Label="@Tm.Reword("Contract")" Required="true" RequiredError="@Tm.Reword("Pick the contract.")" data-testid="start-contract-pick"
+                       HelperText="@Tm.Reword("Its dates set the project's, its CLINs become the top of the WBS, and its labor-category hours start the budget.")">
                 @foreach (var c in _contracts)
                 {
                     <MudSelectItem T="Guid?" Value="c.Id">@c.ContractNumber · @c.Name</MudSelectItem>
@@ -39,15 +39,15 @@
             <MudPaper Outlined="true" Class="pa-3" data-testid="start-terms">
                 <MudText Typo="Typo.subtitle2" Class="mb-1">The money</MudText>
                 <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
-                    Filled in from the contract@(_terms?.SharedWith.Count > 0 ? $" (also used by {string.Join(", ", _terms.SharedWith)}: set this project's share)" : "").
+                    @Tm.Reword("Filled in from the contract")@(_terms?.SharedWith.Count > 0 ? $" (also used by {string.Join(", ", _terms.SharedWith)}: set this project's share)" : "").
                     The PM plans people and hours against these.
                 </MudText>
                 <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap">
-                    <MudNumericField T="decimal?" @bind-Value="_ceiling" Label="Ceiling ($)" Format="N0" Min="0" Style="max-width:180px" data-testid="start-ceiling"
-                                     HelperText="The most it can be worth" />
-                    <MudNumericField T="decimal?" @bind-Value="_funded" Label="Funded ($)" Format="N0" Min="0" Style="max-width:180px" data-testid="start-funded"
-                                     HelperText="Money obligated so far" />
-                    <MudSelect T="ContractKind?" @bind-Value="_pricing" Label="Contract type" Style="max-width:220px" data-testid="start-type">
+                    <MudNumericField T="decimal?" @bind-Value="_ceiling" Label="@(Tm.Reword("Ceiling") + " ($)" + (Tm.IsCommercial() ? " (optional)" : ""))" Format="N0" Min="0" Style="max-width:180px" data-testid="start-ceiling"
+                                     HelperText="@(Tm.IsCommercial() ? "Leave empty if there is no cap" : "The most it can be worth")" />
+                    <MudNumericField T="decimal?" @bind-Value="_funded" Label="@(Tm.Reword("Funded") + " ($)" + (Tm.IsCommercial() ? " (optional)" : ""))" Format="N0" Min="0" Style="max-width:180px" data-testid="start-funded"
+                                     HelperText="@(Tm.IsCommercial() ? "Money authorized so far" : "Money obligated so far")" />
+                    <MudSelect T="ContractKind?" @bind-Value="_pricing" Label="@Tm.Reword("Contract type")" Style="max-width:220px" data-testid="start-type">
                         <MudSelectItem T="ContractKind?" Value="ContractKind.TimeAndMaterials">Time and materials</MudSelectItem>
                         <MudSelectItem T="ContractKind?" Value="ContractKind.LaborHour">Labor hour</MudSelectItem>
                         <MudSelectItem T="ContractKind?" Value="ContractKind.CostPlusFixedFee">Cost plus fixed fee</MudSelectItem>
@@ -59,7 +59,7 @@
                 </MudStack>
                 @if (_terms is { Start: { } ps, Finish: { } pf })
                 {
-                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Period of performance @ps.ToString("MMM d, yyyy") – @pf.ToString("MMM d, yyyy")</MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@Tm.Reword("Period of performance") @ps.ToString("MMM d, yyyy") – @pf.ToString("MMM d, yyyy")</MudText>
                 }
             </MudPaper>
         }
@@ -68,7 +68,7 @@
         {
             <MudSelect T="Guid" SelectedValues="_categoryIds" SelectedValuesChanged="values => _categoryIds = values.ToHashSet()" MultiSelection="true"
                        Label="Labor categories" Clearable="true" data-testid="start-categories"
-                       HelperText="What the project manager can plan with. Leave empty to use the ones the contract prices.">
+                       HelperText="@Tm.Reword("What the project manager can plan with. Leave empty to use the ones the contract prices.")">
                 @foreach (var c in _categories)
                 {
                     <MudSelectItem T="Guid" Value="c.Id">@c.Code · @c.Name</MudSelectItem>
@@ -79,7 +79,7 @@
         @if (_finance)
         {
             <MudSelect T="Guid?" @bind-Value="_managerId" Label="Project manager" Clearable="true" data-testid="start-manager"
-                       HelperText="They get a to-do to plan it once funding and labor categories are in. Leave it empty to manage it yourself.">
+                       HelperText="@Tm.Reword("They get a to-do to plan it once funding and labor categories are in. Leave it empty to manage it yourself.")">
                 @foreach (var e in _employees)
                 {
                     <MudSelectItem T="Guid?" Value="e.Id">@e.DisplayName</MudSelectItem>
@@ -149,7 +149,7 @@
 
         @if (_from != ProjectStartFrom.Contract)
         {
-            <MudSelect T="Guid?" Value="_contractId" ValueChanged="ContractChangedAsync" Label="Contract (optional)" Clearable="true"
+            <MudSelect T="Guid?" Value="_contractId" ValueChanged="ContractChangedAsync" Label="@Tm.Reword("Contract (optional)")" Clearable="true"
                        HelperText="Leave it empty for internal work; you can add it later.">
                 @foreach (var c in _contracts)
                 {
@@ -172,6 +172,8 @@
 </MudStack>
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
+
     [Parameter]
     public EventCallback OnCancel { get; set; }
 
@@ -268,7 +270,7 @@
             }
             catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or UnauthorizedAccessException or WorkbenchNotFoundException or WorkbenchForbiddenException)
             {
-                Snackbar.Add($"Couldn't read the contract's terms: {ex.Message}", Severity.Warning);
+                Snackbar.Add(Tm.Reword($"Couldn't read the contract's terms: {ex.Message}"), Severity.Warning);
             }
         }
     }

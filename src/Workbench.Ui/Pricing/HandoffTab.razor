@@ -8,23 +8,21 @@
     var project = contract?.Projects.FirstOrDefault(p => p.Id == done.ProjectId);
     <MudAlert Severity="Severity.Success" Class="mb-3" data-testid="handoff-done">
         Won. @(Proposal.Models.FirstOrDefault(m => m.Id == done.ModelId)?.Name ?? "The locked version") was handed off by @done.HandedOffBy
-        on @done.HandedOffAtUtc.ToLocalTime().ToString("MMM d, yyyy", PricingFormat.Culture) to contract @(contract?.ContractNumber ?? "(closed)") and project @(project?.Code ?? "?").
+        on @done.HandedOffAtUtc.ToLocalTime().ToString("MMM d, yyyy", PricingFormat.Culture) to @Tm.Term("contract") @(contract?.ContractNumber ?? "(closed)") and project @(project?.Code ?? "?").
     </MudAlert>
     <MudStack Row="true" Spacing="2">
-        <MudButton Variant="Variant.Outlined" Href="@($"setup/contracts/{done.ContractId}")">Open the contract</MudButton>
+        <MudButton Variant="Variant.Outlined" Href="@($"setup/contracts/{done.ContractId}")">@Tm.Reword("Open the contract")</MudButton>
         <MudButton Variant="Variant.Outlined" Href="@($"projects/{done.ProjectId}/financials")">Open the project's budget</MudButton>
     </MudStack>
 }
 else
 {
     <MudText Typo="Typo.body2" Class="mb-3">
-        When the bid is won, start execution from what was bid: CLINs on the contract (one per CLIN and period; options become 1001, 2001, … and start unexercised),
-        T&amp;M or labor-hour bill rates per labor category and period, the project's WBS elements (<i>project</i>.<i>code</i>), and a budget with the bid's hours by WBS,
-        labor category and fiscal period at the bid's direct rates, plus ODCs. Funded CLINs and existing bill rates are left alone.
+        @Tm.Reword("When the bid is won, start execution from what was bid: CLINs on the contract (one per CLIN and period; options become 1001, 2001, … and start unexercised), T&amp;M or labor-hour bill rates per labor category and period, the project's WBS elements (")<i>project</i>.<i>code</i>@Tm.Reword("), and a budget with the bid's hours by WBS, labor category and fiscal period at the bid's direct rates, plus ODCs. Funded CLINs and existing bill rates are left alone.")
     </MudText>
     @if (!CanHandOff)
     {
-        <MudAlert Severity="Severity.Info" Class="mb-3">The handoff changes contracts and budgets, so Finance or an administrator runs it.</MudAlert>
+        <MudAlert Severity="Severity.Info" Class="mb-3">@Tm.Reword("The handoff changes contracts and budgets, so Finance or an administrator runs it.")</MudAlert>
     }
     else if (_locked.Count == 0)
     {
@@ -40,13 +38,13 @@ else
                         <MudSelectItem T="Guid?" Value="m.Id">@m.Name (@m.LockedAtUtc?.ToLocalTime().ToString("MMM d, yyyy", PricingFormat.Culture))</MudSelectItem>
                     }
                 </MudSelect>
-                <MudSelect T="Guid?" Value="_contractId" ValueChanged="PickContract" Label="Contract" data-testid="handoff-contract">
+                <MudSelect T="Guid?" Value="_contractId" ValueChanged="PickContract" Label="@Tm.Reword("Contract")" data-testid="handoff-contract">
                     @foreach (var c in Options.Contracts)
                     {
                         <MudSelectItem T="Guid?" Value="c.Id">@c.ContractNumber · @c.Name</MudSelectItem>
                     }
                 </MudSelect>
-                <MudSelect T="Guid?" @bind-Value="_projectId" Label="Project" Disabled="_contractId is null" HelperText="Create the contract and its project in Setup first." data-testid="handoff-project">
+                <MudSelect T="Guid?" @bind-Value="_projectId" Label="Project" Disabled="_contractId is null" HelperText="@Tm.Reword("Create the contract and its project in Setup first.")" data-testid="handoff-project">
                     @foreach (var p in Options.Contracts.FirstOrDefault(c => c.Id == _contractId)?.Projects ?? [])
                     {
                         <MudSelectItem T="Guid?" Value="p.Id">@p.Code · @p.Name</MudSelectItem>
@@ -57,7 +55,7 @@ else
                     <MudSelectItem T="BudgetVersionKind" Value="BudgetVersionKind.Baseline">Baseline</MudSelectItem>
                     <MudSelectItem T="BudgetVersionKind" Value="BudgetVersionKind.Forecast">Forecast</MudSelectItem>
                 </MudSelect>
-                <MudCheckBox T="bool" @bind-Value="_clins" Label="Add CLINs and their values" Color="Color.Primary" />
+                <MudCheckBox T="bool" @bind-Value="_clins" Label="@Tm.Reword("Add CLINs and their values")" Color="Color.Primary" />
                 <MudCheckBox T="bool" Value="_rates && PricingFormat.IsTimeAndMaterials(Proposal.ContractType)" ValueChanged="v => _rates = v" Label="Add T&M / labor-hour bill rates (T&M and labor-hour bids)" Color="Color.Primary"
                              Disabled="!PricingFormat.IsTimeAndMaterials(Proposal.ContractType)" />
                 <MudCheckBox T="bool" @bind-Value="_budget" Label="Create the budget" Color="Color.Primary" />
@@ -70,7 +68,7 @@ else
 @if (_result is not null)
 {
     <MudAlert Severity="Severity.Success" Class="mt-3" data-testid="handoff-result">
-        @_result.ClinsCreated CLIN@(_result.ClinsCreated == 1 ? "" : "s") added, @_result.ClinsUpdated updated; @_result.BillRatesAdded bill rate@(_result.BillRatesAdded == 1 ? "" : "s");
+        @_result.ClinsCreated @Tm.Term(_result.ClinsCreated == 1 ? "clin" : "clins") added, @_result.ClinsUpdated updated; @_result.BillRatesAdded bill rate@(_result.BillRatesAdded == 1 ? "" : "s");
         @_result.WbsCreated WBS element@(_result.WbsCreated == 1 ? "" : "s"); @(_result.BudgetVersionId is null ? "no budget" : $"a budget with {_result.BudgetLines} lines").
         @foreach (var note in _result.Notes)
         {
@@ -80,6 +78,7 @@ else
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [Parameter, EditorRequired]
     public ProposalDto Proposal { get; set; } = default!;
 

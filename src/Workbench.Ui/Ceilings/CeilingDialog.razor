@@ -18,7 +18,7 @@
                 </MudSelect>
                 @if (_scope == CeilingScope.Clin)
                 {
-                    <MudSelect T="Guid?" @bind-Value="_clinId" Label="CLIN">
+                    <MudSelect T="Guid?" @bind-Value="_clinId" Label="@Tm.Reword("CLIN")">
                         @foreach (var c in _clins)
                         {
                             <MudSelectItem T="Guid?" Value="c.Id">@c.Number · @c.Description</MudSelectItem>
@@ -53,13 +53,13 @@
                     </MudSelect>
                 }
             }
-            <MudNumericField T="decimal?" @bind-Value="_hours" Label="Hours ceiling" Min="0" Clearable="true" data-testid="ceiling-hours" />
-            <MudNumericField T="decimal?" @bind-Value="_cost" Label="Cost ceiling ($)" Min="0" Clearable="true" data-testid="ceiling-cost" />
+            <MudNumericField T="decimal?" @bind-Value="_hours" Label="@Tm.Reword("Hours ceiling")" Min="0" Clearable="true" data-testid="ceiling-hours" />
+            <MudNumericField T="decimal?" @bind-Value="_cost" Label="@Tm.Reword("Cost ceiling ($)")" Min="0" Clearable="true" data-testid="ceiling-cost" />
             @if (Scope is CeilingScope.Contract or CeilingScope.Clin)
             {
-                <MudNumericField T="decimal?" @bind-Value="_billing" Label="Billing ceiling ($)" Min="0" Clearable="true" HelperText="Invoices may not bill past it (when blocking)." />
+                <MudNumericField T="decimal?" @bind-Value="_billing" Label="@Tm.Reword("Billing ceiling ($)")" Min="0" Clearable="true" HelperText="Invoices may not bill past it (when blocking)." />
             }
-            <MudRadioGroup T="CeilingMode" @bind-Value="_mode" aria-label="When the ceiling is reached">
+            <MudRadioGroup T="CeilingMode" @bind-Value="_mode" aria-label="@Tm.Reword("When the ceiling is reached")">
                 <MudRadio T="CeilingMode" Value="CeilingMode.Warn">Warn</MudRadio>
                 <MudRadio T="CeilingMode" Value="CeilingMode.Block" data-testid="ceiling-block">Block</MudRadio>
             </MudRadioGroup>
@@ -69,7 +69,7 @@
             {
                 <MudCheckBox T="bool" @bind-Value="_checkAtRequisition" Label="Check at requisition" data-testid="ceiling-check-requisition" />
                 <MudText Typo="Typo.caption" Class="mud-text-secondary mt-n2">
-                    Requisitions that would go past the cost ceiling are refused when it blocks. Otherwise they only warn, and the purchase order is checked.
+                    @Tm.Reword("Requisitions that would go past the cost ceiling are refused when it blocks. Otherwise they only warn, and the purchase order is checked.")
                 </MudText>
             }
             <MudTextField @bind-Value="_notes" Label="Notes" Lines="2" />
@@ -82,6 +82,7 @@
 </MudDialog>
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [CascadingParameter]
     private IMudDialogInstance MudDialog { get; set; } = default!;
 
@@ -161,7 +162,7 @@
                 await Ceilings.CreateAsync(request);
             }
 
-            Snackbar.Add("Ceiling saved.", Severity.Success);
+            Snackbar.Add(Tm.Reword("Ceiling saved."), Severity.Success);
             MudDialog.Close(DialogResult.Ok(true));
         }
         catch (Exception ex)

@@ -3,22 +3,22 @@
     <DialogContent>
         @if (Contract.Clins.Count == 0)
         {
-            <MudText Class="mud-text-secondary">This contract has no exercised CLINs.</MudText>
+            <MudText Class="mud-text-secondary">@Tm.Reword("This contract has no exercised CLINs.")</MudText>
         }
         else
         {
             <MudSimpleTable Dense="true" Elevation="0" data-testid="clin-lines">
-                <caption class="wb-sr-only">CLINs of @Contract.Number</caption>
-                <thead><tr><th scope="col">Add</th><th scope="col">CLIN</th><th scope="col">Part</th><th scope="col">Quantity</th><th scope="col">Unit price (blank: CLIN value ÷ quantity)</th></tr></thead>
+                <caption class="wb-sr-only">@Tm.Reword("CLINs") of @Contract.Number</caption>
+                <thead><tr><th scope="col">Add</th><th scope="col">@Tm.Reword("CLIN")</th><th scope="col">Part</th><th scope="col">Quantity</th><th scope="col">@Tm.Reword("Unit price (blank: CLIN value ÷ quantity)")</th></tr></thead>
                 <tbody>
                     @foreach (var row in _rows)
                     {
                         var r = row;
                         <tr>
-                            <td><MudCheckBox T="bool" @bind-Value="r.Selected" aria-label="@($"Add CLIN {r.Clin.Number}")" /></td>
+                            <td><MudCheckBox T="bool" @bind-Value="r.Selected" aria-label="@($"Add {Tm.Reword("CLIN")} {r.Clin.Number}")" /></td>
                             <td>@r.Clin.Number <span class="mud-text-secondary">@r.Clin.Description · @r.Clin.Pricing · @MaterialsFormat.Amount(r.Clin.CeilingValue)</span></td>
                             <td style="min-width:200px">
-                                <MudSelect T="Guid?" @bind-Value="r.PartId" Dense="true" aria-label="@($"Part for CLIN {r.Clin.Number}")">
+                                <MudSelect T="Guid?" @bind-Value="r.PartId" Dense="true" aria-label="@($"Part for {Tm.Reword("CLIN")} {r.Clin.Number}")">
                                     @foreach (var p in Parts) { <MudSelectItem T="Guid?" Value="p.Id">@p.Number · @p.Description</MudSelectItem> }
                                 </MudSelect>
                             </td>
@@ -38,6 +38,7 @@
 </MudDialog>
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
 
     [Parameter, EditorRequired] public SalesContractOption Contract { get; set; } = default!;

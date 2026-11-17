@@ -43,9 +43,9 @@ else
                 <th>Target price</th><td class="num">@(r.PriceToWin is { } ptw ? $"{PricingFormat.Cents(ptw.TargetPrice)} ({(ptw.UnderTarget ? "under" : "over")} by {PricingFormat.Cents(Math.Abs(ptw.Difference))})" : "—")</td></tr>
         </table>
 
-        <h2>Price by CLIN and period</h2>
+        <h2>@Tm.Reword("Price by CLIN and period")</h2>
         <table class="items">
-            <thead><tr><th>CLIN</th>@foreach (var p in r.Periods) { <th class="num">@p.PeriodName</th> }<th class="num">Total</th></tr></thead>
+            <thead><tr><th>@Tm.Reword("CLIN")</th>@foreach (var p in r.Periods) { <th class="num">@p.PeriodName</th> }<th class="num">Total</th></tr></thead>
             <tbody>
                 @foreach (var clin in r.Cells.GroupBy(c => (c.ClinId, c.ClinNumber, c.ClinDescription)))
                 {
@@ -142,6 +142,7 @@ else
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [Parameter]
     public Guid Id { get; set; }
 

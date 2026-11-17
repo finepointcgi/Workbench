@@ -1,5 +1,6 @@
 @page "/billing/invoices/{InvoiceId:guid}"
 @inject IInvoiceService Invoices
+@inject IReceivablesService Receivables
 @inject IDialogService DialogService
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
@@ -25,7 +26,7 @@ else
         <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Print" Href="@($"billing/invoices/{s.Id}/print")" data-testid="print-invoice">Print</MudButton>
         @if (_isFinance)
         {
-            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download" OnClick="ExportAsync" data-testid="export-wawf">WAWF CSV</MudButton>
+            <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download" OnClick="ExportAsync" data-testid="export-wawf">@Tm.Reword("WAWF CSV")</MudButton>
             @if (isDraft)
             {
                 @if (s.Type != InvoiceKind.CreditMemo)
@@ -47,7 +48,15 @@ else
                     <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Payments" Href="@($"billing/payments?customer={s.CustomerId}")">Record payment</MudButton>
                     <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.RemoveCircleOutline" OnClick="CreditAsync" Disabled="_busy">Credit memo</MudButton>
                 }
-                @if (s.AmountPaid == 0)
+                @if (s.Type != InvoiceKind.CreditMemo && s.Balance > 0)
+                {
+                    <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.MoneyOff" OnClick="WriteOffAsync" Disabled="_busy" data-testid="write-off">Write off</MudButton>
+                }
+                @if (s.AmountWrittenOff > 0)
+                {
+                    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Undo" OnClick="ReverseWriteOffAsync" Disabled="_busy" data-testid="reverse-write-off">Reverse write-off</MudButton>
+                }
+                @if (s.AmountPaid == 0 && s.AmountWrittenOff == 0)
                 {
                     <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Block" OnClick="VoidAsync" Disabled="_busy" data-testid="void">Void</MudButton>
                 }
@@ -59,7 +68,7 @@ else
         <MudItem xs="12" md="8">
             <MudPaper Outlined="true" Class="pa-4">
                 <MudGrid Spacing="2">
-                    <MudItem xs="6" sm="4"><Field Label="Contract"><MudLink Href="@($"billing/contracts/{s.ContractId}")">@s.ContractNumber</MudLink></Field></MudItem>
+                    <MudItem xs="6" sm="4"><Field Label="@Tm.Reword("Contract")"><MudLink Href="@($"billing/contracts/{s.ContractId}")">@s.ContractNumber</MudLink></Field></MudItem>
                     <MudItem xs="6" sm="4"><Field Label="Customer">@s.CustomerName</Field></MudItem>
                     <MudItem xs="6" sm="4"><Field Label="Type">@BillingFormat.Label(s.Type)</Field></MudItem>
                     <MudItem xs="6" sm="4"><Field Label="Billing period">@BillingFormat.Date(s.PeriodFrom) – @BillingFormat.Date(s.PeriodTo)</Field></MudItem>
@@ -113,6 +122,10 @@ else
                         {
                             <tr><td>Credited</td><td style="text-align:right">@BillingFormat.Money(s.AmountCredited)</td></tr>
                         }
+                        @if (s.AmountWrittenOff != 0)
+                        {
+                            <tr><td>Written off</td><td style="text-align:right" data-testid="invoice-written-off">@BillingFormat.Money(s.AmountWrittenOff)</td></tr>
+                        }
                         <tr><td>Balance</td><td style="text-align:right" data-testid="invoice-balance"><strong>@BillingFormat.Money(s.Balance)</strong></td></tr>
                     </tbody>
                 </MudSimpleTable>
@@ -126,7 +139,7 @@ else
                 }
                 @if (_invoice.FundingOverrideReason is not null)
                 {
-                    <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">Approved past funding: @_invoice.FundingOverrideReason</MudAlert>
+                    <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">@Tm.Reword("Approved past funding:") @_invoice.FundingOverrideReason</MudAlert>
                 }
                 @if (s.Status == InvoiceState.Void)
                 {
@@ -165,13 +178,14 @@ else
 
     @if (_invoice.Funding.Count > 0)
     {
-        <MudText Typo="Typo.h6" HtmlTag="h2" Class="mt-4 mb-2">Funding check</MudText>
+        <MudText Typo="Typo.h6" HtmlTag="h2" Class="mt-4 mb-2">@Tm.Reword("Funding check")</MudText>
         <FundingCheckTable Funding="_invoice.Funding" />
     }
     <CustomFieldsSection EntityType="@CustomizableEntityTypes.Invoice" RecordId="InvoiceId" StatusSet="invoice-status" Class="mt-3" />
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [CascadingParameter]
     public FinanceAccess? Access { get; set; }
 
@@ -279,6 +293,43 @@ else
         if (await dialog.Result is { Canceled: false, Data: string reason })
         {
             await RunAsync(() => Invoices.VoidAsync(InvoiceId, new VoidInvoiceRequest(reason)), "Invoice voided.");
+        }
+    }
+
+    private async Task WriteOffAsync()
+    {
+        var dialog = await DialogService.ShowAsync<WriteOffDialog>($"Write off {_invoice!.Summary.Number}", new DialogParameters<WriteOffDialog> { { d => d.Invoice, _invoice.Summary } });
+        if (await dialog.Result is { Canceled: false, Data: WriteOffInvoiceRequest request })
+        {
+            await RunAsync(async () =>
+            {
+                await Receivables.WriteOffAsync(InvoiceId, request);
+                return await Invoices.GetAsync(InvoiceId);
+            }, "Written off.");
+        }
+    }
+
+    private async Task ReverseWriteOffAsync()
+    {
+        var open = (await Receivables.ListWriteOffsAsync(InvoiceId)).FirstOrDefault(w => !w.IsReversed);
+        if (open is null)
+        {
+            return;
+        }
+
+        var parameters = new DialogParameters<BillingTextDialog>
+        {
+            { d => d.Message, $"Reverses the {BillingFormat.Money(open.Amount)} write-off ({open.Reason}) and its GL entry, and reopens that balance." },
+            { d => d.ConfirmText, "Reverse write-off" },
+        };
+        var dialog = await DialogService.ShowAsync<BillingTextDialog>("Reverse write-off", parameters);
+        if (await dialog.Result is { Canceled: false, Data: string reason })
+        {
+            await RunAsync(async () =>
+            {
+                await Receivables.ReverseWriteOffAsync(open.Id, new ReverseWriteOffRequest(reason));
+                return await Invoices.GetAsync(InvoiceId);
+            }, "Write-off reversed.");
         }
     }
 
