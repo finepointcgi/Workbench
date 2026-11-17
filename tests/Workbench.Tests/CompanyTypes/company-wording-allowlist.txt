@@ -45,3 +45,7 @@ Setup/Import/UnanetMappingGuide.razor
 
 # Server-built text (reports)
 server-text|DCAA
+# Billing pages that name the government invoice layout and CLINs on purpose: the settings and print pages choose between the two layouts, and the plan dialog explains time and materials.
+Billing/BillingSettingsPage.razor
+Billing/InvoicePrintPage.razor
+Billing/AgreementPlanDialog.razor

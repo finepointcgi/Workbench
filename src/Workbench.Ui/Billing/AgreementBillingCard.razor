@@ -17,7 +17,7 @@
 
         @if (_plan is null)
         {
-            <MudText Class="mud-text-secondary">This agreement has no CLINs. Choose how it bills: a fixed fee in milestones, a retainer, a recurring charge, or time and materials on a rate card.</MudText>
+            <MudText Class="mud-text-secondary">@Tm.Reword("This agreement has no CLINs. Choose how it bills: a fixed fee in milestones, a retainer, a recurring charge, or time and materials on a rate card.")</MudText>
         }
         else
         {
@@ -107,6 +107,8 @@
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
+
     [Parameter]
     public Guid ContractId { get; set; }
 
