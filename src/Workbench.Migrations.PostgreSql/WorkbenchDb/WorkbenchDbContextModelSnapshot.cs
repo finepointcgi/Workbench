@@ -12200,10 +12200,37 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                         .HasColumnType("character varying(320)")
                         .UseCollation("C");
 
+                    b.Property<int>("ConsecutiveRefreshFailures")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("InstallId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .UseCollation("C");
+
                     b.Property<string>("Key")
                         .HasMaxLength(4000)
                         .HasColumnType("character varying(4000)")
                         .UseCollation("C");
+
+                    b.Property<DateTime?>("LastRefreshAttemptUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LastRefreshMessage")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .UseCollation("C");
+
+                    b.Property<string>("LastRefreshOutcome")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .UseCollation("C");
+
+                    b.Property<DateTime?>("LastRefreshSuccessUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ServerLicenseId")
+                        .HasColumnType("uuid");
 
                     b.HasKey("Id");
 

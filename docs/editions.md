@@ -187,6 +187,13 @@ dotnet run tools/license.cs -- issue ~/.workbench-license/private.pem "Acme Fede
 The public key is `LicenseOptions.DefaultPublicKeyPem` (or `License:PublicKeyPem` in configuration). If the private key is
 lost, no new keys can be issued for servers that carry that public key, so back it up somewhere safe.
 
+## Keeping a key current: offline or connected
+
+An install is **offline by default**: with `License:ServerUrl` empty it never contacts anyone, and runs on the key it was given
+(a long-lived offline key is the normal setup for defense and air-gapped sites). A **connected** install sets `License:ServerUrl`
+to the vendor's license server and keeps its key fresh automatically; if the server cannot be reached, nothing changes, because
+the key's own expiry (and the 14-day grace) still governs. See [License refresh](admin-guide/license-refresh.md).
+
 ## What this does not do yet
 
 - **It does not take payment.** Keys are issued by hand and hosted plans are set by the host administrator. Card billing,

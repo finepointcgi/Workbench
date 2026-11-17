@@ -123,4 +123,23 @@ public sealed class LicenseSettings : Entity
     public DateTime? ActivatedAtUtc { get; set; }
 
     public string? ActivatedBy { get; set; }
+
+    /// <summary>A random id for this install, made once and sent to the license server (connected installs only). Not derived from anything about the machine.</summary>
+    public string? InstallId { get; set; }
+
+    /// <summary>The license the license server last activated this install for; a different key means activating again.</summary>
+    public Guid? ServerLicenseId { get; set; }
+
+    public DateTime? LastRefreshAttemptUtc { get; set; }
+
+    public DateTime? LastRefreshSuccessUtc { get; set; }
+
+    /// <summary>One of refreshed, refused, offline or failed.</summary>
+    public string? LastRefreshOutcome { get; set; }
+
+    /// <summary>What the last attempt said, for Setup &gt; License: the server's own reason when it refused.</summary>
+    public string? LastRefreshMessage { get; set; }
+
+    /// <summary>Attempts in a row that could not reach the server or got no usable answer. Drives the backoff.</summary>
+    public int ConsecutiveRefreshFailures { get; set; }
 }

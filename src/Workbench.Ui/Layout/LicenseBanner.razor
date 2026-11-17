@@ -26,7 +26,7 @@ else if (_message is not null)
         }
         else
         {
-            <MudLink Href="setup/license" Class="ml-1">Add a license key</MudLink>
+            <MudLink Href="setup/license" Class="ml-1">@_link</MudLink>
         }
     </MudAlert>
 }
@@ -37,12 +37,16 @@ else if (_message is not null)
     private string? _message;
     private string? _readOnly;
     private bool _lapsed;
+    private string _link = "Add a license key";
     private bool _hosted;
     private bool _isAdmin;
+
+    private static string Since(LicenseRefreshDto r) => r.LastSuccessUtc is { } ok ? ok.ToString("d MMM yyyy") : "it was activated";
 
     protected override async Task OnParametersSetAsync()
     {
         _message = null;
+        _link = "Add a license key";
         _readOnly = null;
         _isAdmin = Access.Can(Permission.AdminOrganization);
         try
@@ -64,6 +68,14 @@ else if (_message is not null)
             {
                 _lapsed = true;
                 _message = overdue;
+            }
+            else if (status.Refresh is { Stale: true } refresh)
+            {
+                _lapsed = true;
+                _message = refresh.Outcome == "refused"
+                    ? $"The license server has not renewed this license since {Since(refresh)}. {refresh.Message}"
+                    : $"This install has not been able to refresh its license from the license server since {Since(refresh)}. Nothing has changed: the current key keeps working until it expires.";
+                _link = "Details";
             }
             else if (status is { Trial: true, DaysLeft: { } days } && days <= 7)
             {

@@ -28,7 +28,7 @@ public sealed class HostedEntitlementTests
         var running = TenantEntitlements.Evaluate(Row(), Now, 7);
         Assert.False(running.ReadOnly);
         Assert.True(running.Trial);
-        Assert.Contains("finance", running.Modules);
+        Assert.Contains("billing", running.Modules); // the row says finance: it means billing + accounting now
         Assert.Contains("core", running.Modules);
 
         Assert.False(TenantEntitlements.Evaluate(Row(), Now.AddDays(13.9), 7).ReadOnly);
@@ -79,7 +79,7 @@ public sealed class HostedEntitlementTests
         // No entitlement row: the old behaviour (no plan: Community).
         Assert.Equal(Workbench.Domain.Licensing.Edition.Community, (await State()).Edition);
 
-        await entitlements.ApplyAsync(id, new SetEntitlementRequest("business", ["finance", "govcon", "nonsense"], 25, 10, "active", false, PaidThroughUtc: DateTime.UtcNow.AddDays(30)), "host@workbench.local", "host");
+        await entitlements.ApplyAsync(id, new SetEntitlementRequest("business", ["billing", "govcon", "nonsense"], 25, 10, "active", false, PaidThroughUtc: DateTime.UtcNow.AddDays(30)), "host@workbench.local", "host");
         var paid = await State();
         Assert.Equal(Workbench.Domain.Licensing.Edition.Business, paid.Edition);
         Assert.Equal(25, paid.SeatLimit);
@@ -106,7 +106,7 @@ public sealed class HostedEntitlementTests
         var entitlements = web.Services.GetRequiredService<TenantEntitlements>();
         var id = (await web.Services.GetRequiredService<TenantCatalog>().FindAsync("acme"))!.Info.Id;
         var admin = web.Client("acme", "admin@acme.example");
-        await entitlements.ApplyAsync(id, new SetEntitlementRequest("trial", ["finance"], 5, 0, "active", true, TrialEndsUtc: DateTime.UtcNow.AddDays(3)), "host@workbench.local", "host");
+        await entitlements.ApplyAsync(id, new SetEntitlementRequest("trial", ["billing"], 5, 0, "active", true, TrialEndsUtc: DateTime.UtcNow.AddDays(3)), "host@workbench.local", "host");
 
         // The first administrator signs in once (that accepts the invitation and gives them the Admin role).
         var signedIn = await web.InTenantAsync("acme", sp => sp.GetRequiredService<Workbench.Application.Identity.SignInGate>()
@@ -159,7 +159,7 @@ public sealed class HostedEntitlementTests
     {
         await using var web = await MultiTenantWeb.HostedAsync();
         var host = web.Client(null, null);
-        var body = new SetEntitlementRequest("business", ["finance", "capture"], 25, 10, "active", false, PaidThroughUtc: DateTime.UtcNow.AddMonths(1), ExternalRef: "sub_123", EventAtUtc: new DateTime(2026, 11, 10, 0, 0, 0, DateTimeKind.Utc));
+        var body = new SetEntitlementRequest("business", ["billing", "capture"], 25, 10, "active", false, PaidThroughUtc: DateTime.UtcNow.AddMonths(1), ExternalRef: "sub_123", EventAtUtc: new DateTime(2026, 11, 10, 0, 0, 0, DateTimeKind.Utc));
 
         Assert.Equal(HttpStatusCode.Unauthorized, (await host.PutAsJsonAsync("api/v1/host/entitlements/acme", body)).StatusCode);
         host.DefaultRequestHeaders.Add("X-Host-Key", "wrong-key-wrong-key-wrong-key-wrong-key");
@@ -170,7 +170,7 @@ public sealed class HostedEntitlementTests
         var first = await MultiTenantWeb.ReadAsync<HostTenantEntitlementDto>(await host.PutAsJsonAsync("api/v1/host/entitlements/acme", body));
         var again = await MultiTenantWeb.ReadAsync<HostTenantEntitlementDto>(await host.PutAsJsonAsync("api/v1/host/entitlements/acme", body));
         Assert.Equal(first.Entitlement.Modules, again.Entitlement.Modules);
-        Assert.Equal(["capture", "finance"], again.Entitlement.Modules);
+        Assert.Equal(["billing", "capture"], again.Entitlement.Modules);
         Assert.Equal(25, again.Entitlement.Seats);
         Assert.Equal("sub_123", again.Entitlement.ExternalRef);
         Assert.Equal("license-server", again.Entitlement.Source);
@@ -208,7 +208,7 @@ public sealed class HostedEntitlementTests
     {
         await using var web = await MultiTenantWeb.HostedAsync();
         var id = (await web.Services.GetRequiredService<TenantCatalog>().FindAsync("acme"))!.Info.Id;
-        var change = new SetEntitlementRequest(Modules: ["finance", "enterprise"], Seats: 12, LightSeats: 3, Status: "active", Reason: "upgrade");
+        var change = new SetEntitlementRequest(Modules: ["billing", "enterprise"], Seats: 12, LightSeats: 3, Status: "active", Reason: "upgrade");
 
         // A tenant's own Admin, an ordinary user, an anonymous caller and a host admin on a tenant's address are all refused.
         Assert.Equal(HttpStatusCode.Forbidden, (await web.Client(null, "admin@acme.example").PutAsJsonAsync($"api/v1/host/tenants/{id}/entitlement", change)).StatusCode);
@@ -218,7 +218,7 @@ public sealed class HostedEntitlementTests
 
         var host = web.Client(null, MultiTenantWeb.HostAdmin);
         var updated = await MultiTenantWeb.ReadAsync<HostTenantDto>(await host.PutAsJsonAsync($"api/v1/host/tenants/{id}/entitlement", change));
-        Assert.Equal(["enterprise", "finance"], updated.Entitlement!.Modules);
+        Assert.Equal(["billing", "enterprise"], updated.Entitlement!.Modules);
         Assert.Equal(12, updated.Entitlement.Seats);
 
         var extended = await MultiTenantWeb.ReadAsync<HostTenantDto>(await host.PostAsJsonAsync($"api/v1/host/tenants/{id}/extend-trial", new ExtendTrialRequest(10, "sales call")));

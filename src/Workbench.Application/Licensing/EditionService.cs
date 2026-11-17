@@ -317,6 +317,11 @@ public static class LicensingRegistration
         services.AddScoped<EditionService>();
         services.AddScoped<FeatureGate>();
         services.AddScoped<ILicenseService, LicenseService>();
+
+        // Connected installs only: with no License:ServerUrl the background service never makes a call.
+        services.AddHttpClient(LicenseRefreshService.HttpClientName);
+        services.AddScoped<LicenseRefreshService>();
+        services.AddHostedService<LicenseRefreshBackgroundService>();
         return services;
     }
 }

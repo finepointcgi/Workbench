@@ -6,7 +6,7 @@ using Workbench.Domain.Licensing;
 
 namespace Workbench.Application.Licensing;
 
-public sealed class LicenseService(IWorkbenchDbContextFactory dbFactory, EditionService editions, LicenseOptions options, ICurrentUser currentUser, TimeProvider clock) : ILicenseService
+public sealed class LicenseService(IWorkbenchDbContextFactory dbFactory, EditionService editions, LicenseOptions options, ICurrentUser currentUser, TimeProvider clock, LicenseRefreshService refresh) : ILicenseService
 {
     public async Task<LicenseStatusDto> GetStatusAsync(CancellationToken cancellationToken = default)
     {
@@ -17,11 +17,12 @@ public sealed class LicenseService(IWorkbenchDbContextFactory dbFactory, Edition
             .Select(f => new FeatureStatusDto(f.Feature.ToString(), f.Name, f.Description,
                 FeatureCatalog.IsIncluded(state.Edition, f.Feature) && EditionService.IsLicensed(state, f.Module), f.Module))
             .ToList();
+        var stored = await db.Set<LicenseSettings>().AsNoTracking().OrderBy(s => s.Id).FirstOrDefaultAsync(cancellationToken);
         var modules = editions.Modules
             .Select(m => new ModuleStatusDto(m.Id, m.Name, m.Description, m.Enforced, EditionService.IsLicensed(state, m.Id), editions.HasModule(state, m.Id)))
             .ToList();
         return new LicenseStatusDto(state.Edition.ToString(), state.Source, state.Licensee, state.ExpiresOn, state.InGracePeriod,
-            state.SeatLimit, usage.FullSeatsInUse, state.Problem, features, modules, state.LightSeatLimit, usage.LightSeatsInUse, state.Trial, state.DaysLeft, state.ReadOnly);
+            state.SeatLimit, usage.FullSeatsInUse, state.Problem, features, modules, state.LightSeatLimit, usage.LightSeatsInUse, state.Trial, state.DaysLeft, state.ReadOnly, refresh.Describe(stored));
     }
 
     public async Task<LicenseStatusDto> ActivateAsync(ActivateLicenseRequest request, CancellationToken cancellationToken = default)
