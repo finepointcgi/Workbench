@@ -182,7 +182,7 @@ public sealed class PayRateHistoryAndVoidTests
     private static async Task<PayrollRunDto> PostedRunAsync(PayrollKit kit)
     {
         var run = await kit.Runs.StartAsync(kit.Group.Id, kit.Period.Id);
-        await kit.Runs.ExportHoursAsync(run.Id, new ExportHoursRequest(true));
+        await kit.Runs.ExportHoursAsync(run.Id, new ExportHoursRequest(true, "Run again after a void"));
         await kit.Runs.ImportRegisterAsync(run.Id, new ImportRegisterRequest("register.csv", PayrollKit.Register));
         return await kit.Runs.PostAsync(run.Id);
     }

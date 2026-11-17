@@ -91,6 +91,13 @@ else
             {
                 <MudCheckBox T="bool" @bind-Value="_acknowledge" Label="Export anyway: flagged employees' unapproved hours are left out" Color="Color.Warning" data-testid="acknowledge" />
             }
+            @if (_run.Status == PayrollRunState.Exported || _needNote)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2">
+                    This pay period was already exported. Importing a second file in @ProviderName would pay the hours twice. To export again on purpose, say why.
+                </MudAlert>
+                <MudTextField T="string" @bind-Value="_note" Immediate="true" Label="Why export again?" Variant="Variant.Outlined" Class="mb-2" MaxLength="1000" data-testid="reexport-note" />
+            }
             <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap">
                 @if (CanUseApi(_provider?.SupportsHoursApi))
                 {
@@ -225,6 +232,8 @@ else
     private string? _registerText;
     private string? _fileName;
     private bool _acknowledge;
+    private bool _needNote;
+    private string? _note;
     private bool _busy;
     private bool _forbidden;
     private string? _error;
@@ -264,7 +273,7 @@ else
     {
         await RunAsync(async () =>
         {
-            var file = await Runs.ExportHoursAsync(RunId, new ExportHoursRequest(_acknowledge));
+            var file = await Runs.ExportHoursAsync(RunId, new ExportHoursRequest(_acknowledge, _note));
             await PayrollFormat.DownloadAsync(JS, file.FileName, file.ContentType, file.Content);
             Snackbar.Add($"Exported {file.FileName}. Import it into {ProviderName}, run payroll there, then import the register.", Severity.Success);
         });
@@ -278,7 +287,7 @@ else
     {
         await RunAsync(async () =>
         {
-            var result = await Runs.SendHoursToProviderAsync(RunId, new ExportHoursRequest(_acknowledge));
+            var result = await Runs.SendHoursToProviderAsync(RunId, new ExportHoursRequest(_acknowledge, _note));
             Snackbar.Add(result.Message, Severity.Success);
         });
     }
@@ -359,6 +368,7 @@ else
         }
         catch (Exception ex) when (PayrollFormat.IsExpected(ex) || ex is IOException)
         {
+            _needNote |= ex.Message.Contains("already exported", StringComparison.Ordinal);
             Snackbar.Add(PayrollFormat.Error(ex), Severity.Error);
         }
         finally

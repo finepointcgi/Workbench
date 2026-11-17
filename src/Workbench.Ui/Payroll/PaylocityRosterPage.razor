@@ -1,0 +1,261 @@
+@page "/hr/paylocity-roster"
+@inject IPaylocityService Paylocity
+@inject IPayGroupService PayGroups
+@inject ISnackbar Snackbar
+
+<PageTitle>Import from Paylocity · Workbench</PageTitle>
+
+<MudText Typo="Typo.h4" HtmlTag="h1" Class="mb-2">Import people from Paylocity</MudText>
+<MudText Class="mud-text-secondary mb-4" Style="max-width:760px">
+    Export your employee list from Paylocity as a CSV (include Employee Id, name, email and hire date; add termination date, status,
+    department, job title, FLSA status and full/part time if you want them checked). Pay rates, Social Security numbers and other
+    columns are ignored and never saved. Always preview first: nothing changes until you import.
+</MudText>
+
+@if (_forbidden)
+{
+    <Workbench.Ui.Identity.ForbiddenNotice Title="Importing people is for HR and administrators" Message="@_error" />
+}
+else if (_settings is null && _error is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" />
+}
+else if (_error is not null)
+{
+    <MudAlert Severity="Severity.Warning">@_error</MudAlert>
+}
+else
+{
+    <MudPaper Outlined="true" Class="pa-4 mb-4" Style="max-width:760px">
+        <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">1. Fields Workbench owns</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">An import never changes these on someone already in Workbench (it still fills them in for a new person).</MudText>
+        <MudStack Row="true" Wrap="Wrap.Wrap">
+            @foreach (var (key, label) in PaylocityRosterFields.All)
+            {
+                var k = key;
+                <MudCheckBox T="bool" Value="@_owned.Contains(k)" ValueChanged="@(v => Own(k, v))" Label="@label" Color="Color.Primary" Dense="true" data-testid="@($"owned-{k}")" />
+            }
+        </MudStack>
+        <MudButton Variant="Variant.Text" OnClick="SaveSettingsAsync" Disabled="_busy" data-testid="save-owned">Save</MudButton>
+    </MudPaper>
+
+    <MudPaper Outlined="true" Class="pa-4 mb-4" Style="max-width:760px">
+        <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">2. Choose the file</MudText>
+        <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Center" Class="mb-2">
+            <MudFileUpload T="IBrowserFile" Accept=".csv,text/csv" FilesChanged="FileChosenAsync" Class="mt-0">
+                <CustomContent>
+                    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.UploadFile" OnClick="@context.OpenFilePickerAsync">Choose Paylocity employee file</MudButton>
+                </CustomContent>
+                <SelectedTemplate />
+            </MudFileUpload>
+            @if (_fileName is not null)
+            {
+                <MudText Typo="Typo.body2">@_fileName</MudText>
+            }
+        </MudStack>
+        <MudTextField T="string" Value="_text" ValueChanged="TextChanged" Label="Or paste the CSV" Lines="5" Variant="Variant.Outlined" Class="mb-2" Immediate="true"
+                      Style="font-family:monospace;font-size:12px" data-testid="roster-text" />
+        @if (_groups.Count > 0)
+        {
+            <MudSelect T="Guid?" Value="_groupId" ValueChanged="@(v => { _groupId = v; _result = null; })" Label="Link new and unlinked people to pay group" Clearable="true" Dense="true"
+                       Variant="Variant.Outlined" data-testid="roster-group" Style="max-width:420px">
+                @foreach (var g in _groups)
+                {
+                    <MudSelectItem T="Guid?" Value="g.Id">@g.Code · @g.Name</MudSelectItem>
+                }
+            </MudSelect>
+        }
+        else
+        {
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">No Paylocity pay group is available to you, so Paylocity ids are not linked by this import.</MudText>
+        }
+
+        <MudCheckBox T="bool" Value="_terms" ValueChanged="@(v => { _terms = v; _result = null; })" Label="Apply terminations (set the termination date from Paylocity)" Color="Color.Warning" Dense="true" data-testid="apply-terms" />
+        <MudCheckBox T="bool" Value="_rehires" ValueChanged="@(v => { _rehires = v; _result = null; })" Label="Apply rehires (clear the termination date of people active again in Paylocity)" Color="Color.Warning" Dense="true" data-testid="apply-rehires" />
+
+        <MudStack Row="true" Spacing="2" Class="mt-2">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => RunAsync(true))" Disabled="@(_busy || string.IsNullOrWhiteSpace(_text))" data-testid="preview">3. Preview (changes nothing)</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="@(() => RunAsync(false))" Disabled="@(_busy || _result is not { DryRun: true } || _result.Count(RosterAction.Error) == _result.Rows.Count)" data-testid="import">4. Import</MudButton>
+        </MudStack>
+    </MudPaper>
+
+    @if (_result is { } r)
+    {
+        <MudAlert Severity="@(r.DryRun ? Severity.Info : Severity.Success)" Class="mb-3" data-testid="summary">
+            @(r.DryRun ? "Preview:" : "Imported:")
+            @r.Count(RosterAction.Create) to create, @r.Count(RosterAction.Update) to update, @r.Count(RosterAction.NoChange) unchanged,
+            @r.Count(RosterAction.Skip) skipped, @r.Count(RosterAction.Error) with errors. Checksum <code>@r.Sha256[..12]…</code>
+        </MudAlert>
+        @foreach (var w in r.Warnings)
+        {
+            <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2">@w</MudAlert>
+        }
+
+        <MudSimpleTable Dense="true" Outlined="true" Class="mb-4" data-testid="roster-rows">
+            <thead><tr><th>Line</th><th>Paylocity id</th><th>Name</th><th>Result</th><th>Matched by</th><th>Changes and notes</th></tr></thead>
+            <tbody>
+                @foreach (var row in r.Rows)
+                {
+                    <tr>
+                        <td>@row.Line</td>
+                        <td>@row.PaylocityId</td>
+                        <td>@row.Name</td>
+                        <td><MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@ActionColor(row.Action)" Class="ma-0">@row.Action</MudChip></td>
+                        <td>@row.MatchedBy</td>
+                        <td>
+                            @foreach (var c in row.Changes)
+                            {
+                                <div>
+                                    <strong>@c.Field</strong>: @(c.From ?? "—") → @(c.To ?? "—")
+                                    @if (!c.Applied)
+                                    {
+                                        <span class="mud-text-secondary"> (not changed: @c.Reason)</span>
+                                    }
+                                </div>
+                            }
+                            @foreach (var e in row.Errors)
+                            {
+                                <div class="mud-error-text">@e</div>
+                            }
+                            @foreach (var n in row.Notices)
+                            {
+                                <div class="mud-text-secondary">@n</div>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </MudSimpleTable>
+
+        @if (r.MissingFromFile.Count > 0)
+        {
+            <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">In Workbench but not in the file</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">Nothing is changed for these people. Check whether they left or the export is missing them.</MudText>
+            <MudSimpleTable Dense="true" Outlined="true" data-testid="roster-missing">
+                <thead><tr><th>Name</th><th>Paylocity id</th><th>Active in Workbench</th></tr></thead>
+                <tbody>
+                    @foreach (var m in r.MissingFromFile)
+                    {
+                        <tr><td>@m.Name</td><td>@m.PaylocityId</td><td>@(m.IsActive ? "Yes" : "No")</td></tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        }
+    }
+}
+
+@code {
+    private PaylocityRosterSettingsDto? _settings;
+    private readonly HashSet<string> _owned = [];
+    private IReadOnlyList<PayGroupDto> _groups = [];
+    private Guid? _groupId;
+    private string? _text;
+    private string? _fileName;
+    private bool _terms;
+    private bool _rehires;
+    private PaylocityRosterResultDto? _result;
+    private bool _busy;
+    private bool _forbidden;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _settings = await Paylocity.GetRosterSettingsAsync();
+            _owned.UnionWith(_settings.OwnedFields);
+        }
+        catch (Exception ex) when (PayrollFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (PayrollFormat.Error(ex), PayrollFormat.IsForbidden(ex));
+            return;
+        }
+
+        try
+        {
+            _groups = (await PayGroups.ListAsync()).Where(g => g.IsActive && g.ProviderKey == "paylocity").ToList();
+        }
+        catch (Exception ex) when (PayrollFormat.IsExpected(ex))
+        {
+            _groups = []; // HR without payroll setup rights can't pick a pay group.
+        }
+    }
+
+    private void Own(string key, bool owned)
+    {
+        if (owned)
+        {
+            _owned.Add(key);
+        }
+        else
+        {
+            _owned.Remove(key);
+        }
+
+        _result = null;
+    }
+
+    private void TextChanged(string? value)
+    {
+        _text = value;
+        _result = null;
+    }
+
+    private async Task SaveSettingsAsync() => await GuardedAsync(async () =>
+    {
+        _settings = await Paylocity.SaveRosterSettingsAsync(new SavePaylocityRosterSettingsRequest(_owned.ToList()));
+        Snackbar.Add("Saved.", Severity.Success);
+    });
+
+    private async Task FileChosenAsync(IBrowserFile? file)
+    {
+        if (file is null)
+        {
+            return;
+        }
+
+        await GuardedAsync(async () =>
+        {
+            await using var stream = file.OpenReadStream(5 * 1024 * 1024);
+            using var reader = new StreamReader(stream);
+            _text = await reader.ReadToEndAsync();
+            _fileName = file.Name;
+            _result = null;
+        });
+    }
+
+    private async Task RunAsync(bool dryRun) => await GuardedAsync(async () =>
+    {
+        _result = await Paylocity.ImportRosterAsync(new PaylocityRosterRequest(_fileName ?? "roster.csv", _text ?? "", dryRun, _groupId, _terms, _rehires));
+        if (!dryRun)
+        {
+            Snackbar.Add($"Imported: {_result.Count(RosterAction.Create)} created, {_result.Count(RosterAction.Update)} updated.", Severity.Success);
+        }
+    });
+
+    private async Task GuardedAsync(Func<Task> action)
+    {
+        _busy = true;
+        try
+        {
+            await action();
+        }
+        catch (Exception ex) when (PayrollFormat.IsExpected(ex) || ex is IOException)
+        {
+            Snackbar.Add(PayrollFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static Color ActionColor(RosterAction a) => a switch
+    {
+        RosterAction.Create => Color.Success,
+        RosterAction.Update => Color.Info,
+        RosterAction.Error => Color.Error,
+        RosterAction.Skip => Color.Warning,
+        _ => Color.Default,
+    };
+}

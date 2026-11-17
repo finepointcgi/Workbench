@@ -121,7 +121,7 @@ public sealed class HrReportTests
                 .Select(e => e.Href).ToList();
 
         Assert.Equal(["hr", "hr/org-chart", "hr/me", "hr/benefits/me"], Links(OrgRoles.Employee));
-        Assert.Equal(["hr/positions", "hr/onboarding", "hr/requests", "hr/compensation", "hr/benefits", "hr", "hr/org-chart", "hr/me", "hr/benefits/me", "hr/reports"], Links(OrgRoles.Hr));
+        Assert.Equal(["hr/positions", "hr/onboarding", "hr/requests", "hr/paylocity-roster", "hr/compensation", "hr/benefits", "hr", "hr/org-chart", "hr/me", "hr/benefits/me", "hr/reports"], Links(OrgRoles.Hr));
         Assert.Equal(Links(OrgRoles.Hr), Links(OrgRoles.Admin));
         Assert.Equal(["hr/positions", "hr/compensation", "hr/benefits", "hr", "hr/org-chart", "hr/me", "hr/benefits/me", "hr/reports"], Links(OrgRoles.Finance));
         Assert.Equal("Employee", NavCatalog.Match("hr/employees/123", new NavAccess(new CurrentUserInfo("x@example.com", "X", OrgRoles.Employee, null)))!.Value.Entry.Detail);

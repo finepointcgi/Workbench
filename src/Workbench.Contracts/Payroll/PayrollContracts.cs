@@ -306,8 +306,12 @@ public sealed record HoursPreviewDto(Guid RunId, DateOnly PeriodStart, DateOnly 
     public int FlaggedCount => Employees.Count(e => e.Issues.Count > 0);
 }
 
-/// <summary>Exporting with flagged employees needs <see cref="AcknowledgeIssues"/>: their unapproved hours are left out.</summary>
-public sealed record ExportHoursRequest(bool AcknowledgeIssues = false);
+/// <summary>
+/// Exporting with flagged employees needs <see cref="AcknowledgeIssues"/>: their unapproved hours are left out. A pay
+/// period that was already exported is exported again only with a <see cref="ReExportNote"/> saying why (importing both
+/// files in the provider would pay the hours twice).
+/// </summary>
+public sealed record ExportHoursRequest(bool AcknowledgeIssues = false, string? ReExportNote = null);
 
 public sealed record PayrollFileDto(string FileName, string ContentType, string Content);
 

@@ -74,6 +74,16 @@ public sealed class PaylocityPayrollProvider(IPaylocityApiClient api, IOptions<P
 /// The Paylocity file formats Workbench assumes. Check them against the customer's own Paylocity setup: Paylocity
 /// imports are configured per company, so column names and order can differ.
 /// <para>
+/// <b>Sources and what is not verified.</b> Paylocity does not publish its Payroll/Time Import CSV specification (header text,
+/// column order, required columns). What is public and agrees with this layout: the Payroll Data Converter form
+/// (docs.paylocity.com/forms/New_Client_Forms/Converter_Setup_Form.pdf: imported at Payroll › Pay Entry; employee id,
+/// earning/deduction code and decimal hours are required; cost centers 1–3 and job code optional; earning codes at most 5
+/// characters, cost centers 10) and the Pay Entry API's line fields (developer.paylocity.com/integrations/reference/payentryv2_postpayentryimport:
+/// employeeId, det, detCode, hours, amount, costCenter1-3, jobCode ...). That the CSV headers match those names is an inference.
+/// The default layout is therefore an assumption to be matched to the customer's template with Payroll › Providers › file
+/// layouts (which compares a template's header row with the export).
+/// </para>
+/// <para>
 /// <b>Hours import</b> (Paylocity "Payroll import" / Web Pay entry import, one row per employee and earning):
 /// <c>Company Code, Employee Id, Employee Name, Pay Period Begin, Pay Period End, Check Date, Det, Det Code, Hours, Rate,
 /// Amount, Cost Center 1</c>. <c>Det</c> is always <c>E</c> (earning); <c>Det Code</c> is the earning code from the

@@ -14652,6 +14652,58 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.ToTable("PayPeriod");
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Payroll.PaylocityCostCenterMapping", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OrgUnitId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrgUnitId")
+                        .IsUnique();
+
+                    b.ToTable("PaylocityCostCenterMapping");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Payroll.PaylocityRosterSetting", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OwnedFields")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("PaylocityRosterSetting");
+                });
+
             modelBuilder.Entity("Workbench.Domain.Payroll.PayrollExportLine", b =>
                 {
                     b.Property<Guid>("Id")
@@ -14685,6 +14737,81 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.HasIndex("RunId");
 
                     b.ToTable("PayrollExportLine");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Payroll.PayrollExportRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("EmployeeCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("ExportedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ExportedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(260)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("FlaggedCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsReExport")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("LineCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Method")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("PayGroupId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("PayPeriodId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("RunId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Sequence")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Sha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("TotalHours")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PayGroupId", "PayPeriodId");
+
+                    b.HasIndex("RunId", "Sequence")
+                        .IsUnique();
+
+                    b.ToTable("PayrollExportRecord");
                 });
 
             modelBuilder.Entity("Workbench.Domain.Payroll.PayrollFileLayout", b =>
@@ -26428,6 +26555,15 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Payroll.PaylocityCostCenterMapping", b =>
+                {
+                    b.HasOne("Workbench.Domain.ProjectAccounting.OrgUnit", null)
+                        .WithMany()
+                        .HasForeignKey("OrgUnitId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Workbench.Domain.Payroll.PayrollExportLine", b =>
                 {
                     b.HasOne("Workbench.Domain.ProjectAccounting.Employee", null)
@@ -26440,6 +26576,15 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         .WithMany("ExportLines")
                         .HasForeignKey("RunId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Payroll.PayrollExportRecord", b =>
+                {
+                    b.HasOne("Workbench.Domain.Payroll.PayrollRun", null)
+                        .WithMany()
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 
