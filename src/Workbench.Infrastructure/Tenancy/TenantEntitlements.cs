@@ -257,10 +257,14 @@ public sealed class TenantEntitlements(IDbContextFactory<CatalogDbContext> catal
         $"The trial ended on {ends:d MMM yyyy}, so this organization is read-only. Your data is untouched and an administrator can export it. Ask your Workbench provider to subscribe or extend the trial.";
 
     public static IReadOnlySet<string> Modules(TenantEntitlement e) =>
-        new HashSet<string>(e.Modules.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)) { ModuleIds.Core };
+        new HashSet<string>(ExpandLegacy(e.Modules.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))) { ModuleIds.Core };
+
+    /// <summary>Module ids from before the catalog was restructured (finance, controls) mean their successors, so stored rows and old callers keep working.</summary>
+    private static IEnumerable<string> ExpandLegacy(IEnumerable<string> modules) =>
+        modules.SelectMany(m => ModuleIds.Legacy.TryGetValue(m.Trim().ToLowerInvariant(), out var current) ? current : [m]);
 
     public static IReadOnlyList<string> NormalizeModules(IEnumerable<string> modules) =>
-        modules.Select(m => m.Trim().ToLowerInvariant()).Where(m => m.Length > 0 && m != ModuleIds.Core && ModuleCatalog.IsKnown(m)).Distinct().Order().ToList();
+        ExpandLegacy(modules.Select(m => m.Trim().ToLowerInvariant())).Where(m => m.Length > 0 && m != ModuleIds.Core && ModuleCatalog.IsKnown(m)).Distinct().Order().ToList();
 
     public static EntitlementStatus ParseStatus(string status) => status.Trim().ToLowerInvariant().Replace("-", "_") switch
     {
