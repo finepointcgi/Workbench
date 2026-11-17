@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Terms of use (draft) | Workbench</title>
+<meta name="description" content="Terms of use for Workbench: a draft that is being finalized.">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="canonical" href="https://REPLACE-WITH-DOMAIN/terms.html">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#c2410c">
+<style>
+  :root {
+    --bg: #fbfaf7; --surface: #ffffff; --ink: #1c2420; --muted: #5b665f; --line: #e3e1d9;
+    --accent: #c2410c; --accent-ink: #ffffff; --accent-soft: #fff1ea; --warn-soft: #f6efe0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #121714; --surface: #1a211d; --ink: #eaeee9; --muted: #9ba89f; --line: #2b352f;
+      --accent: #ffb59a; --accent-ink: #3a1200; --accent-soft: #3a2118; --warn-soft: #2a261a;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--ink); line-height: 1.55;
+    font: 17px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  a { color: var(--accent); }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px; }
+  header { border-bottom: 1px solid var(--line); }
+  nav { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 0; flex-wrap: wrap; }
+  .brand { font-weight: 700; font-size: 1.15rem; letter-spacing: -.01em; color: var(--ink); text-decoration: none; }
+  nav .links { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+  nav .links a { color: var(--muted); text-decoration: none; font-size: .95rem; }
+  nav .links a:hover { color: var(--ink); }
+  .btn { display: inline-block; padding: 12px 20px; border-radius: 8px; font-weight: 600; text-decoration: none;
+    background: var(--accent); color: var(--accent-ink) !important; border: 1px solid var(--accent); }
+  .btn.ghost { background: transparent; color: var(--ink) !important; border-color: var(--line); }
+  .btn.small { padding: 8px 14px; font-size: .92rem; }
+  .hero { padding: 72px 0 56px; }
+  h1 { font-size: clamp(2rem, 5.4vw, 3.4rem); line-height: 1.1; letter-spacing: -.025em; margin: 0 0 18px; max-width: 18ch; }
+  .lede { font-size: 1.2rem; color: var(--muted); max-width: 40rem; margin: 0 0 28px; }
+  .cta { display: flex; gap: 12px; flex-wrap: wrap; }
+  .note { color: var(--muted); font-size: .9rem; margin-top: 14px; }
+  section { padding: 56px 0; border-top: 1px solid var(--line); }
+  h2 { font-size: clamp(1.5rem, 3.4vw, 2.1rem); letter-spacing: -.02em; line-height: 1.2; margin: 0 0 12px; }
+  .sub { color: var(--muted); max-width: 40rem; margin: 0 0 32px; }
+  .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .grid.two { grid-template-columns: repeat(2, 1fr); }
+  .grid.four, .replace { grid-template-columns: repeat(2, 1fr); }
+  @media (min-width: 960px) { .grid.four, .replace { grid-template-columns: repeat(4, 1fr); } }
+  @media (max-width: 560px) { .grid.two, .grid.four, .replace { grid-template-columns: 1fr; } }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 22px; }
+  .card h3 { margin: 0 0 8px; font-size: 1.05rem; }
+  .card p { margin: 0; color: var(--muted); font-size: .97rem; }
+  .replace { display: grid; gap: 16px; }
+  .replace .card h3 { font-size: 1rem; }
+  .tag { display: inline-block; font-size: .75rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+    color: var(--accent); background: var(--accent-soft); padding: 3px 9px; border-radius: 99px; margin-bottom: 10px; }
+  .plans { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); align-items: stretch; }
+  .plan { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 28px; display: flex; flex-direction: column; }
+  .plan.featured { border: 2px solid var(--accent); }
+  .plan h3 { margin: 0; font-size: 1.25rem; }
+  .price { font-size: 2.3rem; font-weight: 700; letter-spacing: -.02em; margin: 10px 0 2px; }
+  .price small { font-size: 1rem; font-weight: 500; color: var(--muted); letter-spacing: 0; }
+  .plan ul { list-style: none; padding: 0; margin: 18px 0 24px; flex: 1; }
+  .plan li { padding: 6px 0 6px 26px; position: relative; font-size: .97rem; }
+  .plan li::before { content: ""; position: absolute; left: 4px; top: 13px; width: 10px; height: 6px;
+    border-left: 2px solid var(--accent); border-bottom: 2px solid var(--accent); transform: rotate(-45deg); }
+  .callout { background: var(--accent-soft); border-radius: 12px; padding: 18px 22px; margin-top: 24px; }
+  .callout p { margin: 0; }
+  .honest { background: var(--warn-soft); border-radius: 12px; padding: 18px 22px; }
+  .honest h3 { margin: 0 0 8px; font-size: 1rem; }
+  .honest ul { margin: 0; padding-left: 20px; color: var(--muted); font-size: .97rem; }
+  details { border-bottom: 1px solid var(--line); padding: 16px 0; }
+  summary { font-weight: 600; cursor: pointer; }
+  details p { color: var(--muted); margin: 10px 0 0; max-width: 42rem; }
+  footer { border-top: 1px solid var(--line); padding: 32px 0 48px; color: var(--muted); font-size: .92rem; }
+  footer .row { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .shot { margin: 40px 0 0; } .shot img { width: 100%; height: auto; display: block; border-radius: 14px; box-shadow: 0 10px 30px rgba(0,0,0,.08); }
+  .shot figcaption { color: var(--muted); font-size: .88rem; margin-top: 10px; }
+  .split { display: flex; gap: 40px; align-items: center; margin-bottom: 32px; }
+  .split img { width: 220px; height: auto; flex: none; }
+  .split img.phone { border: 6px solid #1c2420; border-radius: 28px; box-shadow: 0 10px 30px rgba(0,0,0,.15); }
+  .shot img { border: 1px solid var(--line); }
+  @media (max-width: 640px) { .split { flex-direction: column; align-items: flex-start; } }
+  table.cmp{width:100%;border-collapse:collapse;font-size:.95rem} table.cmp th,table.cmp td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top} table.cmp th{color:var(--muted);font-size:.8rem;text-transform:uppercase;letter-spacing:.05em} .tablewrap{overflow-x:auto}
+  form.contact{display:grid;gap:12px;max-width:34rem} form.contact label{font-weight:600;font-size:.92rem} form.contact input,form.contact textarea,form.contact select{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font:inherit} form.contact button{justify-self:start;cursor:pointer;font:inherit}
+  .hp{position:absolute;left:-9999px}
+  ol.steps { padding-left: 20px; max-width: 42rem; } ol.steps li { margin-bottom: 10px; }
+
+a:focus-visible{outline:3px solid var(--accent);outline-offset:2px} .prose p,.prose ul{max-width:42rem}</style></head><body>
+<header><div class="wrap"><nav aria-label="Main"><a class="brand" href="/"><img src="/logo.svg" alt="" width="50" height="22" style="vertical-align:-4px;margin-right:8px">Workbench</a><div class="links"><a href="/#modules">Modules</a><a href="/#pricing">Pricing</a><a href="/docs.html">Docs</a><a href="/#faq">Questions</a></div></nav></div></header>
+<main id="top"><div class="wrap hero" style="padding-bottom:32px"><h1 style="max-width:24ch">Terms of use</h1>
+<div class="honest"><h3>Draft, being finalized</h3><ul><li>This page is a placeholder. The final text is being written and reviewed by a lawyer, and it is not an offer or a contract.</li><li>Until it is published, ask us in writing what applies to you.</li></ul></div></div>
+<section><div class="wrap prose"><h2>What we can say today</h2><ul><li>The source code is available under the <a href="https://github.com/finepointcgi/workbench/blob/master/LICENSE.md">Functional Source License 1.1 (ALv2 future licence)</a>. That licence governs the code.</li><li>You own your data. If a paid licence ends you keep the free core and everything you entered; nothing is deleted.</li><li>Paid terms, hosted-service terms, service levels and a refund policy are not final.</li></ul></div></section></main>
+<footer><div class="wrap row"><div>Workbench</div><div><a href="/">Home</a> &middot; <a href="/terms.html">Terms</a> (draft) &middot; <a href="/privacy.html">Privacy</a> (draft) &middot; <a href="mailto:REPLACE-WITH-SALES-EMAIL">Contact</a></div></div></footer>
+</body></html>
