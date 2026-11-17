@@ -15,7 +15,7 @@
             <MudSelect T="WidgetType" Value="_type" ValueChanged="TypeChanged" Label="Widget type" Disabled="Widget is not null" data-field="type">
                 @foreach (var type in OfferedTypes)
                 {
-                    <MudSelectItem T="WidgetType" Value="type">@TypeLabel(type)</MudSelectItem>
+                    <MudSelectItem T="WidgetType" Value="type">@Tm.Reword(TypeLabel(type))</MudSelectItem>
                 }
             </MudSelect>
             <MudTextField @bind-Value="_title" Label="Title" Required="true" Immediate="true" data-field="title" />
@@ -41,14 +41,14 @@
 
             @if (IsPersonal(_type))
             {
-                <MudText Typo="Typo.body2" Class="mud-text-secondary">Each person sees their own @TypeLabel(_type).ToLowerInvariant(). Nothing to set up.</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">Each person sees their own @Tm.Reword(TypeLabel(_type)).ToLowerInvariant(). Nothing to set up.</MudText>
             }
             else if (_type == WidgetType.Kpi)
             {
                 <MudSelect T="KpiKind?" @bind-Value="_kpi" Label="Figure" data-field="kpi" HelperText="Computed with each viewer's own access: people see only figures their pages show.">
                     @foreach (var kind in Enum.GetValues<KpiKind>())
                     {
-                        <MudSelectItem T="KpiKind?" Value="kind">@KpiLabel(kind)</MudSelectItem>
+                        <MudSelectItem T="KpiKind?" Value="kind">@Tm.Reword(KpiLabel(kind))</MudSelectItem>
                     }
                 </MudSelect>
             }
@@ -106,7 +106,7 @@
             }
             else if (_type == WidgetType.ContractFunding)
             {
-                <MudSelect T="Guid?" @bind-Value="_contractId" Label="Contract" data-field="contract">
+                <MudSelect T="Guid?" @bind-Value="_contractId" Label="@Tm.Reword("Contract")" data-field="contract">
                     @foreach (var contract in _contracts ?? [])
                     {
                         <MudSelectItem T="Guid?" Value="contract.Id">@contract.ContractNumber · @contract.Name</MudSelectItem>
@@ -200,6 +200,7 @@
 </MudDialog>
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     private static readonly (int Cols, string Label)[] Widths =
         [(3, "Quarter"), (4, "Third"), (6, "Half"), (8, "Two thirds"), (12, "Full width")];
 
@@ -285,7 +286,7 @@
 
         if (Widget is not { } w)
         {
-            _title = TypeLabel(_type);
+            _title = Tm.Reword(TypeLabel(_type));
             return;
         }
 
@@ -362,9 +363,9 @@
 
     private void TypeChanged(WidgetType type)
     {
-        if (_title == TypeLabel(_type))
+        if (_title == Tm.Reword(TypeLabel(_type)))
         {
-            _title = TypeLabel(type);
+            _title = Tm.Reword(TypeLabel(type));
         }
 
         _type = type;

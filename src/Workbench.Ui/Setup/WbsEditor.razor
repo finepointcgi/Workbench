@@ -54,7 +54,7 @@
                 </MudStack>
                 @if (Project.ContractId is not null)
                 {
-                    <MudSelect T="Guid?" Value="ClinOf(el.Id)?.Id" ValueChanged="v => SetClinAsync(el, v)" Label="CLIN" Clearable="true" Class="mt-3"
+                    <MudSelect T="Guid?" Value="ClinOf(el.Id)?.Id" ValueChanged="v => SetClinAsync(el, v)" Label="@Tm.Reword("CLIN")" Clearable="true" Class="mt-3"
                                Dense="true" Margin="Margin.Dense" data-testid="wbs-clin-picker"
                                HelperText="@ClinHelp(el)">
                         @foreach (var c in _clins)
@@ -78,6 +78,7 @@
 </MudGrid>
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [Parameter, EditorRequired]
     public ProjectDto Project { get; set; } = default!;
 

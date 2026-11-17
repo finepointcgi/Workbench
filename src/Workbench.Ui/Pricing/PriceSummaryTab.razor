@@ -52,13 +52,13 @@
     </MudItem>
 </MudGrid>
 
-<MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">Price by CLIN and period</MudText>
+<MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">@Tm.Reword("Price by CLIN and period")</MudText>
 <div style="overflow-x:auto" class="mb-4">
     <MudSimpleTable Dense="true" Outlined="true" data-testid="clin-period">
-        <caption class="wb-sr-only">Price by CLIN and period</caption>
+        <caption class="wb-sr-only">@Tm.Reword("Price by CLIN and period")</caption>
         <thead>
             <tr>
-                <th scope="col">CLIN</th>
+                <th scope="col">@Tm.Reword("CLIN")</th>
                 @foreach (var p in Result.Periods)
                 {
                     <th scope="col" style="text-align:right">@p.PeriodName@(p.IsOption ? " (option)" : "")</th>
@@ -170,6 +170,7 @@
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [Parameter, EditorRequired]
     public PriceResultDto Result { get; set; } = default!;
 

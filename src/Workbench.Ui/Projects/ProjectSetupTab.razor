@@ -14,7 +14,7 @@ else
         <MudExpansionPanel Text="Details" Expanded="@_open.Contains("details")" ExpandedChanged="@(e => Toggle("details", e))" data-testid="setup-details">
             @if (_open.Contains("details"))
             {
-                <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">Code, name, contract, manager, status and dates.</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">@Tm.Reword("Code, name, contract, manager, status and dates.")</MudText>
                 <Workbench.Ui.Setup.ProjectDetailsForm Project="_project" ProjectChanged="SavedAsync" />
             }
         </MudExpansionPanel>
@@ -22,8 +22,7 @@ else
             @if (_open.Contains("charge-codes"))
             {
                 <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
-                    The WBS elements people charge time and costs to, their CLINs, and who may charge each one. Rows added on the Plan tab
-                    become charge codes on their own; this is for the finer settings.
+                    @Tm.Reword("The WBS elements people charge time and costs to, their CLINs, and who may charge each one. Rows added on the Plan tab become charge codes on their own; this is for the finer settings.")
                 </MudText>
                 <Workbench.Ui.Setup.WbsEditor Project="_project" Employees="_employees" />
             }
@@ -46,7 +45,7 @@ else
                 <Workbench.Ui.Integrations.Jira.JiraProjectPanel ProjectId="_project.Id" />
             }
         </MudExpansionPanel>
-        <MudExpansionPanel Text="More: ceilings and closeout" Expanded="@_open.Contains("more")" ExpandedChanged="@(e => Toggle("more", e))" data-testid="setup-more">
+        <MudExpansionPanel Text="@Tm.Reword("More: ceilings and closeout")" Expanded="@_open.Contains("more")" ExpandedChanged="@(e => Toggle("more", e))" data-testid="setup-more">
             @if (_open.Contains("more"))
             {
                 <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
@@ -58,7 +57,7 @@ else
                 @if (_project.ContractId is { } contractId)
                 {
                     <MudButton Href="@($"setup/contracts/{contractId}")" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Description" Class="mt-4">
-                        Contract @_project.ContractNumber (rates, CLINs and funding)
+                        @Tm.Reword($"Contract {_project.ContractNumber} (rates, CLINs and funding)")
                     </MudButton>
                 }
             }
@@ -67,6 +66,8 @@ else
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
+
     [Parameter, EditorRequired]
     public ProjectHubDto Hub { get; set; } = default!;
 

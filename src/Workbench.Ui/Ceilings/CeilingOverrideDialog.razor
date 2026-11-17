@@ -5,7 +5,7 @@
 <MudDialog>
     <DialogContent>
         <MudStack Spacing="2">
-            <MudText Typo="Typo.body2" Class="mud-text-secondary">Leave the amounts empty to stop the ceiling blocking (it still warns) until the override expires.</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">@Tm.Reword("Leave the amounts empty to stop the ceiling blocking (it still warns) until the override expires.")</MudText>
             @if (Ceiling.Ceiling.HoursCeiling is not null)
             {
                 <MudNumericField T="decimal?" @bind-Value="_hours" Label="Extra hours" Min="0" Clearable="true" />
@@ -29,6 +29,7 @@
 </MudDialog>
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [CascadingParameter]
     private IMudDialogInstance MudDialog { get; set; } = default!;
 

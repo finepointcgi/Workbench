@@ -5,7 +5,7 @@
 
 <PageTitle>New invoice · Billing · Workbench</PageTitle>
 
-<BillingHeader Title="New invoice" Subtitle="Pick a contract and billing period, preview the lines by CLIN with the funding check, then create the draft. Running it again for the same period refreshes the existing draft.">
+<BillingHeader Title="New invoice" Subtitle="@Tm.Reword("Pick a contract and billing period, preview the lines by CLIN with the funding check, then create the draft. Running it again for the same period refreshes the existing draft.")">
     <MudButton Variant="Variant.Outlined" Href="billing" StartIcon="@Icons.Material.Filled.ArrowBack">All invoices</MudButton>
 </BillingHeader>
 
@@ -27,7 +27,7 @@ else
         <ConfigurableForm EntityType="@CustomizableEntities.Invoice" HeadingsInGrid="false" HeadingTypo="Typo.h6" @ref="_layout"
                           SectionTitles="@(new Dictionary<string, string> { ["details"] = "1. Contract and period" })">
             <FormField Key="contractId" Md="5">
-                <MudSelect T="Guid?" Value="_contractId" ValueChanged="ContractChanged" Label="Contract" data-testid="wizard-contract">
+                <MudSelect T="Guid?" Value="_contractId" ValueChanged="ContractChanged" Label="@Tm.Reword("Contract")" data-testid="wizard-contract">
                     @foreach (var c in _contracts)
                     {
                         <MudSelectItem T="Guid?" Value="c.Id">@c.ContractNumber · @c.Name (@c.CustomerName)</MudSelectItem>
@@ -98,7 +98,7 @@ else
             @if (_preview.ExistingDraftId is not null)
             {
                 <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2">
-                    A draft for this contract, type and period already exists; creating it again refreshes that draft (manual lines are kept).
+                    @Tm.Reword("A draft for this contract, type and period already exists; creating it again refreshes that draft (manual lines are kept).")
                 </MudAlert>
             }
             <InvoiceLinesTable Lines="_preview.Lines" Funding="_preview.Funding" />
@@ -106,7 +106,7 @@ else
             {
                 <MudText Typo="Typo.body2" Class="mt-2">Fee withheld on this invoice: @BillingFormat.Money(_preview.Withheld)</MudText>
             }
-            <MudText Typo="Typo.subtitle1" HtmlTag="h3" Class="mt-4 mb-2">Funding check</MudText>
+            <MudText Typo="Typo.subtitle1" HtmlTag="h3" Class="mt-4 mb-2">@Tm.Reword("Funding check")</MudText>
             <FundingCheckTable Funding="_preview.Funding" />
         </MudPaper>
 
@@ -122,6 +122,7 @@ else
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [CascadingParameter]
     public FinanceAccess? Access { get; set; }
 

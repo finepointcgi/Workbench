@@ -63,8 +63,8 @@
             }
             @if (Has(ReportParameterKind.Contract))
             {
-                <MudSelect T="Guid?" @bind-Value="_contractId" Label="Contract" Clearable="true" Style="min-width:220px">
-                    <MudSelectItem T="Guid?" Value="null">All contracts</MudSelectItem>
+                <MudSelect T="Guid?" @bind-Value="_contractId" Label="@Tm.Reword("Contract")" Clearable="true" Style="min-width:220px">
+                    <MudSelectItem T="Guid?" Value="null">@Tm.Reword("All contracts")</MudSelectItem>
                     @foreach (var c in _contracts)
                     {
                         <MudSelectItem T="Guid?" Value="c.Id">@c.ContractNumber @c.Name</MudSelectItem>
@@ -145,6 +145,7 @@
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [Parameter]
     public string Key { get; set; } = "";
 

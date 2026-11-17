@@ -13,10 +13,10 @@
     <MudPaper Outlined="true" Class="pa-4 mb-4" data-testid="setup-no-plan">
         <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">This project has no plan yet</MudText>
         <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
-            Set it up from the contract: its CLINs become the first rows of the WBS, the plan is made, and revenue and labor categories follow the contract.
+            @Tm.Reword("Set it up from the contract: its CLINs become the first rows of the WBS, the plan is made, and revenue and labor categories follow the contract.")
             @(Hub.Project.ProjectManagerId is null ? "Pick a project manager next." : "Its project manager is then asked to plan it.")
         </MudText>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="FinishAsync" Disabled="_busy" data-testid="finish-setup">Set up the plan from the contract</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="FinishAsync" Disabled="_busy" data-testid="finish-setup">@Tm.Reword("Set up the plan from the contract")</MudButton>
     </MudPaper>
 }
 else if (_plan is { Steps: { } steps } plan && steps.Any(s => !s.Done))
@@ -46,9 +46,9 @@ else if (_plan is { Steps: { } steps } plan && steps.Any(s => !s.Done))
                         }
                         <div style="flex: 1">
                             <MudText Typo="Typo.subtitle2">
-                                @step.Label<span class="wb-sr-only">@(step.Done ? " (done)" : step.Current ? " (next)" : " (to do)")</span>
+                                @Tm.Reword(step.Label)<span class="wb-sr-only">@(step.Done ? " (done)" : step.Current ? " (next)" : " (to do)")</span>
                             </MudText>
-                            <MudText Typo="Typo.body2" Class="mud-text-secondary">@step.Detail</MudText>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">@Tm.Reword(step.Detail)</MudText>
                         </div>
                         @if (action is { } a)
                         {
@@ -69,6 +69,8 @@ else if (_plan is { Steps: { } steps } plan && steps.Any(s => !s.Done))
 </style>
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
+
     [Parameter, EditorRequired]
     public ProjectHubDto Hub { get; set; } = default!;
 
@@ -100,7 +102,7 @@ else if (_plan is { Steps: { } steps } plan && steps.Any(s => !s.Done))
     /// <summary>The button for the next step, only when the viewer can do something about it.</summary>
     private (string Label, string Href)? ActionFor(string key) => key switch
     {
-        "funding" when Hub.Tabs.Setup && Hub.Project.ContractId is { } contractId => ("Fund the CLINs", $"setup/contracts/{contractId}"),
+        "funding" when Hub.Tabs.Setup && Hub.Project.ContractId is { } contractId => (Tm.Reword("Fund the CLINs"), $"setup/contracts/{contractId}"),
         "categories" when _plan?.CanEditTerms == true => ("Choose the categories", $"projects/{Hub.Project.Id}/plan"),
         "manager" when Hub.Tabs.Setup => ("Pick a manager", $"projects/{Hub.Project.Id}/setup"),
         "plan" when Hub.Tabs.Plan => ("Open the plan", $"projects/{Hub.Project.Id}/plan"),

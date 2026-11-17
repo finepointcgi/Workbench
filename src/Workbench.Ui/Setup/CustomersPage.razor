@@ -7,8 +7,8 @@
 
 <PageTitle>Customers · Setup · Workbench</PageTitle>
 
-<SetupHeader Title="Customers" Subtitle="Agencies and primes you hold contracts with.">
-    <MudButton Variant="Variant.Outlined" Href="setup/contracts" StartIcon="@Icons.Material.Filled.Description">Contracts</MudButton>
+<SetupHeader Title="Customers" Subtitle="@Tm.Reword("Agencies and primes you hold contracts with.")">
+    <MudButton Variant="Variant.Outlined" Href="setup/contracts" StartIcon="@Icons.Material.Filled.Description">@Tm.Reword("Contracts")</MudButton>
     <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="() => EditAsync(null)">New customer</MudButton>
 </SetupHeader>
 
@@ -17,7 +17,7 @@
         <PropertyColumn Property="c => c.Code" />
         <PropertyColumn Property="c => c.Name" />
         <PropertyColumn Property="c => c.Category" />
-        <TemplateColumn Title="Contracts" SortBy="@(c => ContractCount(c.Id))">
+        <TemplateColumn Title="@Tm.Reword("Contracts")" SortBy="@(c => ContractCount(c.Id))">
             <CellTemplate>@ContractCount(context.Item.Id)</CellTemplate>
         </TemplateColumn>
         <TemplateColumn Sortable="false" CellStyle="text-align:right">
@@ -29,10 +29,11 @@
             </CellTemplate>
         </TemplateColumn>
     </Columns>
-    <NoRecordsContent><MudText>No customers yet. Add the agencies or companies you have contracts with.</MudText></NoRecordsContent>
+    <NoRecordsContent><MudText>@Tm.Reword("No customers yet. Add the agencies or companies you have contracts with.")</MudText></NoRecordsContent>
 </MudDataGrid>
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     private async Task DetailsAsync(CustomerDto customer) =>
         await DialogService.ShowAsync<CustomFieldsDialog>($"{customer.Code} · {customer.Name}",
             new DialogParameters<CustomFieldsDialog> { { d => d.EntityType, CustomizableEntityTypes.Customer }, { d => d.RecordId, customer.Id } },

@@ -2,8 +2,8 @@
    Without child content it shows the glossary's own term; an unknown key shows the content as plain text. *@
 @if (Entry is { } entry)
 {
-    <MudTooltip Text="@entry.Tooltip" Arrow="true" Placement="Placement.Top">
-        <span class="wb-term" tabindex="0" data-term="@entry.Key">@(ChildContent ?? (RenderFragment)(b => b.AddContent(0, entry.Term)))</span>
+    <MudTooltip Text="@Tm.Reword(entry.Tooltip)" Arrow="true" Placement="Placement.Top">
+        <span class="wb-term" tabindex="0" data-term="@entry.Key">@(ChildContent ?? (RenderFragment)(b => b.AddContent(0, Tm.Reword(entry.Term))))</span>
     </MudTooltip>
 }
 else
@@ -12,6 +12,7 @@ else
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [Parameter, EditorRequired] public string Key { get; set; } = "";
 
     [Parameter] public RenderFragment? ChildContent { get; set; }

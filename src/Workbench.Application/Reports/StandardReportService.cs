@@ -75,10 +75,11 @@ public sealed partial class StandardReportService(
     public async Task<IReadOnlyList<StandardReportDto>> ListAsync(CancellationToken cancellationToken = default)
     {
         var context = await access.GetAsync(cancellationToken);
+        var terms = await OrgProfile.CompanyProfileService.LoadTermsAsync(dbFactory, cancellationToken);
         return Catalog.Select(e =>
         {
             var reason = e.Unavailable(context);
-            return new StandardReportDto(e.Key, e.Name, e.Description, e.Category, e.Parameters, reason is null, reason, e.PageLink, e.PageOnly);
+            return new StandardReportDto(e.Key, terms.ReplaceTerms(e.Name), terms.ReplaceTerms(e.Description), terms.ReplaceTerms(e.Category), e.Parameters, reason is null, reason is null ? null : terms.ReplaceTerms(reason), e.PageLink, e.PageOnly);
         }).ToList();
     }
 
@@ -99,7 +100,20 @@ public sealed partial class StandardReportService(
             case StandardReportKeys.ApAging: await ApAgingAsync(builder, parameters, cancellationToken); break;
         }
 
-        return builder.Build(clock.UtcNow);
+        return await InCompanyWordsAsync(builder.Build(clock.UtcNow), cancellationToken);
+    }
+
+    /// <summary>Titles, headings and notes follow the company type ("Agreement funding", "Billing line"); row values are data and stay as they are.</summary>
+    private async Task<ReportResultDto> InCompanyWordsAsync(ReportResultDto result, CancellationToken cancellationToken)
+    {
+        var terms = await OrgProfile.CompanyProfileService.LoadTermsAsync(dbFactory, cancellationToken);
+        return terms.Type == Workbench.Contracts.Company.CompanyType.GovernmentContractor ? result : result with
+        {
+            Title = terms.ReplaceTerms(result.Title),
+            Subtitle = result.Subtitle is null ? null : terms.ReplaceTerms(result.Subtitle),
+            Columns = [.. result.Columns.Select(c => c with { Label = terms.ReplaceTerms(c.Label) })],
+            Notes = [.. result.Notes.Select(terms.ReplaceTerms)],
+        };
     }
 
     public async Task<ReportResultDto> DrillAsync(string reportKey, ReportParameters parameters, string drillKey, CancellationToken cancellationToken = default)
@@ -125,7 +139,7 @@ public sealed partial class StandardReportService(
             case StandardReportKeys.ApAging: await ApDrillAsync(builder, parameters, key, cancellationToken); break;
         }
 
-        return builder.Build(clock.UtcNow);
+        return await InCompanyWordsAsync(builder.Build(clock.UtcNow), cancellationToken);
     }
 
     public async Task<ReportFileDto> ExportAsync(string reportKey, ReportParameters parameters, ReportFileFormat format, CancellationToken cancellationToken = default) =>

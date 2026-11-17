@@ -74,27 +74,27 @@ else
         <MudText Typo="Typo.subtitle1" HtmlTag="h2">Handoff</MudText>
         @if (_handoff is { } status)
         {
-            <MudAlert Severity="@(status.Stage == HandoffStage.Live ? Severity.Success : Severity.Info)" Dense="true" Class="mb-2" data-testid="handoff-status">@status.Summary</MudAlert>
+            <MudAlert Severity="@(status.Stage == HandoffStage.Live ? Severity.Success : Severity.Info)" Dense="true" Class="mb-2" data-testid="handoff-status">@Tm.Reword(status.Summary)</MudAlert>
         }
         @if (Opportunity.ContractId is { } contract)
         {
             <MudText data-testid="handoff-done">
-                Handed off: <a href="@($"setup/contracts/{contract}")">contract</a>
+                Handed off: <a href="@($"setup/contracts/{contract}")">@Tm.Reword("contract")</a>
                 @if (Opportunity.ProjectId is { } project)
                 {
                     <span> and <a href="@($"projects/{project}")">project</a></span>
                 }
-                (with CLIN placeholders to finish in contract setup).
+                @Tm.Reword("(with CLIN placeholders to finish in contract setup).")
             </MudText>
         }
         else if (!IsFinance)
         {
-            <MudText Class="mud-text-secondary">Finance has been told. They create the customer, contract and project from a won opportunity, and add its funding.</MudText>
+            <MudText Class="mud-text-secondary">@Tm.Reword("Finance has been told. They create the customer, contract and project from a won opportunity, and add its funding.")</MudText>
         }
         else
         {
             <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
-                Creates a pending contract and a planning project with CLIN placeholders (a base CLIN 0001 and an option CLIN per further year, the value split evenly).
+                @Tm.Reword("Creates a pending contract and a planning project with CLIN placeholders (a base CLIN 0001 and an option CLIN per further year, the value split evenly).")
             </MudText>
             <MudGrid Spacing="2">
                 <MudItem xs="12" sm="6">
@@ -110,12 +110,12 @@ else
                     <MudItem xs="6" sm="2"><MudTextField T="string" @bind-Value="_customerCode" Label="New customer code" MaxLength="32" /></MudItem>
                     <MudItem xs="6" sm="4"><MudTextField T="string" @bind-Value="_customerName" Label="New customer name" MaxLength="200" /></MudItem>
                 }
-                <MudItem xs="12" sm="4"><MudTextField T="string" @bind-Value="_contractNumber" Label="Contract number" MaxLength="64" data-testid="handoff-contract" /></MudItem>
-                <MudItem xs="12" sm="8"><MudTextField T="string" @bind-Value="_contractName" Label="Contract name" MaxLength="200" /></MudItem>
+                <MudItem xs="12" sm="4"><MudTextField T="string" @bind-Value="_contractNumber" Label="@Tm.Reword("Contract number")" MaxLength="64" data-testid="handoff-contract" /></MudItem>
+                <MudItem xs="12" sm="8"><MudTextField T="string" @bind-Value="_contractName" Label="@Tm.Reword("Contract name")" MaxLength="200" /></MudItem>
                 <MudItem xs="12" sm="4"><MudTextField T="string" @bind-Value="_projectCode" Label="Project code" MaxLength="64" data-testid="handoff-project" /></MudItem>
                 <MudItem xs="12" sm="4"><MudTextField T="string" @bind-Value="_projectName" Label="Project name" MaxLength="200" /></MudItem>
                 <MudItem xs="12" sm="4">
-                    <MudNumericField T="decimal?" @bind-Value="_funded" Label="Funded so far ($)" Format="N0" Min="0" HelperText="Optional. Funds the base CLINs; add the rest in contract setup" data-testid="handoff-funded" />
+                    <MudNumericField T="decimal?" @bind-Value="_funded" Label="@Tm.Reword("Funded so far ($)")" Format="N0" Min="0" HelperText="@Tm.Reword("Optional. Funds the base CLINs; add the rest in contract setup")" data-testid="handoff-funded" />
                 </MudItem>
                 <MudItem xs="12" sm="4">
                     <MudSelect T="Guid?" @bind-Value="_pm" Label="Project manager" Clearable="true">
@@ -126,7 +126,7 @@ else
                     </MudSelect>
                 </MudItem>
             </MudGrid>
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="HandoffAsync" Disabled="_busy" data-testid="handoff-submit">Create contract and project</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="HandoffAsync" Disabled="_busy" data-testid="handoff-submit">@Tm.Reword("Create contract and project")</MudButton>
         }
     }
     else if (Opportunity.CanEdit)
@@ -144,6 +144,8 @@ else
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
+
     [Parameter, EditorRequired] public OpportunityDto Opportunity { get; set; } = default!;
 
     [Parameter] public bool IsFinance { get; set; }
@@ -218,7 +220,7 @@ else
             result = await Opportunities.HandoffAsync(Opportunity.Id, new HandoffRequest(_contractNumber ?? "", _projectCode ?? "", _customerId, _customerCode, _customerName,
                 _contractName, _projectName, _pm, null, _funded));
             return await Opportunities.GetAsync(Opportunity.Id);
-        }, "Contract and project created. Set up the project's plan next.");
+        }, Tm.Reword("Contract and project created. Set up the project's plan next."));
         if (result is { ProjectId: var projectId })
         {
             Navigation.NavigateTo($"projects/{projectId}");

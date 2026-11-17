@@ -36,13 +36,14 @@
 
                 first = false;
                 mine = action.Mine;
-                <MudMenuItem Icon="@action.Icon" OnClick="() => Start(action)" data-testid="@($"new-{action.Key}")">@action.Title</MudMenuItem>
+                <MudMenuItem Icon="@action.Icon" OnClick="() => Start(action)" data-testid="@($"new-{action.Key}")">@Tm.Reword(action.Title)</MudMenuItem>
             }
         </ChildContent>
     </MudMenu>
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [Parameter] public NavAccess Access { get; set; } = NavAccess.Anonymous;
 
     private IReadOnlyList<NewAction> _actions = [];

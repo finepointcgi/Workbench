@@ -5,10 +5,10 @@
     <DialogContent>
         <MudStack Spacing="2">
             <MudSelect T="Guid?" @bind-Value="_clinId" Label="Applies to" Dense="true">
-                <MudSelectItem T="Guid?" Value="null">The project (WBS not covered by a CLIN setup)</MudSelectItem>
+                <MudSelectItem T="Guid?" Value="null">@Tm.Reword("The project (WBS not covered by a CLIN setup)")</MudSelectItem>
                 @foreach (var c in Clins)
                 {
-                    <MudSelectItem T="Guid?" Value="c.Id">CLIN @c.Number · @c.Description (@c.Pricing)</MudSelectItem>
+                    <MudSelectItem T="Guid?" Value="c.Id">@Tm.Term("Clin") @c.Number · @c.Description (@c.Pricing)</MudSelectItem>
                 }
             </MudSelect>
             <MudSelect T="RevenueMethodKind" @bind-Value="_method" Label="Revenue method" Dense="true" data-testid="setup-method">
@@ -20,7 +20,7 @@
             <MudText Typo="Typo.caption" Class="mud-text-secondary">@Help(_method)</MudText>
             @if (_method == RevenueMethodKind.CostPlusFee)
             {
-                <MudNumericField T="decimal?" @bind-Value="_feePercent" Label="Fee % (blank: each CLIN's fee rate)" HideSpinButtons="true" />
+                <MudNumericField T="decimal?" @bind-Value="_feePercent" Label="@Tm.Reword("Fee % (blank: each CLIN's fee rate)")" HideSpinButtons="true" />
             }
             @if (_method == RevenueMethodKind.TimeAndMaterialsIncurred)
             {
@@ -45,6 +45,7 @@
 </MudDialog>
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [CascadingParameter]
     private IMudDialogInstance MudDialog { get; set; } = default!;
 

@@ -21,7 +21,7 @@
             <CellTemplate><MudLink Href="@($"projects/{context.Item.Id}/setup")" Typo="Typo.body2">@context.Item.Code</MudLink></CellTemplate>
         </PropertyColumn>
         <PropertyColumn Property="p => p.Name" />
-        <PropertyColumn Property="p => p.ContractNumber" Title="Contract" />
+        <PropertyColumn Property="p => p.ContractNumber" Title="@Tm.Reword("Contract")" />
         <TemplateColumn Title="PM" SortBy="@(p => PmName(p.ProjectManagerId))">
             <CellTemplate>@PmName(context.Item.ProjectManagerId)</CellTemplate>
         </TemplateColumn>
@@ -44,6 +44,7 @@
 </MudDataGrid>
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     private IReadOnlyList<ProjectDto> _projects = [];
     private IReadOnlyList<EmployeeDto> _employees = [];
     private bool _loading = true;
