@@ -38,7 +38,7 @@ public static class ApiKeyScopes
         new("materials", "Materials and manufacturing", "Parts, inventory, BOMs, work orders and MRP.", ["materials", "quality", "engineering-changes"]),
         new("reports", "Reports", "Standard reports, the report writer and saved reports.", ["reports"]),
         new("setup", "Setup and approvals", "Organization setup lists (customers, labor categories, org units), approval workflows, the approval inbox and custom fields.",
-            ["setup", "customers", "org-units", "labor-categories", "approvals", "approval-workflows", "approval-delegations", "customization"]),
+            ["setup", "customers", "org-units", "labor-categories", "approvals", "approval-workflows", "approval-delegations", "customization", "company-profile"]),
         new(Mcp, "AI assistants (MCP)",
             "Lets an MCP client such as Hearth or Claude read data with the assistant's read-only tools. Each tool also needs its own area (projects, time, sheets or setup).",
             [Mcp]),
