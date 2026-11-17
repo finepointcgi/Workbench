@@ -56,7 +56,7 @@ template, never whether Vendor operates it.
 | **CC8.1** change management | Authorized, tested, approved changes | `secure-development-policy` | Pull-request review (CODEOWNERS), CI build and tests, SBOM, migrations as a separate step, tagged releases | Feature exists (repo practice) |
 | **CC9.1-9.2** risk mitigation, vendors | Business disruption, suppliers | `supplier-security-policy`, `supplier-security-checklist`, `business-continuity-plan` | None | Template only |
 | **A1.1-1.3** availability | Capacity, backups, recovery | `backup-policy`, `business-continuity-plan` | `scripts/backup-all.sh`, point-in-time recovery, restore tests, [monitoring](../operations/monitoring.md), [performance](../operations/performance.md) | Feature exists; targets Company |
-| **C1.1-1.2** confidentiality | Identify, protect, dispose of confidential data | `cryptography-policy`, `access-control-policy`, `asset-management-policy` | Masked sensitive fields with logged reveal; **retention policies and legal holds**; data export and deletion on termination | Feature exists |
+| **C1.1-1.2** confidentiality | Identify, protect, dispose of confidential data | `cryptography-policy`, `access-control-policy`, `asset-management-policy` | Masked sensitive fields with logged reveal; **retention policies and legal holds** (part of the `enterprise` module); data export and deletion on termination | Feature exists |
 
 !!! note "What ISO covers and SOC 2 asks beyond"
     The ISO set is a management system. SOC 2 asks the same questions but tests the **operation** of specific controls over
@@ -86,6 +86,7 @@ template, never whether Vendor operates it.
 
 - **Audit log and security events**: append-only; can an administrator change them? (Security events are append-only; only the
   retention job deletes, and the retention period is configurable.)
+- **Module boundaries**: the audit log, MFA and role-based access are in free `core`. SSO, SCIM, retention, legal holds and access reviews are in `enterprise`, so a hosted customer without Enterprise has fewer SOC 2-relevant controls available; decide whether the hosted service always includes them.
 - **SSO, SCIM and MFA**: enforced by the customer's identity provider. The vendor's own staff need the same on cloud and admin
   accounts, which is a Company control.
 - **RBAC**: see [Permissions](../security/permissions.md). Custom roles may be changing that model; document the final one before the audit.
