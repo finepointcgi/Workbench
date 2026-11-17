@@ -44,8 +44,24 @@ public sealed record AssistantToolSpec(string Name, string Description, string A
 /// from the caller's scope, so it runs as the signed-in user and sees exactly what they could open. There are no write
 /// tools, no SQL and no free-form queries: arguments are names, codes and dates, validated here.
 /// </summary>
-public sealed class AssistantToolbox(IServiceProvider services, TimeProvider clock, ILogger<AssistantToolbox> logger)
+public sealed class AssistantToolbox(IServiceProvider services, TimeProvider clock, ILogger<AssistantToolbox> logger, IEnumerable<IAssistantToolContribution>? contributions = null)
 {
+    private readonly IReadOnlyList<IAssistantToolContribution> _contributed = (contributions ?? [])
+        .Where(c => Specs.All(s => s.Name != c.Spec.Name) && IsSafe(c.Spec)).GroupBy(c => c.Spec.Name, StringComparer.Ordinal).Select(g => g.First()).ToList();
+
+    /// <summary>The rules every tool keeps (the safety tests check the built-in ones): a read-only name and a strict schema. A module tool that breaks them is not offered.</summary>
+    private static bool IsSafe(AssistantToolSpec spec) =>
+        System.Text.RegularExpressions.Regex.IsMatch(spec.Name, "^(list|get|read)_[a-z_]+$")
+        && spec.Schema["additionalProperties"] is { } strict && strict.GetValueKind() == JsonValueKind.False;
+
+    /// <summary>The built-in tools and those license modules contribute (<see cref="IAssistantToolContribution"/>). A module tool never replaces a built-in one.</summary>
+    public IReadOnlyList<AssistantToolSpec> AllSpecs => _contributed.Count == 0 ? Specs : [.. Specs, .. _contributed.Select(c => c.Spec)];
+
+    public AssistantToolSpec? FindSpec(string name) => AllSpecs.FirstOrDefault(s => s.Name == name);
+
+    /// <summary>The API key area a tool is offered under over MCP, or null when it isn't offered there (built-in areas are in <c>AssistantToolHost</c>).</summary>
+    public string? ContributedMcpArea(string name) => _contributed.FirstOrDefault(c => c.Spec.Name == name)?.McpArea;
+
     private static readonly CultureInfo Invariant = CultureInfo.InvariantCulture;
 
     public static IReadOnlyList<AssistantToolSpec> Specs { get; } =
@@ -111,7 +127,7 @@ public sealed class AssistantToolbox(IServiceProvider services, TimeProvider clo
     /// <summary>Runs a tool. Never throws for permission, validation or missing records: those become an error result.</summary>
     public async Task<AssistantToolResult> RunAsync(string name, string inputJson, CancellationToken cancellationToken)
     {
-        if (Find(name) is null)
+        if (FindSpec(name) is not { } spec)
         {
             return AssistantToolResult.Error(AssistantToolOutcome.Invalid, $"There is no tool named '{Clip(name, 40)}'. The assistant can only read data with its listed tools.");
         }
@@ -124,7 +140,12 @@ public sealed class AssistantToolbox(IServiceProvider services, TimeProvider clo
                 throw new ArgumentException("Tool input must be a JSON object.");
             }
 
-            var args = new Args(doc.RootElement, Find(name)!);
+            var args = new Args(doc.RootElement, spec);
+            if (_contributed.FirstOrDefault(c => c.Spec.Name == name) is { } contributed)
+            {
+                return await contributed.RunAsync(doc.RootElement, services, cancellationToken);
+            }
+
             return name switch
             {
                 "list_projects" => await ListProjectsAsync(args, cancellationToken),
@@ -682,7 +703,8 @@ public sealed class AssistantToolbox(IServiceProvider services, TimeProvider clo
 
     internal static string? Clip(string? value, int max) => value is null ? null : value.Length <= max ? value : value[..max] + "…";
 
-    private static AssistantToolSpec Spec(string name, string description, string activity, params (string Name, string Type, string Description, bool Required)[] parameters)
+    /// <summary>Builds a tool spec with the standard strict schema (named string, integer or boolean parameters, no extra properties).</summary>
+    public static AssistantToolSpec Spec(string name, string description, string activity, params (string Name, string Type, string Description, bool Required)[] parameters)
     {
         var properties = new JsonObject();
         foreach (var p in parameters)
@@ -754,4 +776,21 @@ public sealed class AssistantToolbox(IServiceProvider services, TimeProvider clo
             ? DateOnly.TryParseExact(text, "yyyy-MM-dd", Invariant, DateTimeStyles.None, out var d) ? d : throw new ArgumentException($"'{name}' must be a date like 2026-10-31.")
             : null;
     }
+}
+
+/// <summary>
+/// An assistant tool a license module adds. Register it in the module's <c>ConfigureServices</c>; with the module absent the tool does not
+/// exist. Like the built-in tools it is read-only and runs as the signed-in user: call the module's permission-checked services through
+/// <paramref name="services"/>, validate arguments (unknown properties are already refused against <see cref="Spec"/>'s schema, which
+/// <see cref="AssistantToolbox.Spec"/> builds strictly), and return an <see cref="AssistantToolResult"/>. Permission, validation and
+/// not-found exceptions become error results, as for the built-in tools.
+/// </summary>
+public interface IAssistantToolContribution
+{
+    AssistantToolSpec Spec { get; }
+
+    /// <summary>The API key area (for example <c>projects</c>) the tool is offered under over MCP; null keeps it to the in-app assistant.</summary>
+    string? McpArea => null;
+
+    Task<AssistantToolResult> RunAsync(JsonElement input, IServiceProvider services, CancellationToken cancellationToken);
 }

@@ -26,7 +26,8 @@ public sealed class ApCreditService(
     IOptions<PurchasingOptions> options,
     TimeProvider clock,
     IOptions<Materials.MaterialsOptions>? materialsOptions = null,
-    Customization.DocumentNumbers? documentNumbers = null) : IApCreditService
+    Customization.DocumentNumbers? documentNumbers = null,
+    IItemReader? itemReader = null) : IApCreditService
 {
     private Customization.DocumentNumbers DocNumbers => documentNumbers ?? new(dbFactory, clock);
 
@@ -417,7 +418,7 @@ public sealed class ApCreditService(
                 ?? throw new ArgumentException($"No active receiving clearing account {accountNumber}; set up the materials accounts first.");
             var org = poLine?.OrgUnitId ?? await db.Set<OrgUnit>().AsNoTracking().OrderBy(o => o.Code).Select(o => (Guid?)o.Id).FirstOrDefaultAsync(cancellationToken)
                 ?? throw new ArgumentException("Add an organization first.");
-            var part = await db.Set<Domain.Materials.Part>().AsNoTracking().Where(p => p.Id == quality.PartId).Select(p => p.Number).FirstOrDefaultAsync(cancellationToken);
+            var part = (await (itemReader ?? PartItemReader.Instance).ReadAsync(db, [quality.PartId], cancellationToken)).GetValueOrDefault(quality.PartId)?.Number;
             var ncr = await db.Set<Domain.Quality.Nonconformance>().AsNoTracking().Where(n => n.Id == quality.NonconformanceId).Select(n => n.Number).FirstOrDefaultAsync(cancellationToken);
             var description = $"Returned {quality.Quantity:0.####} × {part} ({ncr}{(quality.ReturnAuthorization is { } rma ? $", RMA {rma}" : "")})";
             save = new SaveBillRequest(quality.VendorId, quality.ReturnAuthorization is { } ra ? $"RMA {ra}" : quality.Number, quality.Date < Today ? Today : quality.Date,
