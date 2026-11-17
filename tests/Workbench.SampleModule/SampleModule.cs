@@ -7,6 +7,12 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.Extensions.DependencyInjection;
 using Workbench.Application;
+using Workbench.Application.Approvals;
+using Workbench.Application.Assistant;
+using Workbench.Application.Customization;
+using Workbench.Application.Migration;
+using Workbench.Application.Purchasing;
+using Workbench.Application.Reports;
 using Workbench.Contracts;
 using Workbench.Contracts.Identity;
 using Workbench.Contracts.Integrations;
@@ -99,10 +105,22 @@ public sealed class SampleModule : IWorkbenchModule
         ServiceInterfaces = [typeof(ISampleWidgetService)],
         ApiKeyAreas = [new ApiKeyAreaDto("sample", "Sample module", "Sample widgets.", ["sample-widgets"])],
         RoutableAssemblies = [typeof(SampleModule).Assembly],
+        Rows = SampleRows.All,
     };
 
-    public void ConfigureServices(IServiceCollection services, ModuleContext context) =>
+    public void ConfigureServices(IServiceCollection services, ModuleContext context)
+    {
         services.AddScoped<ISampleWidgetService, SampleWidgetService>();
+
+        // Contributions to core engines: each is absent when the module is not loaded.
+        services.AddScoped<IHomeWidgetProvider, SampleHomeWidget>();
+        services.AddScoped<IAssistantToolContribution, SampleAssistantTool>();
+        services.AddScoped<IStandardReportContribution, SampleStandardReport>();
+        services.AddScoped<IApprovalDocumentHandler, SampleApprovalHandler>();
+        services.AddScoped<IReconciliationSource, SampleReconciliationSource>();
+        services.AddSingleton(new MigrationStepContribution("sample-widgets", "Sample widgets", "Load the sample module's widgets.", ["people"], [], After: "people"));
+        services.AddScoped<IItemReader, SampleItemReader>();
+    }
 
     public void MapEndpoints(IEndpointRouteBuilder api) =>
         api.MapGet("/sample-widgets", async (ISampleWidgetService widgets, CancellationToken ct) => await widgets.ListAsync(ct));

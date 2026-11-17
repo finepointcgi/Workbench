@@ -19,8 +19,12 @@ using Workbench.Domain.Travel;
 namespace Workbench.Application.Customization;
 
 /// <summary>A numbered document type: its key, name, built-in pattern and where its numbers are stored.</summary>
-public sealed record DocumentNumberType(string Key, string Name, string DefaultPattern, Func<IWorkbenchDbContext, IQueryable<string>> Numbers, Func<IWorkbenchDbContext, int?> MaxLength)
+public sealed record DocumentNumberType(string Key, string Name, string DefaultPattern, Func<IWorkbenchDbContext, IQueryable<string>> Numbers, Func<IWorkbenchDbContext, int?> MaxLength) : Workbench.Contracts.Modules.IModuleRow
 {
+    string Workbench.Contracts.Modules.IModuleRow.Catalog => Workbench.Contracts.Modules.ModuleCatalogs.DocumentNumbers;
+
+    string Workbench.Contracts.Modules.IModuleRow.RowKey => Key;
+
     public static DocumentNumberType For<T>(string key, string name, string pattern, Expression<Func<T, string>> number)
         where T : class
     {
@@ -51,7 +55,8 @@ public static class DocumentNumberTypes
     public const string TravelAuthorization = "travel-authorization";
     public const string Opportunity = "opportunity";
 
-    public static IReadOnlyList<DocumentNumberType> All { get; } =
+    /// <summary>The types the product ships, and (in <see cref="All"/>) those loaded modules add.</summary>
+    public static IReadOnlyList<DocumentNumberType> BuiltIn { get; } =
     [
         DocumentNumberType.For<PurchaseOrder>(PurchaseOrder, "Purchase orders", "PO-{seq:6}", p => p.Number),
         DocumentNumberType.For<PurchaseRequisition>(Requisition, "Purchase requisitions", "REQ-{seq:6}", r => r.Number),
@@ -72,6 +77,10 @@ public static class DocumentNumberTypes
         DocumentNumberType.For<TravelAuthorization>(TravelAuthorization, "Travel authorizations", "TA-{seq:6}", t => t.Number),
         DocumentNumberType.For<Domain.Crm.Opportunity>(Opportunity, "Opportunities", "OPP-{seq:4}", o => o.Number),
     ];
+
+    private static readonly Workbench.Contracts.Modules.RowCatalog<DocumentNumberType> Catalog = new(BuiltIn);
+
+    public static IReadOnlyList<DocumentNumberType> All => Catalog.All;
 
     public static DocumentNumberType? Find(string key) => All.FirstOrDefault(t => t.Key == key);
 

@@ -26,7 +26,8 @@ public sealed partial class EdiService(
     IEnumerable<IEdiTransport> transports,
     IOptions<EdiOptions> options,
     TimeProvider clock,
-    ILogger<EdiService> logger) : IEdiService
+    ILogger<EdiService> logger,
+    IItemReader? itemReader = null) : IEdiService
 {
     public const string PartnerEntity = nameof(EdiPartner);
 
@@ -188,8 +189,8 @@ public sealed partial class EdiService(
         var rfqLines = await db.Set<RfqLine>().AsNoTracking().Where(l => l.PurchaseOrderLineId != null && lineIds.Contains(l.PurchaseOrderLineId.Value)).ToListAsync(ct);
         var links = await db.Set<MaterialPurchaseLink>().AsNoTracking().Where(l => l.PurchaseOrderLineId != null && lineIds.Contains(l.PurchaseOrderLineId.Value)).ToListAsync(ct);
         var partIds = rfqLines.Where(l => l.PartId != null).Select(l => l.PartId!.Value).Concat(links.Select(l => l.PartId)).Distinct().ToList();
-        var parts = await db.Set<Part>().AsNoTracking().Where(p => partIds.Contains(p.Id)).ToDictionaryAsync(p => p.Id, ct);
-        var partByLine = new Dictionary<Guid, Part>();
+        var parts = await (itemReader ?? PartItemReader.Instance).ReadAsync(db, partIds, ct);
+        var partByLine = new Dictionary<Guid, ItemRef>();
         foreach (var l in links.Where(l => parts.ContainsKey(l.PartId)))
         {
             partByLine[l.PurchaseOrderLineId!.Value] = parts[l.PartId];

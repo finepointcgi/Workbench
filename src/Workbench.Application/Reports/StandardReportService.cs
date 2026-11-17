@@ -33,12 +33,16 @@ public sealed partial class StandardReportService(
     ITimeReportService timeReports,
     IArReportService arReports,
     IApReportService apReports,
-    IEnumerable<StandardReportPage> modulePages) : IStandardReportService
+    IEnumerable<StandardReportPage> modulePages,
+    IEnumerable<IStandardReportContribution>? moduleReports = null) : IStandardReportService
 {
     private sealed record Entry(string Key, string Name, string Description, string Category, ReportParameterKind[] Parameters, string? PageLink, Func<ReportAccessContext, string?> Unavailable, bool PageOnly = false);
 
     private Entry[] Catalog => _catalog ??= [.. BuiltInCatalog, .. modulePages.Select(p => new Entry(p.Key, p.Name, p.Description, p.Category, [], p.PageLink,
-        a => a.Can(p.Permission) ? null : p.DeniedMessage, PageOnly: true))];
+        a => a.Can(p.Permission) ? null : p.DeniedMessage, PageOnly: true)),
+        .. (moduleReports ?? []).Select(r => new Entry(r.Key, r.Name, r.Description, r.Category, [.. r.Parameters], r.PageLink, r.Unavailable))];
+
+    private IStandardReportContribution? Contributed(string key) => (moduleReports ?? []).FirstOrDefault(r => r.Key == key);
 
     private Entry[]? _catalog;
 
@@ -100,6 +104,13 @@ public sealed partial class StandardReportService(
             case StandardReportKeys.TimesheetCompliance: await TimesheetComplianceAsync(builder, context, parameters, cancellationToken); break;
             case StandardReportKeys.ArAging: await ArAgingAsync(builder, parameters, cancellationToken); break;
             case StandardReportKeys.ApAging: await ApAgingAsync(builder, parameters, cancellationToken); break;
+            default:
+                if (Contributed(entry.Key) is { } contributed)
+                {
+                    await contributed.RunAsync(builder, context, parameters, cancellationToken);
+                }
+
+                break;
         }
 
         return await InCompanyWordsAsync(builder.Build(clock.UtcNow), cancellationToken);
@@ -139,6 +150,13 @@ public sealed partial class StandardReportService(
             case StandardReportKeys.TimesheetCompliance: await ComplianceDrillAsync(builder, context, key, cancellationToken); break;
             case StandardReportKeys.ArAging: await ArDrillAsync(builder, parameters, key, cancellationToken); break;
             case StandardReportKeys.ApAging: await ApDrillAsync(builder, parameters, key, cancellationToken); break;
+            default:
+                if (Contributed(entry.Key) is { } contributed)
+                {
+                    await contributed.DrillAsync(builder, context, parameters, drillKey, cancellationToken);
+                }
+
+                break;
         }
 
         return await InCompanyWordsAsync(builder.Build(clock.UtcNow), cancellationToken);

@@ -40,12 +40,14 @@ public sealed record ModuleLoadResult(string Id, string Folder, ModuleLoadStatus
 /// <param name="Required">Ids that must load; the host refuses to start when one does not (use for modules the deployment can't run without).</param>
 /// <param name="BuiltInNavSections">The menu sections the product has; checked against a module's menu entries. Null skips that check.</param>
 /// <param name="BuiltInNavHrefs">The pages the menu already has.</param>
+/// <param name="BuiltInRowKeys">The keys (<c>catalog/key</c>) of the built-in catalog rows, so a module can't add a row that already exists. Null skips that check.</param>
 public sealed record ModuleHostOptions(
     string Folder,
     Func<string, bool> IsLicensed,
     IReadOnlyCollection<string>? Required = null,
     IReadOnlyCollection<string>? BuiltInNavSections = null,
-    IReadOnlyCollection<string>? BuiltInNavHrefs = null)
+    IReadOnlyCollection<string>? BuiltInNavHrefs = null,
+    IReadOnlyCollection<string>? BuiltInRowKeys = null)
 {
     public const string FolderKey = "Modules:Folder";
     public const string RequiredKey = "Modules:Required";
@@ -53,11 +55,11 @@ public sealed record ModuleHostOptions(
 
     /// <summary>The folder from <c>Modules:Folder</c> (default <c>modules</c>, relative to the application's folder) and the ids from <c>Modules:Required</c>.</summary>
     public static ModuleHostOptions From(IConfiguration configuration, Func<string, bool> isLicensed,
-        IReadOnlyCollection<string>? navSections = null, IReadOnlyCollection<string>? navHrefs = null)
+        IReadOnlyCollection<string>? navSections = null, IReadOnlyCollection<string>? navHrefs = null, IReadOnlyCollection<string>? rowKeys = null)
     {
         var folder = configuration[FolderKey] is { Length: > 0 } configured ? configured : DefaultFolder;
         return new ModuleHostOptions(Path.GetFullPath(folder, AppContext.BaseDirectory), isLicensed,
-            configuration.GetSection(RequiredKey).Get<string[]>() ?? [], navSections, navHrefs);
+            configuration.GetSection(RequiredKey).Get<string[]>() ?? [], navSections, navHrefs, rowKeys);
     }
 }
 
@@ -274,7 +276,7 @@ public sealed class ModuleHost
 
                 var problems = contribution.ModuleId != module.Id
                     ? [$"Describe() says module '{contribution.ModuleId}', not '{module.Id}'."]
-                    : set.Validate(contribution, options.BuiltInNavSections, options.BuiltInNavHrefs);
+                    : set.Validate(contribution, options.BuiltInNavSections, options.BuiltInNavHrefs, options.BuiltInRowKeys);
                 if (problems.Count > 0)
                 {
                     results.Add(new ModuleLoadResult(module.Id, candidate.Folder, ModuleLoadStatus.Invalid, string.Join(" ", problems), module.Version));
