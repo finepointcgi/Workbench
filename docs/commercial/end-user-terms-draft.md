@@ -16,9 +16,11 @@ Customer). The order form says which.
 - **Source License**: the Functional Source License, Version 1.1, ALv2 Future License (FSL-1.1-ALv2) in `LICENSE.md` of the
   source repository.
 - **License Key**: a signed key, or a hosted plan setting, that unlocks the **Modules** and **Seats** on the order form.
-- **Module**: a licensed part of the Software (for example Finance, Capture, Workforce, Controls, Government contracting
-  pack, Enterprise). Core is free.
-- **Seat**: an active person who can sign in. **Full** and **Light** Seats are defined in the order form.
+- **Module**: a licensed part of the Software (`billing`, `accounting`, `capture`, `workforce`, `projectcontrols`, `materials`, `govcon`, `enterprise`). Core is free
+  forever. The AI assistant is free when Customer supplies its own API key.
+- **Seat**: an active person who can sign in. A **Full** Seat is a person whose roles grant more than the built-in Employee
+  role; a **Light** Seat is a person who holds only the Employee role's access (own time, expenses and leave). The order form
+  may also set a Seat count **per Module**: a person uses a Module's Seat when their roles grant any permission in it.
 - **Customer Data**: everything Customer or its users put into the Software or the Hosted service.
 - **Order Form**: the document naming the Modules, Seats, Term, Fees and any trial.
 
@@ -47,13 +49,13 @@ agreement or the Source License.
 
 ## 3. Seats, Modules and use
 
-3.1 Customer may have no more active Seats than it has paid for, by type. A pending invitation holds a Seat until accepted,
+3.1 Customer may have no more active Seats than it has paid for, by type and, where the Order Form sets them, by Module. A pending invitation holds a Seat until accepted,
 revoked or expired; deactivating a person frees the Seat.
 3.2 API keys and integrations are not people and take no Seat.
 3.3 Customer may add Seats and Modules at any time on the Order Form's rates; additions run to the end of the current Term
 and are billed pro rata `[or: from the next billing date]`.
 3.4 Customer may not reduce Seats or Modules during a Term `[or: may reduce at renewal only]`.
-3.5 Where the Software cannot enforce a limit (for example open sign-up in a development setup), Customer is still bound by it
+3.5 The Software enforces Self-Hosted limits only in part, and the source is open to read and change. Customer is bound by the Seat and Module limits whatever the Software does or does not stop. Where the Software cannot enforce a limit (for example open sign-up in a development setup), Customer is still bound by it
 and must report and pay for any excess on request.
 3.6 Vendor may ask for a usage report once a year, and Customer will give a truthful one `[audit right: scope, notice, cost]`.
 
@@ -63,8 +65,8 @@ and must report and pay for any excess on request.
 commitment and no warranty beyond Section 12.1.
 4.2 Customer Data entered during a trial belongs to Customer (Section 9) and is kept for `[30]` days after the trial ends
 unless Customer converts, in which case it carries over untouched.
-4.3 At the end of a trial the paid features stop working for changes after the grace period in 5.5; Core and read access to
-Customer's records continue. Vendor will not delete Customer Data because a trial ended, except as Section 9.5 provides.
+4.3 At the end of a trial the paid Modules stop working at once, with **no grace period** (the grace period in 5.5 is for paying
+customers); Core and read access to Customer's records continue. Vendor will not delete Customer Data because a trial ended, except as Section 9.5 provides.
 
 ## 5. Fees, renewal and termination
 
@@ -76,7 +78,7 @@ maximum, if less. Vendor may suspend paid features after `[15]` days' written no
 5.4 **Term and renewal.** The Term starts on the Order Form date and runs `[12]` months. It renews for equal periods unless
 either party gives `[60]` days' notice before the end. `[auto-renew: check state law on consumer and business notice rules.]`
 5.5 **Lapse.** If a License Key expires or fees go unpaid, Modules keep working for a grace period of `[14]` days with a warning,
-then the Software returns to Core. **Nothing is deleted.** Reads of all Customer Data stay available, and no one is locked out
+then the Software returns to Core (a lapsed trial returns at once). **Nothing is deleted.** Core, including the audit log and file exports of Customer's own data, is free forever. Reads of all Customer Data stay available, and no one is locked out
 of their own records.
 5.6 **Termination for cause.** Either party may terminate on `[30]` days' written notice of a material breach it has not
 cured in that time. Vendor may terminate immediately for breach of 2.3, 2.4 or 8.

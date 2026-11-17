@@ -40,22 +40,26 @@ Single sign-on with Entra ID and Okta · Self-host or hosted · Your data export
 | Time that holds up | Daily timesheets, approvals, revisions with reasons, and a compliance report your auditor will recognize. |
 | Projects and plans | A WBS, a Gantt chart, a project page, budgets and staffing in one place instead of three tools. |
 | Billing and the books | From approved time to invoice to the general ledger, with periods that close and a trail of who changed what. |
-| Win to project | A won opportunity tells Finance and hands the project manager a project to plan. |
+| Win to project | A won opportunity tells accounting and hands the project manager a project to plan. |
 | Sheets and dashboards | The spreadsheet-and-board flexibility teams like, on the same data. |
 | Security you can show | Single sign-on, SCIM, MFA, access reviews, an append-only audit log and encrypted backups. |
-| ⚠ Modules | Turn on only what you need. Government contracting features appear only if you are a contractor. |
+| ⚠ Modules | Billing, accounting, capture, workforce, project controls, materials, government contracting and enterprise are separate modules. Turn on only what you need. Government contracting features appear only if you are a contractor. |
 
 ## Pricing page (placeholders)
 
 > **Core: free.** Time, expenses, projects, the Plan, sheets and dashboards for one company. No seat limit. Host it yourself.
 >
-> **Team: `[$?]` per person per month.** Adds Finance: general ledger, billing, payables, payroll.
+> **Team: `[$?]` per person per month.** Adds Billing (invoices, AR, revenue recognition, QuickBooks and Xero push) and Accounting (general ledger, payables, purchasing, cash, assets).
 >
-> **Business: `[$?]` per person per month.** Adds Capture, Workforce and Controls (earned value and risk).
+> **Business: `[$?]` per person per month.** Adds Capture, Workforce (HR, payroll, capacity) and Project controls (earned value, risks, schedule health).
 >
 > **Enterprise: `[$?]` per person per month.** Adds single sign-on, multi-company, integrations and priority support.
 >
-> **Government contracting pack: add-on, `[$?]`.** DCAA, CAS, CMMC, incurred cost and WAWF billing.
+> **Government contracting: add-on, `[$?]`.** DCAA, CPSR, CAS, CMMC, incurred cost and WAWF billing.
+>
+> **Materials: add-on, `[$?]`.** Inventory, bills of materials, work orders, MRP, quality and shipping.
+>
+> **AI assistant: free** when you bring your own API key.
 >
 > **Light seats `[$?]`:** for people who only enter time and expenses.
 >
@@ -66,13 +70,13 @@ Honest note under the table: *Prices are for the first customers. Early customer
 
 ## FAQ
 
-**Is it really free?** Core is free to self-host with no seat limit, for one company. You pay when you add modules or Seats, or
+**Is it really free?** Core is free forever, with no seat limit unless you set one, for one company. You pay when you add modules or Seats, or
 if you want us to host it.
 
 **What does "source-available" mean for me?** You can read, change and run the code for your own use. The one thing you may not do
 is sell a competing service. Each release becomes Apache 2.0 after two years.
 
-**Can we leave?** Yes. Importers and exports are free in every plan, and when a license lapses you fall back to Core with
+**Can we leave?** Yes. Importers and file exports of your own data are free in every plan, and when a license lapses you fall back to Core with
 nothing deleted.
 
 **Do you host it?** `[⚠ Yes, in {regions}, from {date} / Not yet.]` Self-hosting is supported with PostgreSQL.
