@@ -140,7 +140,7 @@ public sealed class CustomerViewService(IWorkbenchDbContextFactory dbFactory, Ti
                 .ToListAsync(cancellationToken))
             .OrderByDescending(i => i.InvoiceDate).ThenByDescending(i => i.Sequence).ToList();
 
-        decimal Open(Invoice i) => i.Total - i.AmountPaid - i.AmountCredited;
+        decimal Open(Invoice i) => i.Total - i.AmountPaid - i.AmountCredited - i.AmountWrittenOff;
         var rows = invoices.Select(i => new CustomerInvoiceDto(i.Number, i.InvoiceDate, i.PeriodFrom, i.PeriodTo, i.DueDate, i.Total, i.AmountPaid,
             i.Status switch { InvoiceStatus.Paid => "Paid", InvoiceStatus.PartiallyPaid => "Partially paid", _ => "Awaiting payment" },
             i.Status != InvoiceStatus.Paid && i.DueDate < today && Open(i) > 0)).ToList();

@@ -56,6 +56,19 @@ public static class DatabaseInitializer
             return;
         }
 
+        // Demo:Dataset=Commercial: a professional-services firm instead of the government contractor below.
+        var configuration = services.GetService<IConfiguration>();
+        if (configuration is not null)
+        {
+            DemoMode.ValidateDataset(configuration);
+        }
+
+        if (DemoMode.IsCommercial(configuration))
+        {
+            await CommercialDemoSeed.SeedAsync(db, services, factory, cancellationToken);
+            return;
+        }
+
         var now = DateTime.UtcNow;
         var workspace = new Workspace { Name = "Program Office" };
         var schedule = new Sheet

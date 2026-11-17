@@ -8,8 +8,7 @@
 @inject ISnackbar Snackbar
 
 <MudText Class="mud-text-secondary mb-3">
-    Give a contracting officer a link to this contract's funding and invoices. They don't need an account. They see the contract's value,
-    funding, what's been billed and paid, and the sent invoices: no costs, rates or people. A link works until it expires or you end it.
+    @Tm.Reword("Give a contracting officer a link to this contract's funding and invoices. They don't need an account. They see the contract's value, funding, what's been billed and paid, and the sent invoices: no costs, rates or people. A link works until it expires or you end it.")
 </MudText>
 
 @if (_forbidden)
@@ -69,6 +68,7 @@ else
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [Parameter, EditorRequired] public Guid ContractId { get; set; }
 
     private IReadOnlyList<CustomerShareLinkDto>? _links;

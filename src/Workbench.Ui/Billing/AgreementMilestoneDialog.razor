@@ -1,0 +1,34 @@
+@* Adds or changes a stage of a fixed-fee agreement. *@
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudTextField @bind-Value="_description" Label="Milestone" Required="true" Immediate="true" />
+            <MudNumericField T="decimal" @bind-Value="_amount" Label="Amount" Format="N2" HideSpinButtons="true" Min="0" />
+            <MudDatePicker Label="Due" @bind-Date="_target" DateFormat="yyyy-MM-dd" />
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" Disabled="@(string.IsNullOrWhiteSpace(_description) || _amount <= 0 || _target is null)"
+                   OnClick="() => MudDialog.Close(DialogResult.Ok(new SaveAgreementMilestoneRequest(_description!.Trim(), _amount, DateOnly.FromDateTime(_target!.Value))))">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public AgreementMilestoneDto? Milestone { get; set; }
+
+    private string? _description;
+    private decimal _amount;
+    private DateTime? _target = DateTime.Today;
+
+    protected override void OnInitialized()
+    {
+        _description = Milestone?.Description;
+        _amount = Milestone?.Amount ?? 0;
+        _target = Milestone?.TargetDate.ToDateTime(TimeOnly.MinValue) ?? DateTime.Today;
+    }
+}

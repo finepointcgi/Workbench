@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.DependencyInjection;
 using Workbench.Application.Imports.CaptureExec;
+using Workbench.Application.Imports.Commercial;
 using Workbench.Application.Imports.Costpoint;
 using Workbench.Application.Imports.Smartsheet;
 using Workbench.Application.Imports.Unanet;
@@ -49,6 +50,14 @@ public static class ImportRegistration
         services.AddScoped<IImporter, CaptureExecAccountImporter>();
         services.AddScoped<IImporter, CaptureExecContactImporter>();
         services.AddScoped<IImporter, CaptureExecOpportunityImporter>();
+        // HubSpot, Salesforce and plain CSV: the same three importers, each told which system's headers and stages to expect.
+        foreach (var source in new[] { Workbench.Domain.Imports.ImportSource.HubSpot, Workbench.Domain.Imports.ImportSource.Salesforce, Workbench.Domain.Imports.ImportSource.GenericCsv })
+        {
+            services.AddScoped<IImporter>(_ => new CommercialAccountImporter(source));
+            services.AddScoped<IImporter>(_ => new CommercialContactImporter(source));
+            services.AddScoped<IImporter>(_ => new CommercialDealImporter(source));
+        }
+
         services.AddScoped<OpenItemConversion>();
         services.AddScoped<ImportRollback>();
         services.AddScoped<IImportService, ImportService>();

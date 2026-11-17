@@ -58,7 +58,7 @@
                 <MudIcon Icon="@Icons.Material.Filled.DragIndicator" Size="Size.Small" Class="mud-text-secondary" aria-hidden="true" />
                 <div style="flex:1;min-width:0">
                     <MudText Typo="Typo.body2">@context.Title</MudText>
-                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@WidgetDialog.TypeLabel(context.Type) · @WidthLabel(context.Width)@(context.Config.Pinned ? " · pinned" : "")</MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@Tm.Reword(WidgetDialog.TypeLabel(context.Type)) · @WidthLabel(context.Width)@(context.Config.Pinned ? " · pinned" : "")</MudText>
                 </div>
                 <MudIconButton Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small" aria-label="@($"Move {context.Title} up")" Disabled="@(_widgets.IndexOf(context) == 0)" OnClick="() => MoveAsync(context, -1)" />
                 <MudIconButton Icon="@Icons.Material.Filled.ArrowDownward" Size="Size.Small" aria-label="@($"Move {context.Title} down")" Disabled="@(_widgets.IndexOf(context) == _widgets.Count - 1)" OnClick="() => MoveAsync(context, 1)" />
@@ -89,6 +89,7 @@
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     private static readonly (int Cols, string Label)[] Widths = [(3, "Quarter"), (4, "Third"), (6, "Half"), (8, "Two thirds"), (12, "Full width")];
 
     [Parameter]

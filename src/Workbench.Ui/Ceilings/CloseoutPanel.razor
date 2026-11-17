@@ -61,13 +61,13 @@ else
                                 <MudIcon Icon="@(item.IsSatisfied ? Icons.Material.Filled.CheckCircle : item.IsWaived ? Icons.Material.Filled.RemoveCircle : Icons.Material.Outlined.Circle)"
                                          Color="@(item.IsSatisfied ? Color.Success : item.IsWaived ? Color.Info : Color.Default)" Size="Size.Small" />
                                 <div style="flex:1">
-                                    <MudText Typo="Typo.body2"><b>@item.Label</b>
+                                    <MudText Typo="Typo.body2"><b>@Tm.Reword(item.Label)</b>
                                         @if (item.Link is { } link)
                                         {
                                             <MudLink Href="@link" Typo="Typo.caption" Class="ml-2">Open</MudLink>
                                         }
                                     </MudText>
-                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@item.Detail@(item.IsWaived ? $" · waived: {item.WaiverReason}" : "")</MudText>
+                                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@Tm.Reword(item.Detail)@(item.IsWaived ? $" · waived: {item.WaiverReason}" : "")</MudText>
                                 </div>
                                 @if (c.CanManage && !c.IsClosed)
                                 {
@@ -91,7 +91,7 @@ else
             {
                 <MudPaper Outlined="true" Class="pa-4 mb-3">
                     <MudText Typo="Typo.subtitle2">Funds de-obligation</MudText>
-                    <MudText Typo="Typo.body2">Funded @SetupFormat.Money(c.Funded) − billed @SetupFormat.Money(c.Billed) = <b>@c.DeobligationCalculated.ToString("C2")</b></MudText>
+                    <MudText Typo="Typo.body2">@Tm.Reword("Funded") @SetupFormat.Money(c.Funded) − billed @SetupFormat.Money(c.Billed) = <b>@c.DeobligationCalculated.ToString("C2")</b></MudText>
                     @if (c.DeobligationRecorded is { } rec)
                     {
                         <MudText Typo="Typo.caption" Class="mud-text-secondary">Recorded @rec.ToString("C2") by @c.DeobligationRecordedBy</MudText>
@@ -142,6 +142,7 @@ else
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [Parameter, EditorRequired]
     public CloseoutScope Scope { get; set; }
 

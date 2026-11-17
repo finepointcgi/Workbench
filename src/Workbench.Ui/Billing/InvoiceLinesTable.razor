@@ -46,7 +46,7 @@
                     </tr>
                 }
                 <tr>
-                    <td colspan="6" style="text-align:right" class="mud-text-secondary">CLIN @group.Key subtotal</td>
+                    <td colspan="6" style="text-align:right" class="mud-text-secondary">@Tm.Term("Clin") @group.Key subtotal</td>
                     <td style="text-align:right; white-space:nowrap"><strong>@BillingFormat.Amount(group.Sum(l => l.Amount))</strong></td>
                     @if (OnRemove.HasDelegate)
                     {
@@ -69,6 +69,7 @@
 </MudPaper>
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [Parameter, EditorRequired]
     public IReadOnlyList<InvoiceLineDto> Lines { get; set; } = [];
 

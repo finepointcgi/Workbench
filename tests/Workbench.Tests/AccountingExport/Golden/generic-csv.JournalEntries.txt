@@ -1,0 +1,5 @@
+Entry,Date,Source,Description,Line,Account number,Account,Account code,Debit,Credit,Memo,Class
+JE-000001,2026-01-05,Manual,Rent for January,1,6120,Office Expenses,461,1500.00,,Office rent,Headquarters
+JE-000001,2026-01-05,Manual,Rent for January,2,1010,Checking,090,,1500.00,,
+JE-000002,2026-01-31,Manual,"Accrue =bonus, ""Q1""",1,6020,Office Expenses,461,250.50,,Payroll tax,
+JE-000002,2026-01-31,Manual,"Accrue =bonus, ""Q1""",2,2130,Accounts Payable,800,,250.50,,

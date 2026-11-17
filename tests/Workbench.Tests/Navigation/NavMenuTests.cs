@@ -164,7 +164,7 @@ public sealed class NavMenuTests
         Assert.DoesNotContain("admin/users", links);
         Assert.DoesNotContain("notifications", links);
         Assert.Contains(">Setup<", nav.Find("[data-testid='nav-admin']").OuterHtml.Replace(" ", ""));
-        Assert.True(links.Count <= 100 && links.Distinct().Count() == links.Count, $"{links.Count} links, some repeated"); // 8 under People (HR), 6 under Business development, 4 for the assistant, 12 for Wave A finance, 6 for Waves C and E
+        Assert.True(links.Count <= 110 && links.Distinct().Count() == links.Count, $"{links.Count} links, some repeated"); // 8 under People (HR), 6 under Business development, 4 for the assistant, 12 for Wave A finance, 6 for Waves C and E, then the accounting export and commercial billing pages
     }
 
     [Fact]

@@ -5,7 +5,7 @@ namespace Workbench.Contracts.Imports;
 
 // Enums mirror Workbench.Domain.Imports by name and value.
 
-public enum ImportSource { Costpoint, SmartsheetApi, SmartsheetExcel, Unanet, CaptureExec }
+public enum ImportSource { Costpoint, SmartsheetApi, SmartsheetExcel, Unanet, CaptureExec, HubSpot, Salesforce, GenericCsv }
 
 public enum ImportKind { OrgUnits, LaborCategories, Employees, CostRates, Customers, Contracts, Clins, Projects, BillRates, Budgets, Sheets, FixedAssets,
     Accounts, Vendors, OpeningBalances, OpenArInvoices, OpenApBills, Assignments, Timesheets,
@@ -48,6 +48,9 @@ public sealed record ImportMappingDto(IReadOnlyDictionary<string, string?> Field
 /// <see cref="AsOfDate"/>: the date GL opening balances are posted on (the day before cut-over).
 /// <see cref="OffsetAccount"/>: the clearing account that balances each part of an opening trial balance too long for
 /// one journal entry (the parts net to zero on it).
+/// <see cref="UpdateExisting"/>: HubSpot, Salesforce and plain CSV deal imports only. Off (the default), a row that matches a
+/// record already in Workbench is left alone and listed as a duplicate; on, the matching record is updated from the file
+/// (blank cells keep what Workbench has). Nothing is ever overwritten without this being ticked after seeing the dry run.
 /// </summary>
 public sealed record ImportOptionsDto(
     Guid? ProjectId = null,
@@ -58,7 +61,8 @@ public sealed record ImportOptionsDto(
     bool IncludeAttachments = false,
     IReadOnlyList<string>? SheetIds = null,
     DateOnly? AsOfDate = null,
-    string? OffsetAccount = null);
+    string? OffsetAccount = null,
+    bool UpdateExisting = false);
 
 public sealed record ImportFileDto(string FileName, long Length);
 

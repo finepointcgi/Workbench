@@ -21,7 +21,7 @@
                 </MudItem>
                 <MudItem xs="12" sm="6">
                     <MudNumericField T="decimal?" @bind-Value="_feePercent" Label="Fee %" Min="0" Max="99" Format="N2" Clearable="true"
-                                     HelperText="Cost-plus CLINs (7 = 7%)" />
+                                     HelperText="@Tm.Reword("Cost-plus CLINs (7 = 7%)")" />
                 </MudItem>
                 <MudItem xs="12" sm="6">
                     <MudDatePicker @bind-Date="_start" Label="Period start" Required="true" DateFormat="yyyy-MM-dd" Editable="true" />
@@ -35,7 +35,7 @@
                                      HelperText="@(Clin is { FundedValue: > 0 } ? "Funded: change the value with a modification." : "")" />
                 </MudItem>
                 <MudItem xs="12" sm="6">
-                    <MudSwitch @bind-Value="_isOption" Label="Option CLIN (starts unexercised)" Color="Color.Primary" Disabled="@(Clin is { FundedValue: > 0 })" />
+                    <MudSwitch @bind-Value="_isOption" Label="@Tm.Reword("Option CLIN (starts unexercised)")" Color="Color.Primary" Disabled="@(Clin is { FundedValue: > 0 })" />
                 </MudItem>
             </MudGrid>
         </MudForm>
@@ -47,6 +47,7 @@
 </MudDialog>
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [CascadingParameter]
     private IMudDialogInstance MudDialog { get; set; } = default!;
 

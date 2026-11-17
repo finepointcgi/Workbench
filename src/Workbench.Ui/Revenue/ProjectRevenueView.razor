@@ -57,7 +57,7 @@ else
                 <MudSelectItem T="Guid?" Value="null">Project</MudSelectItem>
                 @foreach (var c in p.Clins)
                 {
-                    <MudSelectItem T="Guid?" Value="c.Id">CLIN @c.Number (@c.Pricing)</MudSelectItem>
+                    <MudSelectItem T="Guid?" Value="c.Id">@Tm.Term("Clin") @c.Number (@c.Pricing)</MudSelectItem>
                 }
             </MudSelect>
             <MudDatePicker DateFormat="yyyy-MM-dd" @bind-Date="_asOf" Label="As of" Style="max-width:160px" />
@@ -134,6 +134,7 @@ else
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [Parameter, EditorRequired]
     public Guid ProjectId { get; set; }
 

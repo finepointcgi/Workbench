@@ -11,10 +11,16 @@ using Workbench.Infrastructure.Persistence;
 
 namespace Workbench.Infrastructure.Tenancy;
 
-public sealed record CreateTenantRequest(string Slug, string DisplayName, string AdminEmail, string? AdminName = null, string? Plan = null, string? Notes = null);
+public sealed record CreateTenantRequest(string Slug, string DisplayName, string AdminEmail, string? AdminName = null, string? Plan = null, string? Notes = null, TenantSignup? Signup = null);
+
+/// <summary>
+/// A self-service signup (<see cref="SignupService"/>): the tenant starts with <paramref name="Entitlement"/> (a trial), its
+/// first administrator gets an emailed sign-in link instead of a password, and the consent is recorded in the catalog.
+/// </summary>
+public sealed record TenantSignup(string Email, string Source, string? CompanyType, DateTime TermsAcceptedAtUtc, string TermsVersion, Contracts.Tenancy.SetEntitlementRequest Entitlement, int MagicLinkMinutes);
 
 /// <summary>A tenant with what the host admin needs to see: database size and last activity (null when unreachable).</summary>
-public sealed record TenantOverview(TenantSummary Tenant, long? DatabaseBytes, DateTime? LastActivityUtc);
+public sealed record TenantOverview(TenantSummary Tenant, long? DatabaseBytes, DateTime? LastActivityUtc, (int Full, int Light)? Seats = null);
 
 /// <summary>
 /// Host administration (MultiTenant mode): creates a tenant (its database, migrations, default chart of accounts and
@@ -64,7 +70,26 @@ public sealed class TenantProvisioner(
 
             db.Tenants.Add(tenant);
             db.HostAuditEvents.Add(Audit(actor, "tenant.create.started", tenant.Id, $"{slug} ({name}); first admin {adminEmail}"));
-            await db.SaveChangesAsync(cancellationToken);
+            if (request.Signup is { } signup)
+            {
+                db.Entitlements.Add(EntitlementFor(tenant.Id, signup, actor, now));
+                db.HostAuditEvents.Add(Audit(actor, "signup.accepted", tenant.Id, $"{slug}: {signup.Email}, source {signup.Source}, terms {signup.TermsVersion}"));
+            }
+
+            try
+            {
+                await db.SaveChangesAsync(cancellationToken);
+            }
+            catch (DbUpdateException)
+            {
+                // Two requests passed the check above together; the unique index let only one in.
+                if (await SlugTakenAsync(slug, cancellationToken))
+                {
+                    throw new ArgumentException($"A tenant with the id '{slug}' already exists. Tenant ids are never reused.");
+                }
+
+                throw;
+            }
         }
 
         catalog.Invalidate(slug, tenant.Id);
@@ -83,7 +108,7 @@ public sealed class TenantProvisioner(
 
                 await TenantDefaultsSeed.SeedAsync(services, tenancy.FiscalYearStartMonth, clock, cancellationToken);
 
-                await InviteAdminAsync(info, adminEmail, Clean(request.AdminName, 200) ?? adminEmail.Split('@')[0], actor, cancellationToken);
+                await InviteAdminAsync(info, adminEmail, Clean(request.AdminName, 200) ?? adminEmail.Split('@')[0], actor, request.Signup, cancellationToken);
             }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -110,6 +135,7 @@ public sealed class TenantProvisioner(
         {
             long? bytes = null;
             DateTime? lastActivity = null;
+            (int Full, int Light)? seats = null;
             if (tenant.Status is TenantStatus.Active or TenantStatus.Suspended)
             {
                 try
@@ -119,6 +145,7 @@ public sealed class TenantProvisioner(
                         await using var db = await services.GetRequiredService<IDbContextFactory<WorkbenchDbContext>>().CreateDbContextAsync(cancellationToken);
                         bytes = await DatabaseSizeAsync(db, cancellationToken);
                         lastActivity = await db.Set<AppUser>().MaxAsync(u => u.LastSeenAtUtc, cancellationToken);
+                        seats = await Workbench.Application.Licensing.EditionService.CountPeopleAsync(db, cancellationToken);
                     }
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
@@ -127,7 +154,7 @@ public sealed class TenantProvisioner(
                 }
             }
 
-            result.Add(new TenantOverview(tenant, bytes, lastActivity));
+            result.Add(new TenantOverview(tenant, bytes, lastActivity, seats));
         }
 
         return result;
@@ -169,7 +196,37 @@ public sealed class TenantProvisioner(
         _ => await db.Database.SqlQueryRaw<long>("SELECT page_count * page_size AS \"Value\" FROM pragma_page_count(), pragma_page_size()").SingleAsync(cancellationToken),
     };
 
-    private async Task InviteAdminAsync(TenantInfo tenant, string email, string name, string actor, CancellationToken cancellationToken)
+    private static TenantEntitlement EntitlementFor(Guid tenantId, TenantSignup signup, string actor, DateTime now)
+    {
+        var e = signup.Entitlement;
+        return new TenantEntitlement
+        {
+            TenantId = tenantId,
+            Plan = e.Plan ?? "trial",
+            Modules = string.Join(',', TenantEntitlements.NormalizeModules(e.Modules ?? [])),
+            Seats = e.Seats ?? 0,
+            LightSeats = e.LightSeats ?? 0,
+            Status = EntitlementStatus.Active,
+            IsTrial = e.Trial ?? true,
+            TrialEndsUtc = e.TrialEndsUtc,
+            Source = "signup",
+            UpdatedAtUtc = now,
+            UpdatedBy = actor,
+            SignupEmail = signup.Email,
+            SignupSource = signup.Source,
+            TermsAcceptedAtUtc = signup.TermsAcceptedAtUtc,
+            TermsVersion = signup.TermsVersion,
+            CompanyType = signup.CompanyType,
+        };
+    }
+
+    private async Task<bool> SlugTakenAsync(string slug, CancellationToken cancellationToken)
+    {
+        await using var db = await catalogFactory.CreateDbContextAsync(cancellationToken);
+        return await db.Tenants.AnyAsync(t => t.Slug == slug, cancellationToken);
+    }
+
+    private async Task InviteAdminAsync(TenantInfo tenant, string email, string name, string actor, TenantSignup? signup, CancellationToken cancellationToken)
     {
         var now = clock.GetUtcNow().UtcDateTime;
         await using var scope = services.CreateAsyncScope();
@@ -193,7 +250,15 @@ public sealed class TenantProvisioner(
             }
 
             db.Set<UserInvite>().Add(invite);
-            if (passwordsEnabled)
+            if (signup is not null)
+            {
+                // Self-service: one link signs the administrator in (no password to choose first); the invite makes them an Admin.
+                var (raw, token) = Workbench.Application.Identity.Passwords.PasswordAccounts.NewToken(email, AccountTokenPurpose.MagicLink, now.AddMinutes(signup.MagicLinkMinutes), now);
+                token.InviteId = invite.Id;
+                db.Set<AccountToken>().Add(token);
+                acceptToken = raw;
+            }
+            else if (passwordsEnabled)
             {
                 // The first admin chooses a password from the email, like any invite (or signs in with the organization's SSO later).
                 var (raw, token) = Workbench.Application.Identity.Passwords.PasswordAccounts.NewToken(email, AccountTokenPurpose.Invite, invite.ExpiresAtUtc, now);
@@ -215,11 +280,25 @@ public sealed class TenantProvisioner(
         }
 
         var signIn = $"https://{tenant.Slug}.{tenancy.BaseDomain}/account/signin";
-        var start = acceptToken is null ? signIn : $"https://{tenant.Slug}.{tenancy.BaseDomain}/account/accept-invite?token={acceptToken}";
-        var how = acceptToken is null ? "Sign in as its administrator with this email address" : "Choose your administrator password for this email address";
-        var text = $"Hello {name},\n\nYour Workbench organization {tenant.DisplayName} is ready. {how} ({email}) at {start} before {invite.ExpiresAtUtc:MMMM d, yyyy HH:mm} UTC.\n";
-        var html = $"<p>Hello {WebUtility.HtmlEncode(name)},</p><p>Your Workbench organization {WebUtility.HtmlEncode(tenant.DisplayName)} is ready. "
-            + $"{how} ({WebUtility.HtmlEncode(email)}) at <a href=\"{WebUtility.HtmlEncode(start)}\">{WebUtility.HtmlEncode(start)}</a> before {invite.ExpiresAtUtc:MMMM d, yyyy HH:mm} UTC.</p>";
+        var start = acceptToken is null ? signIn : $"https://{tenant.Slug}.{tenancy.BaseDomain}/account/{(signup is null ? "accept-invite" : "magic")}?token={acceptToken}";
+        string text, html;
+        if (signup is null)
+        {
+            var how = acceptToken is null ? "Sign in as its administrator with this email address" : "Choose your administrator password for this email address";
+            text = $"Hello {name},\n\nYour Workbench organization {tenant.DisplayName} is ready. {how} ({email}) at {start} before {invite.ExpiresAtUtc:MMMM d, yyyy HH:mm} UTC.\n";
+            html = $"<p>Hello {WebUtility.HtmlEncode(name)},</p><p>Your Workbench organization {WebUtility.HtmlEncode(tenant.DisplayName)} is ready. "
+                + $"{how} ({WebUtility.HtmlEncode(email)}) at <a href=\"{WebUtility.HtmlEncode(start)}\">{WebUtility.HtmlEncode(start)}</a> before {invite.ExpiresAtUtc:MMMM d, yyyy HH:mm} UTC.</p>";
+        }
+        else
+        {
+            // Self-service signup: one link, no password to choose first.
+            text = $"Hello {name},\n\nYour Workbench organization {tenant.DisplayName} is ready. Use this link to sign in as its administrator ({email}):\n\n{start}\n\n"
+                + $"The link works once and expires in {signup.MagicLinkMinutes} minutes. Your {(signup.Entitlement.TrialEndsUtc is { } ends ? $"free trial runs until {ends:MMMM d, yyyy}" : "trial has started")}.\n";
+            html = $"<p>Hello {WebUtility.HtmlEncode(name)},</p><p>Your Workbench organization {WebUtility.HtmlEncode(tenant.DisplayName)} is ready. "
+                + $"Use this link to sign in as its administrator ({WebUtility.HtmlEncode(email)}):</p><p><a href=\"{WebUtility.HtmlEncode(start)}\">{WebUtility.HtmlEncode(start)}</a></p>"
+                + $"<p>The link works once and expires in {signup.MagicLinkMinutes} minutes. Your {(signup.Entitlement.TrialEndsUtc is { } ends2 ? $"free trial runs until {ends2:MMMM d, yyyy}" : "trial has started")}.</p>";
+        }
+
         try
         {
             await scope.ServiceProvider.GetRequiredService<IEmailSender>().SendAsync(new EmailMessage(email, "Your Workbench organization is ready", text, html) { Essential = true }, cancellationToken);
@@ -228,6 +307,59 @@ public sealed class TenantProvisioner(
         {
             logger.LogWarning(ex, "Couldn't email the first-admin invite for tenant {Slug}", tenant.Slug);
         }
+    }
+
+    /// <summary>
+    /// Emails the signup's administrator a new one-time sign-in link (the first one expired, or got lost). False when there is
+    /// nobody to sign in: no such user and no unexpired invite. Older unused links stop working.
+    /// </summary>
+    public async Task<bool> ResendSignInLinkAsync(TenantInfo tenant, string email, int minutes, CancellationToken cancellationToken = default)
+    {
+        var address = ValidEmail(email);
+        var now = clock.GetUtcNow().UtcDateTime;
+        using var _ = TenantScope.Enter(tenant);
+        await using var scope = services.CreateAsyncScope();
+        string raw;
+        string name;
+        await using (var db = await scope.ServiceProvider.GetRequiredService<IDbContextFactory<WorkbenchDbContext>>().CreateDbContextAsync(cancellationToken))
+        {
+            var user = await db.Set<AppUser>().AsNoTracking().FirstOrDefaultAsync(u => u.Email == address && u.IsActive, cancellationToken);
+            var invite = user is null
+                ? await db.Set<UserInvite>().AsNoTracking().Where(i => i.Email == address && i.AcceptedAtUtc == null && i.RevokedAtUtc == null && i.ExpiresAtUtc > now)
+                    .OrderByDescending(i => i.CreatedAtUtc).FirstOrDefaultAsync(cancellationToken)
+                : null;
+            if (user is null && invite is null)
+            {
+                return false;
+            }
+
+            foreach (var old in await db.Set<AccountToken>().Where(t => t.Email == address && t.Purpose == AccountTokenPurpose.MagicLink && t.UsedAtUtc == null && t.RevokedAtUtc == null).ToListAsync(cancellationToken))
+            {
+                old.RevokedAtUtc = now;
+            }
+
+            var (token, row) = Workbench.Application.Identity.Passwords.PasswordAccounts.NewToken(address, AccountTokenPurpose.MagicLink, now.AddMinutes(minutes), now);
+            row.InviteId = invite?.Id;
+            db.Set<AccountToken>().Add(row);
+            await db.SaveChangesAsync(cancellationToken);
+            raw = token;
+            name = user?.DisplayName ?? invite?.DisplayName ?? address;
+        }
+
+        var link = $"https://{tenant.Slug}.{tenancy.BaseDomain}/account/magic?token={raw}";
+        var text = $"Hello {name},\n\nUse this link to sign in to {tenant.DisplayName} on Workbench: {link}\n\nIt works once and expires in {minutes} minutes. If you didn't ask for it, ignore this email.\n";
+        var html = $"<p>Hello {WebUtility.HtmlEncode(name)},</p><p><a href=\"{WebUtility.HtmlEncode(link)}\">Sign in to {WebUtility.HtmlEncode(tenant.DisplayName)}</a> on Workbench. "
+            + $"The link works once and expires in {minutes} minutes. If you didn't ask for it, ignore this email.</p>";
+        try
+        {
+            await scope.ServiceProvider.GetRequiredService<IEmailSender>().SendAsync(new EmailMessage(address, "Your Workbench sign-in link", text, html) { Essential = true }, cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "Couldn't email the sign-in link for tenant {Slug}", tenant.Slug);
+        }
+
+        return true;
     }
 
     private async Task<TenantSummary> ChangeStatusAsync(Guid tenantId, TenantStatus from, TenantStatus to, string actor, string action, string? reason, CancellationToken cancellationToken)

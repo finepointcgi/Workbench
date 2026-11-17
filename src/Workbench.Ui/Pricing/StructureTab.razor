@@ -27,21 +27,21 @@
 @if (!ReadOnly)
 {
     <MudStack Row="true" Spacing="2" Class="mb-6">
-        <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Add" OnClick="AddPeriod">Add option year</MudButton>
+        <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Add" OnClick="AddPeriod">@Tm.Reword("Add option year")</MudButton>
         <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SavePeriodsAsync" Disabled="_busy" data-testid="save-periods">Save periods</MudButton>
     </MudStack>
 }
 
-<MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">CLINs</MudText>
-<MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">Each CLIN is priced in every period. At award, option periods become 1001, 2001, … (the first digit is the period).</MudText>
+<MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">@Tm.Reword("CLINs")</MudText>
+<MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">@Tm.Reword("Each CLIN is priced in every period. At award, option periods become 1001, 2001, … (the first digit is the period).")</MudText>
 <MudSimpleTable Dense="true" Outlined="true" Class="mb-2" data-testid="clins">
-    <caption class="wb-sr-only">CLINs</caption>
+    <caption class="wb-sr-only">@Tm.Reword("CLINs")</caption>
     <thead><tr><th scope="col">Number</th><th scope="col">Description</th><th scope="col"><span class="wb-sr-only">Actions</span></th></tr></thead>
     <tbody>
         @foreach (var row in _clins)
         {
             <tr>
-                <td style="width:120px"><MudTextField T="string" @bind-Value="row.Number" Margin="Margin.Dense" Variant="Variant.Text" ReadOnly="ReadOnly" MaxLength="6" aria-label="CLIN number" /></td>
+                <td style="width:120px"><MudTextField T="string" @bind-Value="row.Number" Margin="Margin.Dense" Variant="Variant.Text" ReadOnly="ReadOnly" MaxLength="6" aria-label="@Tm.Reword("CLIN number")" /></td>
                 <td><MudTextField T="string" @bind-Value="row.Description" Margin="Margin.Dense" Variant="Variant.Text" ReadOnly="ReadOnly" MaxLength="200" aria-label="@($"CLIN {row.Number} description")" /></td>
                 <td>
                     @if (!ReadOnly)
@@ -56,8 +56,8 @@
 @if (!ReadOnly)
 {
     <MudStack Row="true" Spacing="2" Class="mb-6">
-        <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Add" OnClick="AddClin">Add CLIN</MudButton>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveClinsAsync" Disabled="_busy" data-testid="save-clins">Save CLINs</MudButton>
+        <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Add" OnClick="AddClin">@Tm.Reword("Add CLIN")</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveClinsAsync" Disabled="_busy" data-testid="save-clins">@Tm.Reword("Save CLINs")</MudButton>
     </MudStack>
 }
 
@@ -100,6 +100,7 @@
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [Parameter, EditorRequired]
     public PriceModelDto Model { get; set; } = default!;
 

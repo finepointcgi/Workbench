@@ -24,13 +24,14 @@ else
     }
     @foreach (var alert in _summary.Funding?.Alerts.Where(a => a.Level != FundingAlertLevel.Info) ?? [])
     {
-        <MudAlert Severity="@(alert.Level == FundingAlertLevel.Critical ? Severity.Error : Severity.Warning)" Dense="true" Class="mb-2">@alert.Message</MudAlert>
+        <MudAlert Severity="@(alert.Level == FundingAlertLevel.Critical ? Severity.Error : Severity.Warning)" Dense="true" Class="mb-2">@Tm.Reword(alert.Message)</MudAlert>
     }
     <FinancialTiles Summary="_summary" />
     <WbsFinancialsGrid Rows="_rows" Totals="_summary.Totals" Compact="true" />
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [Parameter, EditorRequired]
     public Guid ProjectId { get; set; }
 

@@ -45,12 +45,12 @@ else
         </MudTabPanel>
         <MudTabPanel Text="Government property">
             <MudStack Row="true" Class="mb-2">
-                <MudText Class="mud-text-secondary">Government-furnished (GFP) and contractor-acquired (CAP) property by contract, for FAR 52.245-1 records and inventories.</MudText>
+                <MudText Class="mud-text-secondary">@Tm.Reword("Government-furnished (GFP) and contractor-acquired (CAP) property by contract, for FAR 52.245-1 records and inventories.")</MudText>
                 <MudSpacer />
                 <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download" OnClick="@(() => DownloadAsync(() => Reports.ExportGovernmentPropertyCsvAsync()))">Export CSV</MudButton>
             </MudStack>
             <MudSimpleTable Dense="true" Elevation="0" data-testid="gov-property">
-                <thead><tr><th>Contract</th><th>Gov property no.</th><th>Tag</th><th>Description</th><th>Kind</th><th>Acquired</th><th style="text-align:right">Cost</th><th>Serial</th><th>Location</th><th>Custodian</th><th>Status</th></tr></thead>
+                <thead><tr><th>@Tm.Reword("Contract")</th><th>Gov property no.</th><th>Tag</th><th>Description</th><th>Kind</th><th>Acquired</th><th style="text-align:right">Cost</th><th>Serial</th><th>Location</th><th>Custodian</th><th>Status</th></tr></thead>
                 <tbody>
                     @foreach (var r in _gov)
                     {
@@ -81,6 +81,7 @@ else
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     private DateTime? _from = new DateTime(DateTime.Today.Month >= 10 ? DateTime.Today.Year : DateTime.Today.Year - 1, 10, 1);
     private DateTime? _to = DateTime.Today;
     private RollForwardDto? _roll;

@@ -21,6 +21,8 @@ public sealed class UnbilledAccruals(InvoiceGenerator generator, BillingLedger l
     internal async Task<Accrual> ComputeAsync(IWorkbenchDbContext db, FiscalPeriod period, CancellationToken ct)
     {
         var contractIds = await db.Set<Clin>().AsNoTracking().Select(c => c.ContractId).Distinct().ToListAsync(ct);
+        contractIds.AddRange(await db.Set<AgreementBillingPlan>().AsNoTracking().Where(p => p.Model == AgreementBillingModel.TimeAndMaterials).Select(p => p.ContractId).ToListAsync(ct));
+        contractIds = contractIds.Distinct().ToList();
         var perContract = new (List<(BillingContext, DraftLine)> Lines, List<string> Notes)[contractIds.Count];
         if (dbFactory is null)
         {
@@ -56,7 +58,8 @@ public sealed class UnbilledAccruals(InvoiceGenerator generator, BillingLedger l
 
         foreach (var type in new[] { InvoiceType.CostPlus, InvoiceType.TimeAndMaterials })
         {
-            if (!ctx.Clins.Any(c => c.IsExercised && InvoiceGenerator.Bills(type, c.Pricing)))
+            var planHours = type == InvoiceType.TimeAndMaterials && ctx.Clins.Count == 0 && ctx.Plan is { Model: AgreementBillingModel.TimeAndMaterials };
+            if (!planHours && !ctx.Clins.Any(c => c.IsExercised && InvoiceGenerator.Bills(type, c.Pricing)))
             {
                 continue;
             }
@@ -121,7 +124,7 @@ public sealed class UnbilledAccruals(InvoiceGenerator generator, BillingLedger l
             {
                 var clin = g.First().Ctx.Clin(g.Key.ClinId);
                 return new UnbilledAccrualLineDto(g.Key.Id, g.Key.ContractNumber, clin?.Number,
-                    clin is null ? "Not assigned to a CLIN" : $"{clin.Description} ({BillingMapping.Label(clin.Pricing)})", g.Sum(x => x.Line.Amount));
+                    clin is null ? (g.First().Ctx.Plan is not null ? "Time and materials (agreement without CLINs)" : "Not assigned to a CLIN") : $"{clin.Description} ({BillingMapping.Label(clin.Pricing)})", g.Sum(x => x.Line.Amount));
             })
             .OrderBy(l => l.ContractNumber, StringComparer.Ordinal).ThenBy(l => l.ClinNumber, StringComparer.Ordinal)
             .ToList();

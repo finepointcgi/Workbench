@@ -22,6 +22,7 @@ branches, so these rules keep merges small and predictable.
    `ApiResponses.ReadAsync` / `EnsureOkAsync`, plus **one line** in `ApiClient/DependencyInjection.cs`.
    This is what the desktop app uses, so every UI-facing interface needs one.
 7. **UI** (`src/Workbench.Ui`): components inject contract interfaces only, never EF Core or Application types.
+   Words a commercial company reads differently (contract, CLIN, funding, ceiling) go through `Tm.Reword` / `Tm.Term`; a test fails on new federal literals (see `docs/admin-guide/company-type.md`).
 8. **Tests** (`tests/Workbench.Tests/<Feature>/`): service tests with `TestDb.CreateFactory()`; component tests with bUnit
    (`await using var ctx = new BunitContext(); ctx.JSInterop.Mode = JSRuntimeMode.Loose; ctx.Services.AddMudServices();`).
 
@@ -280,6 +281,16 @@ await notifications.PublishAsync(
   rows hold it until the invoice is voided. Cost-plus bills cumulative cost less billed cost, so it reads
   `IBurdenedCostService` from the contract start; without a registered implementation it bills direct cost only and says
   so. Other modules can add a period-close checklist item by registering `Application.Accounting.IPeriodCloseCheck`.
+- Commercial billing (`Contracts/Billing/CommercialBillingContracts.cs`, `Application/Billing/AgreementBillingService.cs`,
+  `ReceivablesService.cs`, `InvoiceGenerator.Commercial.cs`; guide: [docs/finance/commercial-billing.md](finance/commercial-billing.md)):
+  an agreement is a contract with **no CLINs** and an `AgreementBillingPlan` (T&M on the rate card, fixed fee with
+  `AgreementMilestone`s, retainer, recurring). The plan only switches the *generator*: lines come out as ordinary `DraftLine`s
+  (no CLIN, so no funding or ceiling check), through `InvoiceService`'s draft/approve/void, `BillingLedger` and `BilledSource`
+  (`PlanMilestone`). Retainer and recurring periods (`AgreementPeriods`) are billed once, guarded by the live invoices of that
+  type and period start. Nothing changes for a contract without a plan. A write-off (`InvoiceWriteOff`, bad debt 7040) and an
+  overpayment kept as a credit (`Payment.UnappliedAmount`, credited to AR at receipt) both keep the GL's AR equal to the aging
+  net of credits; `Invoice.Balance` includes `AmountWrittenOff`, so anything reading `Balance` is already right. The commercial
+  layout reads `InvoiceRemittanceDto` (from `BillingOrganizationSettings`, Billing & AR › Invoice settings).
 
 ## Imports (wave 6)
 
@@ -896,3 +907,22 @@ Full write-up: `docs/customization.md`.
   computed on read and never stored; `ItemService` drops them from writes.
 - A form response creates its row through the decorated `IItemService` under a one-use `FormSubmissionGrant` (an
   AsyncLocal, honoured only by `PermissionCheckingItemService.CreateAsync` for that sheet). Don't reuse it for anything else.
+
+## Accounting export (QuickBooks, Xero, generic files)
+
+- `Domain/AccountingExport`, `Contracts/AccountingExport`, `Application/AccountingExport`, Admin › Integrations › Accounting export
+  (`/admin/integrations/accounting-export`); permission `gl.export` (Finance, Admin). Guide: `docs/admin-guide/accounting-export.md`.
+- A format is an `IAccountingExporter` (golden-file tests in `tests/.../AccountingExport/Golden`); `ExportDataLoader` builds neutral documents
+  with names resolved through `AccountingMapping` rows (per **target** package, not per format). A record a format can't carry goes in
+  `ExportFile.Skipped` and is never marked exported.
+- Idempotency is `AccountingExportedRecord` (unique target × kind × record), written in the same unit of work as the `AccountingExportRun`.
+  Don't export through any other path. The live push (`Application/AccountingLive`, guide `docs/admin-guide/accounting-live-push.md`) writes the same rows, plus the provider's id (`AccountingProviderLink`) per record.
+- Journals made by `Billing` and `AP` sources are excluded by default because invoices and bills are exported as documents. A new subledger that
+  posts its own documents and gets an export kind must be added to that exclusion in `ExportDataLoader`.
+
+## Live push to QuickBooks Online and Xero
+
+- `Application/AccountingLive`: an `IAccountingOAuth` and an `IAccountingPublisher` per provider; `AccountingPushService` is the only writer of push runs, results, provider links and exported-record marks.
+  Publishers only talk to the provider. Provider calls go through `AccountingApi` over `IAccountingHttp` (never `HttpClient` directly); tests use a fake handler, so no test calls Intuit or Xero.
+- Client ids and secrets come from configuration (`Accounting:QuickBooks:*`, `Accounting:Xero:*`); tokens are stored encrypted per tenant and written only by `AccountingTokenService` (refresh tokens rotate).
+- Nothing here has run against a real sandbox. Say so in any change that touches it, and cite the vendor page for any endpoint or field you add (see the comments on the publishers).

@@ -48,7 +48,14 @@
             }
             else
             {
-                <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">For a full move from Costpoint, import in this order: organizations, labor categories, employees, cost rates, customers, contracts, CLINs, projects, bill rates, budgets.</MudText>
+                if (_source is ImportSource.HubSpot or ImportSource.Salesforce or ImportSource.GenericCsv)
+                {
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">Import in this order: companies, then contacts, then deals. Contacts and deals find their company by name, so it must already be in Workbench. Each import is checked and dry-run before anything changes; records already in Workbench are left alone unless you choose to update them.</MudText>
+                }
+                else
+                {
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">For a full move from Costpoint, import in this order: organizations, labor categories, employees, cost rates, customers, contracts, CLINs, projects, bill rates, budgets.</MudText>
+                }
             }
             <MudGrid Spacing="2">
                 @foreach (var kind in KindsForSource)
@@ -101,6 +108,9 @@
                         ImportSource.Costpoint => " of the Costpoint screen or report",
                         ImportSource.Unanet => " of the Unanet report or list (run it, then export to Excel or CSV)",
                         ImportSource.CaptureExec => " of a Capture Exec list view or report (open the list, choose the columns you want, then Export to Excel)",
+                        ImportSource.HubSpot => " of a HubSpot companies, contacts or deals list (open the list, then Export; choose CSV or Excel). Include the associated company column for contacts and deals",
+                        ImportSource.Salesforce => " of a Salesforce report (Export → Details Only) or a Data Loader / Data Export CSV of Accounts, Contacts or Opportunities",
+                        ImportSource.GenericCsv => " of any list of companies, contacts or deals; you'll match the columns yourself on the next step",
                         _ => " (Smartsheet: File → Export → Microsoft Excel)",
                     }).
                     @if (_kind.SampleFile is not null)
@@ -157,7 +167,7 @@
 
         case 5 when _job is not null:
             <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">Dry run</MudText>
-            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">Nothing has changed yet. This is what the import will create, update and skip; rows already in Workbench (matched on their natural keys) are updated, not duplicated.</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">Nothing has changed yet. This is what the import will create, update and skip; @(_job.Job.Source is ImportSource.HubSpot or ImportSource.Salesforce or ImportSource.GenericCsv ? (_job.Options.UpdateExisting ? "rows already in Workbench are updated from the file (blank cells keep what Workbench has), not duplicated." : "rows already in Workbench are listed as duplicates and left exactly as they are.") : "rows already in Workbench (matched on their natural keys) are updated, not duplicated.")</MudText>
             @if (_job.Job.Source == ImportSource.Unanet)
             {
                 <UnanetMappingGuide Kind="@_job.Definition.Kind.ToString()" />
@@ -211,6 +221,9 @@
         (ImportSource.SmartsheetExcel, "Smartsheet (.xlsx)", "Upload a sheet exported to Excel. Hierarchy comes from the row grouping or indentation.", Icons.Material.Filled.TableView),
         (ImportSource.Unanet, "Unanet", "CSV or Excel exports of Unanet lists and reports: people, customers, projects and tasks, budgets, assignments, approved timesheets, open AP/AR.", Icons.Material.Filled.SwapHoriz),
         (ImportSource.CaptureExec, "Capture Exec", "Excel or CSV exports of Capture Exec companies, contacts and opportunities: stages, Pwin/Pgo, dates, managers, competitors and outcomes. Re-import to update.", Icons.Material.Filled.TrendingUp),
+        (ImportSource.HubSpot, "HubSpot", "Companies, contacts and deals from a HubSpot export. Deal stages and amounts become pipeline stages and estimated values; matching records are never overwritten unless you say so.", Icons.Material.Filled.Hub),
+        (ImportSource.Salesforce, "Salesforce", "Accounts, contacts and opportunities from a Salesforce report or Data Loader export, with stages, amounts, probabilities and close dates.", Icons.Material.Filled.Cloud),
+        (ImportSource.GenericCsv, "Plain CSV / Excel", "Any spreadsheet of companies, contacts and deals. Columns are matched by name where they can be, and you map the rest.", Icons.Material.Filled.Description),
     ];
 
     [Parameter]

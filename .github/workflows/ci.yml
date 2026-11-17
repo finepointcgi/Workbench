@@ -69,6 +69,13 @@ jobs:
                 --project "src/Workbench.Migrations.$provider" --startup-project "src/Workbench.Migrations.$provider" --context "$context"
             done
           done
+      - name: License server migrations match its model
+        if: matrix.database == 'Sqlite'
+        run: |
+          for context in SqliteLicenseDb PostgresLicenseDb; do
+            dotnet tool run dotnet-ef migrations has-pending-model-changes --no-build --configuration Release \
+              --project src/Workbench.LicenseServer --context "$context"
+          done
       - name: Test PostgreSQL skips durability
         # A throwaway server: every test database is a CREATE DATABASE ... TEMPLATE copy, so don't wait on the disk.
         run: |

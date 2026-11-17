@@ -1,6 +1,7 @@
 @page "/billing/payments"
 @inject IPaymentService Payments
 @inject IArReportService Ar
+@inject IReceivablesService Receivables
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 
@@ -60,7 +61,7 @@ else
             else
             {
                 <MudSimpleTable Dense="true" Class="mt-3" data-testid="open-invoices">
-                    <thead><tr><th>Invoice</th><th>Contract</th><th>Due</th><th style="text-align:right">Open balance</th><th style="text-align:right; width:180px">Apply</th><th></th></tr></thead>
+                    <thead><tr><th>Invoice</th><th>@Tm.Reword("Contract")</th><th>Due</th><th style="text-align:right">Open balance</th><th style="text-align:right; width:180px">Apply</th><th></th></tr></thead>
                     <tbody>
                         @foreach (var i in Visible)
                         {
@@ -81,11 +82,45 @@ else
                         <tr><td colspan="4" style="text-align:right"><strong>Receipt amount</strong></td><td style="text-align:right" data-testid="receipt-total"><strong>@TotalLabel</strong></td><td></td></tr>
                     </tfoot>
                 </MudSimpleTable>
+                @if (_currency is null)
+                {
+                    <MudNumericField T="decimal?" @bind-Value="_received" Label="Amount received" Format="N2" HideSpinButtons="true" Min="0" Class="mt-3" Style="max-width:260px"
+                                     HelperText="Leave blank to receive exactly what you apply. More than you apply is kept as a credit for this customer." data-testid="amount-received" />
+                    @if (Credit > 0)
+                    {
+                        <MudText Typo="Typo.body2" Class="mt-1" data-testid="credit-note">@BillingFormat.Money(Credit) is kept as a customer credit, to apply to a later invoice.</MudText>
+                    }
+                }
                 <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" StartIcon="@Icons.Material.Filled.Payments" OnClick="RecordAsync"
-                           Disabled="@(_busy || Total <= 0 || _receivedOn is null)" data-testid="record-payment-button">Record @TotalLabel</MudButton>
+                           Disabled="@(_busy || Received <= 0 || _receivedOn is null)" data-testid="record-payment-button">Record @ReceivedLabel</MudButton>
             }
         }
     </MudPaper>
+
+    @if (_credits.Count > 0)
+    {
+        <MudPaper Outlined="true" Class="pa-4 mb-4" data-testid="customer-credits">
+            <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">Customer credits</MudText>
+            <MudText Class="mud-text-secondary mb-2">Cash received beyond what was applied. Enter amounts in the Apply column above, then apply a credit to those invoices.</MudText>
+            <MudSimpleTable Dense="true">
+                <thead><tr><th>Received</th><th>Customer</th><th>Reference</th><th style="text-align:right">Unapplied</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var c in _credits)
+                    {
+                        <tr>
+                            <td>@BillingFormat.Date(c.ReceivedOn)</td><td>@c.CustomerName</td><td>@c.Reference</td><td style="text-align:right">@BillingFormat.Amount(c.Unapplied)</td>
+                            <td>
+                                @if (c.CustomerId == _customerId)
+                                {
+                                    <MudButton Size="Size.Small" Variant="Variant.Text" Disabled="@(_busy || Total <= 0 || Total > c.Unapplied)" OnClick="() => ApplyCreditAsync(c)" data-testid="apply-credit">Apply to the amounts entered</MudButton>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </MudPaper>
+    }
 
     <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Receipts</MudText>
     @if (_payments.Count == 0)
@@ -113,6 +148,10 @@ else
                             </td>
                             <td style="text-align:right">
                                 @BillingFormat.Amount(p.Amount)
+                                @if (p.UnappliedAmount > 0)
+                                {
+                                    <div class="mud-text-secondary" style="font-size:0.8rem">@BillingFormat.Amount(p.UnappliedAmount) unapplied (credit)</div>
+                                }
                                 @if (p.CurrencyCode is { } pc)
                                 {
                                     <div class="mud-text-secondary" style="font-size:0.8rem">@Workbench.Ui.Currencies.CurrencyFormat.Amount(p.TransactionAmount, pc) at @Workbench.Ui.Currencies.CurrencyFormat.Rate(p.ExchangeRate) · @Workbench.Ui.Currencies.CurrencyFormat.GainLoss(p.RealizedGainLoss)</div>
@@ -138,6 +177,7 @@ else
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [SupplyParameterFromQuery(Name = "customer")]
     public Guid? Customer { get; set; }
 
@@ -152,6 +192,16 @@ else
     private bool _busy;
     private string? _error;
     private bool _forbidden;
+
+    private decimal? _received;
+    private IReadOnlyList<CustomerCreditDto> _credits = [];
+
+    /// <summary>Cash received: what was typed, else what is applied. More than applied is kept as a customer credit.</summary>
+    private decimal Received => _currency is null && _received is > 0 ? Math.Max(_received.Value, Total) : Total;
+
+    private decimal Credit => Received - Total;
+
+    private string ReceivedLabel => _currency is { } c ? Workbench.Ui.Currencies.CurrencyFormat.Amount(Total, c) : BillingFormat.Money(Received);
 
     private decimal Total => _apply.Where(a => Visible.Any(i => i.Id == a.Key)).Sum(a => a.Value);
 
@@ -170,6 +220,7 @@ else
         {
             _customers = await Ar.ListCustomersAsync();
             _payments = await Payments.ListAsync(new PaymentQuery());
+            _credits = await Receivables.ListCreditsAsync();
             var pick = Customer ?? _customers.Where(c => c.OpenBalance > 0).Select(c => (Guid?)c.Id).FirstOrDefault();
             if (pick is not null)
             {
@@ -186,6 +237,7 @@ else
     {
         _customerId = id;
         _apply.Clear();
+        _received = null;
         _open = id is { } c ? await Payments.ListOpenInvoicesAsync(c) : [];
         var currencies = _open.Select(i => i.CurrencyCode).Distinct().ToList();
         _currency = currencies.Count == 1 ? currencies[0] : _open.Any(i => i.CurrencyCode == _currency) ? _currency : null;
@@ -197,7 +249,7 @@ else
         try
         {
             var applications = _apply.Where(a => a.Value > 0 && Visible.Any(i => i.Id == a.Key)).Select(a => new PaymentApplicationInput(a.Key, a.Value)).ToList();
-            var payment = await Payments.RecordAsync(new RecordPaymentRequest(_customerId!.Value, DateOnly.FromDateTime(_receivedOn!.Value), Total, _method, applications, _reference, CurrencyCode: _currency));
+            var payment = await Payments.RecordAsync(new RecordPaymentRequest(_customerId!.Value, DateOnly.FromDateTime(_receivedOn!.Value), Received, _method, applications, _reference, CurrencyCode: _currency, KeepRemainderAsCredit: Credit > 0));
             Snackbar.Add($"Recorded {BillingFormat.Money(payment.Amount)} (GL {payment.JournalEntryNumber}).", Severity.Success);
             _reference = null;
             await ReloadAsync();
@@ -234,8 +286,27 @@ else
         }
     }
 
+    private async Task ApplyCreditAsync(CustomerCreditDto credit)
+    {
+        _busy = true;
+        try
+        {
+            var applications = _apply.Where(a => a.Value > 0 && Visible.Any(i => i.Id == a.Key)).Select(a => new PaymentApplicationInput(a.Key, a.Value)).ToList();
+            await Receivables.ApplyCreditAsync(credit.PaymentId, new ApplyCreditRequest(applications));
+            Snackbar.Add($"Applied {BillingFormat.Money(Total)} of the credit.", Severity.Success);
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(BillingFormat.Error(ex), Severity.Error);
+        }
+
+        _busy = false;
+    }
+
     private async Task ReloadAsync()
     {
+        _credits = await Receivables.ListCreditsAsync();
         _payments = await Payments.ListAsync(new PaymentQuery());
         _customers = await Ar.ListCustomersAsync();
         await CustomerChanged(_customerId);

@@ -103,7 +103,8 @@ internal sealed class BillingLookups
         i.CurrencyCode,
         i.CurrencyCode is null ? 1m : i.ExchangeRate,
         i.TransactionTotal,
-        i.TransactionBalance);
+        i.TransactionBalance,
+        i.AmountWrittenOff);
 
     public InvoiceLineDto Line(InvoiceLine l, Guid? id = null) => new(
         id ?? l.Id,

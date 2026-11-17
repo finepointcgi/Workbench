@@ -10,7 +10,7 @@
                 <MudTextField T="string" @bind-Value="_title" Label="Title" Required="true" MaxLength="200" autocomplete="off" Class="flex-grow-1" data-testid="proposal-title" />
             </MudStack>
             <MudTextField T="string" @bind-Value="_customer" Label="Customer" MaxLength="200" autocomplete="off" />
-            <MudSelect T="PricingContractKind" @bind-Value="_type" Label="Contract type" data-testid="proposal-type">
+            <MudSelect T="PricingContractKind" @bind-Value="_type" Label="@Tm.Reword("Contract type")" data-testid="proposal-type">
                 @foreach (var t in Enum.GetValues<PricingContractKind>())
                 {
                     <MudSelectItem T="PricingContractKind" Value="t">@PricingFormat.Label(t)</MudSelectItem>
@@ -38,7 +38,7 @@
             {
                 <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap">
                     <MudDatePicker @bind-Date="_start" Label="Base period starts" Editable="true" DateFormat="yyyy-MM-dd" />
-                    <MudNumericField T="int" @bind-Value="_options" Label="Option years" Min="0" Max="9" />
+                    <MudNumericField T="int" @bind-Value="_options" Label="@Tm.Reword("Option years")" Min="0" Max="9" />
                 </MudStack>
             }
             else
@@ -62,6 +62,7 @@
 </MudDialog>
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [CascadingParameter]
     private IMudDialogInstance MudDialog { get; set; } = default!;
 

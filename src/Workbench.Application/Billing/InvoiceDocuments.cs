@@ -20,9 +20,12 @@ public sealed class InvoiceDocuments(IOptions<BillingOptions> options)
     {
         var ctx = await BillingContext.LoadAsync(db, invoice.ContractId, ct);
         var company = options.Value;
+        var org = await db.Set<BillingOrganizationSettings>().AsNoTracking().FirstOrDefaultAsync(ct);
+        var sellerName = !string.IsNullOrWhiteSpace(org?.LegalName) ? org!.LegalName! : company.CompanyName;
+        var remitTo = !string.IsNullOrWhiteSpace(org?.RemitToAddress) ? org!.RemitToAddress : company.RemitToAddress;
         var payee = new InvoicePartyDto(
-            string.IsNullOrWhiteSpace(company.CompanyName) ? "Contractor (set Billing:CompanyName)" : company.CompanyName,
-            company.RemitToAddress,
+            string.IsNullOrWhiteSpace(sellerName) ? "Contractor (set the company name in Billing settings)" : sellerName,
+            remitTo,
             string.Join(" · ", new[]
             {
                 (ctx.Settings?.CageCode ?? company.CageCode) is { Length: > 0 } cage ? $"CAGE {cage}" : null,
@@ -101,7 +104,12 @@ public sealed class InvoiceDocuments(IOptions<BillingOptions> options)
             clinTotals,
             labor.OrderBy(l => l.ClinNumber, StringComparer.Ordinal).ThenBy(l => l.EmployeeName, StringComparer.Ordinal).ThenBy(l => l.LaborCategory, StringComparer.Ordinal).ToList(),
             odcs.OrderBy(o => o.Date).ThenBy(o => o.Description, StringComparer.Ordinal).ToList(),
-            billed.Sum(i => i.Total) + (invoice.Status == InvoiceStatus.Void ? 0 : invoice.Total));
+            billed.Sum(i => i.Total) + (invoice.Status == InvoiceStatus.Void ? 0 : invoice.Total),
+            new InvoiceRemittanceDto(
+                payee.Name, remitTo, org?.RemittanceInstructions,
+                org?.PaymentTermsText, invoice.PaymentTermsDays, invoice.DueDate, org?.InvoiceFooter, org?.BillingContact,
+                // An agreement with a billing plan has no CLINs or voucher blocks to show: it prints the clean invoice.
+                (ctx.Plan is not null ? InvoiceLayout.Commercial : org?.DefaultLayout ?? InvoiceLayout.Government).ToContract()));
     }
 
     /// <summary>

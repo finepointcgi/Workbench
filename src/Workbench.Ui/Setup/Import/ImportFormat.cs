@@ -13,6 +13,9 @@ public static class ImportFormat
         ImportSource.SmartsheetExcel => "Smartsheet (.xlsx)",
         ImportSource.Unanet => "Unanet",
         ImportSource.CaptureExec => "Capture Exec",
+        ImportSource.HubSpot => "HubSpot",
+        ImportSource.Salesforce => "Salesforce",
+        ImportSource.GenericCsv => "Plain CSV / Excel",
         _ => source.ToString(),
     };
 

@@ -55,6 +55,7 @@ public static class DependencyInjection
         services.AddHttpClient<Contracts.MyTodo.IMyTodoService, HttpMyTodoService>(client => client.BaseAddress = serverBaseAddress);
         services.AddSignInSettingsClients(serverBaseAddress);
         services.AddLicenseClient(serverBaseAddress);
+        services.AddHttpClient<Contracts.Company.ICompanyProfileService, HttpCompanyProfileService>(client => client.BaseAddress = serverBaseAddress);
         services.AddHttpClient<Contracts.Support.ISupportService, HttpSupportService>(client => client.BaseAddress = serverBaseAddress); services.AddHttpClient<Contracts.Support.IHelpStateService, HttpHelpStateService>(client => client.BaseAddress = serverBaseAddress); services.AddHttpClient<Contracts.Support.IHostSupportService, HttpHostSupportService>(client => client.BaseAddress = serverBaseAddress);
         services.AddHttpClient<Contracts.Tasks.ITaskAssignmentService, HttpTaskAssignmentService>(client => client.BaseAddress = serverBaseAddress);
         services.AddHrClients(serverBaseAddress);
@@ -67,12 +68,15 @@ public static class DependencyInjection
         services.AddCurrencyClients(serverBaseAddress);
         services.AddCompanyClients(serverBaseAddress);
         services.AddGovernmentBillingClients(serverBaseAddress);
+        services.AddCommercialBillingClients(serverBaseAddress);
         services.AddTravelClients(serverBaseAddress);
         services.AddSalesShippingClients(serverBaseAddress);
         services.AddQualityClients(serverBaseAddress);
         services.AddShopFloorClients(serverBaseAddress);
         services.AddSourcingClients(serverBaseAddress);
         services.AddBankFileClients(serverBaseAddress);
+        services.AddAccountingExportClients(serverBaseAddress);
+        services.AddAccountingLiveClients(serverBaseAddress);
         services.AddSalesTaxClients(serverBaseAddress);
         services.AddIntegrationClients(serverBaseAddress);
         services.AddComplianceClients(serverBaseAddress);
