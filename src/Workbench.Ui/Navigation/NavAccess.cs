@@ -109,7 +109,7 @@ public sealed record NavAccess(
         var ownsBudget = await TryAsync(services.GetService<Contracts.Planning.IPlanningCycleService>(), async s => (await s.ListMineAsync(cancellationToken)).Count > 0, false);
 
         var unavailable = await TryAsync<Contracts.Licensing.ILicenseService, HashSet<string>?>(services.GetService<Contracts.Licensing.ILicenseService>(),
-            async s => (await s.GetStatusAsync(cancellationToken)).Modules?.Where(m => !m.Available).Select(m => m.Id).ToHashSet(), null);
+            async s => (await s.GetStatusAsync(cancellationToken)).Modules?.Where(m => !m.Available && m.WholeModule).Select(m => m.Id).ToHashSet(), null);
 
         return new NavAccess(user, timesheetApprover, leaveApprover, projectManager, approvals, leavePending, receivable, opportunities, ownsBudget, unavailable);
     }
