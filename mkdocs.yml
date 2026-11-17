@@ -149,6 +149,7 @@ nav:
       - admin-guide/index.md
       - Setup checklist: admin-guide/setup.md
       - Organization and calendars: admin-guide/organization.md
+      - Company type and wording: admin-guide/company-type.md
       - Customers, contracts and projects: admin-guide/contracts-projects.md
       - Users, roles and sign-in: admin-guide/users-and-access.md
       - Approval workflows: admin-guide/approval-workflows.md

@@ -36,7 +36,7 @@ else
         }
     </MudStack>
     <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3" Style="padding-left: 52px">
-        @(p.ContractNumber is { } cn ? $"{cn}{(_hub.ContractName is { } name ? $" · {name}" : "")}{(_hub.CustomerName is { } cust ? $" · {cust}" : "")}" : "No contract")
+        @(p.ContractNumber is { } cn ? $"{cn}{(_hub.ContractName is { } name ? $" · {name}" : "")}{(_hub.CustomerName is { } cust ? $" · {cust}" : "")}" : Tm.Reword("No contract"))
         · Manager: @(p.ProjectManagerName ?? "none")
         · @ProjectsFormat.Period(p.Start, p.Finish)
     </MudText>
@@ -69,6 +69,8 @@ else
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
+
     [Parameter]
     public Guid ProjectId { get; set; }
 

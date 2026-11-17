@@ -4749,6 +4749,34 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                     b.ToTable("UserCompanySelections", (string)null);
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Company.OrganizationProfile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CompanyType")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .UseCollation("C");
+
+                    b.Property<bool?>("ShowGovernmentFeatures")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .UseCollation("C");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("OrganizationProfile");
+                });
+
             modelBuilder.Entity("Workbench.Domain.Compliance.CmmcPoamItem", b =>
                 {
                     b.Property<Guid>("Id")
