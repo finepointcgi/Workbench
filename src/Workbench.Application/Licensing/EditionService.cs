@@ -17,6 +17,32 @@ public interface IHostedPlanSource
     Task<string?> GetPlanAsync(CancellationToken cancellationToken);
 }
 
+/// <summary>
+/// What the hosting service says the current tenant is entitled to (MultiTenant, from the catalog's entitlement record).
+/// <see cref="ReadOnly"/> means a lapsed trial, a cancelled or suspended subscription: Business is off and nobody can change data.
+/// </summary>
+public sealed record HostedEntitlement(
+    string Plan,
+    IReadOnlySet<string> Modules,
+    int Seats,
+    int LightSeats,
+    bool Trial,
+    DateTime? EndsUtc,
+    bool ReadOnly,
+    bool PastDue,
+    string? Message);
+
+/// <summary>Set by the hosting service in MultiTenant mode. Null: the tenant has no entitlement record (use <see cref="IHostedPlanSource"/>).</summary>
+public interface IHostedEntitlementSource
+{
+    Task<HostedEntitlement?> GetAsync(CancellationToken cancellationToken);
+}
+
+internal sealed class NoHostedEntitlement : IHostedEntitlementSource
+{
+    public Task<HostedEntitlement?> GetAsync(CancellationToken cancellationToken) => Task.FromResult<HostedEntitlement?>(null);
+}
+
 internal sealed class NoHostedPlan : IHostedPlanSource
 {
     public Task<string?> GetPlanAsync(CancellationToken cancellationToken) => Task.FromResult<string?>(null);
@@ -39,7 +65,8 @@ public sealed record EditionState(
     IReadOnlySet<string>? Modules = null,
     int LightSeatLimit = 0,
     bool Trial = false,
-    int? DaysLeft = null);
+    int? DaysLeft = null,
+    bool ReadOnly = false);
 
 /// <summary>People counted against a license. A light person takes a light seat while one is free, and a full seat otherwise.</summary>
 public sealed record SeatUsage(int FullPeople, int LightPeople, int LightSeatLimit)
@@ -57,7 +84,7 @@ public sealed record SeatUsage(int FullPeople, int LightPeople, int LightSeatLim
 /// modules are licensed, and the seats (full and light). This is the one place that answers "is module X licensed" and
 /// "how many seats are used and allowed".
 /// </summary>
-public sealed class EditionService(IWorkbenchDbContextFactory dbFactory, IHostedPlanSource hosted, LicenseOptions options, TimeProvider clock)
+public sealed class EditionService(IWorkbenchDbContextFactory dbFactory, IHostedPlanSource hosted, LicenseOptions options, TimeProvider clock, IHostedEntitlementSource? entitlements = null)
 {
     private static readonly IReadOnlySet<string> CoreOnly = new HashSet<string> { ModuleIds.Core };
 
@@ -66,6 +93,20 @@ public sealed class EditionService(IWorkbenchDbContextFactory dbFactory, IHosted
         if (string.Equals(options.EditionOverride?.Trim(), "business", StringComparison.OrdinalIgnoreCase))
         {
             return new EditionState(Edition.Business, EditionSource.Configuration, null, null, false, null, null);
+        }
+
+        if (entitlements is not null && await entitlements.GetAsync(ct) is { } grant)
+        {
+            if (grant.ReadOnly)
+            {
+                return new EditionState(Edition.Community, EditionSource.HostedPlan, null, grant.EndsUtc is { } e ? DateOnly.FromDateTime(e) : null, false, null, grant.Message, CoreOnly,
+                    0, grant.Trial, grant.EndsUtc is { } e2 ? DateOnly.FromDateTime(e2).DayNumber - DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime).DayNumber : null, ReadOnly: true);
+            }
+
+            var modules = new HashSet<string>(grant.Modules) { ModuleIds.Core };
+            var left = grant.EndsUtc is { } end ? DateOnly.FromDateTime(end).DayNumber - DateOnly.FromDateTime(clock.GetUtcNow().UtcDateTime).DayNumber : (int?)null;
+            return new EditionState(Edition.Business, EditionSource.HostedPlan, null, grant.EndsUtc is { } e3 ? DateOnly.FromDateTime(e3) : null, grant.PastDue,
+                grant.Seats > 0 ? grant.Seats : null, grant.Message, modules, grant.LightSeats, grant.Trial, left);
         }
 
         if (await hosted.GetPlanAsync(ct) is { } plan && string.Equals(plan.Trim(), "business", StringComparison.OrdinalIgnoreCase))
@@ -259,6 +300,7 @@ public static class LicensingRegistration
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton(new LicenseOptions());
         services.TryAddSingleton<IHostedPlanSource, NoHostedPlan>();
+        services.TryAddSingleton<IHostedEntitlementSource, NoHostedEntitlement>();
         services.AddScoped<EditionService>();
         services.AddScoped<FeatureGate>();
         services.AddScoped<ILicenseService, LicenseService>();
