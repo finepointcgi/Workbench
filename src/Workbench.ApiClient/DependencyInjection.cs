@@ -73,6 +73,7 @@ public static class DependencyInjection
         services.AddShopFloorClients(serverBaseAddress);
         services.AddSourcingClients(serverBaseAddress);
         services.AddBankFileClients(serverBaseAddress);
+        services.AddAccountingExportClients(serverBaseAddress);
         services.AddSalesTaxClients(serverBaseAddress);
         services.AddIntegrationClients(serverBaseAddress);
         services.AddComplianceClients(serverBaseAddress);

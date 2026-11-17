@@ -1,0 +1,74 @@
+@page "/admin/integrations/accounting-export"
+@using Workbench.Contracts.AccountingExport
+@inject ICurrentUserContext CurrentUser
+@inject NavigationManager Navigation
+
+<PageTitle>Accounting export · Integrations · Workbench</PageTitle>
+
+<MudText Typo="Typo.h4" HtmlTag="h1" Class="mb-1">Accounting export</MudText>
+<MudText Class="mud-text-secondary mb-4">
+    Keep QuickBooks or Xero as your books and use Workbench for time, projects and billing. Make import files for journal entries, invoices,
+    customer payments, vendor bills and the chart of accounts. Each record goes to a package once; every file is kept in the history.
+</MudText>
+
+@if (_me is null && _loading)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else if (_me?.Can(Permission.GlExport) != true)
+{
+    <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" data-testid="accounting-export-forbidden">
+        Accounting export needs the "Export to accounting software" permission, which Finance and administrators have. Ask an administrator if you need it.
+    </MudAlert>
+}
+else
+{
+    <MudTabs Elevation="0" Outlined="true" Rounded="true" ApplyEffectsToContainer="true" TabPanelsClass="pa-4"
+             ActivePanelIndex="_tab" ActivePanelIndexChanged="OnTabChanged" KeepPanelsAlive="false">
+        <MudTabPanel Text="Export" Icon="@Icons.Material.Filled.FileDownload">
+            <AccountingExportTab ShowMappings="() => OnTabChanged(1)" OnExported="() => _historyVersion++" />
+        </MudTabPanel>
+        <MudTabPanel Text="Account mapping" Icon="@Icons.Material.Filled.Sync">
+            <AccountingMappingTab />
+        </MudTabPanel>
+        <MudTabPanel Text="History" Icon="@Icons.Material.Filled.History">
+            <AccountingHistoryTab @key="_historyVersion" />
+        </MudTabPanel>
+    </MudTabs>
+}
+
+@code {
+    private static readonly string[] Tabs = ["export", "mapping", "history"];
+
+    [SupplyParameterFromQuery(Name = "tab")]
+    public string? TabQuery { get; set; }
+
+    private CurrentUserInfo? _me;
+    private bool _loading = true;
+    private int _tab;
+    private int _historyVersion;
+
+    protected override void OnParametersSet() => _tab = Math.Max(0, Array.IndexOf(Tabs, TabQuery ?? "export"));
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _me = await CurrentUser.GetAsync();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or TaskCanceledException)
+        {
+            // The forbidden notice below covers an account that couldn't be read.
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void OnTabChanged(int index)
+    {
+        _tab = index;
+        Navigation.NavigateTo(Navigation.GetUriWithQueryParameter("tab", Tabs[index]), replace: true);
+    }
+}

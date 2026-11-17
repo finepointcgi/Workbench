@@ -1,0 +1,3 @@
+Bill No.,Vendor,Bill Date,Due Date,Terms,Memo,Account,Line Description,Line Amount,Line Tax Code,Class
+B-77,Bolt Consulting,01/12/2026,02/11/2026,Net 30,AP-0001 Design work,Office Expenses,"Design, phase 1",600.00,Tax Exempt,Headquarters
+B-77,Bolt Consulting,01/12/2026,02/11/2026,Net 30,AP-0001 Design work,Office Expenses,Licences,300.00,Tax Exempt,

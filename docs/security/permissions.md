@@ -234,6 +234,7 @@ reveals. Admin holds every permission.
 | Manage posting rules | `gl.posting.manage` | General ledger posting setup. | Admin, Finance | Posting rules |
 | Close fiscal periods | `gl.close` | The period close checklist and closing accounting periods, including closing anyway (with a reason) when a check fails. | Admin, Finance | Period close |
 | See financial statements | `gl.reports.view` | Balance sheet, income statement, trial balance, consolidated statements, intercompany balances and the general ledger in the report writer. | Admin, Finance | Financial statements, Consolidated statements |
+| Export to accounting software | `gl.export` | Make QuickBooks, Xero and generic accounting files from journal entries, invoices, payments, bills and the chart of accounts, map account names, and see the export history. | Admin, Finance | Accounting export |
 | Manage recurring journals | `gl.recurring.manage` | Recurring journal templates and runs. | Admin, Finance | Recurring journals |
 | Revalue foreign currency | `gl.revaluation` | Currency revaluation and the foreign currency report. | Admin, Finance | Currency revaluation, Foreign currency report |
 | Manage corporate budgets | `planning.budgets.manage` | Budget versions, budget vs actual and planning cycles. | Admin, Finance | Budgets, Budget vs actual, Planning cycles |

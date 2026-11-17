@@ -1,0 +1,5 @@
+*Narration,*Date,Description,*AccountCode,TaxRate,*Amount,TrackingName1,TrackingOption1
+JE-000001: Rent for January,05 Jan 2026,Office rent,461,,1500.00,Region,Headquarters
+JE-000001: Rent for January,05 Jan 2026,,090,,-1500.00,,
+"JE-000002: Accrue =bonus, ""Q1""",31 Jan 2026,Payroll tax,461,,250.50,,
+"JE-000002: Accrue =bonus, ""Q1""",31 Jan 2026,,800,,-250.50,,

@@ -1,0 +1,91 @@
+@using Workbench.Contracts.AccountingExport
+@using Microsoft.JSInterop
+@inject IAccountingExportService Export
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+
+<MudText Class="mud-text-secondary mb-3">
+    Every file that was made, with who made it and a SHA-256 checksum. Download gives back exactly the same file. "Again" marks an export of records that had been exported before.
+</MudText>
+
+@if (_error is not null)
+{
+    <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">@_error</MudAlert>
+}
+else if (_runs is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else if (_runs.Count == 0)
+{
+    <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">Nothing has been exported yet.</MudAlert>
+}
+else
+{
+    <MudSimpleTable Dense="true" Hover="true" aria-label="Export history" data-testid="export-history">
+        <thead>
+            <tr>
+                <th scope="col">When (UTC)</th><th scope="col">Who</th><th scope="col">Format</th><th scope="col">What</th><th scope="col">Period</th>
+                <th scope="col">Records</th><th scope="col">Control total</th><th scope="col">Checksum</th><th scope="col">Notes</th><th scope="col"><span class="wb-sr-only">Download</span></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var r in _runs)
+            {
+                <tr>
+                    <td>@r.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm")</td>
+                    <td>@r.CreatedBy</td>
+                    <td>@r.FormatName</td>
+                    <td>@r.Kind</td>
+                    <td>@(r.Kind == AccountingExportKind.ChartOfAccounts ? "" : $"{r.From:yyyy-MM-dd} to {r.To:yyyy-MM-dd}")</td>
+                    <td>@r.RecordCount (@r.RowCount rows)</td>
+                    <td>@(r.ControlTotal == 0 ? "" : r.ControlTotal.ToString("N2"))</td>
+                    <td title="@r.Checksum"><code>@r.Checksum[..12]</code></td>
+                    <td>
+                        @if (r.IsRepeat) { <MudChip T="string" Size="Size.Small" Icon="@Icons.Material.Filled.Replay">Again</MudChip> }
+                        @if (r.UnmappedAllowed) { <MudChip T="string" Size="Size.Small" Icon="@Icons.Material.Filled.WarningAmber">@r.UnmappedCount unmapped</MudChip> }
+                        @if (r.Note is not null) { <span>@r.Note</span> }
+                        @if (r.Warnings.Count > 0) { <span class="mud-text-secondary"> @r.Warnings.Count warning@(r.Warnings.Count == 1 ? "" : "s")</span> }
+                    </td>
+                    <td>
+                        @if (r.HasFile)
+                        {
+                            <MudIconButton Icon="@Icons.Material.Filled.Download" Size="Size.Small" aria-label="@($"Download {r.FileName}")" OnClick="() => DownloadAsync(r)" />
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </MudSimpleTable>
+}
+
+@code {
+    private IReadOnlyList<AccountingExportRunDto>? _runs;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _runs = await Export.ListRunsAsync();
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or UnauthorizedAccessException or HttpRequestException or TaskCanceledException)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task DownloadAsync(AccountingExportRunDto run)
+    {
+        try
+        {
+            var file = await Export.DownloadRunAsync(run.Id);
+            await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/Workbench.Ui/integrations.js");
+            await module.InvokeVoidAsync("downloadBase64", file.FileName, file.ContentType, Convert.ToBase64String(file.Content));
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or UnauthorizedAccessException or HttpRequestException or TaskCanceledException or JSException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+}

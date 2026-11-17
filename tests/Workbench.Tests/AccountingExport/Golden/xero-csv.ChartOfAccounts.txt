@@ -1,0 +1,5 @@
+*Code,*Name,*Type,*Tax Code,Description,Dashboard,Expense Claims,Enable Payments,Balance
+090,Checking,Bank,,Main account,,,,
+800,Accounts Payable,Current Liability,,,,,,
+200,Services Revenue,Revenue,,,,,,
+461,Office Expenses,Expense,,,,,,

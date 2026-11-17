@@ -454,6 +454,204 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.ToTable("GlWbsCostPools", (string)null);
                 });
 
+            modelBuilder.Entity("Workbench.Domain.AccountingExport.AccountingExportRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("BlobKey")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Checksum")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("CompanyId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("ControlTotal")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FormatId")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IncludedSubledgerJournals")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsRepeat")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("PeriodFrom")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("PeriodTo")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("RecordCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("RowCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Target")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("UnmappedAllowed")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("UnmappedCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("WarningCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("WarningsJson")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Target", "Kind", "CreatedAtUtc");
+
+                    b.ToTable("AccountingExportRuns", (string)null);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.AccountingExport.AccountingExportedRecord", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ExportCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("FirstExportedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("FirstRunId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("LastExportedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("LastRunId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("RecordId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RecordNumber")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Target")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FirstRunId");
+
+                    b.HasIndex("LastRunId");
+
+                    b.HasIndex("Target", "Kind", "RecordId")
+                        .IsUnique();
+
+                    b.ToTable("AccountingExportedRecords", (string)null);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.AccountingExport.AccountingMapping", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DestinationCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DestinationName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("MapKind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SourceKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SourceName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Target")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UpdatedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Target", "MapKind", "SourceKey")
+                        .IsUnique();
+
+                    b.ToTable("AccountingMappings", (string)null);
+                });
+
             modelBuilder.Entity("Workbench.Domain.Approvals.ApprovalAction", b =>
                 {
                     b.Property<Guid>("Id")
@@ -23725,6 +23923,21 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.HasOne("Workbench.Domain.ProjectAccounting.WbsElement", null)
                         .WithMany()
                         .HasForeignKey("WbsElementId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.AccountingExport.AccountingExportedRecord", b =>
+                {
+                    b.HasOne("Workbench.Domain.AccountingExport.AccountingExportRun", null)
+                        .WithMany()
+                        .HasForeignKey("FirstRunId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.AccountingExport.AccountingExportRun", null)
+                        .WithMany()
+                        .HasForeignKey("LastRunId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
