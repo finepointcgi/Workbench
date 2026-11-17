@@ -37,10 +37,9 @@ public static class BillingRegistration
         services.AddScoped<IReceivablesService, ReceivablesService>();
         services.AddScoped<IBillingSettingsService, BillingSettingsService>();
         services.AddHostedService<AgreementBillingBackgroundService>();
-        services.AddScoped<IProgressPaymentService, ProgressPaymentService>();
-        services.AddScoped<IPerformanceBasedPaymentService, PerformanceBasedPaymentService>();
-        services.AddScoped<IPieeSubmitter, ManualPieeSubmitter>(); // Register a transmitting submitter after this one to replace it.
-        services.AddScoped<IGovernmentBillingService, GovernmentBillingService>();
+        // Contract financing (government progress and performance-based payments) is the government contracting module's: it registers an
+        // IInvoiceFinancing after this one. Without it, invoicing sees none.
+        services.AddScoped<IInvoiceFinancing>(_ => NoInvoiceFinancing.Instance);
         services.AddHostedService<OverdueInvoiceBackgroundService>();
         return services;
     }

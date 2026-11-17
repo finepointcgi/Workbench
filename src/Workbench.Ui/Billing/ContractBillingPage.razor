@@ -1,7 +1,6 @@
 @page "/billing/contracts/{ContractId:guid}"
 @inject IInvoiceService Invoices
 @inject IBillingMilestoneService Milestones
-@inject IGovernmentBillingService Government
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 
@@ -85,15 +84,8 @@ else
             </MudPaper>
             }
 
-            @if (_financing == FinancingKind.PerformanceBased)
-            {
-                <PerformanceEventsCard ContractId="ContractId" IsFinance="_isFinance" Clins="_contract?.Clins ?? []" Changed="() => _refresh++" />
-            }
-
-            @if (_isFinance && !_hasPlan)
-            {
-                <GovernmentBillingCard ContractId="ContractId" Saved="GovernmentSaved" />
-            }
+            @* Contract financing (progress and performance-based payments, the government billing settings): the government contracting module's cards. *@
+            <UiSlot Name="billing.contract.cards" Parameters="@(new Dictionary<string, object?> { ["ContractId"] = ContractId, ["IsFinance"] = _isFinance, ["Clins"] = _contract?.Clins ?? [], ["HasPlan"] = _hasPlan, ["Changed"] = EventCallback.Factory.Create(this, () => _refresh++) })" />
 
             @if (_isFinance && _settings is not null)
             {
@@ -117,7 +109,7 @@ else
         </MudItem>
         <MudItem xs="12" lg="5">
             <BilledToDateCard ContractId="ContractId" @key="_refresh" />
-            <FinancingCard ContractId="ContractId" @key="@($"financing-{_refresh}")" />
+            <UiSlot Name="billing.contract.summary" Parameters="@(new Dictionary<string, object?> { ["ContractId"] = ContractId, ["Refresh"] = _refresh })" />
             @if (_contract is not null)
             {
                 <MudPaper Outlined="true" Class="pa-4 mt-3">
@@ -169,7 +161,6 @@ else
     private string? _paying;
     private string? _admin;
     private string? _address;
-    private FinancingKind _financing;
     private bool _hasPlan;
 
     private IReadOnlyList<BillingClinDto> FfpClins => _contract?.Clins.Where(c => c.Pricing == "FFP").ToList() ?? [];
@@ -181,7 +172,6 @@ else
             _contract = (await Invoices.ListBillingContractsAsync()).FirstOrDefault(c => c.Id == ContractId)
                 ?? throw new WorkbenchNotFoundException("That contract doesn't exist or you can't see it.");
             _milestones = await Milestones.ListAsync(ContractId);
-            _financing = (await Government.GetSettingsAsync(ContractId)).Financing;
             if (_isFinance)
             {
                 Apply(await Invoices.GetSettingsAsync(ContractId));
@@ -200,12 +190,6 @@ else
             _hasPlan = hasPlan;
             StateHasChanged();
         }
-    }
-
-    private void GovernmentSaved(GovernmentBillingSettingsDto s)
-    {
-        _financing = s.Financing;
-        _refresh++;
     }
 
     private void Apply(ContractBillingSettingsDto s)

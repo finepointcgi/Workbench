@@ -24,9 +24,9 @@ About 9,100 lines of production code in 79 files, plus 14 test files (about 1,90
 
 **Stayed in core**, each for a reason (details under *Coupling*):
 
-* **Government billing** (progress payments, performance-based payments, PIEE, SF 1443, contract financing and liquidation). It is still
-  gated by the `govcon` license through `ModuleMap.ServiceTypes`, but its code is **not** in the module. It is woven into invoice
-  generation, voiding and ready-to-bill in the billing module. It moves with the billing extraction, behind an invoice-financing hook.
+* **Government billing** (progress payments, performance-based payments, PIEE, SF 1443, contract financing and liquidation) stayed in
+  this pilot: it is woven into invoice generation, voiding and ready-to-bill. **It moved afterwards, in phase 3a, behind an
+  invoice-financing hook**: see [module-extraction-billing.md](module-extraction-billing.md).
 * The labor cost engine: `LaborCostBook`, `LaborCostAudit`, `TotalTimeCosting`, `LaborCostPolicy`. GL posting and the timesheet reports
   cost every hour through it, with or without the module.
 * `IProcurementCompetitionSource` and `CompetitionEvidenceDto`: purchasing implements the source, the module reads it.
@@ -78,7 +78,7 @@ type stays in core, usually because core needs it without the module).
 | 16 | Contracts: `ParallelRunContracts` sat in `Workbench.Contracts.Migration`, a core namespace | **move** to a module-only namespace (`Workbench.Contracts.ParallelRun`), otherwise `ModuleMap` calls the service core's. Contract namespaces of a moved module must not be a core namespace. |
 | 17 | ApiClient helpers (`ApiResponses`, `LedgerUrls`, `HttpProjectAccountingExtensions`) were `internal` | made public so a module's HTTP clients can use them. |
 | 18 | Tests spanning the module and core | see *Tests*. |
-| 19 | Government billing (`ContractFinancingLedger` called from `InvoiceGenerator`, `InvoiceService`, `ReadyToBill`; `ContractGovernmentBilling`, `ProgressPaymentRequest`, `PieeSubmission` read and deleted by `InvoiceService`; billing pages host its cards; `ClinFundingCalculator`, `CeilingEngine`, `FinancialsCalculator` read its entities) | **keep for now.** About ten call sites in invoice generation and void/delete, five core UI pages and three engines. Moving it needs an invoice-financing hook in billing and belongs with the billing extraction. |
+| 19 | Government billing (`ContractFinancingLedger` called from `InvoiceGenerator`, `InvoiceService`, `ReadyToBill`; `ContractGovernmentBilling`, `ProgressPaymentRequest`, `PieeSubmission` read and deleted by `InvoiceService`; billing pages host its cards) | **keep for the pilot; moved in phase 3a** ([module-extraction-billing.md](module-extraction-billing.md)): about ten call sites became the `IInvoiceFinancing` hook, the cards became `UiSlot`s. (`ClinFundingCalculator` and the other funding engines never read the entities; they stayed.) |
 
 ## Data: existing installs keep their tables, new installs get them from the module
 
@@ -167,7 +167,7 @@ See the report that came with the pull request; the short version is in [module-
 
 ## Not done
 
-* Government billing (above).
+* Government billing: done in [phase 3a](module-extraction-billing.md).
 * The worker (`Workbench.Worker`) and the desktop app do not load modules; neither the module's API clients nor any background job it
   owns run there. The desktop app loses the govcon pages (it has no menu for them without the module's assemblies).
 * Help articles (`ice-package.md`) stay in the shipped UI.

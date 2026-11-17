@@ -2,7 +2,7 @@
 
 A license module (billing, accounting, capture, workforce, project controls, materials, government contracting, enterprise) can live outside this repository as a set of assemblies. The host finds them in a folder at startup, loads the ones the license includes, and the product then behaves as if the module had always been built in: its services, API paths, pages, menu entries, permissions, API key scopes, tables and migrations all take part.
 
-The `govcon` module was the first to move out ([module-extraction-govcon.md](module-extraction-govcon.md)); the other modules are still built in. With an empty modules folder the product is the shipped product, without government contracting. This page is the contract a module author builds against and the rules the host follows.
+The `govcon` module was the first to move out ([module-extraction-govcon.md](module-extraction-govcon.md)), with its government billing ([module-extraction-billing.md](module-extraction-billing.md)); the other modules are still built in. With an empty modules folder the product is the shipped product, without government contracting. This page is the contract a module author builds against and the rules the host follows.
 
 ## What a module contributes
 
@@ -20,9 +20,10 @@ A module is a class that implements `IWorkbenchModule` (`src/Workbench.Modules.A
 | Services | `ConfigureServices(services, context)` | Runs after the core services and before the permission and edition decorators. |
 | API endpoints | `MapEndpoints(api)` | `api` is the `/api/v1` group: already authorized, with the host's error mapping. |
 | Edition feature gates | `Describe().FeatureGates` | Changes on the module's services that also need an edition feature (`ModuleFeatureGate`), applied with the edition gates. |
-| Places on core pages | `UiSlotContribution` registered in `ConfigureServices` | A core page renders `<UiSlot Name="..."/>`; every contribution with that name is rendered there (slots: `timesheet.summary`, `setup.migration.actions`). |
+| Places on core pages | `UiSlotContribution` registered in `ConfigureServices` | A core page renders `<UiSlot Name="..."/>`; every contribution with that name is rendered there (slots: `timesheet.summary`, `setup.migration.actions`, `billing.contract.cards`, `billing.contract.summary`, `billing.invoice.panels`, `billing.invoice.print.links`, `billing.invoice.print.sf1034`). |
 | Reports hub pages | `StandardReportPage` registered in `ConfigureServices` | Listed under Reports as a page to open. |
-| Sample data | `IModuleSeed` registered in `ConfigureServices` | Run by the development seed at its `ModuleSeedStage`. |
+| Sample data | `IModuleSeed` registered in `ConfigureServices` | Run by the development seed at its `ModuleSeedStage` (`AfterRevenue`, `AfterPlanning`, `AfterMulticompany`, `AfterTaxBooks`, `End`). |
+| Core data flows | an interface declared in core with a no-op default (`IInvoiceFinancing`) | The module registers its implementation after the host's default; a host without the module keeps the default. |
 | Static files | the module folder's `wwwroot` | Served at `/_content/<routable assembly name>`. |
 | Entities | `ModelAssemblies`, `OnModelCreating` | Added to the host's EF model, so services use `Set<T>()` like core ones. |
 | Migrations | `Migrations` | The module's own context, migrations assemblies and history table (below). |
@@ -97,7 +98,7 @@ What the sample covers, and what it does not: the tests run a real module's migr
 
 ## Not in this change
 
-* Only `govcon` has moved (and not its government billing); the other in-repo modules still register through `AddWorkbenchApplication`.
+* Only `govcon` has moved (government billing included, through the `IInvoiceFinancing` hook); the other in-repo modules still register through `AddWorkbenchApplication`. The analysis of `billing` is in [module-extraction-billing.md](module-extraction-billing.md).
 * The worker (`Workbench.Worker`) does not load modules yet; background jobs a module owns need it to.
 * The desktop app reads routable pages from the same registry but does not load modules.
 * Reading a license key stored in the database at startup, and signing module assemblies.
@@ -112,3 +113,6 @@ From extracting `govcon` ([module-extraction-govcon.md](module-extraction-govcon
 * **`internal` helpers shared by two modules have to become a real public API**; the first extraction already widened seven types.
 * **Migration ownership is a per-module decision made once.** The recipe used here (release ownership with an empty core migration, edit the old creating migrations, idempotent module baseline, compare the previous release's DDL with the baseline) works for any module whose tables only reference core tables.
 * **Tests that use core kits need the kits' internals** (`InternalsVisibleTo`) and the module loaded before the first test (a module initializer).
+* **When a core engine needs a module's rules, declare the hook in core and give it a no-op default.** Invoicing asked ten questions of government financing; they became one interface with eight methods (`IInvoiceFinancing`, [module-extraction-billing.md](module-extraction-billing.md)), and the shipped billing suite now runs against the default.
+* **Keep the records, move the rules.** The receivables ledger (invoices, payments) is read by dozens of core features, so it stays in core even when the *service* that creates it is a paid module. Decide the kernel (records, posting, shared helpers) before moving an engine.
+* **UI hosts become slots; a hint beats a service call.** A core page that needs to know "which form does this contract print on" gets it as a field in the data it already loads (`InvoicePrintDto.PreferredForm`), not by injecting the module's service.

@@ -52,7 +52,7 @@ public sealed class ReadyToBill(InvoiceGenerator generator)
             // Exactly what PreviewAsync/GenerateDraftAsync build for a new draft: drafts hold their sources, so work on a draft
             // already isn't counted twice.
             var gen = await generator.GenerateAsync(db, ctx, type, from, today, false, null, approvedOnly: false, ct);
-            gen = await ContractFinancingLedger.WithLiquidationAsync(db, ctx, type, gen, [], null, ct);
+            gen = await generator.Financing.AddLiquidationAsync(db, ctx, type, gen, [], null, ct);
             var dated = gen.Lines.SelectMany(l => l.Sources).Select(s => (DateOnly?)s.Date).Min();
             // Cost-plus bills cumulative cost with no per-entry sources: it is unbilled since the last cost-plus invoice's period.
             if (type == InvoiceType.CostPlus && gen.Lines.Any(l => l.Amount != 0 && l.Sources.Count == 0))

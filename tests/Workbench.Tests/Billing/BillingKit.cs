@@ -22,6 +22,9 @@ namespace Workbench.Tests.Billing;
 /// </summary>
 internal sealed class BillingKit
 {
+    /// <summary>The invoice-financing hook the kit's services use: none in the shipped suite; the government contracting module's tests set theirs before any test runs.</summary>
+    public static IInvoiceFinancing? Financing { get; set; }
+
     public static readonly DateTime Now = new(2026, 11, 20, 12, 0, 0, DateTimeKind.Utc);
     public static readonly DateOnly October = new(2026, 10, 1);
     public static readonly DateOnly OctoberEnd = new(2026, 10, 31);
@@ -36,7 +39,7 @@ internal sealed class BillingKit
         Publisher = publisher;
         var audit = new AuditRecorder(user, clock);
         var ledger = new BillingLedger(gl.Ledger);
-        var generator = new InvoiceGenerator(new BillingCostSource(burdened is null ? [] : [burdened]));
+        var generator = new InvoiceGenerator(new BillingCostSource(burdened is null ? [] : [burdened]), financing: Financing);
         Accruals = new UnbilledAccruals(generator, ledger, audit);
         Invoices = new InvoiceService(factory, generator, ledger, audit, clock, new InvoiceDocuments(Options.Create(new BillingOptions { CompanyName = "Test Co" })), Accruals);
         Milestones = new BillingMilestoneService(factory, audit);

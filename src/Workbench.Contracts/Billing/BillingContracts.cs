@@ -196,7 +196,10 @@ public sealed record InvoicePrintDto(
     decimal BilledToDate,
 
     // Added by commercial billing: what the commercial layout prints (null for older callers).
-    InvoiceRemittanceDto? Remittance = null);
+    InvoiceRemittanceDto? Remittance = null,
+
+    // Set by a license module that has its own printed form for the contract (government contracting: "sf1034"); null otherwise.
+    string? PreferredForm = null);
 
 // ---- Contract billing ----
 
