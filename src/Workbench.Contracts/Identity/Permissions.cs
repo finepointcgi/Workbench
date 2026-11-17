@@ -85,6 +85,7 @@ public static class Permission
     public const string GlClose = "gl.close";
     public const string GlReportsView = "gl.reports.view";
     public const string GlRecurringManage = "gl.recurring.manage";
+    public const string GlExport = "gl.export";
     public const string GlRevaluation = "gl.revaluation";
     public const string BudgetsManage = "planning.budgets.manage";
     public const string RevenueManage = "revenue.manage";
@@ -244,6 +245,7 @@ public static class PermissionCatalog
         new(Permission.GlPostingManage, AreaAccounting, "Manage posting rules", "General ledger posting setup.", F),
         new(Permission.GlClose, AreaAccounting, "Close fiscal periods", "The period close checklist and closing accounting periods, including closing anyway (with a reason) when a check fails.", F),
         new(Permission.GlReportsView, AreaAccounting, "See financial statements", "Balance sheet, income statement, trial balance, consolidated statements, intercompany balances and the general ledger in the report writer.", F),
+        new(Permission.GlExport, AreaAccounting, "Export to accounting software", "Make QuickBooks, Xero and generic accounting files from journal entries, invoices, payments, bills and the chart of accounts, map account names, and see the export history.", F),
         new(Permission.GlRecurringManage, AreaAccounting, "Manage recurring journals", "Recurring journal templates and runs.", F),
         new(Permission.GlRevaluation, AreaAccounting, "Revalue foreign currency", "Currency revaluation and the foreign currency report.", F),
         new(Permission.BudgetsManage, AreaAccounting, "Manage corporate budgets", "Budget versions, budget vs actual and planning cycles.", F),

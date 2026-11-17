@@ -32,6 +32,8 @@
     <None Include="Scheduling\Samples\**" CopyToOutputDirectory="PreserveNewest" />
     <!-- Recorded ADP, Paychex and Gusto API responses for the payroll adapter tests. -->
     <None Include="Payroll\Fixtures\**" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Golden files for the accounting export layouts. -->
+    <None Include="AccountingExport\Golden\**" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Integrations\GitLab\Fixtures\**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 

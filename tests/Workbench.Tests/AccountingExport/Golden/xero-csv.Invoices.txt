@@ -1,0 +1,3 @@
+*ContactName,EmailAddress,POAddressLine1,POAddressLine2,POAddressLine3,POAddressLine4,POCity,PORegion,POPostalCode,POCountry,*InvoiceNumber,Reference,*InvoiceDate,*DueDate,InventoryItemCode,*Description,*Quantity,*UnitAmount,Discount,*AccountCode,*TaxType,TrackingName1,TrackingOption1,TrackingName2,TrackingOption2,Currency,BrandingTheme
+Acme Corp,,,,,,,,,,INV-1001,C-100,10 Jan 2026,09 Feb 2026,,"Senior engineer, January",10,100.00,,200,Tax Exempt,Region,Headquarters,,,,
+Acme Corp,,,,,,,,,,INV-1001,C-100,10 Jan 2026,09 Feb 2026,,Travel,1,250.00,,200,Tax Exempt,,,,,,

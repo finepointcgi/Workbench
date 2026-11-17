@@ -1,0 +1,262 @@
+@using Workbench.Contracts.AccountingExport
+@using Microsoft.JSInterop
+@inject IAccountingExportService Export
+@inject ISnackbar Snackbar
+@inject IJSRuntime JS
+
+<MudGrid Spacing="3">
+    <MudItem xs="12" md="5">
+        <MudStack Spacing="2">
+            <MudSelect T="string" Value="_formatId" ValueChanged="OnFormatChanged" Label="Format" data-testid="export-format">
+                @foreach (var f in _formats)
+                {
+                    <MudSelectItem T="string" Value="f.Id">@f.Name</MudSelectItem>
+                }
+            </MudSelect>
+            @if (Current is { } format)
+            {
+                <MudText Typo="Typo.caption" Class="mud-text-secondary" data-testid="format-notes">@format.Notes</MudText>
+            }
+            <MudSelect T="AccountingExportKind" Value="_kind" ValueChanged="OnKindChanged" Label="What to export" data-testid="export-kind">
+                @foreach (var k in Current?.Kinds ?? [])
+                {
+                    <MudSelectItem T="AccountingExportKind" Value="k">@KindLabel(k)</MudSelectItem>
+                }
+            </MudSelect>
+            @if (_kind != AccountingExportKind.ChartOfAccounts)
+            {
+                <MudStack Row="true" Spacing="2">
+                    <MudDatePicker Label="From" Date="_from" DateChanged="d => Changed(() => _from = d)" Editable="true" AutoClose="true" DateFormat="MM/dd/yyyy" data-testid="export-from" />
+                    <MudDatePicker Label="To" Date="_to" DateChanged="d => Changed(() => _to = d)" Editable="true" AutoClose="true" DateFormat="MM/dd/yyyy" data-testid="export-to" />
+                </MudStack>
+                <MudStack Row="true" Spacing="1">
+                    <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="LastMonth">Last month</MudButton>
+                    <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="ThisYear">This year</MudButton>
+                </MudStack>
+            }
+            @if (_kind == AccountingExportKind.JournalEntries)
+            {
+                <MudCheckBox T="bool" Value="_subledger" ValueChanged="v => Changed(() => _subledger = v)"
+                             Label="Include the entries made by invoices, payments and bills (only if you don't export those documents)" />
+            }
+            <MudCheckBox T="bool" Value="_allowUnmapped" ValueChanged="v => Changed(() => _allowUnmapped = v)"
+                         Label="Export even if some names aren't mapped (they go out with Workbench's names)" data-testid="allow-unmapped" />
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="PreviewAsync" Disabled="_busy || Current is null" data-testid="export-preview">Preview</MudButton>
+        </MudStack>
+    </MudItem>
+    <MudItem xs="12" md="7">
+        @if (_error is not null)
+        {
+            <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" data-testid="export-error">@_error</MudAlert>
+        }
+        else if (_preview is { } p)
+        {
+            <MudPaper Outlined="true" Class="pa-4" data-testid="export-preview-panel">
+                <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">What this export would contain</MudText>
+                <MudText data-testid="preview-counts">
+                    <strong>@p.NewRecords</strong> @KindLabel(_kind).ToLowerInvariant() (@p.Rows rows)@(p.ControlTotal != 0 ? $", control total {p.ControlTotal:N2}" : "").
+                    @if (p.AlreadyExported > 0)
+                    {
+                        <span> @p.AlreadyExported already exported to this package.</span>
+                    }
+                </MudText>
+                @if (!p.CanExport && !(_again && p.AlreadyExported > 0 && p.NewRecords == 0))
+                {
+                    <MudAlert Severity="Severity.Warning" Class="mt-2" data-testid="export-blocked">@p.BlockedReason</MudAlert>
+                }
+
+                @if (p.Unmapped.Count > 0)
+                {
+                    <MudText Typo="Typo.subtitle2" HtmlTag="h3" Class="mt-3">Not mapped yet (@p.Unmapped.Count)</MudText>
+                    <ul data-testid="unmapped-list">
+                        @foreach (var u in p.Unmapped.Take(12))
+                        {
+                            <li>@u.Kind: @u.SourceKey @u.SourceName <span class="mud-text-secondary">(@u.Uses use@(u.Uses == 1 ? "" : "s"))</span></li>
+                        }
+                    </ul>
+                    @if (p.Unmapped.Count > 12)
+                    {
+                        <MudText Typo="Typo.caption">and @(p.Unmapped.Count - 12) more.</MudText>
+                    }
+                    <MudButton Variant="Variant.Text" Size="Size.Small" OnClick="ShowMappings">Open account mapping</MudButton>
+                }
+
+                @if (p.Warnings.Count > 0)
+                {
+                    <MudText Typo="Typo.subtitle2" HtmlTag="h3" Class="mt-3">Warnings (@p.Warnings.Count)</MudText>
+                    <ul data-testid="export-warnings">
+                        @foreach (var w in p.Warnings.Take(15))
+                        {
+                            <li>@w</li>
+                        }
+                    </ul>
+                    @if (p.Warnings.Count > 15)
+                    {
+                        <MudText Typo="Typo.caption">and @(p.Warnings.Count - 15) more (all are saved with the run).</MudText>
+                    }
+                }
+
+                @if (p.PriorRuns.Count > 0)
+                {
+                    <MudText Typo="Typo.subtitle2" HtmlTag="h3" Class="mt-3">Earlier exports of this kind</MudText>
+                    <ul>
+                        @foreach (var r in p.PriorRuns)
+                        {
+                            <li>@r.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm") UTC by @r.CreatedBy: @r.From.ToString("yyyy-MM-dd") to @r.To.ToString("yyyy-MM-dd"), @r.RecordCount record@(r.RecordCount == 1 ? "" : "s")@(r.IsRepeat ? " (again)" : "")</li>
+                        }
+                    </ul>
+                }
+
+                @if (p.AlreadyExported > 0 || p.PriorRuns.Count > 0)
+                {
+                    <MudCheckBox T="bool" Value="_again" ValueChanged="v => AgainChanged(v)" Label="Export again: include records that were already exported" data-testid="export-again" />
+                    @if (_again)
+                    {
+                        <MudTextField T="string" @bind-Value="_note" Label="Why are you exporting these again?" Required="true" MaxLength="1000" Lines="2" data-testid="export-note"
+                                      HelperText="Importing them twice duplicates them in your accounting software unless you deleted the first import." />
+                    }
+                }
+
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" StartIcon="@Icons.Material.Filled.Download" OnClick="ExportAsync"
+                           Disabled="@(_busy || (!p.CanExport && !(_again && p.AlreadyExported > 0)) || (_again && string.IsNullOrWhiteSpace(_note)))" data-testid="export-run">Export and download</MudButton>
+            </MudPaper>
+        }
+        else
+        {
+            <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">Choose a format and a period, then Preview. Nothing is exported until you press Export.</MudAlert>
+        }
+    </MudItem>
+</MudGrid>
+
+@code {
+    [Parameter] public EventCallback ShowMappings { get; set; }
+
+    [Parameter] public EventCallback OnExported { get; set; }
+
+    private IReadOnlyList<AccountingFormatDto> _formats = [];
+    private string? _formatId;
+    private AccountingExportKind _kind = AccountingExportKind.JournalEntries;
+    private DateTime? _from = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1).AddMonths(-1);
+    private DateTime? _to = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1).AddDays(-1);
+    private bool _allowUnmapped;
+    private bool _subledger;
+    private bool _again;
+    private string? _note;
+    private bool _busy;
+    private string? _error;
+    private AccountingExportPreviewDto? _preview;
+
+    private AccountingFormatDto? Current => _formats.FirstOrDefault(f => f.Id == _formatId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _formats = await Export.ListFormatsAsync();
+            _formatId = _formats.FirstOrDefault()?.Id;
+            if (Current is { } f && !f.Kinds.Contains(_kind))
+            {
+                _kind = f.Kinds[0];
+            }
+        }
+        catch (Exception ex) when (IsExpected(ex))
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private static bool IsExpected(Exception ex) => ex is ArgumentException or InvalidOperationException or UnauthorizedAccessException or HttpRequestException or TaskCanceledException;
+
+    private static string KindLabel(AccountingExportKind k) => k switch
+    {
+        AccountingExportKind.ChartOfAccounts => "Chart of accounts",
+        AccountingExportKind.JournalEntries => "Journal entries",
+        AccountingExportKind.Invoices => "Customer invoices",
+        AccountingExportKind.Payments => "Customer payments",
+        _ => "Vendor bills",
+    };
+
+    private void Changed(Action set)
+    {
+        set();
+        _preview = null;
+        _error = null;
+        _again = false;
+    }
+
+    private void OnFormatChanged(string id)
+    {
+        Changed(() =>
+        {
+            _formatId = id;
+            if (Current is { } f && !f.Kinds.Contains(_kind))
+            {
+                _kind = f.Kinds[0];
+            }
+        });
+    }
+
+    private void OnKindChanged(AccountingExportKind k) => Changed(() => _kind = k);
+
+    private void AgainChanged(bool value) => _again = value;
+
+    private void LastMonth()
+    {
+        var first = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+        Changed(() => { _from = first.AddMonths(-1); _to = first.AddDays(-1); });
+    }
+
+    private void ThisYear() => Changed(() => { _from = new DateTime(DateTime.Today.Year, 1, 1); _to = DateTime.Today; });
+
+    private AccountingFileRequest Request()
+    {
+        var from = DateOnly.FromDateTime(_from ?? DateTime.Today);
+        var to = DateOnly.FromDateTime(_to ?? DateTime.Today);
+        return new AccountingFileRequest(_formatId!, _kind, from, to, null, _allowUnmapped, _again, _note, _subledger);
+    }
+
+    private async Task PreviewAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            _again = false;
+            _preview = await Export.PreviewAsync(Request());
+        }
+        catch (Exception ex) when (IsExpected(ex))
+        {
+            _preview = null;
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ExportAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var result = await Export.ExportAsync(Request());
+            await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./_content/Workbench.Ui/integrations.js");
+            await module.InvokeVoidAsync("downloadBase64", result.FileName, result.ContentType, Convert.ToBase64String(result.Content));
+            Snackbar.Add($"Downloaded {result.FileName}: {result.RecordCount} record{(result.RecordCount == 1 ? "" : "s")}, {result.RowCount} rows.", Severity.Success);
+            await OnExported.InvokeAsync();
+            _again = false;
+            _note = null;
+            _preview = await Export.PreviewAsync(Request());
+        }
+        catch (Exception ex) when (IsExpected(ex) || ex is JSException)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

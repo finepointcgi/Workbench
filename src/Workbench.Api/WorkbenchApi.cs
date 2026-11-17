@@ -77,6 +77,7 @@ public static class WorkbenchApi
         v1.MapShopFloorEndpoints();
         v1.MapSourcingEndpoints();
         v1.MapBankFileEndpoints();
+        v1.MapAccountingExportEndpoints();
         v1.MapSalesTaxEndpoints();
         v1.MapIntegrationEndpoints();
         v1.MapJiraEndpoints(); // Jira sync: connection and project links (under /integrations).

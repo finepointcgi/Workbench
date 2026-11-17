@@ -896,3 +896,15 @@ Full write-up: `docs/customization.md`.
   computed on read and never stored; `ItemService` drops them from writes.
 - A form response creates its row through the decorated `IItemService` under a one-use `FormSubmissionGrant` (an
   AsyncLocal, honoured only by `PermissionCheckingItemService.CreateAsync` for that sheet). Don't reuse it for anything else.
+
+## Accounting export (QuickBooks, Xero, generic files)
+
+- `Domain/AccountingExport`, `Contracts/AccountingExport`, `Application/AccountingExport`, Admin › Integrations › Accounting export
+  (`/admin/integrations/accounting-export`); permission `gl.export` (Finance, Admin). Guide: `docs/admin-guide/accounting-export.md`.
+- A format is an `IAccountingExporter` (golden-file tests in `tests/.../AccountingExport/Golden`); `ExportDataLoader` builds neutral documents
+  with names resolved through `AccountingMapping` rows (per **target** package, not per format). A record a format can't carry goes in
+  `ExportFile.Skipped` and is never marked exported.
+- Idempotency is `AccountingExportedRecord` (unique target × kind × record), written in the same unit of work as the `AccountingExportRun`.
+  Don't export through any other path (a future OAuth push implements `IAccountingPublisher` and must write the same rows).
+- Journals made by `Billing` and `AP` sources are excluded by default because invoices and bills are exported as documents. A new subledger that
+  posts its own documents and gets an export kind must be added to that exclusion in `ExportDataLoader`.
