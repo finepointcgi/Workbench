@@ -238,7 +238,7 @@ public sealed class LicenseRefreshTests
         Assert.True(status.Refresh!.Stale);
         Assert.Equal("Business", status.Edition);
         Assert.False(status.InGracePeriod);
-        Assert.True(status.HasModule("finance"));
+        Assert.True(status.HasModule("billing"));
     }
 
     [Fact]
@@ -291,7 +291,7 @@ public sealed class LicenseRefreshTests
         Assert.Equal(Guid.Parse("7c2f5d1e-3a64-4b8e-9d0a-1e2f3a4b5c6d"), claims.LicenseId);
         Assert.Equal(new DateOnly(2026, 11, 1), claims.IssuedOn);
         Assert.Equal(new DateOnly(2027, 11, 1), claims.ExpiresOn);
-        Assert.Equal(new[] { "controls", "core", "finance", "govcon" }, claims.Modules!.Order());
+        Assert.Equal(new[] { "accounting", "billing", "core", "enterprise", "govcon" }, claims.Modules!.Order()); // the golden key predates the split: finance -> billing + accounting, controls -> enterprise
         Assert.False(LicenseKeys.TryVerify(key, PublicKey, out _, out _), "Another key pair's public key must not verify it.");
     }
 }
@@ -299,7 +299,7 @@ public sealed class LicenseRefreshTests
 /// <summary>What administrators see on Setup &gt; License and in the banner.</summary>
 public sealed class LicenseRefreshPageTests
 {
-    private static LicenseStatusDto Status(LicenseRefreshDto refresh) => new("Business", EditionSource.Key, "Acme", new DateOnly(2026, 11, 15), false, 5, 1, null, [], null, 0, 0, false, 10, refresh);
+    private static LicenseStatusDto Status(LicenseRefreshDto refresh) => new("Business", EditionSource.Key, "Acme", new DateOnly(2026, 11, 15), false, 5, 1, null, [], null, 0, 0, false, 10, false, refresh);
 
     private static Bunit.BunitContext Context(LicenseStatusDto status, Workbench.Contracts.Identity.OrgRoles roles)
     {

@@ -38,7 +38,7 @@ public sealed partial class HostedSignupTests
         Assert.Equal("utm-launch", row.SignupSource);
         Assert.Equal("draft-1", row.TermsVersion);
         Assert.NotNull(row.TermsAcceptedAtUtc);
-        Assert.Contains("finance", row.Modules);
+        Assert.Contains("billing", row.Modules);
 
         // The product sees a Business trial with the trial's modules and seats; the organization starts empty.
         var state = await web.InTenantAsync("initech", sp => sp.GetRequiredService<EditionService>().GetAsync(default));

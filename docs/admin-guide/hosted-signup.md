@@ -112,7 +112,7 @@ The body is a subset of the license server's `Subscription`; every field is opti
 ```json
 {
   "plan": "business",
-  "modules": ["finance", "capture"],
+  "modules": ["billing", "capture"],
   "seats": 25,
   "lightSeats": 10,
   "status": "active",

@@ -54,7 +54,7 @@ public sealed class SignupOptions
     public int TrialDays { get; set; } = 14;
 
     /// <summary>Modules in the trial (the "Business" trial). Default: every module.</summary>
-    public string[] TrialModules { get; set; } = ["finance", "capture", "workforce", "controls", "govcon", "enterprise"];
+    public string[] TrialModules { get; set; } = ["billing", "accounting", "capture", "workforce", "projectcontrols", "materials", "govcon", "enterprise"];
 
     public int TrialSeats { get; set; } = 10;
 
