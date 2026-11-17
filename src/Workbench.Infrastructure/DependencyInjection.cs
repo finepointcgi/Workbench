@@ -40,6 +40,12 @@ public static class DependencyInjection
             services.AddSingleton<TenantCatalog>();
             services.AddSingleton<Workbench.Application.Licensing.IHostedPlanSource, TenantPlanSource>(); // The tenant's plan decides its edition.
             services.AddSingleton<TenantProvisioner>();
+            services.AddSingleton<TenantEntitlements>();
+            services.AddSingleton<Workbench.Application.Licensing.IHostedEntitlementSource>(sp => sp.GetRequiredService<TenantEntitlements>());
+            services.AddSingleton<ReadOnlyTenantInterceptor>();
+            services.AddSingleton<SignupRateLimiter>();
+            services.AddSingleton<SignupService>();
+            services.TryAddSingleton<ISignupBotProtection, HoneypotBotProtection>();
             services.AddSingleton<IWorkbenchConnectionResolver, TenantConnectionResolver>();
             services.Replace(ServiceDescriptor.Singleton<ITenantJobRunner, MultiTenantJobRunner>());
         }
@@ -57,7 +63,7 @@ public static class DependencyInjection
         }
 
         services.AddSingleton<IDbContextFactory<WorkbenchDbContext>>(sp =>
-            new TenantAwareDbContextFactory(provider, sp.GetRequiredService<IWorkbenchConnectionResolver>(), sp.GetService<ILoggerFactory>()));
+            new TenantAwareDbContextFactory(provider, sp.GetRequiredService<IWorkbenchConnectionResolver>(), sp.GetService<ILoggerFactory>(), sp.GetService<ReadOnlyTenantInterceptor>()));
         services.AddSingleton<IWorkbenchDbContextFactory, WorkbenchDbContextFactory>();
         services.AddSingleton<DatabaseMigrator>();
         services.AddScoped<Contracts.Tenancy.IHostAdminService, HostAdminService>();

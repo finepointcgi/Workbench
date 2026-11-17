@@ -26,7 +26,8 @@
       "applicationUrl": "http://localhost:5251",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "Tenancy__Mode": "MultiTenant"
+        "Tenancy__Mode": "MultiTenant",
+        "Tenancy__Signup__Enabled": "true"
       }
     }
   }
