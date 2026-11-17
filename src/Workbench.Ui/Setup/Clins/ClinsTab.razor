@@ -4,14 +4,14 @@
 @inject ISnackbar Snackbar
 
 <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2" Wrap="Wrap.Wrap">
-    <MudText Typo="Typo.h6" HtmlTag="h2">Contract line items</MudText>
+    <MudText Typo="Typo.h6" HtmlTag="h2">@Tm.Reword("Contract line items")</MudText>
     <MudText Typo="Typo.caption" Class="mud-text-secondary">
-        Value = sum of exercised CLINs · funded = sum of CLIN funding@(Status?.IsBurdened == true ? " · incurred is fully burdened" : " · incurred is direct cost")
+        @Tm.Reword("Value = sum of exercised CLINs · funded = sum of CLIN funding")@(Status?.IsBurdened == true ? " · incurred is fully burdened" : " · incurred is direct cost")
     </MudText>
     <MudSpacer />
     @if (CanEdit)
     {
-        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="() => EditAsync(null)" data-testid="clin-add">Add CLIN</MudButton>
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Add" OnClick="() => EditAsync(null)" data-testid="clin-add">@Tm.Reword("Add CLIN")</MudButton>
     }
 </MudStack>
 
@@ -19,15 +19,15 @@
     <MudSimpleTable Dense="true" Hover="true" data-testid="clin-grid">
         <thead>
             <tr>
-                <th>CLIN</th><th>Description</th><th>Type</th><th>Period</th>
-                <th style="text-align:right">Ceiling</th><th style="text-align:right">Funded</th>
+                <th>@Tm.Reword("CLIN")</th><th>Description</th><th>Type</th><th>Period</th>
+                <th style="text-align:right">@Tm.Reword("Ceiling")</th><th style="text-align:right">@Tm.Reword("Funded")</th>
                 <th style="text-align:right">Incurred</th><th style="text-align:right">Remaining</th><th>Status</th><th></th>
             </tr>
         </thead>
         <tbody>
             @if (Clins.Count == 0)
             {
-                <tr><td colspan="10" class="mud-text-secondary">No CLINs yet. Add the awarded CLINs; option CLINs start unexercised.</td></tr>
+                <tr><td colspan="10" class="mud-text-secondary">@Tm.Reword("No CLINs yet. Add the awarded CLINs; option CLINs start unexercised.")</td></tr>
             }
             @foreach (var clin in Clins)
             {
@@ -81,7 +81,7 @@
             {
                 var top = Clins.Where(c => !c.IsSlin).ToList();
                 <tr>
-                    <td colspan="4"><b>Contract total</b> <span class="mud-text-secondary">(exercised CLINs)</span></td>
+                    <td colspan="4"><b>@Tm.Reword("Contract total")</b> <span class="mud-text-secondary">@Tm.Reword("(exercised CLINs)")</span></td>
                     <td style="text-align:right"><b>@ClinFormat.Money(Contract.CeilingValue)</b></td>
                     <td style="text-align:right"><b>@ClinFormat.Money(Contract.FundedValue)</b></td>
                     <td style="text-align:right"><b>@(Status is null ? "—" : ClinFormat.Money(Status.Clins.Where(s => top.Any(t => t.Id == s.ClinId)).Sum(s => s.Incurred)))</b></td>
@@ -93,6 +93,7 @@
 </MudPaper>
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [Parameter, EditorRequired]
     public ContractDto Contract { get; set; } = default!;
 

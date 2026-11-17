@@ -23,6 +23,7 @@ public sealed record NavAccess(
     int ReceivableCount = 0,
     bool ManagesOpportunities = false,
     bool OwnsBudget = false,
+    bool HideGovernment = false,
     IReadOnlySet<string>? UnavailableModules = null)
 {
     /// <summary>False for a module the license doesn't include and that is enforced; its pages are hidden. <c>UnavailableModules</c> null: every module.</summary>
@@ -32,6 +33,9 @@ public sealed record NavAccess(
     public static NavAccess Anonymous { get; } = new((CurrentUserInfo?)null);
 
     public bool IsSignedIn => User is not null;
+
+    /// <summary>Federal-only pages (DCAA, CPSR, CAS, CMMC, SAM.gov leads, incurred cost) show unless the organization turned them off.</summary>
+    public bool ShowGovernment => !HideGovernment;
 
     /// <summary>True when the user holds <paramref name="permission"/> (a <see cref="Permission"/> constant).</summary>
     public bool Can(string permission) => User?.Can(permission) == true;
@@ -108,10 +112,11 @@ public sealed record NavAccess(
 
         var ownsBudget = await TryAsync(services.GetService<Contracts.Planning.IPlanningCycleService>(), async s => (await s.ListMineAsync(cancellationToken)).Count > 0, false);
 
+        var hideGovernment = !await TryAsync(services.GetService<Contracts.Company.ICompanyProfileService>(), async s => (await s.GetAsync(cancellationToken)).ShowGovernmentFeatures, true);
         var unavailable = await TryAsync<Contracts.Licensing.ILicenseService, HashSet<string>?>(services.GetService<Contracts.Licensing.ILicenseService>(),
             async s => (await s.GetStatusAsync(cancellationToken)).Modules?.Where(m => !m.Available && m.WholeModule).Select(m => m.Id).ToHashSet(), null);
 
-        return new NavAccess(user, timesheetApprover, leaveApprover, projectManager, approvals, leavePending, receivable, opportunities, ownsBudget, unavailable);
+        return new NavAccess(user, timesheetApprover, leaveApprover, projectManager, approvals, leavePending, receivable, opportunities, ownsBudget, hideGovernment, unavailable);
     }
 
     /// <summary>How many documents in the approvals inbox wait on the signed-in user.</summary>

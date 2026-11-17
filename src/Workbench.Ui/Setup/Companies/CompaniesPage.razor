@@ -14,7 +14,7 @@
 <PageTitle>Companies · Setup · Workbench</PageTitle>
 
 <SetupHeader Title="Companies"
-             Subtitle="The legal companies in your organization. Each keeps its own ledger, projects, contracts, invoices, bills, bank accounts and assets; they share the chart of accounts, fiscal calendar, vendors, customers and labor categories.">
+             Subtitle="@Tm.Reword("The legal companies in your organization. Each keeps its own ledger, projects, contracts, invoices, bills, bank accounts and assets; they share the chart of accounts, fiscal calendar, vendors, customers and labor categories.")">
     <MudButton Variant="Variant.Outlined" Href="accounting/consolidated" StartIcon="@Icons.Material.Filled.Assessment">Consolidated statements</MudButton>
     <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="() => EditAsync(null)" data-testid="company-add">Add company</MudButton>
 </SetupHeader>
@@ -132,8 +132,8 @@ else
                 Anything with posted ledger activity stays where it is.
             </MudText>
             <MudSelect T="CompanyRecordKind" Value="_kind" ValueChanged="KindChangedAsync" Label="Show" Dense="true" Style="max-width:260px" Class="mb-3">
-                <MudSelectItem T="CompanyRecordKind" Value="CompanyRecordKind.Contract">Contracts (with their projects)</MudSelectItem>
-                <MudSelectItem T="CompanyRecordKind" Value="CompanyRecordKind.Project">Projects without a contract</MudSelectItem>
+                <MudSelectItem T="CompanyRecordKind" Value="CompanyRecordKind.Contract">@Tm.Reword("Contracts (with their projects)")</MudSelectItem>
+                <MudSelectItem T="CompanyRecordKind" Value="CompanyRecordKind.Project">@Tm.Reword("Projects without a contract")</MudSelectItem>
                 <MudSelectItem T="CompanyRecordKind" Value="CompanyRecordKind.Employee">Employees (home company)</MudSelectItem>
                 <MudSelectItem T="CompanyRecordKind" Value="CompanyRecordKind.BankAccount">Bank accounts</MudSelectItem>
                 <MudSelectItem T="CompanyRecordKind" Value="CompanyRecordKind.FixedAsset">Fixed assets</MudSelectItem>
@@ -211,7 +211,7 @@ else
         {
             <MudTabPanel Text="Who can use each company">
                 <MudText Class="mud-text-secondary mb-3">
-                    Limit people to some companies: they won't see the others' ledger, projects, contracts, invoices, bills, bank accounts or assets. People with no limit can use every company.
+                    @Tm.Reword("Limit people to some companies: they won't see the others' ledger, projects, contracts, invoices, bills, bank accounts or assets. People with no limit can use every company.")
                 </MudText>
                 <MudSimpleTable Dense="true" Hover="true" aria-label="Company access by person" data-testid="company-access">
                     <thead><tr><th scope="col">Person</th><th scope="col">Email</th><th scope="col">Companies</th><th scope="col"><span class="wb-sr-only">Actions</span></th></tr></thead>
@@ -235,6 +235,7 @@ else
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     private IReadOnlyList<CompanyDto>? _companies;
     private IReadOnlyList<IntercompanyAccountDto> _pairs = [];
     private IReadOnlyList<IntercompanyBalanceDto> _balances = [];

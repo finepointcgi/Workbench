@@ -1,0 +1,95 @@
+@* What kind of company this is: it decides the words (agreement or contract, billing line or CLIN) and whether the federal-only
+   pages show. Used on Setup > Organization, and on the Setup page until someone has chosen. The services are optional so a host
+   without them simply shows nothing. *@
+@inject IServiceProvider Services
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+@if (_profile is { } profile && (!FirstRunOnly || !profile.IsSet))
+{
+    <MudPaper Outlined="true" Class="pa-4 mb-4" data-testid="company-type-card">
+        <MudText Typo="Typo.h6" HtmlTag="h2">What kind of company are you?</MudText>
+        <MudText Class="mud-text-secondary mb-3">
+            This sets the words Workbench uses and which pages show. You can change it any time; your data doesn't change.
+        </MudText>
+        <MudRadioGroup T="CompanyType" Value="_type" ValueChanged="TypeChanged" Disabled="!profile.CanEdit" aria-label="Company type">
+            <MudRadio T="CompanyType" Value="CompanyType.GovernmentContractor" Color="Color.Primary" data-testid="company-type-gov">
+                <b>Government contractor</b>: contracts, CLINs, funding and ceilings, DCAA and the other federal pages.
+            </MudRadio>
+            <MudRadio T="CompanyType" Value="CompanyType.ProfessionalServices" Color="Color.Primary" data-testid="company-type-prof">
+                <b>Professional services</b>: agreements, billing lines, authorized budgets and not-to-exceed amounts.
+            </MudRadio>
+            <MudRadio T="CompanyType" Value="CompanyType.EngineeringConstruction" Color="Color.Primary" data-testid="company-type-eng">
+                <b>Engineering and construction</b>: contracts, pay items, change orders and not-to-exceed amounts.
+            </MudRadio>
+        </MudRadioGroup>
+        <MudSwitch T="bool" Value="_show" ValueChanged="v => _show = v" Color="Color.Primary" Disabled="!profile.CanEdit" Class="mt-2"
+                   Label="Show government contracting features" data-testid="company-show-government" />
+        <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-3">
+            DCAA readiness, purchasing system review (CPSR), CAS disclosure, CMMC, SAM.gov leads and incurred cost. Off by default for commercial
+            companies; the data and API stay available either way.
+        </MudText>
+        @if (profile.CanEdit)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="_busy" data-testid="company-type-save">Save</MudButton>
+        }
+        else
+        {
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">Only an Admin changes this.</MudText>
+        }
+    </MudPaper>
+}
+
+@code {
+    /// <summary>Show only while no one has chosen yet (the Setup page); the Organization page always shows it.</summary>
+    [Parameter] public bool FirstRunOnly { get; set; }
+
+    private CompanyProfileDto? _profile;
+    private CompanyType _type;
+    private bool _show;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Services.GetService(typeof(ICompanyProfileService)) is not ICompanyProfileService profiles)
+        {
+            return;
+        }
+
+        try
+        {
+            _profile = await profiles.GetAsync();
+            (_type, _show) = (_profile.Type, _profile.ShowGovernmentFeatures);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            _profile = null;
+        }
+    }
+
+    private void TypeChanged(CompanyType type)
+    {
+        _type = type;
+        _show = CompanyTerms.ShowsGovernmentFeaturesByDefault(type); // The switch follows the type until someone sets it on purpose.
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        try
+        {
+            var follow = _show == CompanyTerms.ShowsGovernmentFeaturesByDefault(_type);
+            _profile = await ((ICompanyProfileService)Services.GetService(typeof(ICompanyProfileService))!).UpdateAsync(new UpdateCompanyProfileRequest(_type, follow ? null : _show));
+            Snackbar.Add("Saved. The menu and wording now follow it.", Severity.Success);
+            Navigation.NavigateTo(Navigation.Uri, forceLoad: true); // Reload so the menu and every page pick up the new words.
+        }
+        catch (Exception ex) when (ex is ArgumentException or UnauthorizedAccessException)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

@@ -4459,6 +4459,32 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                     b.ToTable("UserCompanySelections", (string)null);
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Company.OrganizationProfile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CompanyType")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool?>("ShowGovernmentFeatures")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("OrganizationProfile");
+                });
+
             modelBuilder.Entity("Workbench.Domain.Compliance.CmmcPoamItem", b =>
                 {
                     b.Property<Guid>("Id")
