@@ -97,6 +97,7 @@ public static class DefaultChartOfAccounts
         // Revenue recognition: contract liabilities and loss provisions posted by the monthly revenue runs.
         new("2300", "Billings in excess of revenue", AccountType.Liability, "2000", Description: "Contract liabilities: billed ahead of revenue recognized (revenue runs)"),
         new("2310", "Provision for contract losses", AccountType.Liability, "2000", Description: "Expected losses on loss contracts not yet incurred (revenue runs)"),
+        new("7040", "Unallowable - bad debt expense", AccountType.Expense, "7000", CostClassification.Unallowable, "FAR 31.205-3: receivables written off as uncollectible"),
         new("7030", "Unallowable - provision for contract losses", AccountType.Expense, "7000", CostClassification.Unallowable, "FAR 31.205-23: losses on other contracts are unallowable"),
 
         // Multicompany: what affiliated companies owe each other, posted when an entry crosses companies (eliminated on consolidation).

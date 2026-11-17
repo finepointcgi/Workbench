@@ -1,0 +1,28 @@
+@* Writes off all or part of an open invoice as uncollectible. The reason is audited. *@
+<MudDialog>
+    <DialogContent>
+        <MudStack Spacing="3">
+            <MudText>@Invoice.Number has @BillingFormat.Money(Invoice.Balance) open. A write-off posts bad debt expense against accounts receivable; reverse it later if the customer pays.</MudText>
+            <MudNumericField T="decimal" @bind-Value="_amount" Label="Amount to write off" Format="N2" HideSpinButtons="true" Min="0" Max="Invoice.Balance" data-testid="writeoff-amount" />
+            <MudTextField @bind-Value="_reason" Label="Reason" Required="true" Immediate="true" Lines="2" HelperText="Recorded in the audit log." data-testid="writeoff-reason" />
+        </MudStack>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => MudDialog.Cancel()">Cancel</MudButton>
+        <MudButton Color="Color.Error" Variant="Variant.Filled" Disabled="@(_amount <= 0 || _amount > Invoice.Balance || string.IsNullOrWhiteSpace(_reason))"
+                   OnClick="() => MudDialog.Close(DialogResult.Ok(new WriteOffInvoiceRequest(_amount, _reason!.Trim())))" data-testid="writeoff-confirm">Write off</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter, EditorRequired]
+    public InvoiceSummaryDto Invoice { get; set; } = default!;
+
+    private decimal _amount;
+    private string? _reason;
+
+    protected override void OnInitialized() => _amount = Invoice.Balance;
+}

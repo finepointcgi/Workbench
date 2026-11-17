@@ -1,0 +1,108 @@
+@* The clean invoice for commercial customers: who billed, who to pay and how, what for, with terms and a due date. No CLINs,
+   funding, vouchers or certifications. The government layouts stay available from the print page's toolbar. *@
+@{
+    var inv = Print.Invoice;
+    var s = inv.Summary;
+    var r = Print.Remittance;
+    var isCredit = s.Type == InvoiceKind.CreditMemo;
+    var tax = inv.Lines.Where(l => l.Kind == InvoiceLineType.SalesTax).Sum(l => l.Amount);
+}
+<div class="head" data-testid="commercial-invoice">
+    <div>
+        <h1 class="company">@Print.Payee.Name</h1>
+        <div class="pre small">@Print.Payee.Address</div>
+        @if (r?.BillingContact is { Length: > 0 } contact)
+        {
+            <div class="small">@contact</div>
+        }
+    </div>
+    <div class="title">
+        <div class="word">@(isCredit ? "CREDIT MEMO" : "INVOICE")</div>
+        <table class="meta">
+            <tr><th>Number</th><td data-testid="voucher-number">@s.Number</td></tr>
+            <tr><th>Date</th><td>@BillingFormat.Date(s.InvoiceDate)</td></tr>
+            @if (!isCredit)
+            {
+                <tr><th>Terms</th><td>@(r?.PaymentTermsText is { Length: > 0 } t ? t : $"Net {inv.PaymentTermsDays}")</td></tr>
+                <tr><th>Due</th><td data-testid="commercial-due">@BillingFormat.Date(s.DueDate)</td></tr>
+            }
+        </table>
+    </div>
+</div>
+
+<div class="parties">
+    <div>
+        <div class="label">Bill to</div>
+        <div><strong>@Print.Payer.Name</strong></div>
+        <div class="pre">@Print.Payer.Address</div>
+    </div>
+    <div>
+        <div class="label">Agreement</div>
+        <div>@Print.ContractNumber · @Print.ContractName</div>
+        <div class="small">For @BillingFormat.Date(s.PeriodFrom) to @BillingFormat.Date(s.PeriodTo)</div>
+    </div>
+</div>
+
+<table class="items">
+    <thead><tr><th>Description</th><th class="num">Qty</th><th class="num">Rate</th><th class="num">Amount</th></tr></thead>
+    <tbody>
+        @foreach (var l in inv.Lines.Where(l => l.Kind != InvoiceLineType.SalesTax))
+        {
+            <tr>
+                <td>@l.Description</td>
+                <td class="num">@Quantity(l)</td>
+                <td class="num">@Rate(l)</td>
+                <td class="num">@BillingFormat.Amount(l.Amount)</td>
+            </tr>
+        }
+    </tbody>
+    <tfoot>
+        @if (tax != 0)
+        {
+            <tr class="sub"><td colspan="3">Sales tax</td><td class="num">@BillingFormat.Amount(tax)</td></tr>
+        }
+        <tr class="total"><td colspan="3">@(isCredit ? "Total credited" : "Total due")</td><td class="num" data-testid="print-total">@BillingFormat.Money(s.Total)</td></tr>
+        @if (s.AmountPaid + s.AmountCredited + s.AmountWrittenOff != 0 && !isCredit)
+        {
+            <tr class="sub"><td colspan="3">Paid, credited or adjusted to date</td><td class="num">@BillingFormat.Amount(s.AmountPaid + s.AmountCredited + s.AmountWrittenOff)</td></tr>
+            <tr class="total"><td colspan="3">Balance</td><td class="num">@BillingFormat.Money(s.Balance)</td></tr>
+        }
+    </tfoot>
+</table>
+
+@if (inv.Notes is { Length: > 0 } notes)
+{
+    <p class="pre">@notes</p>
+}
+
+@if (!isCredit && r is not null)
+{
+    <div class="remit" data-testid="remittance">
+        <div class="label">How to pay</div>
+        <div>Please pay @BillingFormat.Money(s.Balance) by @BillingFormat.Date(s.DueDate) and reference invoice <strong>@s.Number</strong>.</div>
+        @if (r.RemitToAddress is { Length: > 0 } address)
+        {
+            <div class="pre"><span class="small">Remit to</span> @r.SellerName@("\n")@address</div>
+        }
+        @if (r.RemittanceInstructions is { Length: > 0 } instructions)
+        {
+            <div class="pre" data-testid="remittance-instructions">@instructions</div>
+        }
+    </div>
+}
+
+@if (r?.Footer is { Length: > 0 } footer)
+{
+    <p class="footer pre">@footer</p>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public InvoicePrintDto Print { get; set; } = default!;
+
+    private static string Quantity(InvoiceLineDto l) => l.Kind == InvoiceLineType.Labor && l.Quantity != 0 ? BillingFormat.Hours(l.Quantity) + " h" : l.Quantity is not (0 or 1) ? BillingFormat.Hours(l.Quantity) : "";
+
+    private static string Rate(InvoiceLineDto l) => l.Kind == InvoiceLineType.Labor && l.Rate != 0 ? BillingFormat.Money(l.Rate)
+        : l.Kind is InvoiceLineType.Retainer && l.Quantity is not (0 or 1) && l.Rate != 0 ? BillingFormat.Money(l.Rate)
+        : "";
+}

@@ -3,11 +3,12 @@ namespace Workbench.Contracts.Billing;
 // Billing and accounts receivable. Finance and administrators do everything here; a project manager can read the
 // invoices (and print them) for contracts their projects are on. Approving an invoice posts it to the general ledger.
 
-public enum InvoiceKind { TimeAndMaterials, CostPlus, FixedPriceMilestone, TrueUp, CreditMemo, ProgressPayment, PerformanceBased }
+// Retainer and Recurring were added by commercial billing (agreements without CLINs); the enums mirror the domain's by value.
+public enum InvoiceKind { TimeAndMaterials, CostPlus, FixedPriceMilestone, TrueUp, CreditMemo, ProgressPayment, PerformanceBased, Retainer, Recurring }
 
 public enum InvoiceState { Draft, Approved, Sent, PartiallyPaid, Paid, Void }
 
-public enum InvoiceLineType { Labor, Odc, MaterialHandling, Burden, Fee, FeeWithhold, WithholdRelease, Milestone, Adjustment, ProgressPayment, PerformanceBasedPayment, Liquidation, SalesTax }
+public enum InvoiceLineType { Labor, Odc, MaterialHandling, Burden, Fee, FeeWithhold, WithholdRelease, Milestone, Adjustment, ProgressPayment, PerformanceBasedPayment, Liquidation, SalesTax, Retainer, Recurring }
 
 public enum FundingCheckLevel { Ok, OverFunded, OverCeiling }
 
@@ -39,7 +40,10 @@ public sealed record InvoiceSummaryDto(
     string? CurrencyCode = null,
     decimal ExchangeRate = 1m,
     decimal TransactionTotal = 0m,
-    decimal TransactionBalance = 0m)
+    decimal TransactionBalance = 0m,
+
+    // Added by commercial billing: the part of the invoice written off as uncollectible (Balance already excludes it).
+    decimal AmountWrittenOff = 0m)
 {
     public bool IsForeignCurrency => CurrencyCode is not null;
 }
@@ -189,7 +193,10 @@ public sealed record InvoicePrintDto(
     IReadOnlyList<ClinTotalDto> ClinTotals,
     IReadOnlyList<LaborDetailRowDto> Labor,
     IReadOnlyList<OdcDetailRowDto> Odcs,
-    decimal BilledToDate);
+    decimal BilledToDate,
+
+    // Added by commercial billing: what the commercial layout prints (null for older callers).
+    InvoiceRemittanceDto? Remittance = null);
 
 // ---- Contract billing ----
 
@@ -431,7 +438,10 @@ public sealed record PaymentDto(
     string? CurrencyCode = null,
     decimal TransactionAmount = 0m,
     decimal ExchangeRate = 1m,
-    decimal RealizedGainLoss = 0m);
+    decimal RealizedGainLoss = 0m,
+
+    // Added by commercial billing: cash received beyond what's applied to invoices (a customer credit).
+    decimal UnappliedAmount = 0m);
 
 public sealed record PaymentApplicationInput(Guid InvoiceId, decimal Amount);
 
@@ -450,7 +460,11 @@ public sealed record RecordPaymentRequest(
     /// invoice must be in it, and the cash converts at <see cref="ExchangeRate"/> or the spot rate on the receipt date.
     /// </summary>
     string? CurrencyCode = null,
-    decimal? ExchangeRate = null);
+    decimal? ExchangeRate = null,
+
+    // Added by commercial billing: when true the applications may add up to less than the amount; the rest is kept as a
+    // customer credit (an overpayment) to apply to later invoices. Functional-currency receipts only.
+    bool KeepRemainderAsCredit = false);
 
 public sealed record PaymentQuery(Guid? CustomerId = null, DateOnly? From = null, DateOnly? To = null, int Take = 500);
 

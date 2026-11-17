@@ -17,6 +17,7 @@ internal sealed class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
         b.Property(i => i.Withheld).Money();
         b.Property(i => i.AmountPaid).Money();
         b.Property(i => i.AmountCredited).Money();
+        b.Property(i => i.AmountWrittenOff).Money();
         b.Property(i => i.RateNote).HasMaxLength(200);
         b.Property(i => i.Notes).HasMaxLength(2000);
         b.Property(i => i.GenerationWarnings).HasMaxLength(4000);
@@ -122,6 +123,7 @@ internal sealed class PaymentConfiguration : IEntityTypeConfiguration<Payment>
     public void Configure(EntityTypeBuilder<Payment> b)
     {
         b.Property(p => p.Amount).Money();
+        b.Property(p => p.UnappliedAmount).Money();
         b.Property(p => p.Method).HasConversion<string>().HasMaxLength(16);
         b.Property(p => p.Reference).HasMaxLength(100);
         b.Property(p => p.Notes).HasMaxLength(1000);

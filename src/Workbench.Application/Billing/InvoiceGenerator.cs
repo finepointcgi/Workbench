@@ -33,11 +33,13 @@ internal sealed record BillingContext(
     IReadOnlyList<Project> Projects,
     IReadOnlyDictionary<Guid, WbsElement> Wbs,
     ContractBillingSettings? Settings,
-    CustomerBillingProfile? Profile)
+    CustomerBillingProfile? Profile,
+    AgreementBillingPlan? Plan = null,
+    int DefaultTermsDays = 30)
 {
     public Clin? Clin(Guid? id) => id is null ? null : Clins.FirstOrDefault(c => c.Id == id);
 
-    public int PaymentTermsDays => Settings?.PaymentTermsDays ?? Profile?.PaymentTermsDays ?? 30;
+    public int PaymentTermsDays => Settings?.PaymentTermsDays ?? Profile?.PaymentTermsDays ?? DefaultTermsDays;
 
     public static async Task<BillingContext> LoadAsync(IWorkbenchDbContext db, Guid contractId, CancellationToken ct)
     {
@@ -51,7 +53,9 @@ internal sealed record BillingContext(
         var wbs = await db.Set<WbsElement>().AsNoTracking().Where(w => projectIds.Contains(w.ProjectId)).ToDictionaryAsync(w => w.Id, ct);
         var settings = await db.Set<ContractBillingSettings>().AsNoTracking().FirstOrDefaultAsync(s => s.ContractId == contractId, ct);
         var profile = await db.Set<CustomerBillingProfile>().AsNoTracking().FirstOrDefaultAsync(p => p.CustomerId == contract.CustomerId, ct);
-        return new BillingContext(contract, customer, clins, projects, wbs, settings, profile);
+        var plan = await db.Set<AgreementBillingPlan>().AsNoTracking().FirstOrDefaultAsync(p => p.ContractId == contractId, ct);
+        var termsDays = await db.Set<BillingOrganizationSettings>().AsNoTracking().Select(s => (int?)s.DefaultPaymentTermsDays).FirstOrDefaultAsync(ct) ?? 30;
+        return new BillingContext(contract, customer, clins, projects, wbs, settings, profile, plan, termsDays);
     }
 }
 
@@ -60,7 +64,7 @@ internal sealed record BillingContext(
 /// on another live invoice are skipped); cost-plus bills cumulative allowable cost through the period end less what was
 /// billed before, so late approvals and corrections are picked up; FFP bills completed, unbilled milestones.
 /// </summary>
-public sealed class InvoiceGenerator(BillingCostSource costs, IEnumerable<IBillingLimits>? limits = null)
+public sealed partial class InvoiceGenerator(BillingCostSource costs, IEnumerable<IBillingLimits>? limits = null)
 {
     /// <summary>How the warning for hours with no contract bill rate begins; Ready to bill reads it as a blocker.</summary>
     internal const string NoBillRate = "No bill rate for";
@@ -100,6 +104,12 @@ public sealed class InvoiceGenerator(BillingCostSource costs, IEnumerable<IBilli
         {
             // Performance-based payments are contract financing: events for the whole contract or a CLIN, any pricing.
             return await PerformanceEventsAsync(db, ctx, to, excludeInvoiceId, warnings, ct);
+        }
+
+        if (type is InvoiceType.Retainer or InvoiceType.Recurring
+            || (ctx.Plan is not null && ctx.Clins.Count == 0 && type is InvoiceType.TimeAndMaterials or InvoiceType.FixedPriceMilestone))
+        {
+            return await CommercialAsync(db, ctx, type, from, to, prior, excludeInvoiceId, warnings, ct);
         }
 
         var clins = ctx.Clins.Where(c => Bills(type, c.Pricing)).ToList();
@@ -148,10 +158,14 @@ public sealed class InvoiceGenerator(BillingCostSource costs, IEnumerable<IBilli
     }
 
     private static async Task<Generation> TimeAndMaterialsAsync(
-        IWorkbenchDbContext db, BillingContext ctx, List<Clin> clins, DateOnly from, DateOnly to, List<Invoice> prior, List<string> warnings, CancellationToken ct)
+        IWorkbenchDbContext db, BillingContext ctx, List<Clin> clins, DateOnly from, DateOnly to, List<Invoice> prior, List<string> warnings, CancellationToken ct,
+        bool withoutClins = false)
     {
         var clinIds = clins.Select(c => c.Id).ToHashSet();
-        var clinOfWbs = ctx.Wbs.Values.Where(w => w.ClinId is { } c && clinIds.Contains(c)).ToDictionary(w => w.Id, w => w.ClinId!.Value);
+        // An agreement without CLINs bills every WBS of its projects, with no CLIN (and so no funding or ceiling check).
+        var clinOfWbs = withoutClins
+            ? ctx.Wbs.Keys.ToDictionary(id => id, _ => (Guid?)null)
+            : ctx.Wbs.Values.Where(w => w.ClinId is { } c && clinIds.Contains(c)).ToDictionary(w => w.Id, w => (Guid?)w.ClinId!.Value);
         var wbsIds = clinOfWbs.Keys.ToList();
         var billed = prior.SelectMany(i => i.Lines).SelectMany(l => l.Sources).Where(s => s.ReleasedAtUtc is null)
             .Select(s => (s.Kind, s.SourceId)).ToHashSet();
@@ -614,6 +628,8 @@ public sealed class InvoiceGenerator(BillingCostSource costs, IEnumerable<IBilli
         InvoiceType.TrueUp => "cost-plus (true-up)",
         InvoiceType.ProgressPayment => "progress payment",
         InvoiceType.PerformanceBased => "performance-based payment",
+        InvoiceType.Retainer => "retainer",
+        InvoiceType.Recurring => "recurring",
         _ => "credit memo",
     };
 

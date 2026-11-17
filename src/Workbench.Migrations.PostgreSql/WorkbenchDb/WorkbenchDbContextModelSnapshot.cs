@@ -2762,6 +2762,120 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                     b.ToTable("AutomationVersions", (string)null);
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Billing.AgreementBillingPlan", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<bool>("AutoGenerate")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Cadence")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<Guid>("ContractId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .UseCollation("C");
+
+                    b.Property<DateOnly?>("EndDate")
+                        .HasColumnType("date");
+
+                    b.Property<decimal?>("IncludedHours")
+                        .HasPrecision(9, 2)
+                        .HasColumnType("numeric(9,2)");
+
+                    b.Property<bool>("InvoiceOnComplete")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Model")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<decimal?>("OverageRate")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)");
+
+                    b.Property<DateOnly>("StartDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("UnusedHours")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .UseCollation("C");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ContractId")
+                        .IsUnique();
+
+                    b.ToTable("AgreementBillingPlan");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Billing.AgreementMilestone", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("CompletedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .UseCollation("C");
+
+                    b.Property<DateOnly?>("CompletedDate")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("ContractId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .UseCollation("C");
+
+                    b.Property<Guid?>("InvoiceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("integer");
+
+                    b.Property<DateOnly>("TargetDate")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ContractId");
+
+                    b.HasIndex("InvoiceId");
+
+                    b.ToTable("AgreementMilestone");
+                });
+
             modelBuilder.Entity("Workbench.Domain.Billing.BilledSource", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2873,6 +2987,66 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                     b.HasIndex("ContractId", "ClinId");
 
                     b.ToTable("BillingMilestone");
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Billing.BillingOrganizationSettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("BillingContact")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .UseCollation("C");
+
+                    b.Property<string>("DefaultLayout")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)");
+
+                    b.Property<int>("DefaultPaymentTermsDays")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("InvoiceFooter")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .UseCollation("C");
+
+                    b.Property<string>("LegalName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .UseCollation("C");
+
+                    b.Property<string>("PaymentTermsText")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .UseCollation("C");
+
+                    b.Property<int>("ReminderDaysBeforeDue")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("RemitToAddress")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .UseCollation("C");
+
+                    b.Property<string>("RemittanceInstructions")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .UseCollation("C");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .UseCollation("C");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("BillingOrganizationSettings");
                 });
 
             modelBuilder.Entity("Workbench.Domain.Billing.ContractBillingSettings", b =>
@@ -3130,6 +3304,10 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
 
+                    b.Property<decimal>("AmountWrittenOff")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
                     b.Property<DateTime?>("ApprovedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -3376,6 +3554,77 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                     b.ToTable("InvoiceLine");
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Billing.InvoiceWriteOff", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<Guid>("CompanyId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValue(new Guid("00000000-0000-0000-0000-00000000c001"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .UseCollation("C");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("InvoiceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsReversed")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid?>("JournalEntryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .UseCollation("C");
+
+                    b.Property<string>("ReversalReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .UseCollation("C");
+
+                    b.Property<DateTime?>("ReversedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ReversedBy")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .UseCollation("C");
+
+                    b.Property<DateOnly>("WrittenOffOn")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId");
+
+                    b.HasIndex("InvoiceId");
+
+                    b.HasIndex("JournalEntryId");
+
+                    b.HasIndex("CustomerId", "WrittenOffOn");
+
+                    b.ToTable("InvoiceWriteOff");
+                });
+
             modelBuilder.Entity("Workbench.Domain.Billing.Payment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3441,6 +3690,10 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                         .UseCollation("C");
 
                     b.Property<decimal>("TransactionAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("UnappliedAmount")
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)");
 
@@ -26141,6 +26394,29 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Workbench.Domain.Billing.AgreementBillingPlan", b =>
+                {
+                    b.HasOne("Workbench.Domain.ProjectAccounting.Contract", null)
+                        .WithMany()
+                        .HasForeignKey("ContractId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Billing.AgreementMilestone", b =>
+                {
+                    b.HasOne("Workbench.Domain.ProjectAccounting.Contract", null)
+                        .WithMany()
+                        .HasForeignKey("ContractId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.Billing.Invoice", null)
+                        .WithMany()
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("Workbench.Domain.Billing.BilledSource", b =>
                 {
                     b.HasOne("Workbench.Domain.Billing.InvoiceLine", null)
@@ -26263,6 +26539,32 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                     b.HasOne("Workbench.Domain.ProjectAccounting.WbsElement", null)
                         .WithMany()
                         .HasForeignKey("WbsElementId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Workbench.Domain.Billing.InvoiceWriteOff", b =>
+                {
+                    b.HasOne("Workbench.Domain.Companies.Company", null)
+                        .WithMany()
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.ProjectAccounting.Customer", null)
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.Billing.Invoice", null)
+                        .WithMany()
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Workbench.Domain.Accounting.JournalEntry", null)
+                        .WithMany()
+                        .HasForeignKey("JournalEntryId")
                         .OnDelete(DeleteBehavior.Restrict);
                 });
 

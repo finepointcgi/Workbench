@@ -1,0 +1,84 @@
+@page "/billing/settings"
+@inject IBillingSettingsService Settings
+@inject ISnackbar Snackbar
+
+<PageTitle>Invoice settings · Billing · Workbench</PageTitle>
+
+<BillingHeader Title="Invoice settings" Subtitle="What your invoices say about payment: terms, where to send money, and when Finance is reminded." />
+
+@if (_error is not null)
+{
+    <BillingError Message="@_error" Forbidden="_forbidden" />
+}
+else if (!_loaded)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudPaper Outlined="true" Class="pa-4" data-testid="billing-settings">
+        <MudGrid Spacing="2">
+            <MudItem xs="12" md="6"><MudTextField @bind-Value="_legalName" Label="Company name on invoices" MaxLength="200" /></MudItem>
+            <MudItem xs="12" md="6"><MudTextField @bind-Value="_contact" Label="Billing contact" MaxLength="500" HelperText="Email or phone for billing questions" /></MudItem>
+            <MudItem xs="12" md="6"><MudTextField @bind-Value="_remitTo" Label="Remit-to address" Lines="3" MaxLength="1000" /></MudItem>
+            <MudItem xs="12" md="6"><MudTextField @bind-Value="_instructions" Label="How to pay" Lines="3" MaxLength="2000" HelperText="ACH or wire details, lockbox, who checks are payable to" data-testid="remittance-instructions" /></MudItem>
+            <MudItem xs="12" sm="4"><MudNumericField T="int" @bind-Value="_terms" Label="Default payment terms (days)" Min="0" Max="365" HideSpinButtons="true" HelperText="For customers and contracts that don't set their own" /></MudItem>
+            <MudItem xs="12" sm="8"><MudTextField @bind-Value="_termsText" Label="Payment terms text" MaxLength="1000" HelperText="For example: Net 30. Late balances accrue 1.5% a month." /></MudItem>
+            <MudItem xs="12"><MudTextField @bind-Value="_footer" Label="Invoice footer" Lines="2" MaxLength="1000" /></MudItem>
+            <MudItem xs="12" sm="4"><MudNumericField T="int" @bind-Value="_reminder" Label="Remind Finance before due (days)" Min="0" Max="60" HideSpinButtons="true" HelperText="0 turns the reminder off" /></MudItem>
+            <MudItem xs="12" sm="8">
+                <MudSelect T="InvoiceLayoutKind" @bind-Value="_layout" Label="Invoice layout" HelperText="Contracts with a commercial billing model always print the commercial layout. Pick the other on the print page.">
+                    <MudSelectItem T="InvoiceLayoutKind" Value="InvoiceLayoutKind.Government">Government (SF 1034 / our layout with CLINs)</MudSelectItem>
+                    <MudSelectItem T="InvoiceLayoutKind" Value="InvoiceLayoutKind.Commercial">Commercial (clean invoice, no CLINs or voucher blocks)</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+        </MudGrid>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" OnClick="SaveAsync" Disabled="_busy" data-testid="save-settings">Save</MudButton>
+    </MudPaper>
+}
+
+@code {
+    private bool _loaded;
+    private bool _busy;
+    private string? _error;
+    private bool _forbidden;
+    private string? _legalName, _contact, _remitTo, _instructions, _termsText, _footer;
+    private int _terms = 30;
+    private int _reminder = 3;
+    private InvoiceLayoutKind _layout;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            Apply(await Settings.GetAsync());
+        }
+        catch (Exception ex)
+        {
+            (_error, _forbidden) = (BillingFormat.Error(ex), BillingFormat.IsForbidden(ex));
+        }
+    }
+
+    private void Apply(BillingSettingsDto s)
+    {
+        (_legalName, _contact, _remitTo, _instructions, _termsText, _footer) = (s.LegalName, s.BillingContact, s.RemitToAddress, s.RemittanceInstructions, s.PaymentTermsText, s.InvoiceFooter);
+        (_terms, _reminder, _layout) = (s.DefaultPaymentTermsDays, s.ReminderDaysBeforeDue, s.DefaultLayout);
+        _loaded = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        _busy = true;
+        try
+        {
+            Apply(await Settings.SaveAsync(new SaveBillingSettingsRequest(_legalName, _remitTo, _instructions, _termsText, _terms, _footer, _contact, _reminder, _layout)));
+            Snackbar.Add("Invoice settings saved.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(BillingFormat.Error(ex), Severity.Error);
+        }
+
+        _busy = false;
+    }
+}

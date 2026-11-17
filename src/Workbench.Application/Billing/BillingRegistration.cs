@@ -28,6 +28,15 @@ public static class BillingRegistration
         services.AddScoped<IBillingMilestoneService, BillingMilestoneService>();
         services.AddScoped<IPaymentService, PaymentService>();
         services.AddScoped<IArReportService, ArReportService>();
+        // Commercial billing: agreements without CLINs, customer credits and write-offs, reminders, the organization's invoice settings.
+        // The concrete types are registered too: the daily run and the milestone drafts call them without a signed-in user's permission check.
+        services.AddScoped<InvoiceService>();
+        services.AddScoped<AgreementBillingService>();
+        services.AddScoped<IAgreementBillingService, AgreementBillingService>();
+        services.AddScoped<DueSoonInvoiceCheck>();
+        services.AddScoped<IReceivablesService, ReceivablesService>();
+        services.AddScoped<IBillingSettingsService, BillingSettingsService>();
+        services.AddHostedService<AgreementBillingBackgroundService>();
         services.AddScoped<IProgressPaymentService, ProgressPaymentService>();
         services.AddScoped<IPerformanceBasedPaymentService, PerformanceBasedPaymentService>();
         services.AddScoped<IPieeSubmitter, ManualPieeSubmitter>(); // Register a transmitting submitter after this one to replace it.
