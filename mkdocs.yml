@@ -133,6 +133,7 @@ nav:
       - finance/index.md
       - Accounting and period close: finance/accounting.md
       - Billing and receivables: finance/billing.md
+      - Commercial billing: finance/commercial-billing.md
       - Payables and purchasing: finance/payables.md
       - Cash, banks and cards: finance/cash.md
       - Fixed assets: finance/assets.md

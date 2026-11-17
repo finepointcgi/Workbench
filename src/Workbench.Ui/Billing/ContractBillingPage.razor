@@ -27,6 +27,9 @@ else
 {
     <MudGrid Spacing="3">
         <MudItem xs="12" lg="7">
+            <AgreementBillingCard ContractId="ContractId" IsFinance="_isFinance" NoClins="@(_contract?.Clins.Count == 0)" Changed="AgreementChanged" @key="@($"agreement-{_refresh}")" />
+            @if (!_hasPlan)
+            {
             <MudPaper Outlined="true" Class="pa-4 mb-3">
                 <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2">
                     <MudText Typo="Typo.h6" HtmlTag="h2">FFP milestones</MudText>
@@ -80,13 +83,14 @@ else
                     <MudText Typo="Typo.caption" Class="mud-text-secondary">Completed, unbilled milestones go on the next FFP milestone invoice.</MudText>
                 }
             </MudPaper>
+            }
 
             @if (_financing == FinancingKind.PerformanceBased)
             {
                 <PerformanceEventsCard ContractId="ContractId" IsFinance="_isFinance" Clins="_contract?.Clins ?? []" Changed="() => _refresh++" />
             }
 
-            @if (_isFinance)
+            @if (_isFinance && !_hasPlan)
             {
                 <GovernmentBillingCard ContractId="ContractId" Saved="GovernmentSaved" />
             }
@@ -165,6 +169,7 @@ else
     private string? _admin;
     private string? _address;
     private FinancingKind _financing;
+    private bool _hasPlan;
 
     private IReadOnlyList<BillingClinDto> FfpClins => _contract?.Clins.Where(c => c.Pricing == "FFP").ToList() ?? [];
 
@@ -184,6 +189,15 @@ else
         catch (Exception ex)
         {
             (_error, _forbidden) = (BillingFormat.Error(ex), BillingFormat.IsForbidden(ex));
+        }
+    }
+
+    private void AgreementChanged(bool hasPlan)
+    {
+        if (_hasPlan != hasPlan)
+        {
+            _hasPlan = hasPlan;
+            StateHasChanged();
         }
     }
 

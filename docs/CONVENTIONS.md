@@ -280,6 +280,16 @@ await notifications.PublishAsync(
   rows hold it until the invoice is voided. Cost-plus bills cumulative cost less billed cost, so it reads
   `IBurdenedCostService` from the contract start; without a registered implementation it bills direct cost only and says
   so. Other modules can add a period-close checklist item by registering `Application.Accounting.IPeriodCloseCheck`.
+- Commercial billing (`Contracts/Billing/CommercialBillingContracts.cs`, `Application/Billing/AgreementBillingService.cs`,
+  `ReceivablesService.cs`, `InvoiceGenerator.Commercial.cs`; guide: [docs/finance/commercial-billing.md](finance/commercial-billing.md)):
+  an agreement is a contract with **no CLINs** and an `AgreementBillingPlan` (T&M on the rate card, fixed fee with
+  `AgreementMilestone`s, retainer, recurring). The plan only switches the *generator*: lines come out as ordinary `DraftLine`s
+  (no CLIN, so no funding or ceiling check), through `InvoiceService`'s draft/approve/void, `BillingLedger` and `BilledSource`
+  (`PlanMilestone`). Retainer and recurring periods (`AgreementPeriods`) are billed once, guarded by the live invoices of that
+  type and period start. Nothing changes for a contract without a plan. A write-off (`InvoiceWriteOff`, bad debt 7040) and an
+  overpayment kept as a credit (`Payment.UnappliedAmount`, credited to AR at receipt) both keep the GL's AR equal to the aging
+  net of credits; `Invoice.Balance` includes `AmountWrittenOff`, so anything reading `Balance` is already right. The commercial
+  layout reads `InvoiceRemittanceDto` (from `BillingOrganizationSettings`, Billing & AR › Invoice settings).
 
 ## Imports (wave 6)
 

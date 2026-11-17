@@ -1,5 +1,6 @@
 @page "/billing/invoices/{InvoiceId:guid}"
 @inject IInvoiceService Invoices
+@inject IReceivablesService Receivables
 @inject IDialogService DialogService
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
@@ -47,7 +48,15 @@ else
                     <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Payments" Href="@($"billing/payments?customer={s.CustomerId}")">Record payment</MudButton>
                     <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.RemoveCircleOutline" OnClick="CreditAsync" Disabled="_busy">Credit memo</MudButton>
                 }
-                @if (s.AmountPaid == 0)
+                @if (s.Type != InvoiceKind.CreditMemo && s.Balance > 0)
+                {
+                    <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.MoneyOff" OnClick="WriteOffAsync" Disabled="_busy" data-testid="write-off">Write off</MudButton>
+                }
+                @if (s.AmountWrittenOff > 0)
+                {
+                    <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Undo" OnClick="ReverseWriteOffAsync" Disabled="_busy" data-testid="reverse-write-off">Reverse write-off</MudButton>
+                }
+                @if (s.AmountPaid == 0 && s.AmountWrittenOff == 0)
                 {
                     <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Block" OnClick="VoidAsync" Disabled="_busy" data-testid="void">Void</MudButton>
                 }
@@ -112,6 +121,10 @@ else
                         @if (s.AmountCredited != 0)
                         {
                             <tr><td>Credited</td><td style="text-align:right">@BillingFormat.Money(s.AmountCredited)</td></tr>
+                        }
+                        @if (s.AmountWrittenOff != 0)
+                        {
+                            <tr><td>Written off</td><td style="text-align:right" data-testid="invoice-written-off">@BillingFormat.Money(s.AmountWrittenOff)</td></tr>
                         }
                         <tr><td>Balance</td><td style="text-align:right" data-testid="invoice-balance"><strong>@BillingFormat.Money(s.Balance)</strong></td></tr>
                     </tbody>
@@ -279,6 +292,43 @@ else
         if (await dialog.Result is { Canceled: false, Data: string reason })
         {
             await RunAsync(() => Invoices.VoidAsync(InvoiceId, new VoidInvoiceRequest(reason)), "Invoice voided.");
+        }
+    }
+
+    private async Task WriteOffAsync()
+    {
+        var dialog = await DialogService.ShowAsync<WriteOffDialog>($"Write off {_invoice!.Summary.Number}", new DialogParameters<WriteOffDialog> { { d => d.Invoice, _invoice.Summary } });
+        if (await dialog.Result is { Canceled: false, Data: WriteOffInvoiceRequest request })
+        {
+            await RunAsync(async () =>
+            {
+                await Receivables.WriteOffAsync(InvoiceId, request);
+                return await Invoices.GetAsync(InvoiceId);
+            }, "Written off.");
+        }
+    }
+
+    private async Task ReverseWriteOffAsync()
+    {
+        var open = (await Receivables.ListWriteOffsAsync(InvoiceId)).FirstOrDefault(w => !w.IsReversed);
+        if (open is null)
+        {
+            return;
+        }
+
+        var parameters = new DialogParameters<BillingTextDialog>
+        {
+            { d => d.Message, $"Reverses the {BillingFormat.Money(open.Amount)} write-off ({open.Reason}) and its GL entry, and reopens that balance." },
+            { d => d.ConfirmText, "Reverse write-off" },
+        };
+        var dialog = await DialogService.ShowAsync<BillingTextDialog>("Reverse write-off", parameters);
+        if (await dialog.Result is { Canceled: false, Data: string reason })
+        {
+            await RunAsync(async () =>
+            {
+                await Receivables.ReverseWriteOffAsync(open.Id, new ReverseWriteOffRequest(reason));
+                return await Invoices.GetAsync(InvoiceId);
+            }, "Write-off reversed.");
         }
     }
 

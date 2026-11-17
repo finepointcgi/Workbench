@@ -1,5 +1,6 @@
 @page "/billing/aging"
 @inject IArReportService Ar
+@inject IReceivablesService Receivables
 @inject ISnackbar Snackbar
 
 <PageTitle>AR aging · Billing · Workbench</PageTitle>
@@ -7,7 +8,7 @@
 <BillingHeader Title="Accounts receivable aging" Subtitle="Open invoice balances by days past due, by customer and by contract.">
     <MudDatePicker Label="As of" Date="_asOf" DateChanged="AsOfChanged" DateFormat="yyyy-MM-dd" Style="max-width:160px" />
     <FinanceOnly Permission="@Workbench.Contracts.Identity.Permission.BillingReportsView">
-        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.NotificationsActive" OnClick="RemindAsync" data-testid="send-reminders">Send overdue reminders</MudButton>
+        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.NotificationsActive" OnClick="RemindAsync" data-testid="send-reminders">Send payment reminders</MudButton>
     </FinanceOnly>
 </BillingHeader>
 
@@ -25,6 +26,14 @@ else
     <AgingRows Rows="_aging.Customers" Totals="_aging.Totals" TestId="aging-customers" />
     <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">By contract</MudText>
     <AgingRows Rows="_aging.Contracts" Totals="_aging.Totals" ShowContract="true" TestId="aging-contracts" />
+
+    @if (_credits is { TotalCredits: > 0 })
+    {
+        <MudAlert Severity="Severity.Info" Class="mb-4" data-testid="aging-credits">
+            Customers hold @BillingFormat.Money(_credits.TotalCredits) in unapplied credit (@string.Join(", ", _credits.Credits.Select(c => $"{c.CustomerName} {BillingFormat.Money(c.Credit)}"))).
+            Net receivable is @BillingFormat.Money(_credits.NetReceivable). Apply credits from <MudLink Href="billing/payments">Customer payments</MudLink>.
+        </MudAlert>
+    }
 
     <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-2">Open invoices</MudText>
     <MudPaper Outlined="true" Style="overflow-x:auto">
@@ -50,6 +59,7 @@ else
 
 @code {
     private ArAgingDto? _aging;
+    private ReceivablesAgingDto? _credits;
     private DateTime? _asOf = DateTime.Today;
     private string? _error;
     private bool _forbidden;
@@ -66,7 +76,9 @@ else
     {
         try
         {
-            _aging = await Ar.GetAgingAsync(_asOf is { } d ? DateOnly.FromDateTime(d) : null);
+            var asOf = _asOf is { } d ? DateOnly.FromDateTime(d) : (DateOnly?)null;
+            _aging = await Ar.GetAgingAsync(asOf);
+            _credits = await Receivables.GetAgingAsync(asOf);
         }
         catch (Exception ex)
         {
@@ -78,8 +90,8 @@ else
     {
         try
         {
-            var sent = await Ar.SendOverdueRemindersAsync();
-            Snackbar.Add(sent == 0 ? "No new overdue reminders to send." : $"Sent {sent} overdue reminder{(sent == 1 ? "" : "s")} to Finance.", Severity.Success);
+            var sent = await Receivables.SendPaymentRemindersAsync();
+            Snackbar.Add(sent == 0 ? "No new payment reminders to send." : $"Sent {sent} payment reminder{(sent == 1 ? "" : "s")} to Finance.", Severity.Success);
         }
         catch (Exception ex)
         {

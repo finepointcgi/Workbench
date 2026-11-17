@@ -34,6 +34,8 @@ public static class BillingFormat
         InvoiceKind.TrueUp => "Year-end true-up",
         InvoiceKind.ProgressPayment => "Progress payment",
         InvoiceKind.PerformanceBased => "Performance-based payment",
+        InvoiceKind.Retainer => "Retainer",
+        InvoiceKind.Recurring => "Recurring charge",
         _ => "Credit memo",
     };
 
@@ -46,6 +48,7 @@ public static class BillingFormat
         InvoiceLineType.ProgressPayment => "Progress payment",
         InvoiceLineType.PerformanceBasedPayment => "Performance-based payment",
         InvoiceLineType.SalesTax => "Sales tax",
+        InvoiceLineType.Recurring => "Recurring charge",
         _ => k.ToString(),
     };
 
@@ -74,6 +77,22 @@ public static class BillingFormat
     };
 
     public static bool IsFinancing(InvoiceKind k) => k is InvoiceKind.ProgressPayment or InvoiceKind.PerformanceBased;
+
+    public static string Label(AgreementModel m) => m switch
+    {
+        AgreementModel.TimeAndMaterials => "Time and materials (rate card)",
+        AgreementModel.FixedFeeMilestones => "Fixed fee with milestones",
+        AgreementModel.Retainer => "Monthly retainer",
+        _ => "Recurring / subscription charge",
+    };
+
+    public static string Label(BillingCadenceKind c) => c switch
+    {
+        BillingCadenceKind.Monthly => "Monthly",
+        BillingCadenceKind.Quarterly => "Quarterly",
+        BillingCadenceKind.SemiAnnual => "Every six months",
+        _ => "Yearly",
+    };
 
     public static string Label(CashReceiptMethod m) => m == CashReceiptMethod.Eft ? "EFT" : m.ToString();
 

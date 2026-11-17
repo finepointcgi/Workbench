@@ -8,8 +8,9 @@
 <div class="toolbar no-print">
     <a href="@($"billing/invoices/{InvoiceId}")">← Back to the invoice</a>
     <span class="spacer"></span>
+    <a href="@($"billing/invoices/{InvoiceId}/print?form=invoice")" class="@(IsClean ? "active" : "")" data-testid="form-clean">Commercial invoice</a>
     <a href="@($"billing/invoices/{InvoiceId}/print?form=sf1034")" class="@(IsSf1034 ? "active" : "")" data-testid="form-sf1034">SF 1034 / SF 1035</a>
-    <a href="@($"billing/invoices/{InvoiceId}/print?form=commercial")" class="@(IsSf1034 ? "" : "active")" data-testid="form-custom">Our invoice layout</a>
+    <a href="@($"billing/invoices/{InvoiceId}/print?form=commercial")" class="@(!IsSf1034 && !IsClean ? "active" : "")" data-testid="form-custom">Our invoice layout (CLINs)</a>
     @if (_voucher?.ProgressPaymentRequestId is { } request)
     {
         <a href="@($"billing/progress-payments/{request}/sf1443")">SF 1443</a>
@@ -35,7 +36,11 @@ else
             <div class="watermark">@(s.Status == InvoiceState.Draft ? "DRAFT" : "VOID")</div>
         }
 
-        @if (IsSf1034)
+        @if (IsClean)
+        {
+            <CommercialInvoiceView Print="_print" />
+        }
+        else if (IsSf1034)
         {
             <Sf1034Voucher Voucher="_voucher!" />
         }
@@ -100,6 +105,8 @@ else
                 <p class="small">Indirect rates: @inv.RateNote</p>
             }
         }
+        @if (!IsClean)
+        {
         @if (inv.Notes is not null)
         {
             <p class="pre">@inv.Notes</p>
@@ -172,6 +179,7 @@ else
                 </table>
             }
         </div>
+        }
     </div>
 }
 
@@ -186,13 +194,22 @@ else
     private InvoicePrintDto? _print;
     private string? _error;
 
-    /// <summary>The form asked for, else the contract's chosen format.</summary>
-    private bool IsSf1034 => Form?.ToLowerInvariant() switch
+    /// <summary>
+    /// The form asked for, else the invoice's own layout: the clean commercial invoice for agreements with a billing plan (or when
+    /// the organization prefers it), else the contract's chosen government format. "commercial" is the CLIN-grouped layout from before.
+    /// </summary>
+    private string Mode => Form?.ToLowerInvariant() switch
     {
-        "sf1034" => true,
-        "commercial" => false,
-        _ => _voucher?.ContractFormat == VoucherFormat.Sf1034,
+        "invoice" => "clean",
+        "sf1034" => "sf1034",
+        "commercial" => "classic",
+        _ => _print?.Remittance?.Layout == InvoiceLayoutKind.Commercial ? "clean"
+            : _voucher?.ContractFormat == VoucherFormat.Sf1034 ? "sf1034" : "classic",
     };
+
+    private bool IsSf1034 => Mode == "sf1034";
+
+    private bool IsClean => Mode == "clean";
 
     protected override async Task OnParametersSetAsync()
     {

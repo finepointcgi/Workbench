@@ -1,0 +1,23 @@
+.head { display: flex; justify-content: space-between; gap: 24px; margin-bottom: 24px; }
+.company { font-size: 22px; margin: 0 0 4px; }
+.title { text-align: right; }
+.word { font-size: 26px; letter-spacing: 2px; color: #444; margin-bottom: 6px; }
+.meta { margin-left: auto; border-collapse: collapse; }
+.meta th { text-align: right; font-weight: normal; color: #555; padding: 1px 10px 1px 0; }
+.meta td { text-align: right; padding: 1px 0; font-weight: 600; }
+
+.parties { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 20px; }
+.label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #666; margin-bottom: 2px; }
+.small { font-size: 10.5px; color: #444; }
+.pre { white-space: pre-line; }
+
+.items { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+.items th { text-align: left; font-size: 10.5px; text-transform: uppercase; color: #444; border-bottom: 2px solid #333; padding: 4px 6px; }
+.items td { padding: 5px 6px; border-bottom: 1px solid #ddd; }
+.items .num { text-align: right; white-space: nowrap; }
+.items tfoot td { border-bottom: none; }
+.items tr.sub td { color: #444; }
+.items tr.total td { font-weight: 700; font-size: 13px; border-top: 2px solid #333; padding-top: 8px; }
+
+.remit { border: 1px solid #bbb; padding: 10px 12px; margin: 18px 0; page-break-inside: avoid; }
+.footer { color: #444; font-size: 11px; margin-top: 24px; }

@@ -59,6 +59,15 @@ public sealed class PaymentService(IWorkbenchDbContextFactory dbFactory, Billing
 
     public async Task<PaymentDto> RecordAsync(RecordPaymentRequest request, CancellationToken cancellationToken = default)
     {
+        if (request.KeepRemainderAsCredit && CurrencySupport.NormalizeCode(request.CurrencyCode) is { } foreign && foreign != "")
+        {
+            await using var functional = await dbFactory.CreateAsync(cancellationToken);
+            if (foreign != await CurrencySupport.FunctionalAsync(functional, cancellationToken))
+            {
+                throw new ArgumentException("Keeping an overpayment as a credit isn't supported for foreign-currency receipts; apply the whole receipt.");
+            }
+        }
+
         if (CurrencySupport.NormalizeCode(request.CurrencyCode) is not null)
         {
             await using var check = await dbFactory.CreateAsync(cancellationToken);
@@ -84,9 +93,12 @@ public sealed class PaymentService(IWorkbenchDbContextFactory dbFactory, Billing
             throw new ArgumentException("Apply to each invoice once.");
         }
 
-        if (applications.Sum(a => a.Amount) != request.Amount)
+        var applied = applications.Sum(a => a.Amount);
+        if (request.KeepRemainderAsCredit ? applied > request.Amount : applied != request.Amount)
         {
-            throw new ArgumentException($"Apply the whole receipt: {applications.Sum(a => a.Amount):C} of {request.Amount:C} is applied.");
+            throw new ArgumentException(request.KeepRemainderAsCredit
+                ? $"{applied:C} is applied, which is more than the {request.Amount:C} received."
+                : $"Apply the whole receipt: {applied:C} of {request.Amount:C} is applied.");
         }
 
         await using var db = await dbFactory.CreateAsync(cancellationToken);
@@ -99,6 +111,7 @@ public sealed class PaymentService(IWorkbenchDbContextFactory dbFactory, Billing
             CustomerId = customer.Id,
             ReceivedOn = request.ReceivedOn,
             Amount = request.Amount,
+            UnappliedAmount = request.Amount - applied,
             Method = request.Method.ToDomain(),
             Reference = InvoiceService.Clean(request.Reference, 100),
             Notes = InvoiceService.Clean(request.Notes, 1000),
@@ -112,6 +125,12 @@ public sealed class PaymentService(IWorkbenchDbContextFactory dbFactory, Billing
         }
 
         payment.CompanyId = invoices.Values.Select(i => i.CompanyId).FirstOrDefault(Domain.Companies.Company.DefaultId);
+        if (invoices.Count == 0)
+        {
+            // A prepayment with nothing to apply yet: the company of the customer's most recent invoice.
+            payment.CompanyId = await db.Set<Invoice>().AsNoTracking().Where(i => i.CustomerId == customer.Id).OrderByDescending(i => i.CreatedAtUtc)
+                .Select(i => (Guid?)i.CompanyId).FirstOrDefaultAsync(cancellationToken) ?? Domain.Companies.Company.DefaultId;
+        }
         foreach (var a in applications)
         {
             if (!invoices.TryGetValue(a.InvoiceId, out var invoice) || invoice.CustomerId != customer.Id)
@@ -143,7 +162,7 @@ public sealed class PaymentService(IWorkbenchDbContextFactory dbFactory, Billing
         var entry = await ledger.PostPaymentAsync(db, payment, customer.Name, cancellationToken);
         payment.JournalEntryId = entry.Id;
         audit.Record(db, nameof(Payment), payment.Id, "Recorded",
-            after: new { payment.Amount, payment.ReceivedOn, Method = payment.Method.ToString(), Applied = applications.Count, Journal = entry.Number });
+            after: new { payment.Amount, payment.ReceivedOn, Method = payment.Method.ToString(), Applied = applications.Count, payment.UnappliedAmount, Journal = entry.Number });
         await db.SaveChangesAsync(cancellationToken);
         return (await DtosAsync(db, [payment], cancellationToken))[0];
     }
@@ -160,6 +179,7 @@ public sealed class PaymentService(IWorkbenchDbContextFactory dbFactory, Billing
         }
 
         var reversal = await ledger.ReverseAsync(db, payment.JournalEntryId, Today, $"Void of cash receipt: {reason}", cancellationToken);
+        payment.UnappliedAmount = 0;
         var ids = payment.Applications.Select(a => a.InvoiceId).ToList();
         var invoices = await db.Set<Invoice>().Where(i => ids.Contains(i.Id)).ToDictionaryAsync(i => i.Id, cancellationToken);
         foreach (var a in payment.Applications)
@@ -284,7 +304,7 @@ public sealed class PaymentService(IWorkbenchDbContextFactory dbFactory, Billing
                     return new PaymentApplicationDto(a.InvoiceId, invoice?.Number ?? "?",
                         invoice is null ? "" : lookups.Contracts.GetValueOrDefault(invoice.ContractId)?.ContractNumber ?? "", a.Amount, a.TransactionAmount);
                 }).ToList(),
-                p.CurrencyCode, p.TransactionAmount, p.CurrencyCode is null ? 1m : p.ExchangeRate, p.RealizedGainLoss))
+                p.CurrencyCode, p.TransactionAmount, p.CurrencyCode is null ? 1m : p.ExchangeRate, p.RealizedGainLoss, p.UnappliedAmount))
             .ToList();
     }
 }
