@@ -88,6 +88,15 @@
             </MudStack>
         </MudItem>
     }
+    @if (Definition.Source is ImportSource.HubSpot or ImportSource.Salesforce or ImportSource.GenericCsv)
+    {
+        <MudItem xs="12">
+            <MudText Typo="Typo.subtitle2" Class="mb-1">Options</MudText>
+            <MudCheckBox T="bool" Value="Options.UpdateExisting" ValueChanged="v => SetOptions(Options with { UpdateExisting = v })" Dense="true"
+                         Label="Update records that are already in Workbench (matched on company domain or name, contact email, deal ID or name)" data-testid="option-update-existing" />
+            <MudText Typo="Typo.caption" Class="mud-text-secondary">Off: matching rows are listed as duplicates in the dry run and left exactly as they are. On: only the cells you filled in change; blank cells keep what Workbench has.</MudText>
+        </MudItem>
+    }
     @if (NeedsProject || IsSheets)
     {
         <MudItem xs="12">

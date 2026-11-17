@@ -1,0 +1,5 @@
+Id,FirstName,LastName,Email,Title,Phone,MobilePhone,Account.Name,Department
+003Dn00000XyZ001,Priya,Raman,priya.raman@redwoodmutual.example,Chief Technology Officer,415-555-0121,,Redwood Mutual Insurance,Technology
+003Dn00000XyZ002,Daniel,Kruger,daniel.kruger@redwoodmutual.example,Director of Claims,415-555-0122,415-555-0199,Redwood Mutual Insurance,Claims
+003Dn00000XyZ003,Hannah,Lopez,hannah.lopez@granitepeak-energy.example,VP Data and Analytics,720-555-0189,,Granite Peak Energy,Data
+003Dn00000XyZ004,Sam,Nguyen,sam.nguyen@harborview-foods.example,Procurement Lead,,206-555-0162,Harborview Foods,Supply Chain

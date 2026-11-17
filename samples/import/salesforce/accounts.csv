@@ -1,0 +1,5 @@
+Id,Name,Website,Phone,BillingStreet,BillingCity,BillingState,BillingPostalCode,BillingCountry,Industry,Type,Description
+001Dn00000AbCdE1,Redwood Mutual Insurance,www.redwoodmutual.example,415-555-0120,100 Market Street,San Francisco,CA,94105,United States,Insurance,Customer - Direct,Regional insurer; claims modernization program
+001Dn00000AbCdE2,Granite Peak Energy,https://granitepeak-energy.example,720-555-0188,2200 Larimer St,Denver,CO,80205,United States,Energy,Prospect,Utility with a smart-meter data backlog
+001Dn00000AbCdE3,Harborview Foods,harborview-foods.example,206-555-0161,45 Pier Road,Seattle,WA,98101,United States,Food & Beverage,Prospect,
+001Dn00000AbCdE4,Stonebridge Partners,stonebridge-partners.example,646-555-0140,1 Water Street,New York,NY,10004,United States,Consulting,Channel Partner / Reseller,Referral partner

@@ -45,6 +45,12 @@ public enum OpportunitySource
 
     /// <summary>Imported from a Capture Exec export; <see cref="Opportunity.SourceId"/> holds its id.</summary>
     CaptureExec,
+
+    /// <summary>Imported from a HubSpot deal export; <see cref="Opportunity.SourceId"/> holds its Record ID.</summary>
+    HubSpot,
+
+    /// <summary>Imported from a Salesforce opportunity export; <see cref="Opportunity.SourceId"/> holds its Id.</summary>
+    Salesforce,
 }
 
 /// <summary>Why a pursuit was won, lost or not bid (win/loss analysis).</summary>

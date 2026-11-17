@@ -1,0 +1,7 @@
+Opportunity ID,Opportunity Name,Account Name,Stage,Amount,Probability (%),Close Date,Type,Lead Source,Next Step,Opportunity Owner,Description
+006Dn00000OpP001,Redwood claims workflow modernization,Redwood Mutual Insurance,Negotiation/Review,640000,90,2026-12-11,Existing Customer - Upgrade,Partner Referral,Legal review of MSA,Jordan Ellis,Phase 2 of the claims program
+006Dn00000OpP002,Granite Peak meter data platform,Granite Peak Energy,Value Proposition,380000,50,2027-02-26,New Customer,Web,Technical deep dive 3 Dec,Jordan Ellis,
+006Dn00000OpP003,Harborview demand forecasting pilot,Harborview Foods,Prospecting,75000,10,2027-04-02,New Customer,Trade Show,,Casey Moore,Eight-week pilot
+006Dn00000OpP004,Redwood fraud analytics,Redwood Mutual Insurance,Closed Won,210000,100,2026-10-02,New Customer,Partner Referral,,Jordan Ellis,Delivered in Q4
+006Dn00000OpP005,Granite Peak outage reporting,Granite Peak Energy,Closed Lost,120000,0,2026-09-18,New Customer,Web,,Casey Moore,Lost to an in-house build
+006Dn00000OpP006,Harborview supplier portal,Harborview Foods,Proposal/Price Quote,155000,75,2026-12-22,New Customer,Web,Proposal review with CFO,Casey Moore,

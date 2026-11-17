@@ -102,6 +102,10 @@
             @if (TemplateKey is { } key && _templates.FirstOrDefault(t => t.Key == key) is { } template)
             {
                 <MudText Typo="Typo.body2" Class="mud-text-secondary">@template.Description</MudText>
+                @if (template.LaborCategories is { Count: > 0 } roles)
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary" data-testid="start-template-roles">Usual roles: @string.Join(", ", roles)</MudText>
+                }
                 <MudPaper Outlined="true" Class="pa-2">
                     @foreach (var line in template.Outline)
                     {

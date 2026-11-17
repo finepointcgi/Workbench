@@ -44,6 +44,29 @@ else
         }
     </MudPaper>
 
+    <MudPaper Outlined="true" Class="pa-4 mb-4" data-testid="deal-import-card">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-1">
+            <MudIcon Icon="@Icons.Material.Filled.CloudUpload" Color="Color.Primary" />
+            <MudText Typo="Typo.subtitle1" HtmlTag="h2">HubSpot, Salesforce or a spreadsheet</MudText>
+        </MudStack>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+            Import companies, contacts and deals from a HubSpot or Salesforce export, or any CSV or Excel list. Deal stages and amounts become pipeline stages and
+            estimated values. Records already in Workbench are listed as duplicates and left alone unless you choose to update them.
+        </MudText>
+        @if (_canImport)
+        {
+            <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap">
+                <MudButton Variant="Variant.Outlined" Href="setup/import?source=HubSpot&kind=CrmAccounts" StartIcon="@Icons.Material.Filled.Hub" data-testid="import-hubspot">HubSpot</MudButton>
+                <MudButton Variant="Variant.Outlined" Href="setup/import?source=Salesforce&kind=CrmAccounts" StartIcon="@Icons.Material.Filled.Cloud" data-testid="import-salesforce">Salesforce</MudButton>
+                <MudButton Variant="Variant.Outlined" Href="setup/import?source=GenericCsv&kind=CrmAccounts" StartIcon="@Icons.Material.Filled.Description" data-testid="import-csv">CSV or Excel</MudButton>
+            </MudStack>
+        }
+        else
+        {
+            <MudText Typo="Typo.body2">An administrator (or Finance, for companies and contacts) runs the import under Setup › Import data.</MudText>
+        }
+    </MudPaper>
+
     <MudPaper Outlined="true" Class="pa-4 mb-4" data-testid="company-profile-card">
         <MudText Typo="Typo.subtitle1" HtmlTag="h2">Company profile</MudText>
         <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
