@@ -162,6 +162,7 @@ nav:
       - Audit log and support requests: admin-guide/audit-and-support.md
       - Multiple companies: admin-guide/companies.md
       - Hosting and operations: admin-guide/hosting.md
+      - Hosted signup and trials: admin-guide/hosted-signup.md
   - Reference:
       - Quick start: quick-start.md
       - Editions: editions.md

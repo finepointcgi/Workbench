@@ -44,7 +44,8 @@ public sealed record LicenseStatusDto(
     int LightSeatLimit = 0,
     int LightSeatsUsed = 0,
     bool Trial = false,
-    int? DaysLeft = null)
+    int? DaysLeft = null,
+    bool ReadOnly = false)
 {
     /// <summary>True when the organization may use <paramref name="moduleId"/>; every module when the server didn't say.</summary>
     public bool HasModule(string moduleId) => Modules is null || Modules.FirstOrDefault(m => m.Id == moduleId)?.Available != false;
