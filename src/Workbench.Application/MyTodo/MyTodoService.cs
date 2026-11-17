@@ -139,6 +139,12 @@ public sealed class MyTodoService(
             }
         }
 
+        // Commercial companies read "agreement", "billing line" and "authorized budget" instead of the federal words.
+        if ((await OrgProfile.CompanyProfileService.LoadTermsAsync(dbFactory, cancellationToken)) is { Type: not Contracts.Company.CompanyType.GovernmentContractor } terms)
+        {
+            items = [.. items.Select(i => i with { Title = terms.ReplaceTerms(i.Title), Reason = terms.ReplaceTerms(i.Reason), LinkLabel = terms.ReplaceTerms(i.LinkLabel) })];
+        }
+
         // A gate decision is also in the approval inbox, which has its own to-do and card: one place for it, not two.
         var inboxIds = (await TryAsync("Approvals", async () => (await context.InboxAsync(cancellationToken)).Select(i => i.DocumentId).ToHashSet(), unavailable, user.Email, cancellationToken)) ?? [];
         items.RemoveAll(i => i.Key.StartsWith("bd:gate:", StringComparison.Ordinal) && Guid.TryParse(i.Key["bd:gate:".Length..], out var gateId) && inboxIds.Contains(gateId));

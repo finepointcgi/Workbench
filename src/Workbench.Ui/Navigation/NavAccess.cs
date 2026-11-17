@@ -22,12 +22,16 @@ public sealed record NavAccess(
     int LeavePending = 0,
     int ReceivableCount = 0,
     bool ManagesOpportunities = false,
-    bool OwnsBudget = false)
+    bool OwnsBudget = false,
+    bool HideGovernment = false)
 {
     /// <summary>Nobody signed in (or the server is unreachable): Home only.</summary>
     public static NavAccess Anonymous { get; } = new((CurrentUserInfo?)null);
 
     public bool IsSignedIn => User is not null;
+
+    /// <summary>Federal-only pages (DCAA, CPSR, CAS, CMMC, SAM.gov leads, incurred cost) show unless the organization turned them off.</summary>
+    public bool ShowGovernment => !HideGovernment;
 
     /// <summary>True when the user holds <paramref name="permission"/> (a <see cref="Permission"/> constant).</summary>
     public bool Can(string permission) => User?.Can(permission) == true;
@@ -104,7 +108,9 @@ public sealed record NavAccess(
 
         var ownsBudget = await TryAsync(services.GetService<Contracts.Planning.IPlanningCycleService>(), async s => (await s.ListMineAsync(cancellationToken)).Count > 0, false);
 
-        return new NavAccess(user, timesheetApprover, leaveApprover, projectManager, approvals, leavePending, receivable, opportunities, ownsBudget);
+        var hideGovernment = !await TryAsync(services.GetService<Contracts.Company.ICompanyProfileService>(), async s => (await s.GetAsync(cancellationToken)).ShowGovernmentFeatures, true);
+
+        return new NavAccess(user, timesheetApprover, leaveApprover, projectManager, approvals, leavePending, receivable, opportunities, ownsBudget, hideGovernment);
     }
 
     /// <summary>How many documents in the approvals inbox wait on the signed-in user.</summary>

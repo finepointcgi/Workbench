@@ -2,19 +2,21 @@
 @inject IContractService Contracts
 @inject NavigationManager Navigation
 
-<PageTitle>Contracts · Setup · Workbench</PageTitle>
+<PageTitle>@Tm.Reword("Contracts") · Setup · Workbench</PageTitle>
 
-<SetupHeader Title="Contracts" Subtitle="Contract type, period of performance, ceiling and funding, and bill rates by labor category.">
+<SetupHeader Title="@Tm.Reword("Contracts")" Subtitle="@Tm.Reword("Contract type, period of performance, ceiling and funding, and bill rates by labor category.")">
     <MudButton Variant="Variant.Outlined" Href="setup/customers" StartIcon="@Icons.Material.Filled.Business">Customers</MudButton>
-    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="setup/contracts/new">New contract</MudButton>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Href="setup/contracts/new">@Tm.Reword("New contract")</MudButton>
 </SetupHeader>
 
 <ConfigurableList T="ContractDto" Definition="_definition" Items="_contracts" Loading="_loading" SearchLabel="Search number, name or customer"
                   RowClick="@(c => Navigation.NavigateTo($"setup/contracts/{c.Id}"))" TestId="contracts-list">
-    <NoRecordsContent><MudText>No contracts yet. Add your first contract with its value, funding and bill rates.</MudText></NoRecordsContent>
+    <NoRecordsContent><MudText>@Tm.Reword("No contracts yet. Add your first contract with its value, funding and bill rates.")</MudText></NoRecordsContent>
 </ConfigurableList>
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
+
     private IReadOnlyList<ContractDto> _contracts = [];
     private bool _loading = true;
 

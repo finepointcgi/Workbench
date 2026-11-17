@@ -54,6 +54,7 @@ public sealed class Notifier(
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Kind);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.Title);
         var now = clock.GetUtcNow().UtcDateTime;
+        var terms = await OrgProfile.CompanyProfileService.LoadTermsAsync(dbFactory); // Commercial companies read "agreement", not "contract".
         var link = CleanLink(request.Link) ?? (request.SheetId is { } sheetId
             ? request.ItemId is { } itemId ? $"sheets/{sheetId}?item={itemId}" : $"sheets/{sheetId}"
             : null);
@@ -61,8 +62,8 @@ public sealed class Notifier(
         {
             RecipientEmail = e,
             Kind = request.Kind,
-            Title = Truncate(request.Title, 500),
-            Body = Truncate(request.Body ?? "", 4_000),
+            Title = Truncate(terms.ReplaceTerms(request.Title), 500),
+            Body = Truncate(terms.ReplaceTerms(request.Body ?? ""), 4_000),
             Link = link,
             SheetId = request.SheetId,
             ItemId = request.ItemId,

@@ -9,16 +9,16 @@
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
 
-<PageTitle>@(_contract?.ContractNumber ?? "New contract") · Setup · Workbench</PageTitle>
+<PageTitle>@(_contract?.ContractNumber ?? Tm.Reword("New contract")) · Setup · Workbench</PageTitle>
 
-<SetupHeader Title="@(_contract is null ? "New contract" : $"{_contract.ContractNumber} · {_contract.Name}")">
+<SetupHeader Title="@(_contract is null ? Tm.Reword("New contract") : $"{_contract.ContractNumber} · {_contract.Name}")">
     @if (_contract is not null)
     {
         @* The next step after the award: a project to plan and charge against, prefilled from this contract. *@
         <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="StartProjectAsync" Class="mr-2"
                    data-testid="contract-start-project">Start a project</MudButton>
     }
-    <MudButton Variant="Variant.Outlined" Href="setup/contracts" StartIcon="@Icons.Material.Filled.ArrowBack">All contracts</MudButton>
+    <MudButton Variant="Variant.Outlined" Href="setup/contracts" StartIcon="@Icons.Material.Filled.ArrowBack">@Tm.Reword("All contracts")</MudButton>
 </SetupHeader>
 
 @if (_loading)
@@ -39,7 +39,7 @@ else
                 <MudForm @ref="_form">
                     <ConfigurableForm EntityType="@CustomizableEntities.Contract" RecordId="_contract?.Id" @ref="_layout">
                         <FormField Key="contractNumber" Sm="6">
-                            <MudTextField @bind-Value="_number" Label="Contract number" Required="true" RequiredError="Contract number is required." Immediate="true" />
+                            <MudTextField @bind-Value="_number" Label="@Tm.Reword("Contract number")" Required="true" RequiredError="@Tm.Reword("Contract number is required.")" Immediate="true" />
                         </FormField>
                         <FormField Key="customerId" Sm="6">
                             <MudSelect T="Guid?" @bind-Value="_customerId" Label="Customer" Required="true" RequiredError="Customer is required.">
@@ -69,37 +69,37 @@ else
                             </MudSelect>
                         </FormField>
                         <FormField Key="periodStart" Sm="6">
-                            <MudDatePicker @bind-Date="_start" Label="Period of performance start" Required="true" RequiredError="Start is required."
+                            <MudDatePicker @bind-Date="_start" Label="@Tm.Reword("Period of performance start")" Required="true" RequiredError="Start is required."
                                            DateFormat="yyyy-MM-dd" Editable="true" />
                         </FormField>
                         <FormField Key="periodEnd" Sm="6">
-                            <MudDatePicker @bind-Date="_end" Label="Period of performance end" Required="true" RequiredError="End is required."
+                            <MudDatePicker @bind-Date="_end" Label="@Tm.Reword("Period of performance end")" Required="true" RequiredError="End is required."
                                            DateFormat="yyyy-MM-dd" Editable="true" Validation="@(new Func<DateTime?, string?>(ValidateEnd))" />
                         </FormField>
                         <FormField Key="ceilingValue" Sm="6">
-                            <MudNumericField T="decimal" @bind-Value="_ceiling" Label="Ceiling value" Adornment="Adornment.Start" AdornmentText="$"
+                            <MudNumericField T="decimal" @bind-Value="_ceiling" Label="@(Tm.Reword("Ceiling value") + OptionalSuffix)" Adornment="Adornment.Start" AdornmentText="$"
                                              Min="0" Format="N2" Immediate="true" Validation="@(new Func<decimal, string?>(v => v < 0 ? "Can't be negative." : null))"
-                                             Disabled="HasClins" HelperText="@(HasClins ? "Sum of exercised CLIN values." : "")" />
+                                             Disabled="HasClins" HelperText="@(HasClins ? Tm.Reword("Sum of exercised CLIN values.") : "")" />
                         </FormField>
                         @if (_contract is not null)
                         {
                             @* A new contract has no funding to type: money is put on each CLIN with its Fund button, and the contract's
                                figure is their sum. (A figure typed here used to be dropped when the first CLIN was added.) *@
                             <FormField Key="fundedValue" Sm="6">
-                                <MudNumericField T="decimal" @bind-Value="_funded" Label="Funded value" Adornment="Adornment.Start" AdornmentText="$"
+                                <MudNumericField T="decimal" @bind-Value="_funded" Label="@(Tm.Reword("Funded value") + OptionalSuffix)" Adornment="Adornment.Start" AdornmentText="$"
                                                  Min="0" Format="N2" Immediate="true" Validation="@(new Func<decimal, string?>(ValidateFunded))"
-                                                 HelperText="@(HasClins ? "Sum of CLIN funding; fund a CLIN from its row." : "Obligated to date. Can't exceed the ceiling.")"
+                                                 HelperText="@(HasClins ? Tm.Reword("Sum of CLIN funding; fund a CLIN from its row.") : Tm.Reword("Obligated to date. Can't exceed the ceiling."))"
                                                  Disabled="HasClins" data-testid="contract-funded" />
                             </FormField>
                         }
                         <FormField Key="isPrime">
-                            <MudSwitch @bind-Value="_isPrime" Label="We are the prime contractor" Color="Color.Primary" />
+                            <MudSwitch @bind-Value="_isPrime" Label="@Tm.Reword("We are the prime contractor")" Color="Color.Primary" />
                         </FormField>
                     </ConfigurableForm>
                 </MudForm>
                 <MudStack Row="true" Justify="Justify.FlexEnd" Class="mt-3">
                     <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync" Disabled="_saving" data-testid="contract-save">
-                        @(_contract is null ? "Create contract" : "Save")
+                        @(_contract is null ? Tm.Reword("Create contract") : "Save")
                     </MudButton>
                 </MudStack>
             </MudPaper>
@@ -140,7 +140,7 @@ else
                 @if (_missingBilling.Count > 0)
                 {
                     <MudAlert Severity="Severity.Info" Dense="true" Class="mt-3" data-testid="billing-details-missing">
-                        Before the first invoice, add this contract's billing details: @string.Join(", ", _missingBilling).
+                        @Tm.Reword("Before the first invoice, add this contract's billing details:") @string.Join(", ", _missingBilling).
                         <MudLink Href="@($"billing/contracts/{_contract.Id}")">Add them now</MudLink>.
                     </MudAlert>
                 }
@@ -159,22 +159,22 @@ else
     </MudTabPanel>
     @if (_contract is { } detail)
     {
-        <MudTabPanel Text="CLINs" data-testid="tab-clins">
+        <MudTabPanel Text="@Tm.Reword("CLINs")" data-testid="tab-clins">
             <Workbench.Ui.Setup.Clins.ClinsTab Contract="detail" Clins="_clins" Status="_fundingStatus" Changed="ReloadDetailAsync" />
         </MudTabPanel>
         <MudTabPanel Text="Modifications" data-testid="tab-mods">
             <Workbench.Ui.Setup.Clins.ModificationsTab Contract="detail" Clins="_clins" Changed="ReloadDetailAsync" />
         </MudTabPanel>
-        <MudTabPanel Text="Funding history" data-testid="tab-history">
+        <MudTabPanel Text="@Tm.Reword("Funding history")" data-testid="tab-history">
             <Workbench.Ui.Setup.Clins.FundingHistoryTab Rows="_history" Clins="_clins" />
         </MudTabPanel>
-        <MudTabPanel Text="Funding status" BadgeData="@(_fundingStatus?.Notices.Count > 0 ? _fundingStatus.Notices.Count : null)" BadgeColor="Color.Warning" data-testid="tab-status">
+        <MudTabPanel Text="@Tm.Reword("Funding status")" BadgeData="@(_fundingStatus?.Notices.Count > 0 ? _fundingStatus.Notices.Count : null)" BadgeColor="Color.Warning" data-testid="tab-status">
             @if (_fundingStatus is not null)
             {
                 <Workbench.Ui.Setup.Clins.FundingStatusTab Status="_fundingStatus" Clins="_clins" Changed="ReloadDetailAsync" />
             }
         </MudTabPanel>
-        <MudTabPanel Text="Ceilings" data-testid="tab-ceilings">
+        <MudTabPanel Text="@Tm.Reword("Ceilings")" data-testid="tab-ceilings">
             <Workbench.Ui.Ceilings.CeilingsPanel ContractId="detail.Id" />
         </MudTabPanel>
         <MudTabPanel Text="Customer link" data-testid="tab-customer-link">
@@ -188,6 +188,11 @@ else
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
+
+    // Commercial companies often have no cap or separate authorization: the inputs stay but read as optional.
+    private string OptionalSuffix => Tm.IsCommercial() ? " (optional)" : "";
+
     [Parameter]
     public Guid? ContractId { get; set; }
 
@@ -284,7 +289,7 @@ else
     private string? ValidateEnd(DateTime? end) => end is { } e && _start is { } s && e.Date < s.Date ? "End can't be before the start." : null;
 
     internal string? ValidateFunded(decimal funded) =>
-        funded < 0 ? "Can't be negative." : funded > _ceiling ? "Funded value can't exceed the ceiling." : null;
+        funded < 0 ? "Can't be negative." : funded > _ceiling ? Tm.Reword("Funded value can't exceed the ceiling.") : null;
 
     private string CategoryLabel(Guid id) => _categories.FirstOrDefault(c => c.Id == id) is { } c ? $"{c.Code} · {c.Name}" : "(unknown)";
 
@@ -305,14 +310,14 @@ else
             {
                 var created = await Contracts.CreateContractAsync(request);
                 await (_layout?.SaveCustomFieldsAsync(created.Id) ?? Task.CompletedTask);
-                Snackbar.Add($"Created {created.ContractNumber}. Add its bill rates and CLINs next; fund each CLIN once it exists.", Severity.Success);
+                Snackbar.Add(Tm.Reword($"Created {created.ContractNumber}. Add its bill rates and CLINs next; fund each CLIN once it exists."), Severity.Success);
                 Navigation.NavigateTo($"setup/contracts/{created.Id}");
             }
             else
             {
                 _contract = await Contracts.UpdateContractAsync(_contract.Id, request);
                 await (_layout?.SaveCustomFieldsAsync(_contract.Id) ?? Task.CompletedTask);
-                Snackbar.Add("Contract saved.", Severity.Success);
+                Snackbar.Add(Tm.Reword("Contract saved."), Severity.Success);
             }
         }
         catch (Exception ex)
