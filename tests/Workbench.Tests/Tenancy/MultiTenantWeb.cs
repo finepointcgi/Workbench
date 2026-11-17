@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.DependencyInjection;
 using Workbench.Application.Tenancy;
 using Workbench.Infrastructure.Tenancy;
+using Workbench.Tests.Automation;
 using Workbench.Tests.Identity;
 
 namespace Workbench.Tests.Tenancy;
@@ -58,6 +59,34 @@ internal sealed class MultiTenantWeb : IAsyncDisposable
         return web;
     }
 
+    /// <summary>The key the license server would send as <c>X-Host-Key</c> in <see cref="HostedAsync"/>.</summary>
+    public const string EntitlementKey = "test-entitlement-key-0123456789abcdef0123456789";
+
+    /// <summary>
+    /// Staging with self-service signup on (<c>Tenancy:Signup</c>), acme and beta provisioned by the host, and every email captured in
+    /// <see cref="Mail"/> instead of sent.
+    /// </summary>
+    public static async Task<MultiTenantWeb> HostedAsync(Action<Dictionary<string, string>>? configure = null)
+    {
+        var mail = new RecordingEmailSender();
+        var extra = new Dictionary<string, string>
+        {
+            ["Tenancy:Signup:Enabled"] = "true",
+            ["Tenancy:Signup:TermsUrl"] = "https://example.test/terms",
+            ["Tenancy:Signup:EntitlementApiKey"] = EntitlementKey,
+        };
+        configure?.Invoke(extra);
+        var web = Start("Staging", "workbench.test", [], NewId(), extraSettings: extra, configureServices: s => s.AddSingleton<Workbench.Application.Notifications.IEmailSender>(mail));
+        web.Mail = mail;
+        await web.Services.GetRequiredService<Workbench.Infrastructure.Persistence.DatabaseMigrator>().MigrateAsync();
+        var provisioner = web.Services.GetRequiredService<TenantProvisioner>();
+        await provisioner.CreateAsync(new CreateTenantRequest("acme", "Acme Federal", "admin@acme.example"), HostAdmin);
+        await provisioner.CreateAsync(new CreateTenantRequest("beta", "Beta Systems", "admin@beta.example"), HostAdmin);
+        return web;
+    }
+
+    public RecordingEmailSender Mail { get; private set; } = new();
+
     internal static string NewId() => Guid.NewGuid().ToString("N")[..8];
 
     /// <summary>The catalog's connection string for host <paramref name="id"/>.</summary>
@@ -73,7 +102,8 @@ internal sealed class MultiTenantWeb : IAsyncDisposable
     internal static string SqliteFolder(string id) => Path.Combine(Path.GetTempPath(), $"workbench-tenants-{id}");
 
     /// <summary>Starts a host on the databases named by <paramref name="id"/> (which may already exist) and <paramref name="storageRoot"/>.</summary>
-    internal static MultiTenantWeb Start(string environment, string baseDomain, string[] developmentTenants, string id, string? storageRoot = null)
+    internal static MultiTenantWeb Start(string environment, string baseDomain, string[] developmentTenants, string id, string? storageRoot = null,
+        IReadOnlyDictionary<string, string>? extraSettings = null, Action<IServiceCollection>? configureServices = null)
     {
         storageRoot ??= Path.Combine(Path.GetTempPath(), $"workbench-blobs-{id}");
         var settings = new Dictionary<string, string>
@@ -87,13 +117,18 @@ internal sealed class MultiTenantWeb : IAsyncDisposable
             ["Tenancy:TenantConnectionString"] = TenantConnectionString(id),
             ["Storage:Root"] = storageRoot,
         };
+        foreach (var (key, value) in extraSettings ?? new Dictionary<string, string>())
+        {
+            settings[key] = value;
+        }
+
         for (var i = 0; i < developmentTenants.Length; i++)
         {
             settings[$"Tenancy:DevelopmentTenants:{i}"] = developmentTenants[i];
         }
 
         var factory = new WorkbenchWebFactory(environment, testAuth: true,
-            oidcAuthority: environment == "Development" ? null : "https://login.example.test/", settings: settings);
+            oidcAuthority: environment == "Development" ? null : "https://login.example.test/", settings: settings, configureServices: configureServices);
         _ = factory.Server; // start the host (and, in Development, provision the tenants)
         return new MultiTenantWeb(factory, baseDomain, id, storageRoot);
     }

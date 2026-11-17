@@ -77,7 +77,7 @@ In this order:
 
 1. `License:EditionOverride = Business` in configuration. For the public demo, development, and trials you run yourself.
    `appsettings.Demo.json` and `appsettings.Development.json` set it. **Leave it unset in production.**
-2. The hosting plan. In MultiTenant mode a tenant whose catalog `Plan` is `business` (set by the host administrator) is Business.
+2. The hosting plan. In MultiTenant mode a tenant's catalog **entitlement** (plan, modules, seats, trial; set by the host administrator or the license server) decides, or, for a tenant without one, a catalog `Plan` of `business`. A lapsed trial or cancelled subscription makes the organization read-only: see [Hosted signup](admin-guide/hosted-signup.md).
 3. A license key entered under **Setup › License** (self-hosted).
 4. Otherwise Community.
 
