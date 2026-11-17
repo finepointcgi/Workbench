@@ -1,0 +1,5 @@
+!ACCNT	NAME	ACCNTTYPE	DESC	ACCNUM
+ACCNT	Checking	BANK	Main account	1010
+ACCNT	Accounts Payable	AP		2010
+ACCNT	Services Revenue	INC		4020
+ACCNT	Office Expenses	EXP		6230

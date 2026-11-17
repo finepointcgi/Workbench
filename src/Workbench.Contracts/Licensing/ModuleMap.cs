@@ -71,8 +71,8 @@ public static class ModuleMap
             "time", "expense-reports", "odc-approvals", "odcs", "leave", "per-diem", "travel", "receipts", "timesheet-flags",
             "reports", "setup", "customers", "org-units", "labor-categories", "approvals", "approval-delegations", "fiscal", "audit", "employees",
             "admin", "host", "users", "invites", "workspaces-admin", "imports", "migration", "reconciliation", "assistant", "me", "support", "help", "license",
-            "email-issues", "security-events", "mcp", "company-profile"),
-        .. Segments(ModuleKeys.Billing, "billing", "revenue"),
+            "email-issues", "security-events", "mcp", "company-profile", "accounting-export"),
+        .. Segments(ModuleKeys.Billing, "billing", "revenue", "accounting-live"),
         .. Segments(ModuleKeys.Accounting,
             "accounting", "cash", "assets", "currencies", "planning", "indirect-rates", "sales-tax", "purchasing", "cards", "vendor-bank", "bank-files"),
         .. Segments(ModuleKeys.Capture, "crm", "pricing"),
@@ -227,7 +227,7 @@ public static class ModuleMap
     public static IReadOnlyDictionary<string, string> ServiceNamespaces { get; } = new Dictionary<string, string>(StringComparer.Ordinal)
     {
         // core
-        ["Approvals"] = ModuleKeys.Core, ["Company"] = ModuleKeys.Core, ["Assistant"] = ModuleKeys.Core, ["Calendar"] = ModuleKeys.Core, ["Collaboration"] = ModuleKeys.Core,
+        ["Approvals"] = ModuleKeys.Core, ["AccountingExport"] = ModuleKeys.Core, ["Company"] = ModuleKeys.Core, ["Assistant"] = ModuleKeys.Core, ["Calendar"] = ModuleKeys.Core, ["Collaboration"] = ModuleKeys.Core,
         ["Contracts"] = ModuleKeys.Core, ["Dashboards"] = ModuleKeys.Core, ["Financials"] = ModuleKeys.Core, ["Forms"] = ModuleKeys.Core,
         ["Identity"] = ModuleKeys.Core, ["Imports"] = ModuleKeys.Core, ["Leave"] = ModuleKeys.Core, ["Licensing"] = ModuleKeys.Core,
         ["Migration"] = ModuleKeys.Core, ["MyTodo"] = ModuleKeys.Core, ["MyWork"] = ModuleKeys.Core, ["Notifications"] = ModuleKeys.Core,
@@ -236,7 +236,7 @@ public static class ModuleMap
         ["Sheets"] = ModuleKeys.Core, ["Support"] = ModuleKeys.Core, ["Tasks"] = ModuleKeys.Core, ["Tenancy"] = ModuleKeys.Core, ["Time"] = ModuleKeys.Core,
         ["Automation"] = ModuleKeys.Core, // sheet rules
         // billing
-        ["Billing"] = ModuleKeys.Billing, ["Revenue"] = ModuleKeys.Billing,
+        ["Billing"] = ModuleKeys.Billing, ["Revenue"] = ModuleKeys.Billing, ["AccountingLive"] = ModuleKeys.Billing,
         // accounting
         ["Accounting"] = ModuleKeys.Accounting, ["Assets"] = ModuleKeys.Accounting, ["BankFiles"] = ModuleKeys.Accounting, ["Cash"] = ModuleKeys.Accounting,
         ["Currencies"] = ModuleKeys.Accounting, ["IndirectRates"] = ModuleKeys.Accounting, ["Planning"] = ModuleKeys.Accounting,

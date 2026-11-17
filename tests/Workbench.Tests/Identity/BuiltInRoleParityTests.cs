@@ -60,6 +60,7 @@ public sealed class BuiltInRoleParityTests
         [Permission.GlClose] = r => r.IsFinance(),
         [Permission.GlReportsView] = r => r.IsFinance(),
         [Permission.GlRecurringManage] = r => r.IsFinance(),
+        [Permission.GlExport] = r => r.IsFinance(),
         [Permission.GlRevaluation] = r => r.IsFinance(),
         [Permission.BudgetsManage] = r => r.IsFinance(),
         [Permission.RevenueManage] = r => r.IsFinance(),

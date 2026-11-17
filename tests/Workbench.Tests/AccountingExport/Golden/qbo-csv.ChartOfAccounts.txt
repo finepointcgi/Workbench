@@ -1,0 +1,5 @@
+Account Name,Type,Detail Type,Number,Description
+Checking,Bank,,1010,Main account
+Accounts Payable,AccountsPayable,,2010,
+Services Revenue,Income,,4020,
+Office Expenses,Expense,,6230,

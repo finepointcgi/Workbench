@@ -37,7 +37,7 @@ addresses, SFTP passwords and keys) are encrypted and never shown again.
 | --- | --- |
 | **Microsoft Teams** | Posts the events you choose to a channel as a card. **Post a test message** checks the setup. |
 | **Slack** | Posts the events you choose to a channel. |
-| **General ledger export (QuickBooks)** | A company's posted journal lines for a date range, as a QuickBooks `.iif` file or CSV, on a schedule. |
+| **General ledger export (QuickBooks)** | A company's posted journal lines for a date range, as a QuickBooks `.iif` file or CSV, on a schedule. For keeping QuickBooks or Xero as your books, use [Accounting export](accounting-export.md) instead: it covers invoices, bills and the chart of accounts, maps account names and never exports a record twice. |
 | **Report export (CSV or SFTP)** | Saved reports as CSV or Excel files on a schedule, optionally uploaded to an SFTP server. |
 
 Workbench keeps a copy of each exported file, downloadable from the run log for 30 days. See
