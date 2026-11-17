@@ -46,6 +46,9 @@ public enum AccountTokenPurpose
 
     /// <summary>Forgot password: set a new one.</summary>
     PasswordReset,
+
+    /// <summary>Sign in once without a password (the first administrator of a self-service signup).</summary>
+    MagicLink,
 }
 
 /// <summary>

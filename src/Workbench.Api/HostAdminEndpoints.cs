@@ -22,6 +22,10 @@ internal static class HostAdminEndpoints
             s.SuspendTenantAsync(tenantId, request, ct));
         host.MapPost("/tenants/{tenantId:guid}/reactivate", (Guid tenantId, HostTenantStatusRequest request, IHostAdminService s, CancellationToken ct) =>
             s.ReactivateTenantAsync(tenantId, request, ct));
+        host.MapPut("/tenants/{tenantId:guid}/entitlement", (Guid tenantId, SetEntitlementRequest request, IHostAdminService s, CancellationToken ct) =>
+            s.SetEntitlementAsync(tenantId, request, ct));
+        host.MapPost("/tenants/{tenantId:guid}/extend-trial", (Guid tenantId, ExtendTrialRequest request, IHostAdminService s, CancellationToken ct) =>
+            s.ExtendTrialAsync(tenantId, request, ct));
         host.MapGet("/audit", (IHostAdminService s, CancellationToken ct) => s.ListAuditAsync(ct));
     }
 }

@@ -161,7 +161,9 @@ nav:
       - AI assistant: admin-guide/assistant.md
       - Audit log and support requests: admin-guide/audit-and-support.md
       - Multiple companies: admin-guide/companies.md
+      - License refresh (connected installs): admin-guide/license-refresh.md
       - Hosting and operations: admin-guide/hosting.md
+      - Hosted signup and trials: admin-guide/hosted-signup.md
   - Commercial:
       - Modules and pricing (draft): commercial/modules-and-pricing.md
       - Software license and subscription agreement (draft): commercial/end-user-terms-draft.md

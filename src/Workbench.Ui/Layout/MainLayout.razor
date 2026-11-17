@@ -34,8 +34,16 @@
             <PageBreadcrumbs Access="_access" />
             <GroupTabs Access="_access" />
             <main id="main-content" tabindex="-1" @ref="_main" class="wb-main">
+                <LicenseBanner Access="_access" />
                 <Workbench.Ui.Approvals.DecideHere />
-                <Workbench.Ui.Support.FriendlyErrorBoundary>@Body</Workbench.Ui.Support.FriendlyErrorBoundary>
+                @if (UnlicensedPage() is { } unlicensed)
+                {
+                    <ModuleNeeded Entry="unlicensed" />
+                }
+                else
+                {
+                    <Workbench.Ui.Support.FriendlyErrorBoundary>@Body</Workbench.Ui.Support.FriendlyErrorBoundary>
+                }
             </main>
         </MudContainer>
     </MudMainContent>
@@ -53,6 +61,10 @@
     private string SkipHref => $"{Navigation.ToBaseRelativePath(Navigation.Uri).Split('#')[0]}#main-content";
 
     private async Task SkipToMainAsync() => await _main.FocusAsync();
+
+    /// <summary>The catalog page being opened when its license module isn't available to this organization.</summary>
+    private NavEntry? UnlicensedPage() =>
+        NavCatalog.OwnerOf(Navigation.ToBaseRelativePath(Navigation.Uri)) is { } owner && !_access.HasModule(owner.ModuleId) ? owner : null;
 
     private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
 

@@ -25,7 +25,7 @@ namespace Workbench.Tests.Identity;
 /// sample data, start from the copy).
 /// </remarks>
 internal sealed class WorkbenchWebFactory(string environment, bool testAuth = false, string? oidcAuthority = null, IReadOnlyDictionary<string, string>? settings = null,
-    bool? seededTemplate = null)
+    bool? seededTemplate = null, Action<IServiceCollection>? configureServices = null)
     : WebApplicationFactory<Program>
 {
     public const string UserHeader = "X-Test-User";
@@ -70,6 +70,11 @@ internal sealed class WorkbenchWebFactory(string environment, bool testAuth = fa
         {
             builder.UseSetting("Authentication:Oidc:Authority", oidcAuthority);
             builder.UseSetting("Authentication:Oidc:ClientId", "workbench");
+        }
+
+        if (configureServices is not null)
+        {
+            builder.ConfigureTestServices(configureServices);
         }
 
         if (testAuth)
