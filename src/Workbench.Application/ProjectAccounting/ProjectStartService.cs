@@ -81,6 +81,9 @@ public sealed class ProjectStartService(
             ["Principal Engineer", "Project Engineer", "Design Engineer", "CAD Designer", "QA/QC Reviewer"]),
     ];
 
+    /// <summary>The built-in starter outlines (also what the commercial demo data builds its projects from).</summary>
+    public static IReadOnlyList<ProjectTemplateDto> BuiltInTemplates => Templates;
+
     public Task<IReadOnlyList<ProjectTemplateDto>> ListTemplatesAsync(CancellationToken cancellationToken = default) => Task.FromResult(Templates);
 
     public async Task<string> SuggestCodeAsync(CancellationToken cancellationToken = default)

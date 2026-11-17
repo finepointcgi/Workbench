@@ -19,6 +19,31 @@ public static class DemoMode
     public const string EnvironmentName = "Demo";
     public const string EnabledKey = "Demo:Enabled";
 
+    /// <summary>
+    /// Which sample data a development or demo host seeds, <c>Demo:Dataset</c> (environment variable <c>Demo__Dataset</c>):
+    /// <c>Government</c> (the default: a federal contractor with contracts, Costpoint-style accounting and a capture pipeline) or
+    /// <c>Commercial</c> (a professional-services firm: clients, retainers, fixed-fee work and a pipeline of commercial deals).
+    /// It applies to an empty database; an existing one keeps the data it has.
+    /// </summary>
+    public const string DatasetKey = "Demo:Dataset";
+
+    public const string GovernmentDataset = "Government";
+    public const string CommercialDataset = "Commercial";
+
+    /// <summary>True when <c>Demo:Dataset</c> asks for the commercial sample data.</summary>
+    public static bool IsCommercial(IConfiguration? configuration) =>
+        string.Equals(configuration?[DatasetKey], CommercialDataset, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Throws for a dataset name that is neither of the two, so a typo doesn't quietly seed the government data.</summary>
+    public static void ValidateDataset(IConfiguration configuration)
+    {
+        var name = configuration[DatasetKey];
+        if (!string.IsNullOrWhiteSpace(name) && !string.Equals(name, GovernmentDataset, StringComparison.OrdinalIgnoreCase) && !IsCommercial(configuration))
+        {
+            throw new InvalidOperationException($"{DatasetKey} is '{name}'; use {GovernmentDataset} (the default) or {CommercialDataset}.");
+        }
+    }
+
     /// <summary>The seeded administrator. A database without it (but with users) holds someone's real data.</summary>
     public const string DemoAdminEmail = "dev@workbench.local";
 

@@ -167,7 +167,7 @@
 
         case 5 when _job is not null:
             <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">Dry run</MudText>
-            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">Nothing has changed yet. This is what the import will create, update and skip; rows already in Workbench (matched on their natural keys) are updated, not duplicated.</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">Nothing has changed yet. This is what the import will create, update and skip; @(_job.Job.Source is ImportSource.HubSpot or ImportSource.Salesforce or ImportSource.GenericCsv ? (_job.Options.UpdateExisting ? "rows already in Workbench are updated from the file (blank cells keep what Workbench has), not duplicated." : "rows already in Workbench are listed as duplicates and left exactly as they are.") : "rows already in Workbench (matched on their natural keys) are updated, not duplicated.")</MudText>
             @if (_job.Job.Source == ImportSource.Unanet)
             {
                 <UnanetMappingGuide Kind="@_job.Definition.Kind.ToString()" />

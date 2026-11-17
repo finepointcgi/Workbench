@@ -16,6 +16,8 @@ company data, and never point the demo at a real database (it refuses one: see [
 - **Settings:** `ASPNETCORE_ENVIRONMENT=Demo` loads `src/Workbench.Web/appsettings.Demo.json`, and `Demo__Enabled=true`
   turns on demo mode. Both are set in the image. Demo mode means:
   - SQLite at `/data/workbench.db`, migrated and seeded with the sample data on a fresh database;
+    `Demo__Dataset=Commercial` seeds a professional-services firm instead of the government contractor
+    (see the [setup guide](admin-guide/setup.md#sample-data-and-starter-outlines));
   - the demo sign-in page (`/account/dev-signin`): pick a sample user, no passwords and no identity provider;
   - the AI assistant turned on with the **fake provider** (canned answers, no model and no cost), up to 100 questions
     per person per day;
