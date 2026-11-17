@@ -27,7 +27,7 @@
             @if (Government)
             {
                 <MudItem xs="6">
-                    <MudSelect T="Guid?" @bind-Value="_contractId" Label="Accountable contract" Dense="true">
+                    <MudSelect T="Guid?" @bind-Value="_contractId" Label="@Tm.Reword("Accountable contract")" Dense="true">
                         @foreach (var c in _contracts) { <MudSelectItem T="Guid?" Value="c.Id">@c.ContractNumber</MudSelectItem> }
                     </MudSelect>
                 </MudItem>
@@ -69,6 +69,7 @@
 </MudDialog>
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [CascadingParameter] private IMudDialogInstance MudDialog { get; set; } = default!;
 
     [Parameter, EditorRequired] public AssetDto Asset { get; set; } = default!;

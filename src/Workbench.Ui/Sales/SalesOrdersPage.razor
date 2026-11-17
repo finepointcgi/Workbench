@@ -6,7 +6,7 @@
 
 <PageTitle>Sales orders · Materials · Workbench</PageTitle>
 
-<MaterialsHeader Title="Sales orders" Subtitle="Customer orders for parts, by contract CLIN or project. Released orders are planned by MRP and picked, packed and shipped from Shipping.">
+<MaterialsHeader Title="Sales orders" Subtitle="@Tm.Reword("Customer orders for parts, by contract CLIN or project. Released orders are planned by MRP and picked, packed and shipped from Shipping.")">
     @if (SalesFormat.CanEdit(User))
     {
         <MudButton Variant="Variant.Outlined" Href="materials/shipping" StartIcon="@Icons.Material.Filled.LocalShipping">Shipping</MudButton>
@@ -33,6 +33,7 @@ else
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [CascadingParameter] public CurrentUserInfo? User { get; set; }
 
     private IReadOnlyList<SalesOrderSummaryDto>? _orders;

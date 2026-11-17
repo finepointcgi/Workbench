@@ -49,6 +49,7 @@ builder.AddWorkbenchHosting();
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 builder.Services.AddMudServices();
+Workbench.Ui.Company.TermsSnackbarRegistration.AddCompanyWordsInSnackbars(builder.Services);
 builder.Services.AddProblemDetails();
 
 builder.Services.AddWorkbenchApplication();

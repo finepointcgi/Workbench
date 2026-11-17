@@ -46,9 +46,9 @@ else if (_plan is { Steps: { } steps } plan && steps.Any(s => !s.Done))
                         }
                         <div style="flex: 1">
                             <MudText Typo="Typo.subtitle2">
-                                @step.Label<span class="wb-sr-only">@(step.Done ? " (done)" : step.Current ? " (next)" : " (to do)")</span>
+                                @Tm.Reword(step.Label)<span class="wb-sr-only">@(step.Done ? " (done)" : step.Current ? " (next)" : " (to do)")</span>
                             </MudText>
-                            <MudText Typo="Typo.body2" Class="mud-text-secondary">@step.Detail</MudText>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">@Tm.Reword(step.Detail)</MudText>
                         </div>
                         @if (action is { } a)
                         {

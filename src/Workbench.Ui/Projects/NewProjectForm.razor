@@ -59,7 +59,7 @@
                 </MudStack>
                 @if (_terms is { Start: { } ps, Finish: { } pf })
                 {
-                    <MudText Typo="Typo.caption" Class="mud-text-secondary">Period of performance @ps.ToString("MMM d, yyyy") – @pf.ToString("MMM d, yyyy")</MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@Tm.Reword("Period of performance") @ps.ToString("MMM d, yyyy") – @pf.ToString("MMM d, yyyy")</MudText>
                 }
             </MudPaper>
         }
@@ -68,7 +68,7 @@
         {
             <MudSelect T="Guid" SelectedValues="_categoryIds" SelectedValuesChanged="values => _categoryIds = values.ToHashSet()" MultiSelection="true"
                        Label="Labor categories" Clearable="true" data-testid="start-categories"
-                       HelperText="What the project manager can plan with. Leave empty to use the ones the contract prices.">
+                       HelperText="@Tm.Reword("What the project manager can plan with. Leave empty to use the ones the contract prices.")">
                 @foreach (var c in _categories)
                 {
                     <MudSelectItem T="Guid" Value="c.Id">@c.Code · @c.Name</MudSelectItem>
@@ -79,7 +79,7 @@
         @if (_finance)
         {
             <MudSelect T="Guid?" @bind-Value="_managerId" Label="Project manager" Clearable="true" data-testid="start-manager"
-                       HelperText="They get a to-do to plan it once funding and labor categories are in. Leave it empty to manage it yourself.">
+                       HelperText="@Tm.Reword("They get a to-do to plan it once funding and labor categories are in. Leave it empty to manage it yourself.")">
                 @foreach (var e in _employees)
                 {
                     <MudSelectItem T="Guid?" Value="e.Id">@e.DisplayName</MudSelectItem>

@@ -14,7 +14,7 @@ else
         <MudExpansionPanel Text="Details" Expanded="@_open.Contains("details")" ExpandedChanged="@(e => Toggle("details", e))" data-testid="setup-details">
             @if (_open.Contains("details"))
             {
-                <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">Code, name, contract, manager, status and dates.</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">@Tm.Reword("Code, name, contract, manager, status and dates.")</MudText>
                 <Workbench.Ui.Setup.ProjectDetailsForm Project="_project" ProjectChanged="SavedAsync" />
             }
         </MudExpansionPanel>

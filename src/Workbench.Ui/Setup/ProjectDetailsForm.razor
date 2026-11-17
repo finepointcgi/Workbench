@@ -17,7 +17,7 @@
             <MudTextField @bind-Value="_name" Label="Name" Required="true" RequiredError="Name is required." Immediate="true" data-testid="project-name" />
         </FormField>
         <FormField Key="contractId" Sm="6" Context="field">
-            <MudSelect T="Guid?" @bind-Value="_contractId" Label="Contract" Clearable="true" HelperText="Leave empty for indirect projects." Disabled="@(!_isFinance && _project is not null)"
+            <MudSelect T="Guid?" @bind-Value="_contractId" Label="@Tm.Reword("Contract")" Clearable="true" HelperText="Leave empty for indirect projects." Disabled="@(!_isFinance && _project is not null)"
                        Required="field.Required" RequiredError="Contract is required.">
                 @foreach (var c in _contracts)
                 {
@@ -59,6 +59,7 @@
     </MudButton>
 </MudStack>
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [Parameter, EditorRequired]
     public ProjectDto Project { get; set; } = default!;
 

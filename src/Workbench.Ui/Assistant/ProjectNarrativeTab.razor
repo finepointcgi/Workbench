@@ -38,8 +38,7 @@
     @if (_narrative is null && !_busy && _error is null)
     {
         <MudText Class="mud-text-secondary" data-testid="narrative-empty">
-            No narrative saved for this period. “Draft from the data” writes one from earned value, financials, completed plan tasks,
-            upcoming milestones, ceilings and funding; you edit it and save.
+            @Tm.Reword("No narrative saved for this period. “Draft from the data” writes one from earned value, financials, completed plan tasks, upcoming milestones, ceilings and funding; you edit it and save.")
         </MudText>
     }
     else if (_narrative is { } n)
@@ -61,7 +60,7 @@
                 <MudTextField @bind-Value="_eac" Label="Changes in the estimate at completion (EAC)" Lines="3" Sizing="InputSizing.Auto" MaxLength="8000" Variant="Variant.Outlined" Class="mb-3" />
                 <MudTextField @bind-Value="_accomplishments" Label="Accomplishments this period" Lines="3" Sizing="InputSizing.Auto" MaxLength="8000" Variant="Variant.Outlined" Class="mb-3" />
                 <MudTextField @bind-Value="_milestones" Label="Upcoming milestones" Lines="3" Sizing="InputSizing.Auto" MaxLength="8000" Variant="Variant.Outlined" Class="mb-3" />
-                <MudTextField @bind-Value="_risks" Label="Risks (ceilings and funding)" Lines="3" Sizing="InputSizing.Auto" MaxLength="8000" Variant="Variant.Outlined" Class="mb-3" />
+                <MudTextField @bind-Value="_risks" Label="@Tm.Reword("Risks (ceilings and funding)")" Lines="3" Sizing="InputSizing.Auto" MaxLength="8000" Variant="Variant.Outlined" Class="mb-3" />
 
                 @if (_variances.Count > 0)
                 {
@@ -117,6 +116,7 @@
 </div>
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [Parameter] public Guid ProjectId { get; set; }
 
     private IReadOnlyList<NarrativePeriodDto> _periods = [];

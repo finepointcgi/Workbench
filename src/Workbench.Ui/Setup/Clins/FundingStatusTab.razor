@@ -3,7 +3,7 @@
 @inject ISnackbar Snackbar
 
 <MudStack Row="true" AlignItems="AlignItems.Center" Class="mb-2" Wrap="Wrap.Wrap">
-    <MudText Typo="Typo.h6" HtmlTag="h2">Funding status</MudText>
+    <MudText Typo="Typo.h6" HtmlTag="h2">@Tm.Reword("Funding status")</MudText>
     <MudText Typo="Typo.caption" Class="mud-text-secondary">
         As of @SetupFormat.Date(Status.AsOf) · @(Status.IsBurdened ? "fully burdened cost" : "direct cost (labor at cost + allowable ODCs)") · committed = submitted, not yet approved
     </MudText>
@@ -17,14 +17,14 @@
 @foreach (var notice in Status.Notices)
 {
     <MudAlert Severity="@(notice.ThresholdPercent >= 90 ? Severity.Error : Severity.Warning)" Dense="true" Class="mb-2" data-testid="funding-notice">
-        <b>@notice.Title</b> · sent @notice.SentAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm") to @string.Join(", ", notice.Recipients)
+        <b>@Tm.Reword(notice.Title)</b> · sent @notice.SentAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm") to @string.Join(", ", notice.Recipients)
     </MudAlert>
 }
 
 <MudPaper Outlined="true" Class="pa-4">
     @if (Status.Clins.Count == 0)
     {
-        <MudText Class="mud-text-secondary">No CLINs yet.</MudText>
+        <MudText Class="mud-text-secondary">@Tm.Reword("No CLINs yet.")</MudText>
     }
     else
     {
@@ -33,6 +33,7 @@
 </MudPaper>
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [Parameter, EditorRequired]
     public ContractFundingStatusDto Status { get; set; } = default!;
 

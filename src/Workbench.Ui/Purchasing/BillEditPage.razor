@@ -248,8 +248,8 @@ else
     @if (_needsOverride)
     {
         <MudPaper Outlined="true" Class="pa-4 mb-3">
-            <MudTextField T="string" @bind-Value="_overrideReason" Label="Funding override reason (Finance)" Lines="2"
-                          HelperText="This invoice is over the subcontract's funded value. Finance can submit it anyway with a reason; it's recorded on the bill." data-testid="override-reason" />
+            <MudTextField T="string" @bind-Value="_overrideReason" Label="@Tm.Reword("Funding override reason (Finance)")" Lines="2"
+                          HelperText="@Tm.Reword("This invoice is over the subcontract's funded value. Finance can submit it anyway with a reason; it's recorded on the bill.")" data-testid="override-reason" />
         </MudPaper>
     }
 
@@ -269,6 +269,7 @@ else
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [Parameter] public Guid? BillId { get; set; }
 
     [SupplyParameterFromQuery(Name = "vendor")] public Guid? VendorQuery { get; set; }

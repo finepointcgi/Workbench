@@ -4,19 +4,20 @@
 @if (_status is { Clins.Count: > 0 } status)
 {
     <MudPaper Outlined="true" Class="pa-4 mt-3" data-testid="clin-funding-card">
-        <MudText Typo="Typo.subtitle1" HtmlTag="h2">CLIN funding</MudText>
+        <MudText Typo="Typo.subtitle1" HtmlTag="h2">@Tm.Reword("CLIN funding")</MudText>
         <MudText Typo="Typo.caption" Class="mud-text-secondary d-block mb-3">
             @status.ContractNumber · @(status.IsBurdened ? "burdened cost" : "direct cost") · as of @SetupFormat.Date(status.AsOf)
         </MudText>
         @foreach (var notice in status.Notices.Take(3))
         {
-            <MudAlert Severity="@(notice.ThresholdPercent >= 90 ? Severity.Error : Severity.Warning)" Dense="true" Class="mb-2">@notice.Title</MudAlert>
+            <MudAlert Severity="@(notice.ThresholdPercent >= 90 ? Severity.Error : Severity.Warning)" Dense="true" Class="mb-2">@Tm.Reword(notice.Title)</MudAlert>
         }
         <ClinFundingBars Status="status" />
     </MudPaper>
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [Parameter, EditorRequired]
     public Guid ProjectId { get; set; }
 

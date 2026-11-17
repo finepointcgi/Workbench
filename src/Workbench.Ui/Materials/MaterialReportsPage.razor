@@ -20,7 +20,7 @@
             <MudPaper Outlined="true" Class="pa-2 mt-2" Style="overflow-x:auto">
                 <MudSimpleTable Dense="true" Elevation="0" data-testid="valuation">
 <caption class="wb-sr-only">Inventory valuation</caption>
-                    <thead><tr><th scope="col">Part</th><th scope="col">Costing</th><th scope="col" style="text-align:right">Quantity</th><th scope="col" style="text-align:right">Unit cost</th><th scope="col" style="text-align:right">Value</th><th scope="col" style="text-align:right">Of which contract</th></tr></thead>
+                    <thead><tr><th scope="col">Part</th><th scope="col">Costing</th><th scope="col" style="text-align:right">Quantity</th><th scope="col" style="text-align:right">Unit cost</th><th scope="col" style="text-align:right">Value</th><th scope="col" style="text-align:right">@Tm.Reword("Of which contract")</th></tr></thead>
                     <tbody>
                         @foreach (var r in v.Rows)
                         {
@@ -127,6 +127,7 @@
 </MudTabs>
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     [CascadingParameter] public CurrentUserInfo? User { get; set; }
 
     private InventoryValuationDto? _valuation;

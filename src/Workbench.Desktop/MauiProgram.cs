@@ -21,6 +21,7 @@ public static class MauiProgram
 
         builder.Services.AddMauiBlazorWebView();
         builder.Services.AddMudServices();
+        Workbench.Ui.Company.TermsSnackbarRegistration.AddCompanyWordsInSnackbars(builder.Services);
 
         // WORKBENCH_TENANT_URL (or WORKBENCH_SERVER_URL + WORKBENCH_TENANT) for a SaaS tenant; WORKBENCH_SERVER_URL when self-hosted.
         var serverUrl = WorkbenchServerAddress.FromEnvironment(DefaultServerUrl);

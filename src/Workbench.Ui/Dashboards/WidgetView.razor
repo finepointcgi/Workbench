@@ -97,8 +97,8 @@ else
             </MudText>
             <MudText Typo="Typo.body2" Class="mb-1">@f.Name</MudText>
             <MudGrid Spacing="2">
-                <MudItem xs="4"><Stat Label="Ceiling" Value="@FormatNumber(f.CeilingValue, true)" /></MudItem>
-                <MudItem xs="4"><Stat Label="Funded" Value="@FormatNumber(f.FundedValue, true)" /></MudItem>
+                <MudItem xs="4"><Stat Label="@Tm.Reword("Ceiling")" Value="@FormatNumber(f.CeilingValue, true)" /></MudItem>
+                <MudItem xs="4"><Stat Label="@Tm.Reword("Funded")" Value="@FormatNumber(f.FundedValue, true)" /></MudItem>
                 <MudItem xs="4">
                     <Stat Label="Days left" Value="@f.DaysLeft.ToString("N0", Culture)"
                           Color="@(f.DaysLeft == 0 ? Color.Error : f.DaysLeft <= 90 ? Color.Warning : Color.Default)" />
@@ -106,12 +106,12 @@ else
             </MudGrid>
             @if (f.FundedShare is { } share)
             {
-                <MudProgressLinear Value="@((double)Math.Min(share, 1m) * 100)" Color="Color.Primary" Class="mt-2" aria-label="Share of ceiling funded" />
-                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@share.ToString("P0", Culture) of ceiling funded</MudText>
+                <MudProgressLinear Value="@((double)Math.Min(share, 1m) * 100)" Color="Color.Primary" Class="mt-2" aria-label="@Tm.Reword("Share of ceiling funded")" />
+                <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">@share.ToString("P0", Culture) @Tm.Reword("of ceiling funded")</MudText>
             }
-            <MudProgressLinear Value="@(f.PeriodElapsed * 100)" Color="@(f.PeriodElapsed > 0.9 ? Color.Warning : Color.Info)" Class="mt-2" aria-label="Period of performance elapsed" />
+            <MudProgressLinear Value="@(f.PeriodElapsed * 100)" Color="@(f.PeriodElapsed > 0.9 ? Color.Warning : Color.Info)" Class="mt-2" aria-label="@Tm.Reword("Period of performance elapsed")" />
             <MudText Typo="Typo.caption" Class="mud-text-secondary d-block">
-                Period of performance @f.PeriodStart.ToString("d MMM yyyy") – @f.PeriodEnd.ToString("d MMM yyyy")
+                @Tm.Reword("Period of performance") @f.PeriodStart.ToString("d MMM yyyy") – @f.PeriodEnd.ToString("d MMM yyyy")
                 (@f.PeriodElapsed.ToString("P0", Culture) elapsed)
             </MudText>
             @if (f.Projects.Count > 0)
@@ -163,6 +163,7 @@ else
 }
 
 @code {
+    [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
     private static readonly CultureInfo Culture = CultureInfo.GetCultureInfo("en-US");
 
     [Parameter]
