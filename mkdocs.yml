@@ -159,6 +159,7 @@ nav:
       - Automation: admin-guide/automation.md
       - Importing and go-live: admin-guide/import-and-migration.md
       - Integrations: admin-guide/integrations.md
+      - Paylocity: admin-guide/paylocity.md
       - Accounting export (QuickBooks, Xero): admin-guide/accounting-export.md
       - Push to QuickBooks and Xero: admin-guide/accounting-live-push.md
       - Compliance readiness: admin-guide/compliance.md

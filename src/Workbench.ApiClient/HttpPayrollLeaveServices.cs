@@ -221,6 +221,7 @@ public static class PayrollLeaveClientRegistration
         services.AddHttpClient<IPayrollProfileService, HttpPayrollProfileService>(client => client.BaseAddress = serverBaseAddress);
         services.AddHttpClient<IPayrollProviderService, HttpPayrollProviderService>(client => client.BaseAddress = serverBaseAddress);
         services.AddHttpClient<IPayrollRunService, HttpPayrollRunService>(client => client.BaseAddress = serverBaseAddress);
+        services.AddHttpClient<IPaylocityService, HttpPaylocityService>(client => client.BaseAddress = serverBaseAddress);
         services.AddHttpClient<ILeavePolicyService, HttpLeavePolicyService>(client => client.BaseAddress = serverBaseAddress);
         services.AddHttpClient<IHolidayService, HttpHolidayService>(client => client.BaseAddress = serverBaseAddress);
         services.AddHttpClient<ILeaveBalanceService, HttpLeaveBalanceService>(client => client.BaseAddress = serverBaseAddress);

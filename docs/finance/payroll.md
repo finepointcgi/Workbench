@@ -37,7 +37,7 @@ run**. The run page walks through six steps:
 
 Supported providers:
 
-- **Paylocity**: employee sync and hours over its REST API (set up by the server administrator), or by file.
+- **Paylocity**: employee sync and hours over its REST API (set up by the server administrator), or by file; see [Paylocity](../admin-guide/paylocity.md).
 - **ADP Workforce Now, Paychex Flex and Gusto**: connect with your own API credentials under **Providers** (stored
   encrypted), or use files without a connection.
 - Any other provider: hours export and register import as CSV files.

@@ -1,0 +1,241 @@
+@page "/payroll/paylocity"
+@inject IPaylocityService Paylocity
+@inject IPayrollProviderService Providers
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+
+<PageTitle>Paylocity · Workbench</PageTitle>
+
+<AccessibleBreadcrumbs Items="_crumbs" Class="px-0" />
+<MudText Typo="Typo.h4" HtmlTag="h1" Class="mb-2">Paylocity</MudText>
+<MudText Class="mud-text-secondary mb-4" Style="max-width:760px">
+    Workbench sends Paylocity a file of approved hours and never calculates pay. Check here that every employee has a Paylocity id and
+    every earning and cost center maps to a Paylocity code, and keep the record of what was exported. Running the export is on
+    <MudLink Href="payroll">Payroll</MudLink>; adding people from Paylocity is under People › Import from Paylocity.
+</MudText>
+
+@if (_forbidden)
+{
+    <Workbench.Ui.Identity.ForbiddenNotice Title="Paylocity setup is for Finance and administrators" Message="@_error" />
+}
+else if (_error is not null)
+{
+    <MudAlert Severity="Severity.Warning">@_error</MudAlert>
+}
+else if (_mapping is null)
+{
+    <MudProgressLinear aria-label="Loading" Indeterminate="true" />
+}
+else
+{
+    <MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true" TabPanelsClass="pt-4">
+        <MudTabPanel Text="Mapping" data-testid="tab-mapping">
+            @foreach (var problem in _mapping.Problems)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2" data-testid="problem">@problem</MudAlert>
+            }
+
+            <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">Companies</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">The Paylocity company code each pay group is filed under (change it on Payroll › Pay groups).</MudText>
+            <MudSimpleTable Dense="true" Outlined="true" Class="mb-6" data-testid="companies">
+                <thead><tr><th>Pay group</th><th>Company code</th><th>Employees</th></tr></thead>
+                <tbody>
+                    @foreach (var c in _mapping.Companies)
+                    {
+                        <tr><td>@c.PayGroupCode · @c.PayGroupName@(c.IsActive ? "" : " (inactive)")</td><td>@c.CompanyCode</td><td>@c.Employees</td></tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+
+            <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">Earning codes</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
+                The Paylocity earning code for each kind of hours: regular, overtime and each leave type. Overtime is hours over 40 worked in a
+                Monday–Sunday week for non-exempt employees.
+            </MudText>
+            <MudSimpleTable Dense="true" Outlined="true" Class="mb-2" data-testid="earning-codes">
+                <thead><tr><th>Workbench hours</th><th>Paylocity earning code</th></tr></thead>
+                <tbody>
+                    @foreach (var ec in _codes)
+                    {
+                        <tr>
+                            <td>@CodeLabel(ec.Category)</td>
+                            <td>
+                                <MudTextField T="string" Value="@_codeValues.GetValueOrDefault(ec.Category)" ValueChanged="@(v => _codeValues[ec.Category] = v ?? "")" Dense="true" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                              MaxLength="5" Style="max-width:140px" aria-label="@($"Earning code for {ec.Category}")" />
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+            <MudButton Variant="Variant.Outlined" Class="mb-6" OnClick="SaveCodesAsync" Disabled="_busy" data-testid="save-codes">Save earning codes</MudButton>
+
+            <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">Cost centers</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
+                Paylocity's cost center for each org unit. Leave it blank to send the org unit's own code.
+            </MudText>
+            <MudSimpleTable Dense="true" Outlined="true" Class="mb-2" data-testid="cost-centers">
+                <thead><tr><th>Org unit</th><th>Employees</th><th>Paylocity cost center</th><th>Sent as</th></tr></thead>
+                <tbody>
+                    @foreach (var row in _mapping.CostCenters)
+                    {
+                        <tr>
+                            <td>@row.OrgUnitCode · @row.OrgUnitName</td>
+                            <td>@row.Employees</td>
+                            <td>
+                                <MudTextField T="string" Value="@_centers.GetValueOrDefault(row.OrgUnitId)" ValueChanged="@(v => _centers[row.OrgUnitId] = v)" Dense="true" Variant="Variant.Outlined"
+                                              Margin="Margin.Dense" MaxLength="50" Style="max-width:180px" aria-label="@($"Cost center for {row.OrgUnitCode}")" />
+                            </td>
+                            <td>@row.SentAs</td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+            <MudButton Variant="Variant.Outlined" Class="mb-6" OnClick="SaveCentersAsync" Disabled="_busy" data-testid="save-centers">Save cost centers</MudButton>
+
+            <MudText Typo="Typo.h6" HtmlTag="h2" Class="mb-1">Employee ids</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2">
+                Hours are exported only for people with a Paylocity id. Set it on Payroll › Employee profiles, or import the roster from Paylocity.
+            </MudText>
+            <MudSimpleTable Dense="true" Outlined="true" data-testid="employees">
+                <thead><tr><th>Employee</th><th>Pay group</th><th>Paylocity id</th><th>Cost center</th><th>Status</th></tr></thead>
+                <tbody>
+                    @foreach (var e in _mapping.Employees)
+                    {
+                        <tr>
+                            <td>@e.Name <span class="mud-text-secondary">(@e.EmployeeNumber)</span></td>
+                            <td>@e.PayGroupCode</td>
+                            <td>@e.PaylocityId</td>
+                            <td>@e.CostCenter</td>
+                            <td>
+                                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@(e.Status == "Ready" ? Color.Success : Color.Warning)" Class="ma-0">@(e.Status switch { "NoId" => "No id", "DuplicateId" => "Duplicate id", _ => "Ready" })</MudChip>
+                                @if (e.Note is not null)
+                                {
+                                    <span class="mud-text-secondary ml-2">@e.Note</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </MudTabPanel>
+
+        <MudTabPanel Text="Export history" data-testid="tab-exports">
+            <MudText Typo="Typo.body2" Class="mud-text-secondary mb-2" Style="max-width:760px">
+                Every hours file sent to Paylocity, with a checksum (SHA-256) to compare with the file you imported there. A pay period is exported
+                again only on purpose, with a note, because importing two files would pay the hours twice.
+            </MudText>
+            <MudSimpleTable Dense="true" Outlined="true" data-testid="exports">
+                <thead><tr><th>When</th><th>Pay group · period</th><th>#</th><th>File</th><th>Employees</th><th>Hours</th><th>Checksum</th><th>By</th><th>Note</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var x in _exports)
+                    {
+                        <tr>
+                            <td>@x.ExportedAtUtc.ToLocalTime().ToString("MMM d, yyyy h:mm tt", CultureInfo.InvariantCulture)</td>
+                            <td>@x.PayGroupCode · @PayrollFormat.Range(x.PeriodStart, x.PeriodEnd)</td>
+                            <td>@x.Sequence@(x.IsReExport ? " (again)" : "")</td>
+                            <td>@x.FileName@(x.Method == "api" ? " (sent by API)" : "")</td>
+                            <td>@x.EmployeeCount</td>
+                            <td>@PayrollFormat.Hours(x.TotalHours)</td>
+                            <td><code title="@x.Sha256">@x.Sha256[..12]…</code></td>
+                            <td>@x.ExportedBy</td>
+                            <td>@x.Note</td>
+                            <td><MudButton Size="Size.Small" Variant="Variant.Text" OnClick="@(() => DownloadAsync(x))" StartIcon="@Icons.Material.Filled.Download">Download</MudButton></td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+            @if (_exports.Count == 0)
+            {
+                <MudText Class="mud-text-secondary mt-2">Nothing has been exported yet.</MudText>
+            }
+        </MudTabPanel>
+    </MudTabs>
+}
+
+@code {
+    private PaylocityMappingDto? _mapping;
+    private IReadOnlyList<PayrollExportRecordDto> _exports = [];
+    private IReadOnlyList<EarningCodeMapping> _codes = [];
+    private readonly Dictionary<string, string> _codeValues = [];
+    private readonly Dictionary<Guid, string?> _centers = [];
+    private bool _busy;
+    private bool _forbidden;
+    private string? _error;
+
+    private readonly List<BreadcrumbItem> _crumbs = [new("Payroll", "payroll"), new("Paylocity", null, disabled: true)];
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await LoadAsync();
+        }
+        catch (Exception ex) when (PayrollFormat.IsExpected(ex))
+        {
+            (_error, _forbidden) = (PayrollFormat.Error(ex), PayrollFormat.IsForbidden(ex));
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        _mapping = await Paylocity.GetMappingAsync();
+        _exports = await Paylocity.ListExportsAsync();
+        _codes = (await Providers.GetSettingsAsync("paylocity")).EarningCodes;
+        _codeValues.Clear();
+        foreach (var c in _codes)
+        {
+            _codeValues[c.Category] = c.EarningCode;
+        }
+
+        _centers.Clear();
+        foreach (var c in _mapping.CostCenters)
+        {
+            _centers[c.OrgUnitId] = c.MappedCode;
+        }
+    }
+
+    private static string CodeLabel(string category) => category switch
+    {
+        "REG" => "Regular hours",
+        "OT" => "Overtime hours",
+        _ when category.StartsWith("LV.", StringComparison.OrdinalIgnoreCase) => $"Leave: {category[3..]}",
+        _ => category,
+    };
+
+    private async Task SaveCodesAsync() => await RunAsync(async () =>
+    {
+        var current = await Providers.GetSettingsAsync("paylocity");
+        await Providers.SaveSettingsAsync("paylocity", new SavePayrollProviderSettingsRequest(_codes.Select(c => new EarningCodeMapping(c.Category, _codeValues.GetValueOrDefault(c.Category, c.EarningCode).Trim())).ToList(), current.ExportSalariedRegularHours));
+        Snackbar.Add("Earning codes saved.", Severity.Success);
+    });
+
+    private async Task SaveCentersAsync() => await RunAsync(async () =>
+    {
+        await Paylocity.SaveCostCentersAsync(_centers.Select(c => new SaveCostCenterMapping(c.Key, c.Value)).ToList());
+        Snackbar.Add("Cost centers saved.", Severity.Success);
+    });
+
+    private async Task DownloadAsync(PayrollExportRecordDto export) => await RunAsync(async () =>
+    {
+        var file = await Paylocity.GetExportFileAsync(export.Id);
+        await PayrollFormat.DownloadAsync(JS, file.FileName, file.ContentType, file.Content);
+    });
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        try
+        {
+            await action();
+            await LoadAsync();
+        }
+        catch (Exception ex) when (PayrollFormat.IsExpected(ex))
+        {
+            Snackbar.Add(PayrollFormat.Error(ex), Severity.Error);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

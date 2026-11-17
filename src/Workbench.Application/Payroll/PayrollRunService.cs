@@ -82,9 +82,9 @@ public sealed class PayrollRunService(
     }
 
     public Task<PayrollFileDto> ExportHoursAsync(Guid runId, ExportHoursRequest request, CancellationToken cancellationToken = default) =>
-        ExportHoursCoreAsync(runId, request, null, cancellationToken);
+        ExportHoursCoreAsync(runId, request, null, "file", cancellationToken);
 
-    private async Task<PayrollFileDto> ExportHoursCoreAsync(Guid runId, ExportHoursRequest request, Action<PayrollHoursExport>? exported, CancellationToken cancellationToken)
+    private async Task<PayrollFileDto> ExportHoursCoreAsync(Guid runId, ExportHoursRequest request, Action<PayrollHoursExport>? exported, string method, CancellationToken cancellationToken)
     {
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var run = await db.Set<PayrollRun>().Include(r => r.ExportLines).FirstOrDefaultAsync(r => r.Id == runId, cancellationToken)
@@ -94,6 +94,25 @@ public sealed class PayrollRunService(
             throw new ArgumentException(run.Status == PayrollRunStatus.Voided
                 ? "This run is voided. Start a new run for the period."
                 : "The register is already imported, so the hours can't be exported again. Void the run to start over.");
+        }
+
+        // Never export the same pay period twice by accident: importing both files would pay the hours twice. Looks at every
+        // run of the group and period (a voided run's file may still have been imported), and needs a reason to go on.
+        var earlier = await db.Set<PayrollExportRecord>().AsNoTracking()
+            .Where(x => x.PayGroupId == run.PayGroupId && x.PayPeriodId == run.PayPeriodId)
+            .OrderByDescending(x => x.ExportedAtUtc).ThenByDescending(x => x.Sequence).ToListAsync(cancellationToken);
+        var note = request.ReExportNote?.Trim();
+        if (earlier.Count > 0 && string.IsNullOrEmpty(note))
+        {
+            var last = earlier[0];
+            throw new ArgumentException($"The hours for this pay period were already exported on {last.ExportedAtUtc:yyyy-MM-dd HH:mm} UTC by {last.ExportedBy} "
+                + $"({last.FileName}, checksum {last.Sha256[..12]}…). Importing a second file in the payroll provider would pay them twice. "
+                + "To export again on purpose, say why (for example: \"first file was rejected by Paylocity\").");
+        }
+
+        if (note is { Length: > 1000 })
+        {
+            throw new ArgumentException("The re-export note can be at most 1000 characters.");
         }
 
         var data = await PayrollData.LoadAsync(db, run, cancellationToken, providers);
@@ -144,6 +163,26 @@ public sealed class PayrollRunService(
             db.Set<PayrollExportLine>().Add(line);
         }
 
+        var record = new PayrollExportRecord
+        {
+            RunId = run.Id,
+            PayGroupId = run.PayGroupId,
+            PayPeriodId = run.PayPeriodId,
+            Sequence = (await db.Set<PayrollExportRecord>().Where(x => x.RunId == run.Id).MaxAsync(x => (int?)x.Sequence, cancellationToken) ?? 0) + 1,
+            Method = method,
+            FileName = file.FileName,
+            Sha256 = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(file.Content))).ToLowerInvariant(),
+            Content = file.Content,
+            LineCount = lines.Count,
+            EmployeeCount = lines.Select(l => l.EmployeeId).Distinct().Count(),
+            TotalHours = lines.Sum(l => l.Hours),
+            FlaggedCount = flagged.Count,
+            IsReExport = earlier.Count > 0,
+            Note = earlier.Count > 0 ? note : null,
+            ExportedBy = audit.Actor,
+            ExportedAtUtc = UtcNow,
+        };
+        db.Set<PayrollExportRecord>().Add(record);
         var before = new { Status = run.Status.ToString() };
         run.Status = PayrollRunStatus.Exported;
         run.ExportedAtUtc = UtcNow;
@@ -151,8 +190,8 @@ public sealed class PayrollRunService(
         run.ExportFileName = file.FileName;
         run.ExportContent = file.Content;
         audit.Record(db, AuditEntityType, run.Id, "Hours exported", before,
-            new { Status = run.Status.ToString(), file.FileName, Lines = lines.Count, Hours = lines.Sum(l => l.Hours), Flagged = flagged.Count },
-            flagged.Count > 0 ? $"Exported with {flagged.Count} flagged employee(s)" : null);
+            new { Status = run.Status.ToString(), file.FileName, record.Sha256, record.Sequence, Lines = lines.Count, Hours = lines.Sum(l => l.Hours), Flagged = flagged.Count },
+            record.IsReExport ? $"Exported again: {record.Note}" : flagged.Count > 0 ? $"Exported with {flagged.Count} flagged employee(s)" : null);
         await db.SaveChangesAsync(cancellationToken);
         if (securityLog is not null)
         {
@@ -245,7 +284,7 @@ public sealed class PayrollRunService(
         }
 
         // Export first: the run keeps the exact file as evidence of what was sent, whichever way it went.
-        var file = await ExportHoursCoreAsync(runId, request, e => sent = e, cancellationToken);
+        var file = await ExportHoursCoreAsync(runId, request, e => sent = e, "api", cancellationToken);
         PayrollHoursSubmission submission;
         try
         {
@@ -652,6 +691,14 @@ internal sealed class PayrollData
             .Where(e => e.HireDate <= period.End && (e.TerminationDate is null || e.TerminationDate >= period.Start))
             .ToDictionary(e => e.Id);
         var orgs = await db.Set<OrgUnit>().AsNoTracking().ToDictionaryAsync(o => o.Id, o => o.Code, ct);
+        if (group.ProviderKey == PaylocityPayrollProvider.ProviderKey)
+        {
+            // Paylocity cost center codes mapped to org units (Payroll › Paylocity); the org unit's own code otherwise.
+            foreach (var m in await db.Set<PaylocityCostCenterMapping>().AsNoTracking().ToListAsync(ct))
+            {
+                orgs[m.OrgUnitId] = m.Code;
+            }
+        }
 
         // Whole workweeks around the period, so overtime counts a week's hours from before the period start.
         var weeksFrom = PayrollHours.WeekStart(period.Start);

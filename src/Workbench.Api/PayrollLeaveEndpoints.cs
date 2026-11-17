@@ -86,7 +86,7 @@ internal static class PayrollLeaveEndpoints
     internal sealed record StartPayrollRunBody(Guid PayGroupId, Guid PayPeriodId);
 
     /// <summary>Coming-soon providers (501), invalid state (409) and employee lookups (403) on top of the shared mapping.</summary>
-    private static async ValueTask<object?> MapPayrollErrors(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
+    internal static async ValueTask<object?> MapPayrollErrors(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
     {
         try
         {

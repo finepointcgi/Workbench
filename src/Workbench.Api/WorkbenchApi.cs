@@ -47,6 +47,7 @@ public static class WorkbenchApi
         v1.MapAssetEndpoints();
         v1.MapCashEndpoints();
         v1.MapPayrollLeaveEndpoints();
+        v1.MapPaylocityEndpoints();
         v1.MapPerDiemResourcingEndpoints();
         v1.MapRevenueEndpoints();
         v1.MapIncurredCostEndpoints();
