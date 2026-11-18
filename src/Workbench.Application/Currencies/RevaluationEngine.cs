@@ -2,7 +2,6 @@ using Microsoft.EntityFrameworkCore;
 using Workbench.Application.Purchasing;
 using Workbench.Domain.Accounting;
 using Workbench.Domain.Billing;
-using Workbench.Domain.Cash;
 using Workbench.Domain.Currencies;
 using Workbench.Domain.ProjectAccounting;
 using Workbench.Domain.Purchasing;
@@ -44,7 +43,7 @@ public sealed record OpenForeignBalance(
 public static class RevaluationEngine
 {
     /// <param name="latestRate">Value at the newest rate of any type on the date (the report) instead of the month-end rate (the revaluation).</param>
-    public static async Task<(List<OpenForeignBalance> Balances, List<string> Warnings)> OpenBalancesAsync(IWorkbenchDbContext db, DateOnly asOf, CancellationToken ct, bool latestRate = false)
+    public static async Task<(List<OpenForeignBalance> Balances, List<string> Warnings)> OpenBalancesAsync(IWorkbenchDbContext db, DateOnly asOf, CancellationToken ct, bool latestRate = false, IEnumerable<IForeignBalanceSource>? sources = null)
     {
         var functional = await CurrencySupport.FunctionalAsync(db, ct);
         var warnings = new List<string>();
@@ -111,37 +110,10 @@ public static class RevaluationEngine
             }
         }
 
-        // Bank accounts kept in a foreign currency.
-        var banks = await db.Set<BankAccount>().AsNoTracking().Where(b => b.IsActive).ToListAsync(ct);
-        foreach (var bank in banks.Where(b => b.Currency != functional).OrderBy(b => b.Name))
+        // Balances a license module owns (bank accounts kept in a foreign currency).
+        foreach (var source in sources ?? [])
         {
-            if (banks.Any(o => o.Id != bank.Id && o.GlAccountId == bank.GlAccountId && o.Currency != bank.Currency))
-            {
-                warnings.Add($"{bank.Name} ({bank.Currency}) shares GL account {accounts.GetValueOrDefault(bank.GlAccountId)} with an account in another currency, so it isn't revalued. Give it its own cash account.");
-                continue;
-            }
-
-            var lines = await (
-                    from l in db.Set<JournalLine>().AsNoTracking()
-                    join e in db.Set<JournalEntry>().AsNoTracking() on l.JournalEntryId equals e.Id
-                    where l.AccountId == bank.GlAccountId && e.Status != JournalStatus.Draft && e.Date <= asOf
-                    select new { l.Debit, l.Credit, l.TransactionCurrency, l.TransactionAmount })
-                .ToListAsync(ct);
-            var carrying = lines.Sum(l => l.Debit - l.Credit);
-            var transaction = lines.Where(l => l.TransactionCurrency == bank.Currency).Sum(l => (l.Debit > 0 ? 1 : -1) * (l.TransactionAmount ?? 0));
-            if (lines.Any(l => l.TransactionCurrency != null && l.TransactionCurrency != bank.Currency))
-            {
-                warnings.Add($"{bank.Name} has postings in other currencies than {bank.Currency}; only its {bank.Currency} amounts are revalued.");
-            }
-
-            if (transaction == 0 && carrying == 0)
-            {
-                continue;
-            }
-
-            balances.Add(new OpenForeignBalance(RevaluationItemKind.Bank, bank.Id, $"{bank.Name} ••••{bank.AccountNumberLast4}", bank.BankName, asOf,
-                bank.Currency, transaction == 0 ? 0 : Math.Round(carrying / transaction, CurrencyMath.RateDecimals), transaction, transaction, carrying,
-                bank.GlAccountId, accounts.GetValueOrDefault(bank.GlAccountId) ?? "", null, null, bank.CompanyId));
+            await source.AddOpenBalancesAsync(db, asOf, functional, accounts, balances, warnings, ct);
         }
 
         // Value everything at the month-end rate (falling back to the latest rate of another type).

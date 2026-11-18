@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Workbench.Contracts.Currencies;
 using Workbench.Domain.Accounting;
-using Workbench.Domain.Cash;
 using Workbench.Domain.Currencies;
 
 namespace Workbench.Application.Currencies;
@@ -186,13 +185,20 @@ public static class CurrencySupport
     }
 
     /// <summary>
-    /// The GL cash account a foreign payment moves through: the active bank account kept in that currency (its GL account),
-    /// else the default cash account.
+    /// The GL cash account a foreign payment moves through: the account of the active bank account kept in that currency (the accounting module's records,
+    /// asked through <paramref name="sources"/>), else null and the caller uses the default cash account.
     /// </summary>
-    public static async Task<Guid?> ForeignCashAccountAsync(IWorkbenchDbContext db, string currency, CancellationToken ct)
+    public static async Task<Guid?> ForeignCashAccountAsync(IWorkbenchDbContext db, string currency, IEnumerable<IForeignBalanceSource>? sources, CancellationToken ct)
     {
-        var accounts = await db.Set<BankAccount>().AsNoTracking().Where(b => b.IsActive && b.Currency == currency).Select(b => b.GlAccountId).Distinct().ToListAsync(ct);
-        return accounts.Count == 1 ? accounts[0] : null;
+        foreach (var source in sources ?? [])
+        {
+            if (await source.CashAccountAsync(db, currency, ct) is { } id)
+            {
+                return id;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>

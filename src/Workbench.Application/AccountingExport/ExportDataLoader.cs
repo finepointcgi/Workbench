@@ -139,14 +139,14 @@ internal static class ExportDataLoader
     }
 
     public static async Task<ExportDataset> BuildAsync(
-        IWorkbenchDbContext db, AccountingExportKind kind, IReadOnlyCollection<Guid> idSet, MappingResolver map, CancellationToken ct)
+        IWorkbenchDbContext db, AccountingExportKind kind, IReadOnlyCollection<Guid> idSet, MappingResolver map, CancellationToken ct, IInvoiceTaxHook? salesTaxHook = null)
     {
         var ids = idSet.ToList();
         return kind switch
         {
             AccountingExportKind.ChartOfAccounts => await AccountsAsync(db, ids, map, ct),
             AccountingExportKind.JournalEntries => await JournalsAsync(db, ids, map, ct),
-            AccountingExportKind.Invoices => await InvoicesAsync(db, ids, map, ct),
+            AccountingExportKind.Invoices => await InvoicesAsync(db, ids, map, ct, salesTaxHook),
             AccountingExportKind.Payments => await PaymentsAsync(db, ids, map, ct),
             _ => await BillsAsync(db, ids, map, ct),
         };
@@ -207,7 +207,7 @@ internal static class ExportDataLoader
 
     private static string Money(decimal v) => v.ToString("0.00", CultureInfo.InvariantCulture);
 
-    private static async Task<ExportDataset> InvoicesAsync(IWorkbenchDbContext db, List<Guid> ids, MappingResolver map, CancellationToken ct)
+    private static async Task<ExportDataset> InvoicesAsync(IWorkbenchDbContext db, List<Guid> ids, MappingResolver map, CancellationToken ct, IInvoiceTaxHook? salesTaxHook)
     {
         var invoices = await db.Set<Invoice>().AsNoTracking().Include(i => i.Lines).Where(i => ids.Contains(i.Id)).ToListAsync(ct);
         var customerIds = invoices.Select(i => i.CustomerId).Distinct().ToList();
@@ -217,7 +217,7 @@ internal static class ExportDataLoader
         var clins = await db.Set<Clin>().AsNoTracking().Where(c => contractIds.Contains(c.ContractId)).ToDictionaryAsync(c => c.Id, ct);
         var projects = await ProjectsAsync(db, invoices.SelectMany(i => i.Lines).Select(l => l.ProjectId), ct);
         var salesTaxNumber = invoices.Any(i => i.Lines.Any(l => l.Kind == InvoiceLineKind.SalesTax))
-            ? await SalesTax.SalesTaxSupport.SalesTaxPayableNumberAsync(db, ct)
+            ? (salesTaxHook is null ? SalesTaxDefaults.PayableNumber : await salesTaxHook.PayableNumberAsync(db, ct))
             : null;
         var neededNumbers = new HashSet<string> { BillingLedger.ArBilled, BillingLedger.ArUnbilled, BillingLedger.ContractFinancing, "4010", "4020", "4030", "4040" };
         if (salesTaxNumber is not null)

@@ -44,8 +44,6 @@ public static class WorkbenchApi
         v1.MapCompanyProfileEndpoints();
         v1.MapImportEndpoints();
         v1.MapProcurementEndpoints();
-        v1.MapAssetEndpoints();
-        v1.MapCashEndpoints();
         v1.MapLeaveEndpoints();
         v1.MapPerDiemResourcingEndpoints();
         v1.MapRevenueEndpoints();
@@ -60,16 +58,13 @@ public static class WorkbenchApi
         v1.MapTaskEndpoints();
         v1.MapAssistantEndpoints();
         v1.MapMcpEndpoints(); // MCP for outside AI clients, API keys only (docs/integrations/mcp.md).
-        v1.MapPlanningEndpoints();
         v1.MapCurrencyEndpoints();
         v1.MapCompanyEndpoints();
         v1.MapCommercialBillingEndpoints();
         v1.MapTravelEndpoints();
         v1.MapSourcingEndpoints();
-        v1.MapBankFileEndpoints();
         v1.MapAccountingExportEndpoints();
         v1.MapAccountingLiveEndpoints();
-        v1.MapSalesTaxEndpoints();
         v1.MapIntegrationEndpoints();
         v1.MapJiraEndpoints(); // Jira sync: connection and project links (under /integrations).
         v1.MapGitLabEndpoints(); // GitLab sync: connection and project links (under /integrations).

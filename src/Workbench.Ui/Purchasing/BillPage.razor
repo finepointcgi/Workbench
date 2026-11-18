@@ -3,7 +3,6 @@
 @inject IDialogService DialogService
 @inject ISnackbar Snackbar
 @inject NavigationManager Navigation
-@inject Workbench.Contracts.Assets.IAssetService AssetService
 
 <PageTitle>@(_bill?.Bill.Number ?? "Bill") · Purchasing · Workbench</PageTitle>
 
@@ -133,12 +132,13 @@ else
         {
             <MudText Class="mb-2">@bill.Description</MudText>
         }
-        <BillLinesTable Lines="bill.Lines" CanCapitalize="@(_capitalizable.Count > 0 ? l => _capitalizable.Contains(l.Id) : null)" OnCapitalize="CapitalizeAsync" />
+        <BillLinesTable Lines="bill.Lines" />
     </MudPaper>
 
     @if (Access?.Can(Workbench.Contracts.Identity.Permission.ApBillsManage) == true && bill.Bill.Status is not (BillState.Void or BillState.Rejected) && bill.Bill.Kind == BillKind.Bill)
     {
-        <Workbench.Ui.SalesTax.BillTaxCard BillId="BillId" Status="bill.Bill.Status" />
+        @* Sales and use tax, and adding posted lines to fixed assets: the accounting module's panels. *@
+        <UiSlot Name="purchasing.bill.panels" Parameters="@(new Dictionary<string, object?> { ["BillId"] = BillId, ["Status"] = bill.Bill.Status, ["Changed"] = EventCallback.Factory.Create(this, ReloadBillAsync) })" />
     }
 
     @if (bill.Payments.Count > 0)
@@ -192,7 +192,6 @@ else
         try
         {
             _bill = await Bills.GetAsync(BillId);
-            await LoadCapitalizableAsync();
         }
         catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
         {
@@ -205,7 +204,6 @@ else
         try
         {
             _bill = await action();
-            await LoadCapitalizableAsync();
             Snackbar.Add(_bill.Bill.PostingProblem is { } problem ? $"Saved, but posting failed: {problem}" : success,
                 _bill.Bill.PostingProblem is null ? Severity.Success : Severity.Warning);
         }
@@ -242,40 +240,15 @@ else
         }
     }
 
-    /// <summary>Posted GL-account lines over the capitalization threshold not yet capitalized (Finance only; others see no action).</summary>
-    private HashSet<Guid> _capitalizable = [];
-
-    private async Task LoadCapitalizableAsync()
+    private async Task ReloadBillAsync()
     {
         try
         {
-            _capitalizable = _bill?.Bill.Status == BillState.Posted
-                ? (await AssetService.ListCapitalizableBillLinesAsync()).Where(l => l.BillId == BillId).Select(l => l.BillLineId).ToHashSet()
-                : [];
+            _bill = await Bills.GetAsync(BillId);
         }
         catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
         {
-            _capitalizable = [];
-        }
-    }
-
-    private async Task CapitalizeAsync(BillLineDto line)
-    {
-        var dialog = await DialogService.ShowAsync<Workbench.Ui.Assets.CapitalizeDialog>($"Add {_bill!.Bill.Number} line {line.LineNumber} to fixed assets",
-            new DialogParameters<Workbench.Ui.Assets.CapitalizeDialog> { { d => d.BillLineId, line.Id }, { d => d.Description, line.Description }, { d => d.Amount, line.Amount } },
-            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true });
-        if (await dialog.Result is { Canceled: false, Data: Workbench.Contracts.Assets.CapitalizeBillLineRequest request })
-        {
-            try
-            {
-                var asset = await AssetService.CapitalizeAsync(request);
-                Snackbar.Add($"Added to fixed assets as {asset.Asset.TagNumber}.", Severity.Success);
-                Navigation.NavigateTo($"assets/{asset.Asset.Id}");
-            }
-            catch (Exception ex) when (PurchasingFormat.IsExpected(ex))
-            {
-                Snackbar.Add(PurchasingFormat.Error(ex), Severity.Error);
-            }
+            Snackbar.Add(PurchasingFormat.Error(ex), Severity.Error);
         }
     }
 

@@ -26,7 +26,8 @@ public sealed class ApCreditService(
     IOptions<PurchasingOptions> options,
     TimeProvider clock,
     Customization.DocumentNumbers? documentNumbers = null,
-    IVendorReturnSource? vendorReturns = null) : IApCreditService
+    IVendorReturnSource? vendorReturns = null,
+    Billing.IBillTaxHook? billTax = null) : IApCreditService
 {
     private Customization.DocumentNumbers DocNumbers => documentNumbers ?? new(dbFactory, clock);
 
@@ -484,9 +485,9 @@ public sealed class ApCreditService(
             }
         }
 
-        if (await db.Set<Domain.SalesTax.ApBillTax>().AsNoTracking().Where(t => t.BillId == bill.Id).Select(t => (Guid?)t.Id).FirstOrDefaultAsync(cancellationToken) is { } taxId)
+        if (billTax is not null && await billTax.FindAsync(db, bill.Id, cancellationToken) is { } tax)
         {
-            sources[taxId] = "Use tax";
+            sources[tax.Id] = "Use tax";
         }
 
         foreach (var p in await db.Set<ApPayment>().AsNoTracking().Where(p => p.BillId == bill.Id).Select(p => new { p.Id, p.Reference }).ToListAsync(cancellationToken))

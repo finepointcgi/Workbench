@@ -2,9 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Workbench.Domain;
 using Workbench.Domain.Accounting;
-using Workbench.Domain.Assets;
 using Workbench.Domain.Billing;
-using Workbench.Domain.Cash;
 using Workbench.Domain.Companies;
 using Workbench.Domain.Identity;
 using Workbench.Domain.ProjectAccounting;
@@ -117,10 +115,6 @@ internal sealed class InvoiceCompanyConfiguration : CompanyColumnConfiguration<I
 internal sealed class PaymentCompanyConfiguration : CompanyColumnConfiguration<Payment>;
 
 internal sealed class InvoiceWriteOffCompanyConfiguration : CompanyColumnConfiguration<InvoiceWriteOff>;
-
-internal sealed class BankAccountCompanyConfiguration : CompanyColumnConfiguration<BankAccount>;
-
-internal sealed class FixedAssetCompanyConfiguration : CompanyColumnConfiguration<FixedAsset>;
 
 internal sealed class IndirectPoolSetupCompanyConfiguration : CompanyColumnConfiguration<IndirectPoolSetup>;
 

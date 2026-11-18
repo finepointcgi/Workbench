@@ -15,43 +15,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
         protected override void Up(MigrationBuilder migrationBuilder)
         {
 
-            migrationBuilder.AddColumn<string>(
-                name: "DisposalKind",
-                table: "FixedAsset",
-                type: "TEXT",
-                maxLength: 16,
-                nullable: true);
-
-            migrationBuilder.AddColumn<Guid>(
-                name: "FromCompanyId",
-                table: "AssetTransfer",
-                type: "TEXT",
-                nullable: true);
-
-            migrationBuilder.AddColumn<Guid>(
-                name: "FromContractId",
-                table: "AssetTransfer",
-                type: "TEXT",
-                nullable: true);
-
-            migrationBuilder.AddColumn<Guid>(
-                name: "JournalEntryId",
-                table: "AssetTransfer",
-                type: "TEXT",
-                nullable: true);
-
-            migrationBuilder.AddColumn<Guid>(
-                name: "ToCompanyId",
-                table: "AssetTransfer",
-                type: "TEXT",
-                nullable: true);
-
-            migrationBuilder.AddColumn<Guid>(
-                name: "ToContractId",
-                table: "AssetTransfer",
-                type: "TEXT",
-                nullable: true);
-
             migrationBuilder.CreateTable(
                 name: "ApiKeys",
                 columns: table => new
@@ -76,68 +39,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_ApiKeys", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "AssetTaxBooks",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    AssetId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Book = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    Method = table.Column<string>(type: "TEXT", maxLength: 24, nullable: false),
-                    RecoveryYears = table.Column<decimal>(type: "TEXT", precision: 5, scale: 1, nullable: false),
-                    Convention = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    Basis = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: true),
-                    PlacedInServiceDate = table.Column<DateOnly>(type: "TEXT", nullable: true),
-                    Section179Amount = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    BonusPercent = table.Column<decimal>(type: "TEXT", precision: 5, scale: 2, nullable: false),
-                    Notes = table.Column<string>(type: "TEXT", maxLength: 1000, nullable: true),
-                    DisposalDepreciation = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: true),
-                    DisposalAdjustedBasis = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: true),
-                    DisposalGainLoss = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: true),
-                    UpdatedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_AssetTaxBooks", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_AssetTaxBooks_FixedAsset_AssetId",
-                        column: x => x.AssetId,
-                        principalTable: "FixedAsset",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "BankAchSettings",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    BankAccountId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ImmediateDestination = table.Column<string>(type: "TEXT", maxLength: 9, nullable: false),
-                    ImmediateDestinationName = table.Column<string>(type: "TEXT", maxLength: 23, nullable: false),
-                    ImmediateOrigin = table.Column<string>(type: "TEXT", maxLength: 10, nullable: false),
-                    ImmediateOriginName = table.Column<string>(type: "TEXT", maxLength: 23, nullable: false),
-                    CompanyIdentification = table.Column<string>(type: "TEXT", maxLength: 10, nullable: false),
-                    CompanyName = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    EntryDescription = table.Column<string>(type: "TEXT", maxLength: 10, nullable: false),
-                    OriginatingDfi = table.Column<string>(type: "TEXT", maxLength: 8, nullable: false),
-                    BalancedFile = table.Column<bool>(type: "INTEGER", nullable: false),
-                    PositivePayLayoutId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    UpdatedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_BankAchSettings", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_BankAchSettings_BankAccounts_BankAccountId",
-                        column: x => x.BankAccountId,
-                        principalTable: "BankAccounts",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -217,59 +118,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 });
 
             migrationBuilder.CreateTable(
-                name: "PaymentFileDownloads",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    RunId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    BankAccountId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Kind = table.Column<int>(type: "INTEGER", nullable: false),
-                    FileName = table.Column<string>(type: "TEXT", maxLength: 260, nullable: false),
-                    FileIdModifier = table.Column<string>(type: "TEXT", maxLength: 1, nullable: true),
-                    EntryCount = table.Column<int>(type: "INTEGER", nullable: false),
-                    TotalAmount = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    Sha256 = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    DownloadedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    DownloadedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_PaymentFileDownloads", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_PaymentFileDownloads_ApPaymentRun_RunId",
-                        column: x => x.RunId,
-                        principalTable: "ApPaymentRun",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_PaymentFileDownloads_BankAccounts_BankAccountId",
-                        column: x => x.BankAccountId,
-                        principalTable: "BankAccounts",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "PositivePayLayouts",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Name = table.Column<string>(type: "TEXT", maxLength: 100, nullable: false),
-                    Format = table.Column<int>(type: "INTEGER", nullable: false),
-                    FieldsJson = table.Column<string>(type: "TEXT", maxLength: 8000, nullable: false),
-                    IncludeHeader = table.Column<bool>(type: "INTEGER", nullable: false),
-                    IssueCode = table.Column<string>(type: "TEXT", maxLength: 4, nullable: false),
-                    VoidCode = table.Column<string>(type: "TEXT", maxLength: 4, nullable: false),
-                    IsActive = table.Column<bool>(type: "INTEGER", nullable: false),
-                    UpdatedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_PositivePayLayouts", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "PurchaseOrderAcknowledgement",
                 columns: table => new
                 {
@@ -296,36 +144,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
                         name: "FK_PurchaseOrderAcknowledgement_Vendor_VendorId",
-                        column: x => x.VendorId,
-                        principalTable: "Vendor",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "RemittanceAdvices",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    RunId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    VendorId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Email = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    Amount = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    Payments = table.Column<int>(type: "INTEGER", nullable: false),
-                    SentBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    SentAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_RemittanceAdvices", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_RemittanceAdvices_ApPaymentRun_RunId",
-                        column: x => x.RunId,
-                        principalTable: "ApPaymentRun",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_RemittanceAdvices_Vendor_VendorId",
                         column: x => x.VendorId,
                         principalTable: "Vendor",
                         principalColumn: "Id",
@@ -484,128 +302,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_SupplierPortalEvent", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "TaxCodes",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Code = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
-                    Name = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    Treatment = table.Column<int>(type: "INTEGER", nullable: false),
-                    IsActive = table.Column<bool>(type: "INTEGER", nullable: false),
-                    UpdatedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_TaxCodes", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "TaxExemptionCertificates",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    CustomerId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Number = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    State = table.Column<string>(type: "TEXT", maxLength: 2, nullable: true),
-                    Reason = table.Column<string>(type: "TEXT", maxLength: 100, nullable: false),
-                    EffectiveDate = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    ExpiresOn = table.Column<DateOnly>(type: "TEXT", nullable: true),
-                    FileId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    IsRevoked = table.Column<bool>(type: "INTEGER", nullable: false),
-                    UpdatedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_TaxExemptionCertificates", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_TaxExemptionCertificates_Customer_CustomerId",
-                        column: x => x.CustomerId,
-                        principalTable: "Customer",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "TaxJurisdictions",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Code = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    Name = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    State = table.Column<string>(type: "TEXT", maxLength: 2, nullable: false),
-                    County = table.Column<string>(type: "TEXT", maxLength: 100, nullable: true),
-                    City = table.Column<string>(type: "TEXT", maxLength: 100, nullable: true),
-                    IsActive = table.Column<bool>(type: "INTEGER", nullable: false),
-                    CreatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_TaxJurisdictions", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "VendorBankAccounts",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    VendorId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    AccountHolderName = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    Kind = table.Column<int>(type: "INTEGER", nullable: false),
-                    ProtectedRoutingNumber = table.Column<string>(type: "TEXT", maxLength: 2000, nullable: false),
-                    ProtectedAccountNumber = table.Column<string>(type: "TEXT", maxLength: 2000, nullable: false),
-                    RoutingLast4 = table.Column<string>(type: "TEXT", maxLength: 4, nullable: false),
-                    AccountLast4 = table.Column<string>(type: "TEXT", maxLength: 4, nullable: false),
-                    RemittanceEmail = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    ChangeId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    ApprovedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    ApprovedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_VendorBankAccounts", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_VendorBankAccounts_Vendor_VendorId",
-                        column: x => x.VendorId,
-                        principalTable: "Vendor",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "VendorBankChanges",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    VendorId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Status = table.Column<int>(type: "INTEGER", nullable: false),
-                    AccountHolderName = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    Kind = table.Column<int>(type: "INTEGER", nullable: false),
-                    ProtectedRoutingNumber = table.Column<string>(type: "TEXT", maxLength: 2000, nullable: false),
-                    ProtectedAccountNumber = table.Column<string>(type: "TEXT", maxLength: 2000, nullable: false),
-                    RoutingLast4 = table.Column<string>(type: "TEXT", maxLength: 4, nullable: false),
-                    AccountLast4 = table.Column<string>(type: "TEXT", maxLength: 4, nullable: false),
-                    RemittanceEmail = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    Reason = table.Column<string>(type: "TEXT", maxLength: 1000, nullable: false),
-                    RequestedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    RequestedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    DecidedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    DecidedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    DecisionComment = table.Column<string>(type: "TEXT", maxLength: 1000, nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_VendorBankChanges", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_VendorBankChanges_Vendor_VendorId",
-                        column: x => x.VendorId,
-                        principalTable: "Vendor",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -878,235 +574,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 });
 
             migrationBuilder.CreateTable(
-                name: "TaxCodeAssignments",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Target = table.Column<int>(type: "INTEGER", nullable: false),
-                    TargetKey = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    TaxCodeId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    UpdatedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_TaxCodeAssignments", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_TaxCodeAssignments_TaxCodes_TaxCodeId",
-                        column: x => x.TaxCodeId,
-                        principalTable: "TaxCodes",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "ApBillTaxes",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    BillId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    JurisdictionId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    VendorChargedTax = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    TaxCodeOverrideId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    TaxableAmount = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    Rate = table.Column<decimal>(type: "TEXT", precision: 9, scale: 6, nullable: false),
-                    UseTaxAmount = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    UseTaxJournalEntryId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    UpdatedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_ApBillTaxes", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_ApBillTaxes_ApBill_BillId",
-                        column: x => x.BillId,
-                        principalTable: "ApBill",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_ApBillTaxes_GlJournalEntries_UseTaxJournalEntryId",
-                        column: x => x.UseTaxJournalEntryId,
-                        principalTable: "GlJournalEntries",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_ApBillTaxes_TaxCodes_TaxCodeOverrideId",
-                        column: x => x.TaxCodeOverrideId,
-                        principalTable: "TaxCodes",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_ApBillTaxes_TaxJurisdictions_JurisdictionId",
-                        column: x => x.JurisdictionId,
-                        principalTable: "TaxJurisdictions",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "CustomerTaxProfiles",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    CustomerId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ShipToJurisdictionId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    Status = table.Column<int>(type: "INTEGER", nullable: false),
-                    UpdatedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_CustomerTaxProfiles", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_CustomerTaxProfiles_Customer_CustomerId",
-                        column: x => x.CustomerId,
-                        principalTable: "Customer",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_CustomerTaxProfiles_TaxJurisdictions_ShipToJurisdictionId",
-                        column: x => x.ShipToJurisdictionId,
-                        principalTable: "TaxJurisdictions",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "InvoiceTaxes",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    InvoiceId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    JurisdictionId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    JurisdictionOverrideId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    TaxableAmount = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    ExemptAmount = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    Rate = table.Column<decimal>(type: "TEXT", precision: 9, scale: 6, nullable: false),
-                    StateTax = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    CountyTax = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    CityTax = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    SpecialTax = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    TaxAmount = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    ExemptionReason = table.Column<string>(type: "TEXT", maxLength: 200, nullable: true),
-                    CertificateId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    Engine = table.Column<string>(type: "TEXT", maxLength: 50, nullable: false),
-                    CalculatedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    CalculatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_InvoiceTaxes", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_InvoiceTaxes_Invoice_InvoiceId",
-                        column: x => x.InvoiceId,
-                        principalTable: "Invoice",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_InvoiceTaxes_TaxExemptionCertificates_CertificateId",
-                        column: x => x.CertificateId,
-                        principalTable: "TaxExemptionCertificates",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_InvoiceTaxes_TaxJurisdictions_JurisdictionId",
-                        column: x => x.JurisdictionId,
-                        principalTable: "TaxJurisdictions",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_InvoiceTaxes_TaxJurisdictions_JurisdictionOverrideId",
-                        column: x => x.JurisdictionOverrideId,
-                        principalTable: "TaxJurisdictions",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "SalesTaxSettings",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    SalesTaxPayableAccountId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    UseTaxPayableAccountId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    UseTaxExpenseAccountId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    HomeJurisdictionId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    DefaultSalesTaxCodeId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    DefaultPurchaseTaxCodeId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    GovernmentCategories = table.Column<string>(type: "TEXT", maxLength: 500, nullable: false),
-                    Engine = table.Column<string>(type: "TEXT", maxLength: 50, nullable: false),
-                    UpdatedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_SalesTaxSettings", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_SalesTaxSettings_GlAccounts_SalesTaxPayableAccountId",
-                        column: x => x.SalesTaxPayableAccountId,
-                        principalTable: "GlAccounts",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_SalesTaxSettings_GlAccounts_UseTaxExpenseAccountId",
-                        column: x => x.UseTaxExpenseAccountId,
-                        principalTable: "GlAccounts",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_SalesTaxSettings_GlAccounts_UseTaxPayableAccountId",
-                        column: x => x.UseTaxPayableAccountId,
-                        principalTable: "GlAccounts",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_SalesTaxSettings_TaxCodes_DefaultPurchaseTaxCodeId",
-                        column: x => x.DefaultPurchaseTaxCodeId,
-                        principalTable: "TaxCodes",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_SalesTaxSettings_TaxCodes_DefaultSalesTaxCodeId",
-                        column: x => x.DefaultSalesTaxCodeId,
-                        principalTable: "TaxCodes",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_SalesTaxSettings_TaxJurisdictions_HomeJurisdictionId",
-                        column: x => x.HomeJurisdictionId,
-                        principalTable: "TaxJurisdictions",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "TaxRates",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    JurisdictionId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    EffectiveDate = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    StateRate = table.Column<decimal>(type: "TEXT", precision: 9, scale: 6, nullable: false),
-                    CountyRate = table.Column<decimal>(type: "TEXT", precision: 9, scale: 6, nullable: false),
-                    CityRate = table.Column<decimal>(type: "TEXT", precision: 9, scale: 6, nullable: false),
-                    SpecialRate = table.Column<decimal>(type: "TEXT", precision: 9, scale: 6, nullable: false),
-                    Source = table.Column<string>(type: "TEXT", maxLength: 50, nullable: false),
-                    CreatedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    CreatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_TaxRates", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_TaxRates_TaxJurisdictions_JurisdictionId",
-                        column: x => x.JurisdictionId,
-                        principalTable: "TaxJurisdictions",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "IntegrationDeliveries",
                 columns: table => new
                 {
@@ -1307,52 +774,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 });
 
             migrationBuilder.CreateIndex(
-                name: "IX_AssetTransfer_FromCompanyId",
-                table: "AssetTransfer",
-                column: "FromCompanyId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_AssetTransfer_FromContractId",
-                table: "AssetTransfer",
-                column: "FromContractId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_AssetTransfer_JournalEntryId",
-                table: "AssetTransfer",
-                column: "JournalEntryId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_AssetTransfer_ToCompanyId",
-                table: "AssetTransfer",
-                column: "ToCompanyId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_AssetTransfer_ToContractId",
-                table: "AssetTransfer",
-                column: "ToContractId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_ApBillTaxes_BillId",
-                table: "ApBillTaxes",
-                column: "BillId",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_ApBillTaxes_JurisdictionId",
-                table: "ApBillTaxes",
-                column: "JurisdictionId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_ApBillTaxes_TaxCodeOverrideId",
-                table: "ApBillTaxes",
-                column: "TaxCodeOverrideId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_ApBillTaxes_UseTaxJournalEntryId",
-                table: "ApBillTaxes",
-                column: "UseTaxJournalEntryId");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_ApiKeys_KeyHash",
                 table: "ApiKeys",
                 column: "KeyHash",
@@ -1365,32 +786,9 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_AssetTaxBooks_AssetId_Book",
-                table: "AssetTaxBooks",
-                columns: new[] { "AssetId", "Book" },
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_BankAchSettings_BankAccountId",
-                table: "BankAchSettings",
-                column: "BankAccountId",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
                 name: "IX_ConnectorRuns_ConnectorId_StartedAtUtc",
                 table: "ConnectorRuns",
                 columns: new[] { "ConnectorId", "StartedAtUtc" });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_CustomerTaxProfiles_CustomerId",
-                table: "CustomerTaxProfiles",
-                column: "CustomerId",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_CustomerTaxProfiles_ShipToJurisdictionId",
-                table: "CustomerTaxProfiles",
-                column: "ShipToJurisdictionId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_EdiMessage_CreatedAtUtc",
@@ -1467,43 +865,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 column: "OccurredAtUtc");
 
             migrationBuilder.CreateIndex(
-                name: "IX_InvoiceTaxes_CertificateId",
-                table: "InvoiceTaxes",
-                column: "CertificateId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_InvoiceTaxes_InvoiceId",
-                table: "InvoiceTaxes",
-                column: "InvoiceId",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_InvoiceTaxes_JurisdictionId",
-                table: "InvoiceTaxes",
-                column: "JurisdictionId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_InvoiceTaxes_JurisdictionOverrideId",
-                table: "InvoiceTaxes",
-                column: "JurisdictionOverrideId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PaymentFileDownloads_BankAccountId_DownloadedAtUtc",
-                table: "PaymentFileDownloads",
-                columns: new[] { "BankAccountId", "DownloadedAtUtc" });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PaymentFileDownloads_RunId",
-                table: "PaymentFileDownloads",
-                column: "RunId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PositivePayLayouts_Name",
-                table: "PositivePayLayouts",
-                column: "Name",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
                 name: "IX_PurchaseOrderAcknowledgement_PurchaseOrderId",
                 table: "PurchaseOrderAcknowledgement",
                 column: "PurchaseOrderId");
@@ -1522,16 +883,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "IX_PurchaseOrderAcknowledgementLine_PurchaseOrderLineId",
                 table: "PurchaseOrderAcknowledgementLine",
                 column: "PurchaseOrderLineId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_RemittanceAdvices_RunId",
-                table: "RemittanceAdvices",
-                column: "RunId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_RemittanceAdvices_VendorId",
-                table: "RemittanceAdvices",
-                column: "VendorId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Rfq_Number",
@@ -1604,36 +955,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "IX_RfqVendor_VendorId",
                 table: "RfqVendor",
                 column: "VendorId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_SalesTaxSettings_DefaultPurchaseTaxCodeId",
-                table: "SalesTaxSettings",
-                column: "DefaultPurchaseTaxCodeId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_SalesTaxSettings_DefaultSalesTaxCodeId",
-                table: "SalesTaxSettings",
-                column: "DefaultSalesTaxCodeId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_SalesTaxSettings_HomeJurisdictionId",
-                table: "SalesTaxSettings",
-                column: "HomeJurisdictionId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_SalesTaxSettings_SalesTaxPayableAccountId",
-                table: "SalesTaxSettings",
-                column: "SalesTaxPayableAccountId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_SalesTaxSettings_UseTaxExpenseAccountId",
-                table: "SalesTaxSettings",
-                column: "UseTaxExpenseAccountId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_SalesTaxSettings_UseTaxPayableAccountId",
-                table: "SalesTaxSettings",
-                column: "UseTaxPayableAccountId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_ShipNotice_Number",
@@ -1715,50 +1036,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_TaxCodeAssignments_Target_TargetKey",
-                table: "TaxCodeAssignments",
-                columns: new[] { "Target", "TargetKey" },
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_TaxCodeAssignments_TaxCodeId",
-                table: "TaxCodeAssignments",
-                column: "TaxCodeId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_TaxCodes_Code",
-                table: "TaxCodes",
-                column: "Code",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_TaxExemptionCertificates_CustomerId",
-                table: "TaxExemptionCertificates",
-                column: "CustomerId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_TaxJurisdictions_Code",
-                table: "TaxJurisdictions",
-                column: "Code",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_TaxRates_JurisdictionId_EffectiveDate",
-                table: "TaxRates",
-                columns: new[] { "JurisdictionId", "EffectiveDate" });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_VendorBankAccounts_VendorId",
-                table: "VendorBankAccounts",
-                column: "VendorId",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_VendorBankChanges_VendorId_Status",
-                table: "VendorBankChanges",
-                columns: new[] { "VendorId", "Status" });
-
-            migrationBuilder.CreateIndex(
                 name: "IX_VendorQuote_AttachmentFileId",
                 table: "VendorQuote",
                 column: "AttachmentFileId");
@@ -1790,88 +1067,17 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 table: "VendorQuotePriceBreak",
                 column: "QuoteLineId");
 
-            migrationBuilder.AddForeignKey(
-                name: "FK_AssetTransfer_Companies_FromCompanyId",
-                table: "AssetTransfer",
-                column: "FromCompanyId",
-                principalTable: "Companies",
-                principalColumn: "Id",
-                onDelete: ReferentialAction.Restrict);
-
-            migrationBuilder.AddForeignKey(
-                name: "FK_AssetTransfer_Companies_ToCompanyId",
-                table: "AssetTransfer",
-                column: "ToCompanyId",
-                principalTable: "Companies",
-                principalColumn: "Id",
-                onDelete: ReferentialAction.Restrict);
-
-            migrationBuilder.AddForeignKey(
-                name: "FK_AssetTransfer_Contract_FromContractId",
-                table: "AssetTransfer",
-                column: "FromContractId",
-                principalTable: "Contract",
-                principalColumn: "Id",
-                onDelete: ReferentialAction.Restrict);
-
-            migrationBuilder.AddForeignKey(
-                name: "FK_AssetTransfer_Contract_ToContractId",
-                table: "AssetTransfer",
-                column: "ToContractId",
-                principalTable: "Contract",
-                principalColumn: "Id",
-                onDelete: ReferentialAction.Restrict);
-
-            migrationBuilder.AddForeignKey(
-                name: "FK_AssetTransfer_GlJournalEntries_JournalEntryId",
-                table: "AssetTransfer",
-                column: "JournalEntryId",
-                principalTable: "GlJournalEntries",
-                principalColumn: "Id",
-                onDelete: ReferentialAction.Restrict);
-
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropForeignKey(
-                name: "FK_AssetTransfer_Companies_FromCompanyId",
-                table: "AssetTransfer");
-
-            migrationBuilder.DropForeignKey(
-                name: "FK_AssetTransfer_Companies_ToCompanyId",
-                table: "AssetTransfer");
-
-            migrationBuilder.DropForeignKey(
-                name: "FK_AssetTransfer_Contract_FromContractId",
-                table: "AssetTransfer");
-
-            migrationBuilder.DropForeignKey(
-                name: "FK_AssetTransfer_Contract_ToContractId",
-                table: "AssetTransfer");
-
-            migrationBuilder.DropForeignKey(
-                name: "FK_AssetTransfer_GlJournalEntries_JournalEntryId",
-                table: "AssetTransfer");
-
-            migrationBuilder.DropTable(
-                name: "ApBillTaxes");
 
             migrationBuilder.DropTable(
                 name: "ApiKeys");
 
             migrationBuilder.DropTable(
-                name: "AssetTaxBooks");
-
-            migrationBuilder.DropTable(
-                name: "BankAchSettings");
-
-            migrationBuilder.DropTable(
                 name: "ConnectorRuns");
-
-            migrationBuilder.DropTable(
-                name: "CustomerTaxProfiles");
 
             migrationBuilder.DropTable(
                 name: "EdiMessage");
@@ -1880,25 +1086,10 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "IntegrationDeliveryAttempts");
 
             migrationBuilder.DropTable(
-                name: "InvoiceTaxes");
-
-            migrationBuilder.DropTable(
-                name: "PaymentFileDownloads");
-
-            migrationBuilder.DropTable(
-                name: "PositivePayLayouts");
-
-            migrationBuilder.DropTable(
                 name: "PurchaseOrderAcknowledgementLine");
 
             migrationBuilder.DropTable(
-                name: "RemittanceAdvices");
-
-            migrationBuilder.DropTable(
                 name: "RfqVendor");
-
-            migrationBuilder.DropTable(
-                name: "SalesTaxSettings");
 
             migrationBuilder.DropTable(
                 name: "ShipNoticeLine");
@@ -1913,18 +1104,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "SupplierSignInToken");
 
             migrationBuilder.DropTable(
-                name: "TaxCodeAssignments");
-
-            migrationBuilder.DropTable(
-                name: "TaxRates");
-
-            migrationBuilder.DropTable(
-                name: "VendorBankAccounts");
-
-            migrationBuilder.DropTable(
-                name: "VendorBankChanges");
-
-            migrationBuilder.DropTable(
                 name: "VendorQuotePriceBreak");
 
             migrationBuilder.DropTable(
@@ -1934,9 +1113,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "IntegrationDeliveries");
 
             migrationBuilder.DropTable(
-                name: "TaxExemptionCertificates");
-
-            migrationBuilder.DropTable(
                 name: "PurchaseOrderAcknowledgement");
 
             migrationBuilder.DropTable(
@@ -1944,12 +1120,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
 
             migrationBuilder.DropTable(
                 name: "SupplierContact");
-
-            migrationBuilder.DropTable(
-                name: "TaxCodes");
-
-            migrationBuilder.DropTable(
-                name: "TaxJurisdictions");
 
             migrationBuilder.DropTable(
                 name: "VendorQuoteLine");
@@ -1975,49 +1145,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
             migrationBuilder.DropTable(
                 name: "Rfq");
 
-            migrationBuilder.DropIndex(
-                name: "IX_AssetTransfer_FromCompanyId",
-                table: "AssetTransfer");
-
-            migrationBuilder.DropIndex(
-                name: "IX_AssetTransfer_FromContractId",
-                table: "AssetTransfer");
-
-            migrationBuilder.DropIndex(
-                name: "IX_AssetTransfer_JournalEntryId",
-                table: "AssetTransfer");
-
-            migrationBuilder.DropIndex(
-                name: "IX_AssetTransfer_ToCompanyId",
-                table: "AssetTransfer");
-
-            migrationBuilder.DropIndex(
-                name: "IX_AssetTransfer_ToContractId",
-                table: "AssetTransfer");
-
-            migrationBuilder.DropColumn(
-                name: "DisposalKind",
-                table: "FixedAsset");
-
-            migrationBuilder.DropColumn(
-                name: "FromCompanyId",
-                table: "AssetTransfer");
-
-            migrationBuilder.DropColumn(
-                name: "FromContractId",
-                table: "AssetTransfer");
-
-            migrationBuilder.DropColumn(
-                name: "JournalEntryId",
-                table: "AssetTransfer");
-
-            migrationBuilder.DropColumn(
-                name: "ToCompanyId",
-                table: "AssetTransfer");
-
-            migrationBuilder.DropColumn(
-                name: "ToContractId",
-                table: "AssetTransfer");
         }
     }
 }

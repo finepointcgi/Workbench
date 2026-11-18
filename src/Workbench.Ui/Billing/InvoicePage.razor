@@ -135,7 +135,8 @@ else
                 <Workbench.Ui.Currencies.InvoiceCurrencyCard Summary="s" CanEdit="_isFinance" Changed="ReloadAsync" />
                 @if (_isFinance)
                 {
-                    <Workbench.Ui.SalesTax.InvoiceTaxCard InvoiceId="s.Id" Status="s.Status" Total="s.Total" Changed="ReloadAsync" />
+                    @* Sales tax: the accounting module. *@
+                    <UiSlot Name="billing.invoice.tax" Parameters="@(new Dictionary<string, object?> { ["InvoiceId"] = s.Id, ["Status"] = s.Status, ["Total"] = s.Total, ["Changed"] = EventCallback.Factory.Create(this, ReloadAsync) })" />
                 }
                 @if (_invoice.FundingOverrideReason is not null)
                 {

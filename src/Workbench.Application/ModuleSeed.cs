@@ -6,6 +6,9 @@ namespace Workbench.Application;
 /// <summary>Where in the development sample data a license module's seed runs (the sample data is built in a fixed order, and a module's rows read what came before).</summary>
 public enum ModuleSeedStage
 {
+    /// <summary>After the procurement sample data, before fixed assets and cash (the accounting module's assets and bank accounts).</summary>
+    AfterProcurement,
+
     /// <summary>After cash and bank accounts, before leave (the sample pay group, pay periods and payroll profiles the leave sample data follows).</summary>
     AfterCash,
 
@@ -23,6 +26,9 @@ public enum ModuleSeedStage
 
     /// <summary>After travel (before sourcing, bank files and tax books).</summary>
     AfterTravel,
+
+    /// <summary>After sourcing (the accounting module's bank files, sales tax and tax books; before the CPSR sample purchase orders).</summary>
+    AfterSourcing,
 
     /// <summary>After tax books and the CPSR sample purchase orders.</summary>
     AfterTaxBooks,
