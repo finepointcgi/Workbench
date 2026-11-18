@@ -1,5 +1,8 @@
 # Jira sync
 
+!!! info "Optional module: Enterprise"
+    This page describes the **Enterprise** module, an optional add-on. It appears only when your license includes it. See [Optional modules](../reference/optional-modules.md).
+
 Keeps a project's Jira issues and its plan in step, so a team whose engineers live in Jira doesn't retype anything. Works with
 Jira Cloud (an account email and an API token). Jira Data Center follows behind the same client interface (`IJiraClient`).
 

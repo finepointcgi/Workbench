@@ -1,5 +1,8 @@
 # Paylocity
 
+!!! info "Optional module: Workforce"
+    This page describes the **Workforce** module, an optional add-on. It appears only when your license includes it. See [Optional modules](../reference/optional-modules.md).
+
 <p class="roles">Finance · HR · Administrators</p>
 
 Workbench works with Paylocity through **files**, so it needs no access to Paylocity's API. Workbench sends Paylocity

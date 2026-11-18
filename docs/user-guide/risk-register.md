@@ -1,5 +1,8 @@
 # Project risks
 
+!!! info "Optional module: Project controls"
+    This page describes the **Project controls** module, an optional add-on. It appears only when your license includes it. See [Optional modules](../reference/optional-modules.md).
+
 Each project has a **Risks** tab: a register of what could go wrong, how likely it is, what it would cost, and who is
 dealing with it. It is for the project's manager, Finance and administrators.
 

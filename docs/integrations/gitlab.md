@@ -1,5 +1,8 @@
 # GitLab sync
 
+!!! info "Optional module: Enterprise"
+    This page describes the **Enterprise** module, an optional add-on. It appears only when your license includes it. See [Optional modules](../reference/optional-modules.md).
+
 Links a project's plan (WBS, schedule tasks and assignments) to a GitLab project, both ways. Works with gitlab.com and
 self-managed GitLab, including air-gapped servers with an internal certificate authority.
 

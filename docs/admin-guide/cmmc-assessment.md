@@ -1,5 +1,8 @@
 # CMMC assessment
 
+!!! info "Optional module: Government contracting"
+    This page describes the **Government contracting** module, an optional add-on. It appears only when your license includes it. See [Optional modules](../reference/optional-modules.md).
+
 **Admin → Compliance → CMMC assessment** is your own assessment against the 110 security requirements of NIST SP 800-171
 Revision 2, the basis of CMMC Level 2. It is for people who manage compliance (administrators).
 

@@ -1,5 +1,8 @@
 # Proposal pricing
 
+!!! info "Optional module: Capture"
+    This page describes the **Capture** module, an optional add-on. It appears only when your license includes it. See [Optional modules](../reference/optional-modules.md).
+
 <p class="roles">Pricing</p>
 
 **Projects › Proposal pricing** prices bids from your own books: labor at employee cost rates, your indirect rate

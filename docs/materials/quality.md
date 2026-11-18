@@ -1,5 +1,8 @@
 # Quality and engineering
 
+!!! info "Optional module: Materials"
+    This page describes the **Materials** module, an optional add-on. It appears only when your license includes it. See [Optional modules](../reference/optional-modules.md).
+
 <p class="roles">Quality · Materials review board · Change control board</p>
 
 ## Quality

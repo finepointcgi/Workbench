@@ -1,5 +1,8 @@
 # Costpoint integration
 
+!!! info "Optional module: Enterprise"
+    This page describes the **Enterprise** module, an optional add-on. It appears only when your license includes it. See [Optional modules](../reference/optional-modules.md).
+
 Workbench replaces Deltek Costpoint, but a customer doesn't switch overnight. This page says what Workbench does with
 Costpoint today, what was added for a real conversion and a parallel month, and what is deliberately not built.
 There is **no live Costpoint connection**: Costpoint hands over Excel/CSV reports, and everything below reads those files.
