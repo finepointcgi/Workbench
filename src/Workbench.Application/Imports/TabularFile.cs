@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Text;
 using ClosedXML.Excel;
-using Workbench.Costpoint;
 
 namespace Workbench.Application.Imports;
 
@@ -39,7 +38,7 @@ public sealed record TabularFile(string FileName, IReadOnlyList<string> Headers,
         }
 
         using var reader = new StreamReader(new MemoryStream(content), Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
-        var records = CostpointCsv.ReadRecords(reader)
+        var records = CsvRecordReader.ReadRecords(reader)
             .Where(r => r.Fields.Any(f => !string.IsNullOrWhiteSpace(f)))
             .Select(r => new TabularRow(r.Line, r.Fields.Select(f => f.Trim()).ToList()))
             .ToList();

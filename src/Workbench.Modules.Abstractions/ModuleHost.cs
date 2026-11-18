@@ -550,6 +550,22 @@ public sealed class ModuleHost
         }
     }
 
+    /// <summary>Maps every module's root endpoints (<see cref="IWorkbenchModule.MapHostEndpoints"/>) on <paramref name="app"/>.</summary>
+    public void MapHostEndpoints(IEndpointRouteBuilder app)
+    {
+        foreach (var module in _modules.ToList())
+        {
+            try
+            {
+                module.MapHostEndpoints(app);
+            }
+            catch (Exception ex)
+            {
+                Drop(module, $"MapHostEndpoints failed: {ex.GetType().Name}: {ex.Message}");
+            }
+        }
+    }
+
     /// <summary>Adds every module's entities to the host's EF model.</summary>
     public void ApplyModel(ModelBuilder modelBuilder)
     {
