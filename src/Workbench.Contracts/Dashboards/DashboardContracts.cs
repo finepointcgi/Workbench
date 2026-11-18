@@ -57,6 +57,9 @@ public enum WidgetType
 
     /// <summary>A message from the administrators (<c>Config.Markdown</c>), shown as a notice.</summary>
     Announcement,
+
+    /// <summary>A widget a license module provides (<c>Config.ModuleKey</c>). Shows nothing but a notice when the module is not installed.</summary>
+    Module,
 }
 
 /// <summary>The figures a KPI tile can show. Each comes from the permission-checked services, so a viewer sees only what their pages show.</summary>
@@ -118,6 +121,7 @@ public enum ChartKind
 /// <param name="ListViewId">List view chart: the saved list view.</param>
 /// <param name="Shortcuts">Shortcuts: the links, in order.</param>
 /// <param name="Pinned">Home pages: people can't hide the widget from their own home page.</param>
+/// <param name="ModuleKey">Module widget: the key of the module's home widget (<c>ModuleHomeWidget</c>).</param>
 public sealed record WidgetConfig(
     Guid? SheetId = null,
     MetricAggregate Aggregate = MetricAggregate.Count,
@@ -133,7 +137,8 @@ public sealed record WidgetConfig(
     Guid? SavedReportId = null,
     Guid? ListViewId = null,
     IReadOnlyList<WidgetShortcut>? Shortcuts = null,
-    bool Pinned = false);
+    bool Pinned = false,
+    string? ModuleKey = null);
 
 public sealed record WidgetDto(
     Guid Id,

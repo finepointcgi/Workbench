@@ -55,7 +55,7 @@ builder.Services.AddProblemDetails();
 // License modules from outside the repository (docs/operations/module-plugins.md). The license is checked before a module's assembly is loaded.
 var moduleLicensed = Workbench.Application.Licensing.ModuleEntitlement.Check(builder.Configuration, TimeProvider.System, out var moduleLicenseNote);
 var modules = Workbench.Plugins.ModuleHost.Load(Workbench.Plugins.ModuleHostOptions.From(builder.Configuration, moduleLicensed,
-    Workbench.Ui.Navigation.NavCatalog.BuiltInSectionKeys, Workbench.Ui.Navigation.NavCatalog.BuiltInHrefs));
+    Workbench.Ui.Navigation.NavCatalog.BuiltInSectionKeys, Workbench.Ui.Navigation.NavCatalog.BuiltInHrefs, Workbench.Web.BuiltInRowKeys.All));
 builder.Services.AddSingleton(modules);
 builder.Services.AddWorkbenchApplication(services => modules.ConfigureServices(services, builder.Configuration));
 var licenseOptions = new Workbench.Application.Licensing.LicenseOptions();
@@ -123,6 +123,11 @@ app.UseWhen(
     context => !AuthenticationSetup.IsApiRequest(context.Request) && AuthenticationSetup.IsPageNavigation(context.Request),
     branch => branch.UseStatusCodePagesWithRedirects("/not-found"));
 app.UseHttpsRedirection();
+foreach (var (requestPath, physicalPath) in modules.StaticAssets())
+{
+    // Files of a license module's pages (its wwwroot), served where a referenced Razor class library's would be.
+    app.UseStaticFiles(new Microsoft.AspNetCore.Builder.StaticFileOptions { FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(physicalPath), RequestPath = requestPath });
+}
 app.UseRequestLocalization(new Microsoft.AspNetCore.Builder.RequestLocalizationOptions()
     .SetDefaultCulture("en-US").AddSupportedCultures("en-US").AddSupportedUICultures("en-US")); // the request's culture, which Blazor's circuit takes
 app.UseAuthentication();

@@ -22,8 +22,13 @@ public static class CustomizableLists
     public const string Parts = "parts";
     public const string SalesOrders = "sales-orders";
 
-    public static IReadOnlyList<string> All { get; } =
+    /// <summary>The lists the product ships.</summary>
+    public static IReadOnlyList<string> BuiltIn { get; } =
         [Projects, Contracts, People, Vendors, PurchaseOrders, Bills, Invoices, Timesheets, ExpenseReports, Opportunities, Parts, SalesOrders];
+
+    /// <summary>The built-in lists and the ones loaded modules add (<see cref="Modules.ModuleCustomList"/>).</summary>
+    public static IReadOnlyList<string> All =>
+        Modules.ModuleRegistry.Current.RowsOf<Modules.ModuleCustomList>() is { Count: > 0 } extra ? [.. BuiltIn, .. extra.Select(l => l.Key)] : BuiltIn;
 }
 
 public enum ListViewVisibility

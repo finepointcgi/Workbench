@@ -40,12 +40,14 @@ public sealed record ModuleLoadResult(string Id, string Folder, ModuleLoadStatus
 /// <param name="Required">Ids that must load; the host refuses to start when one does not (use for modules the deployment can't run without).</param>
 /// <param name="BuiltInNavSections">The menu sections the product has; checked against a module's menu entries. Null skips that check.</param>
 /// <param name="BuiltInNavHrefs">The pages the menu already has.</param>
+/// <param name="BuiltInRowKeys">The keys (<c>catalog/key</c>) of the built-in catalog rows, so a module can't add a row that already exists. Null skips that check.</param>
 public sealed record ModuleHostOptions(
     string Folder,
     Func<string, bool> IsLicensed,
     IReadOnlyCollection<string>? Required = null,
     IReadOnlyCollection<string>? BuiltInNavSections = null,
-    IReadOnlyCollection<string>? BuiltInNavHrefs = null)
+    IReadOnlyCollection<string>? BuiltInNavHrefs = null,
+    IReadOnlyCollection<string>? BuiltInRowKeys = null)
 {
     public const string FolderKey = "Modules:Folder";
     public const string RequiredKey = "Modules:Required";
@@ -53,11 +55,11 @@ public sealed record ModuleHostOptions(
 
     /// <summary>The folder from <c>Modules:Folder</c> (default <c>modules</c>, relative to the application's folder) and the ids from <c>Modules:Required</c>.</summary>
     public static ModuleHostOptions From(IConfiguration configuration, Func<string, bool> isLicensed,
-        IReadOnlyCollection<string>? navSections = null, IReadOnlyCollection<string>? navHrefs = null)
+        IReadOnlyCollection<string>? navSections = null, IReadOnlyCollection<string>? navHrefs = null, IReadOnlyCollection<string>? rowKeys = null)
     {
         var folder = configuration[FolderKey] is { Length: > 0 } configured ? configured : DefaultFolder;
         return new ModuleHostOptions(Path.GetFullPath(folder, AppContext.BaseDirectory), isLicensed,
-            configuration.GetSection(RequiredKey).Get<string[]>() ?? [], navSections, navHrefs);
+            configuration.GetSection(RequiredKey).Get<string[]>() ?? [], navSections, navHrefs, rowKeys);
     }
 }
 
@@ -97,6 +99,31 @@ public sealed class ModuleHost
 
     public bool Has(string moduleId) => _modules.Any(m => m.Id == moduleId);
 
+    /// <summary>
+    /// The static files of the loaded modules' pages: a module's <c>wwwroot</c> folder (next to its <c>module.json</c>) is served at
+    /// <c>/_content/&lt;assembly name&gt;</c> for each assembly in its <see cref="ModuleContribution.RoutableAssemblies"/>, the path a Razor class
+    /// library's files have in a project reference. (A host built with the library as a reference has those files from its own static web
+    /// assets; a module loaded from a folder does not, so the host serves them from here.)
+    /// </summary>
+    public IReadOnlyList<(string RequestPath, string PhysicalPath)> StaticAssets()
+    {
+        var assets = new List<(string, string)>();
+        foreach (var module in _modules)
+        {
+            if (!_folders.TryGetValue(module.Id, out var folder) || !Directory.Exists(Path.Combine(folder, "wwwroot")))
+            {
+                continue;
+            }
+
+            foreach (var assembly in module.Describe().RoutableAssemblies)
+            {
+                assets.Add(($"/_content/{assembly.GetName().Name}", Path.Combine(folder, "wwwroot")));
+            }
+        }
+
+        return assets;
+    }
+
     /// <summary>True when a loaded module adds entities to the EF model.</summary>
     public bool HasModel => _modules.Any(m => m.ModelAssemblies.Count > 0);
 
@@ -131,6 +158,24 @@ public sealed class ModuleHost
 
     /// <summary>Loads the licensed, valid modules from <see cref="ModuleHostOptions.Folder"/> and publishes them. Never throws for a bad module; throws only when a <see cref="ModuleHostOptions.Required"/> module is missing.</summary>
     public static ModuleHost Load(ModuleHostOptions options)
+    {
+        // A module is checked against what is built in and what loaded before it in this call, not against the set an earlier Load
+        // published (a process that loads twice, such as a test that starts several hosts, would otherwise find every module "already
+        // taken" by itself). So the published set is cleared while loading and put back if loading throws.
+        var previous = ModuleRegistry.Current;
+        ModuleRegistry.Set(ModuleSet.Empty);
+        try
+        {
+            return LoadCore(options);
+        }
+        catch
+        {
+            ModuleRegistry.Set(previous);
+            throw;
+        }
+    }
+
+    private static ModuleHost LoadCore(ModuleHostOptions options)
     {
         var results = new List<ModuleLoadResult>();
         var candidates = new List<Candidate>();
@@ -231,7 +276,7 @@ public sealed class ModuleHost
 
                 var problems = contribution.ModuleId != module.Id
                     ? [$"Describe() says module '{contribution.ModuleId}', not '{module.Id}'."]
-                    : set.Validate(contribution, options.BuiltInNavSections, options.BuiltInNavHrefs);
+                    : set.Validate(contribution, options.BuiltInNavSections, options.BuiltInNavHrefs, options.BuiltInRowKeys);
                 if (problems.Count > 0)
                 {
                     results.Add(new ModuleLoadResult(module.Id, candidate.Folder, ModuleLoadStatus.Invalid, string.Join(" ", problems), module.Version));

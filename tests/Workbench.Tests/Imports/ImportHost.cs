@@ -141,6 +141,12 @@ internal static class Samples
 
     private static readonly Lazy<string> Root = new(() =>
     {
+        // The private module repository's tests run from their own folder and point at a checkout of this repository.
+        if (Environment.GetEnvironmentVariable("WORKBENCH_CORE_DIR") is { Length: > 0 } core && System.IO.File.Exists(Path.Combine(core, "Workbench.Server.slnf")))
+        {
+            return core;
+        }
+
         for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
         {
             if (System.IO.File.Exists(Path.Combine(dir.FullName, "Workbench.Server.slnf")))

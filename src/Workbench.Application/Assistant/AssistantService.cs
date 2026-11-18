@@ -101,7 +101,7 @@ public sealed partial class AssistantService(
         await events.WriteAsync(new AssistantEvent(AssistantEventKind.Started, null, conversationId, interaction.Id), ct);
 
         var messages = new List<ModelMessage>(history) { ModelMessage.UserText(await UserMessageAsync(question, pagePath, ct)) };
-        var tools = AssistantToolbox.Specs.Select(s => s.Definition).ToList();
+        var tools = toolbox.AllSpecs.Select(s => s.Definition).ToList();
         var client = runner.ClientFor(route);
         var usage = AssistantTokenUsage.Zero;
         var answer = new StringBuilder();
@@ -168,7 +168,7 @@ public sealed partial class AssistantService(
                 foreach (var use in uses)
                 {
                     toolCalls++;
-                    var spec = AssistantToolbox.Find(use.Name);
+                    var spec = toolbox.FindSpec(use.Name);
                     AssistantToolResult result;
                     if (toolCalls > options.MaxToolCallsPerQuestion)
                     {

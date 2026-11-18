@@ -31,6 +31,7 @@ public static class Permission
     public const string AdminRoles = "admin.roles";
     public const string AdminSecurity = "admin.security";
     public const string AdminRetention = "admin.retention";
+    // The DCAA readiness checklist's permission (its definition ships with the government contracting module; the key stays here because the checklist service, which is core, checks it).
     public const string AdminCompliance = "admin.compliance";
     public const string AdminIntegrations = "admin.integrations";
     public const string AdminAssistant = "admin.assistant";
@@ -64,7 +65,6 @@ public static class Permission
     public const string TimeTeam = "time.team";
     public const string LaborCostView = "labor.cost.view";
     public const string LaborCostRatesManage = "labor.cost_rates.manage";
-    public const string TimeTotalTime = "time.total_time";
     public const string LeaveBalancesManage = "leave.balances.manage";
     public const string LeavePoliciesManage = "leave.policies.manage";
 
@@ -90,8 +90,6 @@ public static class Permission
     public const string BudgetsManage = "planning.budgets.manage";
     public const string RevenueManage = "revenue.manage";
     public const string IndirectRatesManage = "compliance.indirect_rates";
-    public const string IncurredCostManage = "compliance.incurred_cost";
-    public const string CasCpsrManage = "compliance.cas_cpsr";
     public const string SalesTaxManage = "tax.sales_tax.manage";
     public const string AssetsManage = "assets.manage";
     public const string AssetsDepreciationRun = "assets.depreciation.run";
@@ -204,7 +202,6 @@ public static class PermissionCatalog
         new(Permission.AdminRoles, AreaAdministration, "Manage roles", "Create, edit, clone and delete custom roles and choose their permissions.", A, Sensitive: true),
         new(Permission.AdminSecurity, AreaAdministration, "Manage sign-in and security", "Sign-in settings (single sign-on, MFA, SCIM, sessions), the security event log and access reviews.", A, Sensitive: true),
         new(Permission.AdminRetention, AreaAdministration, "Manage retention and legal holds", "Record retention policies and legal holds.", A),
-        new(Permission.AdminCompliance, AreaAdministration, "DCAA readiness", "The DCAA accounting system readiness checklist.", A),
         new(Permission.AdminIntegrations, AreaAdministration, "Manage integrations", "API keys, webhooks, connectors and the Costpoint sync.", A, Sensitive: true),
         new(Permission.AdminAssistant, AreaAdministration, "Administer the assistant", "AI assistant settings, usage and audit.", A),
         new(Permission.AdminSupport, AreaAdministration, "Handle support requests", "See and answer everyone's support requests, and hear about new ones.", A),
@@ -234,7 +231,6 @@ public static class PermissionCatalog
         new(Permission.TimeTeam, AreaTime, "Team time for everyone", "The Team time page and timesheet approvals list for the whole organization.", OrgRoles.Timekeeper),
         new(Permission.LaborCostView, AreaFields, "See cost rates and labor cost", "Employee cost rates, labor cost in reports and the labor distribution.", F, Sensitive: true),
         new(Permission.LaborCostRatesManage, AreaTime, "Change cost rates", "Add employee cost rates.", F, Sensitive: true),
-        new(Permission.TimeTotalTime, AreaTime, "Total time accounting", "The labor cost method, uncompensated overtime and effective labor rates.", F),
         new(Permission.LeaveBalancesManage, AreaTime, "Manage leave balances", "See everyone's leave balances, adjust them, run accruals and the leave year end.", F),
         new(Permission.LeavePoliciesManage, AreaTime, "Manage leave policies and holidays", "Leave policies, eligibility and the holiday calendar.", A),
 
@@ -258,8 +254,6 @@ public static class PermissionCatalog
         new(Permission.BudgetsManage, AreaAccounting, "Manage corporate budgets", "Budget versions, budget vs actual and planning cycles.", F),
         new(Permission.RevenueManage, AreaAccounting, "Revenue recognition", "Revenue setup, estimates at completion and revenue recognition runs and reports.", F),
         new(Permission.IndirectRatesManage, AreaAccounting, "Manage indirect rates", "Fringe, overhead and G&A pools and rates.", F),
-        new(Permission.IncurredCostManage, AreaAccounting, "Incurred cost submissions", "Prepare incurred cost (ICE) submissions.", F),
-        new(Permission.CasCpsrManage, AreaAccounting, "CAS disclosure and purchasing review", "The CAS disclosure statement and purchasing system review files.", F),
         new(Permission.SalesTaxManage, AreaAccounting, "Manage sales and use tax", "Tax rates, jurisdictions, exemption certificates and returns.", F),
         new(Permission.AssetsManage, AreaAccounting, "Manage fixed assets", "The asset register, categories, transfers, tax books and asset reports.", F),
         new(Permission.AssetsDepreciationRun, AreaAccounting, "Run depreciation", "Run and post depreciation.", F),

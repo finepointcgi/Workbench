@@ -151,7 +151,7 @@ else
 
     @if (_isFinance && s.Type != InvoiceKind.CreditMemo)
     {
-        <PieePanel InvoiceId="s.Id" InvoiceStatus="s.Status" @key="@($"{s.Id}-{s.Status}")" Changed="ReloadAsync" />
+        <UiSlot Name="billing.invoice.panels" Parameters="@(new Dictionary<string, object?> { ["InvoiceId"] = s.Id, ["InvoiceStatus"] = s.Status, ["Changed"] = EventCallback.Factory.Create(this, ReloadAsync) })" />
     }
 
     @foreach (var w in _invoice.Warnings)

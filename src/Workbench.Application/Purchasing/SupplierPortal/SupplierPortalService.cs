@@ -13,9 +13,11 @@ namespace Workbench.Application.Purchasing;
 /// by it again. Writes go through <see cref="SupplierDocuments"/> and <see cref="SourcingSupport"/>, the same rules as
 /// buyers and EDI.
 /// </summary>
-public sealed class SupplierPortalService(IWorkbenchDbContextFactory dbFactory, SupplierCaller caller, SupplierDocuments documents, TimeProvider clock)
+public sealed class SupplierPortalService(IWorkbenchDbContextFactory dbFactory, SupplierCaller caller, SupplierDocuments documents, TimeProvider clock, IItemReader? itemReader = null)
     : ISupplierPortalService
 {
+    private IItemReader Items => itemReader ?? PartItemReader.Instance;
+
     private DateTime UtcNow => clock.GetUtcNow().UtcDateTime;
 
     private DateOnly Today => DateOnly.FromDateTime(UtcNow);
@@ -109,7 +111,7 @@ public sealed class SupplierPortalService(IWorkbenchDbContextFactory dbFactory, 
         var quote = await db.Set<VendorQuote>().AsNoTracking().Include(q => q.Lines).ThenInclude(l => l.PriceBreaks)
             .FirstOrDefaultAsync(q => q.RfqId == rfq.Id && q.VendorId == VendorId, ct);
         var partIds = rfq.Lines.Where(l => l.PartId != null).Select(l => l.PartId!.Value).ToList();
-        var parts = await db.Set<Part>().AsNoTracking().Where(p => partIds.Contains(p.Id)).ToDictionaryAsync(p => p.Id, p => p.Number, ct);
+        var parts = (await Items.ReadAsync(db, partIds, ct)).ToDictionary(p => p.Key, p => p.Value.Number);
         var mine = await MyQuoteLineIdsAsync(db, [rfq.Id], ct);
         return new SupplierRfqDto(
             Summary(rfq, invitation, mine),

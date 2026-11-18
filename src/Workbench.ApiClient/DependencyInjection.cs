@@ -45,7 +45,6 @@ public static class DependencyInjection
         services.AddPayrollLeaveClients(serverBaseAddress);
         services.AddPerDiemResourcingClients(serverBaseAddress);
         services.AddRevenueClients(serverBaseAddress);
-        services.AddIncurredCostClients(serverBaseAddress);
         services.AddReportClients(serverBaseAddress);
         services.AddEvmClients(serverBaseAddress);
         services.AddCeilingClients(serverBaseAddress);
@@ -64,10 +63,8 @@ public static class DependencyInjection
         services.AddPricingClients(serverBaseAddress);
         services.AddAssistantClients(serverBaseAddress);
         services.AddPlanningClients(serverBaseAddress);
-        services.AddTotalTimeClients(serverBaseAddress);
         services.AddCurrencyClients(serverBaseAddress);
         services.AddCompanyClients(serverBaseAddress);
-        services.AddGovernmentBillingClients(serverBaseAddress);
         services.AddCommercialBillingClients(serverBaseAddress);
         services.AddTravelClients(serverBaseAddress);
         services.AddSalesShippingClients(serverBaseAddress);
@@ -79,7 +76,6 @@ public static class DependencyInjection
         services.AddAccountingLiveClients(serverBaseAddress);
         services.AddSalesTaxClients(serverBaseAddress);
         services.AddIntegrationClients(serverBaseAddress);
-        services.AddComplianceClients(serverBaseAddress);
         services.AddReceiptClients(serverBaseAddress);
         services.AddCustomizationClients(serverBaseAddress);
         services.AddHttpClient<Contracts.Identity.IRoleService, HttpRoleService>(client => client.BaseAddress = serverBaseAddress);

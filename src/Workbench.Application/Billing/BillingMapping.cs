@@ -17,7 +17,7 @@ public sealed class BillingOptions
     public string? Uei { get; set; }
 }
 
-internal static class BillingMapping
+public static class BillingMapping
 {
     public static InvoiceKind ToContract(this InvoiceType t) => (InvoiceKind)(int)t;
 
