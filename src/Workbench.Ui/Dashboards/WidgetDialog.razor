@@ -46,7 +46,7 @@
             else if (_type == WidgetType.Module)
             {
                 <MudSelect T="string" @bind-Value="_moduleKey" Label="Widget" data-field="module-widget" HelperText="Computed with each viewer's own access.">
-                    @foreach (var w in Workbench.Contracts.Modules.ModuleRegistry.Current.RowsOf<Workbench.Contracts.Modules.ModuleHomeWidget>())
+                    @foreach (var w in Workbench.Contracts.Modules.ModuleRegistry.Current.RowsOf<Workbench.Contracts.Modules.ModuleHomeWidget>().Where(w => w.Key != EarnedValueKey))
                     {
                         <MudSelectItem T="string" Value="w.Key">@w.Title</MudSelectItem>
                     }
@@ -278,7 +278,11 @@
     // Dashboards get everything that works without a person behind it; home pages get the personal widgets too.
     private IEnumerable<WidgetType> OfferedTypes => Enum.GetValues<WidgetType>()
         .Where(t => HomePage || !(IsPersonal(t) || t is WidgetType.ListViewChart or WidgetType.Shortcuts))
-        .Where(t => t != WidgetType.Module || Workbench.Contracts.Modules.ModuleRegistry.Current.RowsOf<Workbench.Contracts.Modules.ModuleHomeWidget>().Count > 0 || Widget?.Type == WidgetType.Module);
+        .Where(t => t != WidgetType.Module || Workbench.Contracts.Modules.ModuleRegistry.Current.RowsOf<Workbench.Contracts.Modules.ModuleHomeWidget>().Any(w => w.Key != EarnedValueKey) || Widget?.Type == WidgetType.Module)
+        // Earned value is offered while the project controls module provides it (a saved one stays on its dashboard either way).
+        .Where(t => t != WidgetType.EarnedValue || Workbench.Contracts.Modules.ModuleRegistry.Current.RowsOf<Workbench.Contracts.Modules.ModuleHomeWidget>().Any(w => w.Key == EarnedValueKey) || Widget?.Type == WidgetType.EarnedValue);
+
+    private const string EarnedValueKey = Workbench.Contracts.Dashboards.ModuleWidgetKeys.EarnedValue;
 
     protected override async Task OnInitializedAsync()
     {

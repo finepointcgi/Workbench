@@ -29,7 +29,8 @@ public sealed class ProjectPlanService(
     AuditRecorder audit,
     TimeProvider clock,
     INotificationPublisher? notifications = null,
-    Microsoft.Extensions.Options.IOptions<Resourcing.ResourcingOptions>? options = null) : IProjectPlanService
+    Microsoft.Extensions.Options.IOptions<Resourcing.ResourcingOptions>? options = null,
+    Projects.IContractCeilingSource? ceilingSource = null) : IProjectPlanService
 {
     public const string NotificationKind = "project-plan";
 
@@ -423,14 +424,17 @@ public sealed class ProjectPlanService(
         return missing;
     }
 
-    private static async Task<IReadOnlyList<ProjectCategoryDto>> CategoriesAsync(IWorkbenchDbContext db, Project project, CancellationToken ct)
+    private async Task<IReadOnlyList<ProjectCategoryDto>> CategoriesAsync(IWorkbenchDbContext db, Project project, CancellationToken ct)
     {
         var picked = (await db.Set<ProjectLaborCategory>().AsNoTracking().Where(c => c.ProjectId == project.Id).Select(c => c.LaborCategoryId).ToListAsync(ct)).ToHashSet();
         var onContract = new HashSet<Guid>();
         if (project.ContractId is { } contractId)
         {
             onContract.UnionWith(await db.Set<ContractLaborRate>().AsNoTracking().Where(r => r.ContractId == contractId).Select(r => r.LaborCategoryId).ToListAsync(ct));
-            onContract.UnionWith(await db.Set<Domain.Ceilings.Ceiling>().AsNoTracking().Where(c => c.ContractId == contractId && c.LaborCategoryId != null).Select(c => c.LaborCategoryId!.Value).ToListAsync(ct));
+            if (ceilingSource is not null)
+            {
+                onContract.UnionWith(await ceilingSource.CappedCategoriesAsync(contractId, ct));
+            }
         }
 
         return (await db.Set<LaborCategory>().AsNoTracking().Where(c => c.IsActive || picked.Contains(c.Id)).OrderBy(c => c.Code).ToListAsync(ct))

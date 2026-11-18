@@ -86,13 +86,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                 nullable: false,
                 defaultValue: "FullTime");
 
-            migrationBuilder.AddColumn<bool>(
-                name: "CheckAtRequisition",
-                table: "Ceiling",
-                type: "boolean",
-                nullable: false,
-                defaultValue: false);
-
             migrationBuilder.AddColumn<decimal>(
                 name: "CapitalizationThreshold",
                 table: "AssetCategory",
@@ -505,10 +498,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
             migrationBuilder.DropColumn(
                 name: "EmploymentType",
                 table: "EmployeePayProfile");
-
-            migrationBuilder.DropColumn(
-                name: "CheckAtRequisition",
-                table: "Ceiling");
 
             migrationBuilder.DropColumn(
                 name: "CapitalizationThreshold",

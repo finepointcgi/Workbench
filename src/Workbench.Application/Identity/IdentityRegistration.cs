@@ -65,7 +65,6 @@ public static class IdentityRegistration
         services.Decorate<IPlanSyncService, PermissionCheckingPlanSyncService>(); // Plan sheet sync: project setup (Finance, Admin, the project's PM with the role).
         services.Decorate<IProjectStartService, PermissionCheckingProjectStartService>(); // Start a project in one step: Set up every project or Create projects.
         services.Decorate<IProjectPlanService, PermissionCheckingProjectPlanService>(); // Plan terms and approval: Finance sets and approves, the PM submits.
-        services.Decorate<Contracts.Risks.IRiskService, PermissionCheckingRiskService>(); // A project's risk register: its manager, Finance and Admin.
         services.Decorate<IFiscalCalendarService, PermissionCheckingFiscalCalendarService>();
         services.Decorate<IAuditLogService, PermissionCheckingAuditLogService>();
         services.Decorate<ITimeReportService, PermissionCheckingTimeReportService>();
@@ -90,8 +89,6 @@ public static class IdentityRegistration
         services.AddWorkbenchPerDiemResourcingPermissions(); // Per diem imports Finance/Admin; allocations PMs (own projects) and resource managers (all).
         services.AddWorkbenchRevenuePermissions(); // Revenue: setup, runs and reports Finance/Admin; PMs read their projects and submit their EACs and deliveries.
         services.AddWorkbenchReportPermissions(); // Reports: signed in; row/field rules inside the reports; exports are security events.
-        services.AddWorkbenchEvmPermissions(); // Earned value: Finance, Admin or the project's PM; BCR approval and period reopen Finance/Admin.
-        services.AddWorkbenchCeilingPermissions(); // Ceilings and closeout: reads Finance/Admin/PMs; changes Finance/Admin (PMs may override where allowed).
         services.Decorate<Workbench.Contracts.Approvals.IApprovalWorkflowService, Approvals.PermissionCheckingApprovalWorkflowService>(); // Approval workflows: read Finance/Admin, change Admin.
         services.AddScoped<Projects.ProjectHubAccess>(); services.Decorate<Workbench.Contracts.Projects.IProjectHubService, PermissionCheckingProjectHubService>(); // Projects hub: list scoped in the service; project page for those on it; team Finance/Admin/PM.
         services.Decorate<Workbench.Contracts.Support.ISupportService, PermissionCheckingSupportService>(); // Support requests: send and read your own; admins list, read and update all.

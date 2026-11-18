@@ -54,6 +54,29 @@ public sealed class HomeWidgetData(IServiceProvider services, TimeProvider clock
     /// </summary>
     public const string PipelineKpiKey = "kpi.pipeline";
 
+    /// <summary>
+    /// The key of the provider that computes the "Earned value" dashboard widget (<see cref="WidgetType.EarnedValue"/>, stored on saved dashboards, so it stays in the
+    /// product). The project controls module registers the provider; without it the widget says so.
+    /// </summary>
+    public const string EarnedValueKey = ModuleWidgetKeys.EarnedValue;
+
+    /// <summary>Computes a widget whose data a license module provides, by the key of its <see cref="IHomeWidgetProvider"/>.</summary>
+    public async Task<WidgetDataDto> ComputeModuleAsync(WidgetDto widget, string key, CancellationToken ct)
+    {
+        try
+        {
+            return await ModuleWidgetAsync(new WidgetDataDto(widget.Id, widget.Type, null, null, null), widget, ct, key);
+        }
+        catch (Exception ex) when (ex is WorkbenchForbiddenException or UnauthorizedAccessException)
+        {
+            return new WidgetDataDto(widget.Id, widget.Type, null, null, "You don't have access to this figure.");
+        }
+        catch (WorkbenchNotFoundException)
+        {
+            return new WidgetDataDto(widget.Id, widget.Type, null, null, "What this widget shows no longer exists or isn't shared with you.");
+        }
+    }
+
     /// <summary>A module's widget: the provider registered for <c>Config.ModuleKey</c> (or <paramref name="providerKey"/>). With the module absent there is no provider, and the widget says so.</summary>
     private async Task<WidgetDataDto> ModuleWidgetAsync(WidgetDataDto data, WidgetDto widget, CancellationToken ct, string? providerKey = null)
     {

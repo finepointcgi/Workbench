@@ -75,8 +75,6 @@ public static class Permission
     public const string ProjectsFinancialsView = "projects.financials.view";
     public const string ResourcingManage = "projects.resourcing.manage";
     public const string ResourcingView = "projects.resourcing.view";
-    public const string EvmManage = "projects.evm.manage";
-    public const string CeilingsManage = "projects.ceilings.manage";
 
     // General ledger and accounting
     public const string GlAccountsManage = "gl.accounts.manage";
@@ -227,8 +225,6 @@ public static class PermissionCatalog
         new(Permission.ProjectsFinancialsView, AreaProjects, "See every project's financials", "Financials, budgets, project costs and financial exports of every project, and contract funding. Project managers always see their own.", F),
         new(Permission.ResourcingManage, AreaProjects, "Staff every project", "Change anyone's allocations on every project and see capacity and utilization.", OrgRoles.ResourceManager),
         new(Permission.ResourcingView, AreaProjects, "See every project's staffing", "Allocations and open demand on every project.", F),
-        new(Permission.EvmManage, AreaProjects, "Manage earned value", "Approve and reject baseline changes and reopen closed earned value periods.", F),
-        new(Permission.CeilingsManage, AreaProjects, "Manage ceilings and closeout", "Hours, cost and billing ceilings, overrides, alerts and contract and project closeout.", F),
 
         new(Permission.GlAccountsManage, AreaAccounting, "Manage the chart of accounts", "Add and change general ledger accounts.", F),
         new(Permission.GlJournalsPost, AreaAccounting, "Post journal entries", "Draft, post and reverse manual journal entries.", F),

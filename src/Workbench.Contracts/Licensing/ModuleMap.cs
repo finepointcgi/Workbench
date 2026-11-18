@@ -4,19 +4,15 @@ using Workbench.Contracts.Assistant;
 using Workbench.Contracts.BankFiles;
 using Workbench.Contracts.Billing;
 using Workbench.Contracts.Cash;
-using Workbench.Contracts.Ceilings;
-using Workbench.Contracts.Closeout;
 using Workbench.Contracts.Compliance;
 using Workbench.Contracts.Costpoint;
 using Workbench.Contracts.Currencies;
-using Workbench.Contracts.Evm;
 using Workbench.Contracts.Hr;
 using Workbench.Contracts.IndirectRates;
 using Workbench.Contracts.Migration;
 using Workbench.Contracts.Modules;
 using Workbench.Contracts.Notifications;
 using Workbench.Contracts.Purchasing;
-using Workbench.Contracts.Risks;
 using Workbench.Contracts.Scheduling;
 using Workbench.Contracts.Security;
 using Workbench.Contracts.Travel;
@@ -75,7 +71,7 @@ public static class ModuleMap
         .. Segments(ModuleKeys.Accounting,
             "accounting", "cash", "assets", "currencies", "planning", "indirect-rates", "sales-tax", "purchasing", "cards", "vendor-bank", "bank-files"),
         .. Segments(ModuleKeys.Workforce, "hr", "payroll", "resourcing"),
-        .. Segments(ModuleKeys.ProjectControls, "evm", "ceilings", "ceiling-overrides", "rate-ceilings", "closeout", "risks"),
+        // project controls: the evm, ceilings, ceiling-overrides, rate-ceilings, closeout and risks segments live in the project controls module (its own rows).
         .. Segments(ModuleKeys.Enterprise,
             "companies", "integrations", "customization", "automations", "approval-workflows", "access-reviews", "retention", "edi", "costpoint"),
     ]);
@@ -106,8 +102,6 @@ public static class ModuleMap
         ["leave."] = ModuleKeys.Core,
         ["projects."] = ModuleKeys.Core,
         ["projects.resourcing."] = ModuleKeys.Workforce,
-        ["projects.evm."] = ModuleKeys.ProjectControls,
-        ["projects.ceilings."] = ModuleKeys.ProjectControls,
         ["gl."] = ModuleKeys.Accounting,
         ["planning."] = ModuleKeys.Accounting,
         ["revenue."] = ModuleKeys.Billing,
@@ -233,8 +227,7 @@ public static class ModuleMap
         // capture: the Crm and Pricing namespaces live in the capture module (its own rows).
         // workforce
         ["Hr"] = ModuleKeys.Workforce, ["Payroll"] = ModuleKeys.Workforce, ["Resourcing"] = ModuleKeys.Workforce,
-        // project controls
-        ["Ceilings"] = ModuleKeys.ProjectControls, ["Closeout"] = ModuleKeys.ProjectControls, ["Evm"] = ModuleKeys.ProjectControls, ["Risks"] = ModuleKeys.ProjectControls,
+        // project controls: the Ceilings, Closeout, Evm and Risks namespaces, and the monthly narrative, live in the project controls module (its own rows).
         // materials: the Materials and Quality namespaces live in the materials module (its own rows).
         // govcon: the Compliance, IncurredCost and TotalTime namespaces and the parallel run live in the government contracting module (its own rows).
         // enterprise
@@ -248,8 +241,6 @@ public static class ModuleMap
     {
         // Sign-in settings (MFA, sessions) stay core; the single sign-on provider save is a Feature gate on enterprise.
         [typeof(IApprovalWorkflowService)] = ModuleKeys.Enterprise, // Custom workflows; the standard approvals don't change them.
-        [typeof(IProjectNarrativeService)] = ModuleKeys.ProjectControls,
-        [typeof(IScheduleHealthService)] = ModuleKeys.ProjectControls,
         [typeof(IBurdenedCostService)] = ModuleKeys.Accounting,
         [typeof(ICustomerShareLinkService)] = ModuleKeys.Enterprise,
         [typeof(ICustomerViewService)] = ModuleKeys.Enterprise,

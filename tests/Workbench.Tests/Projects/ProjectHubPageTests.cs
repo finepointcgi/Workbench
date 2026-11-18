@@ -65,7 +65,7 @@ public sealed class ProjectHubPageTests
         var page = ctx.Render<ProjectHubPage>(p => p.Add(c => c.ProjectId, ProjectId));
 
         // The everyday tabs; the occasional ones wait under More.
-        page.WaitForAssertion(() => Assert.Equal(["Overview", "Budget", "Financials", "Risks"], TabLabels(page)));
+        page.WaitForAssertion(() => Assert.Equal(["Overview", "Budget", "Financials"], TabLabels(page))); // Risks, earned value and ceilings are the project controls module's tabs
         Assert.NotEmpty(page.FindAll("[data-testid=project-more]"));
         foreach (var label in new[] { "Spent so far", "Budget", "Forecast at completion", "Funding left" })
         {
@@ -149,15 +149,40 @@ public sealed class ProjectHubPageTests
     [Fact]
     public async Task An_occasional_tab_shows_in_the_bar_while_it_is_open()
     {
+        // The tabs a license module adds (project controls adds Risks, Earned value, the narrative and Ceilings & closeout) come through contributions.
         await using var ctx = NewContext(Hub(Money, Tabs(money: true, setup: false)), configure: services =>
         {
-            services.AddSingleton(NullService<Workbench.Contracts.Ceilings.ICeilingService>.Create());
-            services.AddSingleton(NullService<Workbench.Contracts.Closeout.ICloseoutService>.Create());
+            services.AddSingleton(new Workbench.Contracts.Modules.ProjectHubTabContribution("risks", "Risks", typeof(StubModuleTab), t => t.Financials, 65));
+            services.AddSingleton(new Workbench.Contracts.Modules.ProjectHubTabContribution("ceilings", "Ceilings & closeout", typeof(StubModuleTab), t => t.Ceilings, 100, Occasional: true));
         });
 
         var page = ctx.Render<ProjectHubPage>(p => p.Add(c => c.ProjectId, ProjectId).Add(c => c.Tab, "ceilings"));
 
         page.WaitForAssertion(() => Assert.Equal(["Overview", "Budget", "Financials", "Risks", "Ceilings & closeout"], TabLabels(page)));
+        Assert.Contains("stub module tab", page.Markup);
+    }
+
+    [Fact]
+    public async Task Without_a_module_there_are_no_module_tabs_and_their_routes_fall_back_to_the_overview()
+    {
+        await using var ctx = NewContext(Hub(Money, Tabs(money: true, setup: false)));
+
+        var page = ctx.Render<ProjectHubPage>(p => p.Add(c => c.ProjectId, ProjectId).Add(c => c.Tab, "evm"));
+
+        page.WaitForAssertion(() => Assert.Equal(["Overview", "Budget", "Financials"], TabLabels(page)));
+        Assert.DoesNotContain("Risks", TabLabels(page));
+    }
+
+    /// <summary>What a license module's tab component looks like to the project page (it declares the parameters the page passes).</summary>
+    private sealed class StubModuleTab : Microsoft.AspNetCore.Components.ComponentBase
+    {
+        [Microsoft.AspNetCore.Components.Parameter] public Guid ProjectId { get; set; }
+
+        [Microsoft.AspNetCore.Components.Parameter] public Guid? SheetId { get; set; }
+
+        [Microsoft.AspNetCore.Components.Parameter] public Microsoft.AspNetCore.Components.EventCallback Changed { get; set; }
+
+        protected override void BuildRenderTree(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder builder) => builder.AddContent(0, "stub module tab");
     }
 
     [Theory]

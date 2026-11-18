@@ -33,7 +33,6 @@ public static class WorkbenchApi
         v1.MapOdcEndpoints();
         v1.MapFinancialsEndpoints();
         v1.MapSetupEndpoints();
-        v1.MapRiskEndpoints();
         v1.MapAccountingEndpoints();
         v1.MapSecurityAdminEndpoints();
         v1.MapContractDetailEndpoints();
@@ -52,8 +51,6 @@ public static class WorkbenchApi
         v1.MapPerDiemResourcingEndpoints();
         v1.MapRevenueEndpoints();
         v1.MapReportEndpoints();
-        v1.MapEvmEndpoints();
-        v1.MapCeilingEndpoints();
         v1.MapApprovalEndpoints();
         v1.MapProjectHubEndpoints();
         v1.MapMyTodoEndpoints();

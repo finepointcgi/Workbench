@@ -50,8 +50,6 @@ public sealed class BuiltInRoleParityTests
         [Permission.ProjectsFinancialsView] = r => r.IsFinance(),
         [Permission.ResourcingManage] = r => r.IsResourceManager(),
         [Permission.ResourcingView] = r => r.IsFinance(),
-        [Permission.EvmManage] = r => r.IsFinance(),
-        [Permission.CeilingsManage] = r => r.IsFinance(),
         [Permission.GlAccountsManage] = r => r.IsFinance(),
         [Permission.GlJournalsPost] = r => r.IsFinance(),
         [Permission.GlPostingManage] = r => r.IsFinance(),

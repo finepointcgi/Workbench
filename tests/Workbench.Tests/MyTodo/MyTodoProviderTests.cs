@@ -2,7 +2,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Workbench.Application.MyTodo;
 using Workbench.Contracts.Accounting;
 using Workbench.Contracts.Approvals;
-using Workbench.Contracts.Evm;
 using Workbench.Contracts.Identity;
 using Workbench.Contracts.MyTodo;
 using Workbench.Contracts.MyWork;
@@ -104,35 +103,6 @@ public sealed class MyTodoProviderTests
         var rejected = EacReviewTodoProvider.For(project, Detail(RevenueMethodKind.CostPlusFee, Estimate(Today.AddDays(-3), EstimateState.Rejected, "Too low")), context)!;
         Assert.Equal("Revise the EAC for 1001", rejected.Title);
         Assert.Contains("Too low", rejected.Reason);
-    }
-
-    [Fact]
-    public async Task Variances_list_open_write_ups_due_after_the_reporting_period()
-    {
-        var periodId = Guid.NewGuid();
-        EvmVarianceDto Var(string code, bool needs, string? cause = null, bool frozen = false) =>
-            new(Guid.NewGuid(), code, code, periodId, "FY27 P1", needs, ["CV% over 10"], 0, -5000, 0, -12, 1, 1, 0, cause, cause, cause, null, null, null, frozen);
-        var asked = new List<Guid>();
-        var (evm, fake) = Fake<IEvmService>.Create();
-        fake.On(nameof(IEvmService.GetBaselineAsync), args =>
-        {
-            asked.Add((Guid)args[0]!);
-            return new EvmBaselineDto(Guid.NewGuid(), (Guid)args[0]!, "1001", Guid.NewGuid(), "Baseline", null, null, 2, 0, 0, 0, 0, 0, 0, 10, 0, false, DateTime.UtcNow, Finance, [], [], []);
-        });
-        fake.Returns(nameof(IEvmService.ListVariancesAsync), (IReadOnlyList<EvmVarianceDto>)[Var("1001.01", true), Var("1001.02", true, "Done"), Var("1001.03", false), Var("1001.04", true, frozen: true)]);
-        fake.Returns(nameof(IEvmService.ListPeriodsAsync), (IReadOnlyList<EvmPeriodRefDto>)[new(periodId, "FY27 P1", new(2026, 10, 1), new(2026, 10, 31), EvmPeriodState.Reporting, null, null)]);
-        await using var kit = await MyTodoKit.CreateAsync(services => services.AddSingleton(evm));
-
-        var item = Assert.Single((await kit.GetAsync(Owner)).Items, i => i.Key.StartsWith("evm:", StringComparison.Ordinal));
-        Assert.Equal("Explain the variance on 1001.01", item.Title);
-        Assert.Equal(new DateOnly(2026, 11, 10), item.Due);
-        Assert.Equal(TodoUrgency.Later, item.Urgency);
-        Assert.Equal($"projects/{kit.Fx.Project1}/evm", item.Link);
-        Assert.Equal([kit.Fx.Project1], asked);
-
-        asked.Clear();
-        Assert.DoesNotContain((await kit.GetAsync(Editor)).Items, i => i.Key.StartsWith("evm:", StringComparison.Ordinal));
-        Assert.Empty(asked);
     }
 
     [Fact]

@@ -21,12 +21,6 @@ internal static class AssistantEndpoints
         assistant.MapGet("/audit", (DateOnly? from, DateOnly? to, string? user, int? take, IAssistantAdminService s, CancellationToken ct) =>
             s.ListAuditAsync(new AssistantAuditQuery(from, to, user, take ?? 200), ct));
 
-        assistant.MapGet("/projects/{id:guid}/narrative/periods", (Guid id, IProjectNarrativeService s, CancellationToken ct) => s.ListPeriodsAsync(id, ct));
-        assistant.MapGet("/projects/{id:guid}/narrative", async (Guid id, Guid? periodId, IProjectNarrativeService s, CancellationToken ct) =>
-            await s.GetAsync(id, periodId, ct) is { } n ? Results.Ok(n) : Results.NoContent());
-        assistant.MapPost("/projects/{id:guid}/narrative/draft", (Guid id, Guid? periodId, IProjectNarrativeService s, CancellationToken ct) => s.DraftAsync(id, periodId, ct));
-        assistant.MapPut("/projects/{id:guid}/narrative", (Guid id, SaveProjectNarrativeRequest r, IProjectNarrativeService s, CancellationToken ct) => s.SaveAsync(id, r, ct));
-
         assistant.MapPost("/timesheet-flags", (TimesheetIdsRequest r, ITimesheetFlagService s, CancellationToken ct) => s.ListForTimesheetsAsync(r.TimesheetIds, ct));
         assistant.MapGet("/timesheet-flags/{id:guid}", (Guid id, ITimesheetFlagService s, CancellationToken ct) => s.GetAsync(id, ct));
         assistant.MapGet("/timesheet-flags/report", (DateOnly from, DateOnly to, string? rule, ITimesheetFlagService s, CancellationToken ct) =>

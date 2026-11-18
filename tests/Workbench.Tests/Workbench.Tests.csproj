@@ -44,6 +44,7 @@
     <InternalsVisibleTo Include="Workbench.Module.GovCon.Tests" />
     <InternalsVisibleTo Include="Workbench.Module.Capture.Tests" />
     <InternalsVisibleTo Include="Workbench.Module.Materials.Tests" />
+    <InternalsVisibleTo Include="Workbench.Module.ProjectControls.Tests" />
   </ItemGroup>
 
   <ItemGroup>
