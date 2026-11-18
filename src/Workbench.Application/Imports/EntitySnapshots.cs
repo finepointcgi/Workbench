@@ -8,7 +8,7 @@ namespace Workbench.Application.Imports;
 /// Property snapshots of any mapped entity, taken from the EF model, so an import can record what it changed and a
 /// rollback can restore it (or tell that someone changed it since) without per-entity code.
 /// </summary>
-internal static class EntitySnapshots
+public static class EntitySnapshots
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 

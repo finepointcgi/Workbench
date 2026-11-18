@@ -11,7 +11,7 @@ namespace Workbench.Tests.Navigation;
 public sealed class GovernmentNavigationTests
 {
     private static readonly string[] FederalLinks =
-        ["bd/leads"]; // The government contracting module's federal pages are checked in that module's own tests.
+        []; // The federal pages (government contracting, SAM.gov leads) come from modules and are checked in their own tests.
 
     private static NavAccess Admin(bool hideGovernment)
     {

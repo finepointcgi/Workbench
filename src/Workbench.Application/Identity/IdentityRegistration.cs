@@ -100,8 +100,6 @@ public static class IdentityRegistration
         services.Decorate<Workbench.Contracts.Tasks.ITaskAssignmentService, PermissionCheckingTaskAssignmentService>(); // Tasks: Viewers read, Editors/Owners assign, assignees update their own status; workload Finance/Admin/PM.
         services.AddWorkbenchHrPermissions(); // HR: records HR/Admin (employees self-service, supervisors/Finance job fields), EEO HR/Admin/self, compensation HR+Finance.
         services.AddWorkbenchMaterialsPermissions(); // Materials: read Materials/Finance/Admin, change Materials/Admin; revaluation and WIP Finance; own shop labor anyone.
-        services.AddWorkbenchCrmPermissions(); // Business development: pipeline for BD/Finance/Admin; capture and proposal managers edit theirs; everyone else nothing.
-        services.AddWorkbenchPricingPermissions(); // Proposal pricing: Finance, Admin or the Pricing role; the won handoff Finance/Admin.
         services.AddWorkbenchAssistantPermissions(); // Assistant: ask signed in (tools check the user's access); settings/usage/audit Admin; narratives Finance/Admin/PM; flags filtered to reviewees.
         services.AddWorkbenchPlanningPermissions(); // Recurring journals, GL budgets, budget vs actual: Finance/Admin; planning cycles Finance/Admin, org unit owners their own budget.
         services.AddWorkbenchCurrencyPermissions(); // Multicurrency: reads signed in; rates, setup, revaluation and the report Finance/Admin.

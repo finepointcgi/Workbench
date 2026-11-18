@@ -8,7 +8,6 @@ using Workbench.Contracts.Hr;
 using Workbench.Contracts.Identity;
 using Workbench.Contracts.IndirectRates;
 using Workbench.Contracts.Payroll;
-using Workbench.Contracts.Pricing;
 using Workbench.Contracts.Security;
 using Workbench.Domain.Companies;
 using Workbench.Domain.Identity;
@@ -194,32 +193,6 @@ public sealed class ScopedRoleAndFieldTests
     }
 
     [Fact]
-    public async Task Pricing_without_the_fee_field_shows_cost_only_and_refuses_the_export()
-    {
-        await using var seeded = await CreateAsync();
-        var estimator = await CreateRoleAsync(seeded, "Estimator", Permission.PricingManage);
-        await AssignAsync(seeded, Viewer, new RoleAssignment(estimator.Id));
-        seeded.As(Viewer);
-        var denied = await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => seeded.Host.Get<IProposalPricingService>().ExportCostVolumeAsync(Guid.NewGuid()));
-        Assert.Contains("See fee and margin", denied.Message);
-
-        // What the decorators return: fee, fee rate, margin, wrap rate and price masked, cost kept, nested lists too.
-        var figures = new PriceFiguresDto(10, 1000, 300, 400, 150, 50, 0, 0, 0, 1900, 190, 2090);
-        var model = new PriceModelRefDto(Guid.NewGuid(), "Base", null, true, false, null, null, null, null, null, DateTime.UtcNow);
-        var comparison = new ScenarioComparisonDto(Guid.NewGuid(), 2000m,
-            [new ScenarioRowDto(model, 10, 1000, 1900, 190, 2090, 0.1m, 2.09m, 0.0909m, new PriceToWinDto(2000m, 90m, 0.045m, 0.05m, false))]);
-        var masked = FieldMasker.Mask(comparison, PermissionSet.Of([Permission.PricingManage]));
-        var row = Assert.Single(masked.Rows);
-        Assert.Equal((1900m, 0m, 0m, 0m, 0m, 0m), (row.TotalCost, row.Fee, row.Price, row.FeeRate, row.Margin, row.WrapRate));
-        Assert.Equal((2000m, 0m, (decimal?)null), (row.PriceToWin!.TargetPrice, row.PriceToWin.Difference, row.PriceToWin.FeeRateAtTarget));
-        Assert.Equal(190m, comparison.Rows[0].Fee); // The original is untouched.
-        Assert.Same(comparison, FieldMasker.Mask(comparison, PermissionSet.Of([Permission.FieldsPricingFee])));
-        Assert.Equal(0m, FieldMasker.Mask(figures, PermissionSet.Empty).Price);
-        Assert.Contains((nameof(PriceFiguresDto.Fee), Permission.FieldsPricingFee), FieldMasker.FieldsOf(typeof(PriceResultDto)));
-        Assert.Equal([Permission.FieldsPricingFee], FieldMasker.WithheldPermissions(typeof(PriceResultDto), PermissionSet.Of([Permission.PricingManage])));
-    }
-
-    [Fact]
     public async Task Burden_columns_of_the_gl_reconciliation_are_masked_without_the_field()
     {
         await using var seeded = await CreateAsync();
@@ -239,7 +212,6 @@ public sealed class ScopedRoleAndFieldTests
         Assert.Equal(PermissionCatalog.Find(Permission.HrWorkforceView)!.GrantedTo, PermissionCatalog.Find(Permission.FieldsSalaries)!.GrantedTo);
         Assert.Equal(PermissionCatalog.Find(Permission.ProjectsFinancialsView)!.GrantedTo, PermissionCatalog.Find(Permission.FieldsBurdenedCost)!.GrantedTo);
         Assert.Equal(PermissionCatalog.Find(Permission.HrRestrictedReports)!.GrantedTo, PermissionCatalog.Find(Permission.FieldsEeo)!.GrantedTo);
-        Assert.Equal(PermissionCatalog.Find(Permission.PricingManage)!.GrantedTo, PermissionCatalog.Find(Permission.FieldsPricingFee)!.GrantedTo);
         Assert.All(PermissionCatalog.All.Where(p => p.Area == PermissionCatalog.AreaFields), p => Assert.True(p.Sensitive));
         Assert.Equal(8, PermissionCatalog.All.Count(p => p.Area == PermissionCatalog.AreaFields));
     }

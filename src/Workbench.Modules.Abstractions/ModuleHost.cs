@@ -124,6 +124,34 @@ public sealed class ModuleHost
         return assets;
     }
 
+    /// <summary>
+    /// The scoped style sheets of the loaded modules' pages (<c>&lt;assembly name&gt;.bundle.scp.css</c> in the module's <c>wwwroot</c>, which the module's
+    /// build copies there from the Razor class library's build output), as paths the host's pages link. A host built with the library as a reference gets
+    /// that bundle from its own style sheet; a module loaded from a folder has to be linked.
+    /// </summary>
+    public IReadOnlyList<string> StyleSheets()
+    {
+        var sheets = new List<string>();
+        foreach (var module in _modules)
+        {
+            if (!_folders.TryGetValue(module.Id, out var folder))
+            {
+                continue;
+            }
+
+            foreach (var assembly in module.Describe().RoutableAssemblies)
+            {
+                var name = assembly.GetName().Name;
+                if (File.Exists(Path.Combine(folder, "wwwroot", $"{name}.bundle.scp.css")))
+                {
+                    sheets.Add($"_content/{name}/{name}.bundle.scp.css");
+                }
+            }
+        }
+
+        return sheets;
+    }
+
     /// <summary>True when a loaded module adds entities to the EF model.</summary>
     public bool HasModel => _modules.Any(m => m.ModelAssemblies.Count > 0);
 
@@ -449,6 +477,13 @@ public sealed class ModuleHost
 
             foreach (var descriptor in scratch)
             {
+                // Framework registries that are added with TryAdd (such as the one AddHttpClient makes) already exist in the host's collection:
+                // a second copy would make the host's own later AddHttpClient fail. Public service types are never skipped (modules add several).
+                if (descriptor.ImplementationInstance is not null && !descriptor.ServiceType.IsPublic && services.Any(d => d.ServiceType == descriptor.ServiceType))
+                {
+                    continue;
+                }
+
                 services.Add(descriptor);
             }
         }

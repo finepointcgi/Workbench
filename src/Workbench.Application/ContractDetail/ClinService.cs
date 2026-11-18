@@ -160,7 +160,7 @@ public sealed class ClinService(IWorkbenchDbContextFactory dbFactory, AuditRecor
     }
 
     /// <summary>Validates and adds a CLIN or SLIN to <paramref name="clins"/> (tracked); shared with modification execution.</summary>
-    internal static async Task<Clin> AddClinAsync(IWorkbenchDbContext db, Contract contract, List<Clin> clins, SaveClinRequest request, CancellationToken ct)
+    public static async Task<Clin> AddClinAsync(IWorkbenchDbContext db, Contract contract, List<Clin> clins, SaveClinRequest request, CancellationToken ct)
     {
         var number = ClinRules.Normalize(request.Number);
         ValidateFields(request);

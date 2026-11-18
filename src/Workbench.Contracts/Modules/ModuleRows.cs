@@ -51,6 +51,9 @@ public static class ModuleCatalogs
 
     /// <summary>Home page and dashboard widgets: <see cref="ModuleHomeWidget"/>.</summary>
     public const string HomeWidgets = "home-widget";
+
+    /// <summary>Status sets administrators may relabel (Setup › Lists): <c>StatusSetDefinition</c> (Workbench.Application).</summary>
+    public const string StatusSets = "status-set";
 }
 
 /// <summary>A list page whose saved views a module owns (the key of a <c>ListViewDefinition</c>).</summary>

@@ -18,7 +18,6 @@ public sealed record IntegrationEventType(string Key, string Subject, Type DataT
     public static readonly IntegrationEventType ProjectCreated = new("project.created", "Project", typeof(ProjectEventData));
     public static readonly IntegrationEventType EmployeeHired = new("employee.hired", "Employee", typeof(EmployeeEventData));
     public static readonly IntegrationEventType EmployeeTerminated = new("employee.terminated", "Employee", typeof(EmployeeEventData));
-    public static readonly IntegrationEventType OpportunityStageChanged = new("opportunity.stage_changed", "Opportunity", typeof(OpportunityStageEventData));
     public static readonly IntegrationEventType PeriodClosed = new("period.closed", "FiscalPeriod", typeof(PeriodEventData));
     public static readonly IntegrationEventType ShipmentShipped = new("shipment.shipped", "Shipment", typeof(ShipmentEventData));
     public static readonly IntegrationEventType RfqAwarded = new("rfq.awarded", "Rfq", typeof(RfqAwardEventData));
@@ -28,7 +27,7 @@ public sealed record IntegrationEventType(string Key, string Subject, Type DataT
     public static IReadOnlyList<IntegrationEventType> All { get; } =
     [
         TimesheetSubmitted, TimesheetApproved, InvoiceApproved, InvoiceSent, InvoicePaid, BillApproved, BillPaid,
-        PurchaseOrderApproved, ProjectCreated, EmployeeHired, EmployeeTerminated, OpportunityStageChanged, PeriodClosed,
+        PurchaseOrderApproved, ProjectCreated, EmployeeHired, EmployeeTerminated, PeriodClosed,
         ShipmentShipped, RfqAwarded, NcrDispositioned, SheetFormSubmitted,
     ];
 
@@ -84,13 +83,6 @@ public sealed record EmployeeEventData(
     DateOnly HireDate, DateOnly? TerminationDate) : IntegrationEventData
 {
     public override Guid GetSubjectId() => EmployeeId;
-}
-
-public sealed record OpportunityStageEventData(
-    Guid OpportunityId, string Number, string Name, string FromStage, string ToStage, decimal EstimatedValue, DateOnly? EstimatedAwardDate)
-    : IntegrationEventData
-{
-    public override Guid GetSubjectId() => OpportunityId;
 }
 
 public sealed record PeriodEventData(Guid FiscalPeriodId, int FiscalYear, int Number, string Name, DateOnly Start, DateOnly End, string Status)

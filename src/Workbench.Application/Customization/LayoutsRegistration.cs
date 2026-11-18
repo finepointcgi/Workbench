@@ -1,7 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Workbench.Contracts.Billing;
-using Workbench.Contracts.Crm;
 using Workbench.Contracts.Customization;
 using Workbench.Contracts.Materials;
 using Workbench.Contracts.Odcs;
@@ -28,22 +27,25 @@ public static class LayoutsRegistration
         services.AddScoped<FormRequirementGuard>();
 
         // Fields a layout makes required are checked on every save of these records.
-        Guard<IProjectService>(services);
-        Guard<IContractService>(services);
-        Guard<ISetupAdminService>(services);
-        Guard<IPeopleService>(services);
-        Guard<IVendorService>(services);
-        Guard<IPurchaseOrderService>(services);
-        Guard<IApBillService>(services);
-        Guard<IInvoiceService>(services);
-        Guard<IExpenseReportService>(services);
-        Guard<IPartService>(services);
-        Guard<IOpportunityService>(services);
+        services.AddFormRequirementGuard<IProjectService>();
+        services.AddFormRequirementGuard<IContractService>();
+        services.AddFormRequirementGuard<ISetupAdminService>();
+        services.AddFormRequirementGuard<IPeopleService>();
+        services.AddFormRequirementGuard<IVendorService>();
+        services.AddFormRequirementGuard<IPurchaseOrderService>();
+        services.AddFormRequirementGuard<IApBillService>();
+        services.AddFormRequirementGuard<IInvoiceService>();
+        services.AddFormRequirementGuard<IExpenseReportService>();
+        services.AddFormRequirementGuard<IPartService>();
         return services;
     }
 
-    /// <summary>Wraps the last registration of <typeparamref name="T"/> in a <see cref="FormRequirementProxy{T}"/>, keeping its lifetime.</summary>
-    private static void Guard<T>(IServiceCollection services)
+    /// <summary>
+    /// Wraps the last registration of <typeparamref name="T"/> in a <see cref="FormRequirementProxy{T}"/>, keeping its lifetime: the fields a layout
+    /// makes required are then checked on every save through the service. A module that owns a record with a built-in form calls this after
+    /// registering the service and before its permission decorators (the built-in services are guarded in <see cref="AddWorkbenchLayouts"/>).
+    /// </summary>
+    public static void AddFormRequirementGuard<T>(this IServiceCollection services)
         where T : class
     {
         var index = services.ToList().FindLastIndex(d => d.ServiceType == typeof(T) && !d.IsKeyedService);

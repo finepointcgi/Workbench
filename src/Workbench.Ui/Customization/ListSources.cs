@@ -1,6 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
 using Workbench.Contracts.Billing;
-using Workbench.Contracts.Crm;
 using Workbench.Contracts.Customization;
 using Workbench.Contracts.Dashboards;
 using Workbench.Contracts.Hr;
@@ -104,8 +103,6 @@ public static class ListSources
             ((await Get<ITimesheetApprovalService>(sp).GetTeamStatusAsync(DateOnly.FromDateTime(DateTime.Today), ct)).Members, Time.TeamPage._definition)),
         new ListSource<ExpenseReportDto>(CustomizableLists.ExpenseReports, "Expense reports", async (sp, ct) =>
             (await Get<IExpenseReportService>(sp).ListMyReportsAsync(ct), Pages.Odcs.Expenses._definition)),
-        new ListSource<OpportunityDto>(CustomizableLists.Opportunities, "Opportunities", async (sp, ct) =>
-            (await Get<IOpportunityService>(sp).ListAsync(new OpportunityFilter(), ct), Crm.OpportunityListPage._definition)),
         new ListSource<PartSummaryDto>(CustomizableLists.Parts, "Parts", async (sp, ct) =>
             (await Get<IPartService>(sp).ListAsync(new PartQuery(), ct), Materials.PartsPage._definition)),
         new ListSource<SalesOrderSummaryDto>(CustomizableLists.SalesOrders, "Sales orders", async (sp, ct) =>

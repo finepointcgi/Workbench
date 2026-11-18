@@ -226,63 +226,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                 });
 
             migrationBuilder.CreateTable(
-                name: "CrmAccount",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    Name = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false, collation: "C"),
-                    Acronym = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: true, collation: "C"),
-                    Kind = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
-                    ParentId = table.Column<Guid>(type: "uuid", nullable: true),
-                    Uei = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: true, collation: "C"),
-                    CageCode = table.Column<string>(type: "character varying(8)", maxLength: 8, nullable: true, collation: "C"),
-                    Website = table.Column<string>(type: "character varying(300)", maxLength: 300, nullable: true, collation: "C"),
-                    Phone = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true, collation: "C"),
-                    Address = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true, collation: "C"),
-                    Notes = table.Column<string>(type: "character varying(4000)", maxLength: 4000, nullable: true, collation: "C"),
-                    CustomerId = table.Column<Guid>(type: "uuid", nullable: true),
-                    IsActive = table.Column<bool>(type: "boolean", nullable: false),
-                    CreatedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
-                    CreatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_CrmAccount", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_CrmAccount_CrmAccount_ParentId",
-                        column: x => x.ParentId,
-                        principalTable: "CrmAccount",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_CrmAccount_Customer_CustomerId",
-                        column: x => x.CustomerId,
-                        principalTable: "Customer",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "CrmSettings",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    BpParentWbsElementId = table.Column<Guid>(type: "uuid", nullable: true),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    UpdatedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C")
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_CrmSettings", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_CrmSettings_WbsElement_BpParentWbsElementId",
-                        column: x => x.BpParentWbsElementId,
-                        principalTable: "WbsElement",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "EmergencyContact",
                 columns: table => new
                 {
@@ -392,25 +335,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                         principalTable: "Employee",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "GateDefinition",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    Name = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false, collation: "C"),
-                    ToStage = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
-                    Description = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true, collation: "C"),
-                    PassingScore = table.Column<int>(type: "integer", nullable: false),
-                    RequiresApproval = table.Column<bool>(type: "boolean", nullable: false),
-                    IsActive = table.Column<bool>(type: "boolean", nullable: false),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    UpdatedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C")
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_GateDefinition", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -601,28 +525,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                 });
 
             migrationBuilder.CreateTable(
-                name: "SavedLeadSearch",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    Name = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false, collation: "C"),
-                    NaicsCodes = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true, collation: "C"),
-                    Agencies = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true, collation: "C"),
-                    SetAsides = table.Column<string>(type: "character varying(300)", maxLength: 300, nullable: true, collation: "C"),
-                    Keywords = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true, collation: "C"),
-                    PostedWithinDays = table.Column<int>(type: "integer", nullable: false),
-                    IsActive = table.Column<bool>(type: "boolean", nullable: false),
-                    OwnerEmail = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
-                    CreatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    LastRunAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    LastRunNewLeads = table.Column<int>(type: "integer", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_SavedLeadSearch", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "TimesheetFlagExplanation",
                 columns: table => new
                 {
@@ -777,144 +679,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                         principalTable: "Employee",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "CrmContact",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    AccountId = table.Column<Guid>(type: "uuid", nullable: false),
-                    FirstName = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false, collation: "C"),
-                    LastName = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false, collation: "C"),
-                    Title = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true, collation: "C"),
-                    Role = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
-                    Email = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
-                    Phone = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true, collation: "C"),
-                    Notes = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true, collation: "C"),
-                    IsActive = table.Column<bool>(type: "boolean", nullable: false),
-                    CreatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_CrmContact", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_CrmContact_CrmAccount_AccountId",
-                        column: x => x.AccountId,
-                        principalTable: "CrmAccount",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "Opportunity",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    Number = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false, collation: "C"),
-                    Name = table.Column<string>(type: "character varying(300)", maxLength: 300, nullable: false, collation: "C"),
-                    Description = table.Column<string>(type: "character varying(4000)", maxLength: 4000, nullable: true, collation: "C"),
-                    SolicitationNumber = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true, collation: "C"),
-                    SolicitationKey = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true, collation: "C"),
-                    AgencyAccountId = table.Column<Guid>(type: "uuid", nullable: true),
-                    AgencyName = table.Column<string>(type: "character varying(300)", maxLength: 300, nullable: true, collation: "C"),
-                    NaicsCode = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: true, collation: "C"),
-                    SetAside = table.Column<string>(type: "character varying(48)", maxLength: 48, nullable: false),
-                    ContractVehicle = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true, collation: "C"),
-                    ContractType = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: true),
-                    Kind = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
-                    EstimatedValue = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    EstimatedAwardDate = table.Column<DateOnly>(type: "date", nullable: true),
-                    PeriodOfPerformanceMonths = table.Column<int>(type: "integer", nullable: true),
-                    RfiDueOn = table.Column<DateOnly>(type: "date", nullable: true),
-                    RfpReleaseOn = table.Column<DateOnly>(type: "date", nullable: true),
-                    ProposalDueOn = table.Column<DateOnly>(type: "date", nullable: true),
-                    PlaceOfPerformance = table.Column<string>(type: "character varying(300)", maxLength: 300, nullable: true, collation: "C"),
-                    IncumbentAccountId = table.Column<Guid>(type: "uuid", nullable: true),
-                    IncumbentName = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true, collation: "C"),
-                    CaptureManagerEmail = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
-                    ProposalManagerEmail = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
-                    Stage = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
-                    StageChangedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    Pwin = table.Column<int>(type: "integer", nullable: false),
-                    Pgo = table.Column<int>(type: "integer", nullable: false),
-                    Source = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
-                    SourceUrl = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true, collation: "C"),
-                    SamNoticeId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true, collation: "C"),
-                    OutcomeReason = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: true),
-                    OutcomeNotes = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true, collation: "C"),
-                    DecidedOn = table.Column<DateOnly>(type: "date", nullable: true),
-                    AwardedValue = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
-                    AwardedTo = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true, collation: "C"),
-                    BpWbsElementId = table.Column<Guid>(type: "uuid", nullable: true),
-                    CustomerId = table.Column<Guid>(type: "uuid", nullable: true),
-                    ContractId = table.Column<Guid>(type: "uuid", nullable: true),
-                    ProjectId = table.Column<Guid>(type: "uuid", nullable: true),
-                    CreatedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
-                    CreatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_Opportunity", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_Opportunity_Contract_ContractId",
-                        column: x => x.ContractId,
-                        principalTable: "Contract",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_Opportunity_CrmAccount_AgencyAccountId",
-                        column: x => x.AgencyAccountId,
-                        principalTable: "CrmAccount",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_Opportunity_CrmAccount_IncumbentAccountId",
-                        column: x => x.IncumbentAccountId,
-                        principalTable: "CrmAccount",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_Opportunity_Customer_CustomerId",
-                        column: x => x.CustomerId,
-                        principalTable: "Customer",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_Opportunity_Project_ProjectId",
-                        column: x => x.ProjectId,
-                        principalTable: "Project",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_Opportunity_WbsElement_BpWbsElementId",
-                        column: x => x.BpWbsElementId,
-                        principalTable: "WbsElement",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "GateCriterion",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    GateDefinitionId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Text = table.Column<string>(type: "character varying(300)", maxLength: 300, nullable: false, collation: "C"),
-                    Guidance = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true, collation: "C"),
-                    Weight = table.Column<int>(type: "integer", nullable: false),
-                    Order = table.Column<int>(type: "integer", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_GateCriterion", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_GateCriterion_GateDefinition_GateDefinitionId",
-                        column: x => x.GateDefinitionId,
-                        principalTable: "GateDefinition",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -1116,246 +880,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                 });
 
             migrationBuilder.CreateTable(
-                name: "CrmActivity",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    AccountId = table.Column<Guid>(type: "uuid", nullable: true),
-                    ContactId = table.Column<Guid>(type: "uuid", nullable: true),
-                    OpportunityId = table.Column<Guid>(type: "uuid", nullable: true),
-                    Kind = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
-                    Subject = table.Column<string>(type: "character varying(300)", maxLength: 300, nullable: false, collation: "C"),
-                    Body = table.Column<string>(type: "character varying(4000)", maxLength: 4000, nullable: true, collation: "C"),
-                    OccurredOn = table.Column<DateOnly>(type: "date", nullable: true),
-                    DueOn = table.Column<DateOnly>(type: "date", nullable: true),
-                    AssignedTo = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
-                    IsDone = table.Column<bool>(type: "boolean", nullable: false),
-                    CompletedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    CreatedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
-                    CreatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_CrmActivity", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_CrmActivity_CrmAccount_AccountId",
-                        column: x => x.AccountId,
-                        principalTable: "CrmAccount",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_CrmActivity_CrmContact_ContactId",
-                        column: x => x.ContactId,
-                        principalTable: "CrmContact",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_CrmActivity_Opportunity_OpportunityId",
-                        column: x => x.OpportunityId,
-                        principalTable: "Opportunity",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "OpportunityCompetitor",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    OpportunityId = table.Column<Guid>(type: "uuid", nullable: false),
-                    AccountId = table.Column<Guid>(type: "uuid", nullable: true),
-                    Name = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false, collation: "C"),
-                    IsIncumbent = table.Column<bool>(type: "boolean", nullable: false),
-                    Notes = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true, collation: "C")
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_OpportunityCompetitor", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_OpportunityCompetitor_CrmAccount_AccountId",
-                        column: x => x.AccountId,
-                        principalTable: "CrmAccount",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_OpportunityCompetitor_Opportunity_OpportunityId",
-                        column: x => x.OpportunityId,
-                        principalTable: "Opportunity",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "OpportunityGateReview",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    OpportunityId = table.Column<Guid>(type: "uuid", nullable: false),
-                    GateDefinitionId = table.Column<Guid>(type: "uuid", nullable: false),
-                    GateName = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false, collation: "C"),
-                    ToStage = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
-                    Recommendation = table.Column<string>(type: "character varying(8)", maxLength: 8, nullable: false),
-                    ScorePercent = table.Column<decimal>(type: "numeric(5,2)", precision: 5, scale: 2, nullable: false),
-                    PassingScore = table.Column<int>(type: "integer", nullable: false),
-                    Notes = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true, collation: "C"),
-                    Status = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
-                    SubmittedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
-                    SubmittedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    DecidedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
-                    DecidedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    DecisionComment = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true, collation: "C")
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_OpportunityGateReview", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_OpportunityGateReview_GateDefinition_GateDefinitionId",
-                        column: x => x.GateDefinitionId,
-                        principalTable: "GateDefinition",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_OpportunityGateReview_Opportunity_OpportunityId",
-                        column: x => x.OpportunityId,
-                        principalTable: "Opportunity",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "OpportunityLead",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    Source = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
-                    SourceId = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true, collation: "C"),
-                    SolicitationNumber = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true, collation: "C"),
-                    SolicitationKey = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true, collation: "C"),
-                    Title = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false, collation: "C"),
-                    Agency = table.Column<string>(type: "character varying(300)", maxLength: 300, nullable: true, collation: "C"),
-                    Office = table.Column<string>(type: "character varying(300)", maxLength: 300, nullable: true, collation: "C"),
-                    NaicsCode = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: true, collation: "C"),
-                    SetAside = table.Column<string>(type: "character varying(48)", maxLength: 48, nullable: false),
-                    NoticeType = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true, collation: "C"),
-                    PostedOn = table.Column<DateOnly>(type: "date", nullable: true),
-                    ResponseDueOn = table.Column<DateOnly>(type: "date", nullable: true),
-                    PlaceOfPerformance = table.Column<string>(type: "character varying(300)", maxLength: 300, nullable: true, collation: "C"),
-                    Url = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true, collation: "C"),
-                    Description = table.Column<string>(type: "character varying(4000)", maxLength: 4000, nullable: true, collation: "C"),
-                    EstimatedValue = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
-                    SavedSearchId = table.Column<Guid>(type: "uuid", nullable: true),
-                    Status = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
-                    OpportunityId = table.Column<Guid>(type: "uuid", nullable: true),
-                    ReviewedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
-                    ReviewedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    CreatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_OpportunityLead", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_OpportunityLead_Opportunity_OpportunityId",
-                        column: x => x.OpportunityId,
-                        principalTable: "Opportunity",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_OpportunityLead_SavedLeadSearch_SavedSearchId",
-                        column: x => x.SavedSearchId,
-                        principalTable: "SavedLeadSearch",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.SetNull);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "OpportunityStageChange",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    OpportunityId = table.Column<Guid>(type: "uuid", nullable: false),
-                    From = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
-                    To = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
-                    ChangedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
-                    ChangedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    Note = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true, collation: "C")
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_OpportunityStageChange", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_OpportunityStageChange_Opportunity_OpportunityId",
-                        column: x => x.OpportunityId,
-                        principalTable: "Opportunity",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "OpportunityTeammate",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    OpportunityId = table.Column<Guid>(type: "uuid", nullable: false),
-                    AccountId = table.Column<Guid>(type: "uuid", nullable: true),
-                    Name = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false, collation: "C"),
-                    Role = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
-                    WorksharePercent = table.Column<decimal>(type: "numeric(5,2)", precision: 5, scale: 2, nullable: false),
-                    Notes = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true, collation: "C")
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_OpportunityTeammate", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_OpportunityTeammate_CrmAccount_AccountId",
-                        column: x => x.AccountId,
-                        principalTable: "CrmAccount",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_OpportunityTeammate_Opportunity_OpportunityId",
-                        column: x => x.OpportunityId,
-                        principalTable: "Opportunity",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "Proposal",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    Number = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false, collation: "C"),
-                    Title = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false, collation: "C"),
-                    Customer = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true, collation: "C"),
-                    OpportunityId = table.Column<Guid>(type: "uuid", nullable: true),
-                    OpportunityName = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true, collation: "C"),
-                    ContractType = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
-                    Status = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
-                    TargetPrice = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
-                    DueDate = table.Column<DateOnly>(type: "date", nullable: true),
-                    Notes = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true, collation: "C"),
-                    CreatedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
-                    CreatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    WonModelId = table.Column<Guid>(type: "uuid", nullable: true),
-                    WonContractId = table.Column<Guid>(type: "uuid", nullable: true),
-                    WonProjectId = table.Column<Guid>(type: "uuid", nullable: true),
-                    WonBudgetVersionId = table.Column<Guid>(type: "uuid", nullable: true),
-                    HandedOffAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    HandedOffBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C")
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_Proposal", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_Proposal_Opportunity_OpportunityId",
-                        column: x => x.OpportunityId,
-                        principalTable: "Opportunity",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.SetNull);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "Part",
                 columns: table => new
                 {
@@ -1428,73 +952,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                         principalTable: "BenefitElection",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "OpportunityGateScore",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    ReviewId = table.Column<Guid>(type: "uuid", nullable: false),
-                    CriterionId = table.Column<Guid>(type: "uuid", nullable: true),
-                    Text = table.Column<string>(type: "character varying(300)", maxLength: 300, nullable: false, collation: "C"),
-                    Weight = table.Column<int>(type: "integer", nullable: false),
-                    Score = table.Column<int>(type: "integer", nullable: false),
-                    Comment = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true, collation: "C")
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_OpportunityGateScore", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_OpportunityGateScore_OpportunityGateReview_ReviewId",
-                        column: x => x.ReviewId,
-                        principalTable: "OpportunityGateReview",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "PriceModel",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    ProposalId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Name = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: false, collation: "C"),
-                    Description = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true, collation: "C"),
-                    IsBase = table.Column<bool>(type: "boolean", nullable: false),
-                    SourceModelId = table.Column<Guid>(type: "uuid", nullable: true),
-                    RateBasis = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
-                    FringeOverride = table.Column<decimal>(type: "numeric(18,6)", precision: 18, scale: 6, nullable: true),
-                    OverheadOverride = table.Column<decimal>(type: "numeric(18,6)", precision: 18, scale: 6, nullable: true),
-                    GaOverride = table.Column<decimal>(type: "numeric(18,6)", precision: 18, scale: 6, nullable: true),
-                    RatesAsOf = table.Column<DateOnly>(type: "date", nullable: false),
-                    DefaultRateMethod = table.Column<string>(type: "character varying(24)", maxLength: 24, nullable: false),
-                    DefaultEscalation = table.Column<decimal>(type: "numeric(9,6)", precision: 9, scale: 6, nullable: false),
-                    FeeMethod = table.Column<string>(type: "character varying(24)", maxLength: 24, nullable: false),
-                    FeeRate = table.Column<decimal>(type: "numeric(9,6)", precision: 9, scale: 6, nullable: false),
-                    WgTechnicalRisk = table.Column<decimal>(type: "numeric(9,6)", precision: 9, scale: 6, nullable: false),
-                    WgManagementRisk = table.Column<decimal>(type: "numeric(9,6)", precision: 9, scale: 6, nullable: false),
-                    WgContractTypeRisk = table.Column<decimal>(type: "numeric(9,6)", precision: 9, scale: 6, nullable: false),
-                    WgCostEfficiency = table.Column<decimal>(type: "numeric(9,6)", precision: 9, scale: 6, nullable: false),
-                    IsLocked = table.Column<bool>(type: "boolean", nullable: false),
-                    Version = table.Column<int>(type: "integer", nullable: true),
-                    LockedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    LockedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
-                    LockNote = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true, collation: "C"),
-                    LockedSnapshot = table.Column<string>(type: "character varying(4000000)", maxLength: 4000000, nullable: true, collation: "C"),
-                    CreatedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
-                    CreatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_PriceModel", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_PriceModel_Proposal_ProposalId",
-                        column: x => x.ProposalId,
-                        principalTable: "Proposal",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -1698,175 +1155,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                         principalTable: "Part",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "PriceClin",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    ModelId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Number = table.Column<string>(type: "character varying(10)", maxLength: 10, nullable: false, collation: "C"),
-                    Description = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false, collation: "C"),
-                    Order = table.Column<int>(type: "integer", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_PriceClin", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_PriceClin_PriceModel_ModelId",
-                        column: x => x.ModelId,
-                        principalTable: "PriceModel",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "PriceCostLine",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    ModelId = table.Column<Guid>(type: "uuid", nullable: false),
-                    WbsId = table.Column<Guid>(type: "uuid", nullable: false),
-                    ClinId = table.Column<Guid>(type: "uuid", nullable: true),
-                    PeriodId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Kind = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
-                    Description = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false, collation: "C"),
-                    Quantity = table.Column<decimal>(type: "numeric(18,4)", precision: 18, scale: 4, nullable: false),
-                    UnitCost = table.Column<decimal>(type: "numeric(18,4)", precision: 18, scale: 4, nullable: false),
-                    IsUnallowable = table.Column<bool>(type: "boolean", nullable: false),
-                    Vendor = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true, collation: "C"),
-                    QuoteReference = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true, collation: "C"),
-                    Destination = table.Column<string>(type: "character varying(120)", maxLength: 120, nullable: true, collation: "C"),
-                    State = table.Column<string>(type: "character varying(60)", maxLength: 60, nullable: true, collation: "C"),
-                    Trips = table.Column<int>(type: "integer", nullable: false),
-                    Travelers = table.Column<int>(type: "integer", nullable: false),
-                    Nights = table.Column<int>(type: "integer", nullable: false),
-                    AirfarePerTrip = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    OtherPerTrip = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    Order = table.Column<int>(type: "integer", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_PriceCostLine", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_PriceCostLine_PriceModel_ModelId",
-                        column: x => x.ModelId,
-                        principalTable: "PriceModel",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "PriceEscalation",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    ModelId = table.Column<Guid>(type: "uuid", nullable: false),
-                    LaborCategoryId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Rate = table.Column<decimal>(type: "numeric(9,6)", precision: 9, scale: 6, nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_PriceEscalation", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_PriceEscalation_LaborCategory_LaborCategoryId",
-                        column: x => x.LaborCategoryId,
-                        principalTable: "LaborCategory",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_PriceEscalation_PriceModel_ModelId",
-                        column: x => x.ModelId,
-                        principalTable: "PriceModel",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "PriceLaborLine",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    ModelId = table.Column<Guid>(type: "uuid", nullable: false),
-                    WbsId = table.Column<Guid>(type: "uuid", nullable: false),
-                    ClinId = table.Column<Guid>(type: "uuid", nullable: true),
-                    LaborCategoryId = table.Column<Guid>(type: "uuid", nullable: false),
-                    EmployeeId = table.Column<Guid>(type: "uuid", nullable: true),
-                    StaffName = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true, collation: "C"),
-                    RateMethod = table.Column<string>(type: "character varying(24)", maxLength: 24, nullable: false),
-                    SelectedEmployeeIds = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true, collation: "C"),
-                    ManualRate = table.Column<decimal>(type: "numeric(18,4)", precision: 18, scale: 4, nullable: true),
-                    Note = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true, collation: "C"),
-                    Order = table.Column<int>(type: "integer", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_PriceLaborLine", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_PriceLaborLine_Employee_EmployeeId",
-                        column: x => x.EmployeeId,
-                        principalTable: "Employee",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_PriceLaborLine_LaborCategory_LaborCategoryId",
-                        column: x => x.LaborCategoryId,
-                        principalTable: "LaborCategory",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_PriceLaborLine_PriceModel_ModelId",
-                        column: x => x.ModelId,
-                        principalTable: "PriceModel",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "PricePeriod",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    ModelId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Name = table.Column<string>(type: "character varying(60)", maxLength: 60, nullable: false, collation: "C"),
-                    Order = table.Column<int>(type: "integer", nullable: false),
-                    Start = table.Column<DateOnly>(type: "date", nullable: false),
-                    End = table.Column<DateOnly>(type: "date", nullable: false),
-                    IsOption = table.Column<bool>(type: "boolean", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_PricePeriod", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_PricePeriod_PriceModel_ModelId",
-                        column: x => x.ModelId,
-                        principalTable: "PriceModel",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "PriceWbs",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    ModelId = table.Column<Guid>(type: "uuid", nullable: false),
-                    ParentId = table.Column<Guid>(type: "uuid", nullable: true),
-                    Code = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false, collation: "C"),
-                    Name = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false, collation: "C"),
-                    BasisOfEstimate = table.Column<string>(type: "character varying(4000)", maxLength: 4000, nullable: true, collation: "C"),
-                    Order = table.Column<int>(type: "integer", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_PriceWbs", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_PriceWbs_PriceModel_ModelId",
-                        column: x => x.ModelId,
-                        principalTable: "PriceModel",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -2090,26 +1378,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                         principalTable: "WbsElement",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "PriceLaborHours",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    LineId = table.Column<Guid>(type: "uuid", nullable: false),
-                    PeriodId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Hours = table.Column<decimal>(type: "numeric(9,2)", precision: 9, scale: 2, nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_PriceLaborHours", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_PriceLaborHours_PriceLaborLine_LineId",
-                        column: x => x.LineId,
-                        principalTable: "PriceLaborLine",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -2505,51 +1773,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                 column: "PayRateId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_CrmAccount_CustomerId",
-                table: "CrmAccount",
-                column: "CustomerId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_CrmAccount_Name",
-                table: "CrmAccount",
-                column: "Name");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_CrmAccount_ParentId",
-                table: "CrmAccount",
-                column: "ParentId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_CrmActivity_AccountId",
-                table: "CrmActivity",
-                column: "AccountId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_CrmActivity_AssignedTo_IsDone",
-                table: "CrmActivity",
-                columns: new[] { "AssignedTo", "IsDone" });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_CrmActivity_ContactId",
-                table: "CrmActivity",
-                column: "ContactId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_CrmActivity_OpportunityId",
-                table: "CrmActivity",
-                column: "OpportunityId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_CrmContact_AccountId",
-                table: "CrmContact",
-                column: "AccountId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_CrmSettings_BpParentWbsElementId",
-                table: "CrmSettings",
-                column: "BpParentWbsElementId");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_EmergencyContact_EmployeeId",
                 table: "EmergencyContact",
                 column: "EmployeeId");
@@ -2600,16 +1823,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                 name: "IX_EmployeeHrProfile_PositionId",
                 table: "EmployeeHrProfile",
                 column: "PositionId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_GateCriterion_GateDefinitionId",
-                table: "GateCriterion",
-                column: "GateDefinitionId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_GateDefinition_ToStage",
-                table: "GateDefinition",
-                column: "ToStage");
 
             migrationBuilder.CreateIndex(
                 name: "IX_HrChangeRequest_EmployeeId_Status",
@@ -2748,127 +1961,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                 column: "RunAtUtc");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Opportunity_AgencyAccountId",
-                table: "Opportunity",
-                column: "AgencyAccountId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Opportunity_BpWbsElementId",
-                table: "Opportunity",
-                column: "BpWbsElementId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Opportunity_CaptureManagerEmail",
-                table: "Opportunity",
-                column: "CaptureManagerEmail");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Opportunity_ContractId",
-                table: "Opportunity",
-                column: "ContractId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Opportunity_CustomerId",
-                table: "Opportunity",
-                column: "CustomerId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Opportunity_IncumbentAccountId",
-                table: "Opportunity",
-                column: "IncumbentAccountId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Opportunity_Number",
-                table: "Opportunity",
-                column: "Number",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Opportunity_ProjectId",
-                table: "Opportunity",
-                column: "ProjectId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Opportunity_ProposalManagerEmail",
-                table: "Opportunity",
-                column: "ProposalManagerEmail");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Opportunity_SolicitationKey",
-                table: "Opportunity",
-                column: "SolicitationKey");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Opportunity_Stage",
-                table: "Opportunity",
-                column: "Stage");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_OpportunityCompetitor_AccountId",
-                table: "OpportunityCompetitor",
-                column: "AccountId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_OpportunityCompetitor_OpportunityId",
-                table: "OpportunityCompetitor",
-                column: "OpportunityId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_OpportunityGateReview_GateDefinitionId",
-                table: "OpportunityGateReview",
-                column: "GateDefinitionId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_OpportunityGateReview_OpportunityId_Status",
-                table: "OpportunityGateReview",
-                columns: new[] { "OpportunityId", "Status" });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_OpportunityGateScore_ReviewId",
-                table: "OpportunityGateScore",
-                column: "ReviewId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_OpportunityLead_OpportunityId",
-                table: "OpportunityLead",
-                column: "OpportunityId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_OpportunityLead_SavedSearchId",
-                table: "OpportunityLead",
-                column: "SavedSearchId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_OpportunityLead_SolicitationKey",
-                table: "OpportunityLead",
-                column: "SolicitationKey");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_OpportunityLead_SourceId",
-                table: "OpportunityLead",
-                column: "SourceId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_OpportunityLead_Status",
-                table: "OpportunityLead",
-                column: "Status");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_OpportunityStageChange_OpportunityId",
-                table: "OpportunityStageChange",
-                column: "OpportunityId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_OpportunityTeammate_AccountId",
-                table: "OpportunityTeammate",
-                column: "AccountId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_OpportunityTeammate_OpportunityId",
-                table: "OpportunityTeammate",
-                column: "OpportunityId");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_Part_DefaultBinId",
                 table: "Part",
                 column: "DefaultBinId");
@@ -2936,62 +2028,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                 column: "ReportsToPositionId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_PriceClin_ModelId",
-                table: "PriceClin",
-                column: "ModelId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PriceCostLine_ModelId",
-                table: "PriceCostLine",
-                column: "ModelId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PriceEscalation_LaborCategoryId",
-                table: "PriceEscalation",
-                column: "LaborCategoryId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PriceEscalation_ModelId",
-                table: "PriceEscalation",
-                column: "ModelId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PriceLaborHours_LineId_PeriodId",
-                table: "PriceLaborHours",
-                columns: new[] { "LineId", "PeriodId" },
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PriceLaborLine_EmployeeId",
-                table: "PriceLaborLine",
-                column: "EmployeeId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PriceLaborLine_LaborCategoryId",
-                table: "PriceLaborLine",
-                column: "LaborCategoryId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PriceLaborLine_ModelId",
-                table: "PriceLaborLine",
-                column: "ModelId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PriceModel_ProposalId",
-                table: "PriceModel",
-                column: "ProposalId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PricePeriod_ModelId",
-                table: "PricePeriod",
-                column: "ModelId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PriceWbs_ModelId",
-                table: "PriceWbs",
-                column: "ModelId");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_ProjectMaterialRequirement_PartId_IsClosed",
                 table: "ProjectMaterialRequirement",
                 columns: new[] { "PartId", "IsClosed" });
@@ -3016,17 +2052,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                 table: "ProjectNarrative",
                 columns: new[] { "ProjectId", "FiscalPeriodId" },
                 unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Proposal_Number",
-                table: "Proposal",
-                column: "Number",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_Proposal_OpportunityId",
-                table: "Proposal",
-                column: "OpportunityId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Routing_PartId_Revision",
@@ -3216,12 +2241,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                 name: "CompensationChange");
 
             migrationBuilder.DropTable(
-                name: "CrmActivity");
-
-            migrationBuilder.DropTable(
-                name: "CrmSettings");
-
-            migrationBuilder.DropTable(
                 name: "EmergencyContact");
 
             migrationBuilder.DropTable(
@@ -3237,9 +2256,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                 name: "EmployeeHrProfile");
 
             migrationBuilder.DropTable(
-                name: "GateCriterion");
-
-            migrationBuilder.DropTable(
                 name: "HrChangeRequest");
 
             migrationBuilder.DropTable(
@@ -3249,40 +2265,7 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                 name: "MaterialPurchaseLink");
 
             migrationBuilder.DropTable(
-                name: "OpportunityCompetitor");
-
-            migrationBuilder.DropTable(
-                name: "OpportunityGateScore");
-
-            migrationBuilder.DropTable(
-                name: "OpportunityLead");
-
-            migrationBuilder.DropTable(
-                name: "OpportunityStageChange");
-
-            migrationBuilder.DropTable(
-                name: "OpportunityTeammate");
-
-            migrationBuilder.DropTable(
                 name: "PartForecast");
-
-            migrationBuilder.DropTable(
-                name: "PriceClin");
-
-            migrationBuilder.DropTable(
-                name: "PriceCostLine");
-
-            migrationBuilder.DropTable(
-                name: "PriceEscalation");
-
-            migrationBuilder.DropTable(
-                name: "PriceLaborHours");
-
-            migrationBuilder.DropTable(
-                name: "PricePeriod");
-
-            migrationBuilder.DropTable(
-                name: "PriceWbs");
 
             migrationBuilder.DropTable(
                 name: "ProjectMaterialRequirement");
@@ -3321,19 +2304,7 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                 name: "MeritCycle");
 
             migrationBuilder.DropTable(
-                name: "CrmContact");
-
-            migrationBuilder.DropTable(
                 name: "Position");
-
-            migrationBuilder.DropTable(
-                name: "OpportunityGateReview");
-
-            migrationBuilder.DropTable(
-                name: "SavedLeadSearch");
-
-            migrationBuilder.DropTable(
-                name: "PriceLaborLine");
 
             migrationBuilder.DropTable(
                 name: "InventoryTransaction");
@@ -3354,12 +2325,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                 name: "ChecklistTemplate");
 
             migrationBuilder.DropTable(
-                name: "GateDefinition");
-
-            migrationBuilder.DropTable(
-                name: "PriceModel");
-
-            migrationBuilder.DropTable(
                 name: "WorkCenter");
 
             migrationBuilder.DropTable(
@@ -3367,9 +2332,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
 
             migrationBuilder.DropTable(
                 name: "BenefitPlan");
-
-            migrationBuilder.DropTable(
-                name: "Proposal");
 
             migrationBuilder.DropTable(
                 name: "BillOfMaterial");
@@ -3381,16 +2343,10 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                 name: "Routing");
 
             migrationBuilder.DropTable(
-                name: "Opportunity");
-
-            migrationBuilder.DropTable(
                 name: "MrpRun");
 
             migrationBuilder.DropTable(
                 name: "Part");
-
-            migrationBuilder.DropTable(
-                name: "CrmAccount");
 
             migrationBuilder.DropTable(
                 name: "Bin");

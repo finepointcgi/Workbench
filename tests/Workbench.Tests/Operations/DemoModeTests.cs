@@ -132,7 +132,7 @@ public sealed partial class DemoModeTests
         Assert.Contains(DevSignIn.Path, home.Headers.Location!.OriginalString);
         Assert.Contains("Workbench demo", page);
         Assert.Contains("reset every night", page);
-        foreach (var email in new[] { DemoMode.DemoAdminEmail, HarperEmail, "mia.materials@example.com", "bd@example.com", "pricing@example.com" })
+        foreach (var email in new[] { DemoMode.DemoAdminEmail, HarperEmail, "mia.materials@example.com" }) // bd@ and pricing@ come with the capture module
         {
             Assert.Contains(email, page);
         }
