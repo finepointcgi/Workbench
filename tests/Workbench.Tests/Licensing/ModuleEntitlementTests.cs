@@ -167,12 +167,12 @@ public sealed class ModuleEntitlementTests
         var before = NavCatalog.PaletteEntries(everything).ToList();
         var after = NavCatalog.PaletteEntries(without).ToList();
 
-        Assert.All(new[] { "billing", "enterprise" }, id => Assert.Contains(before, e => e.ModuleId == id)); // (The accounting module's pages come from the module.) // Workforce and project controls have no menu page of their own here (the workforce pages come from the module): it lives on the project; the pages of government contracting and capture come from their modules.
+        Assert.Contains(before, e => e.ModuleId == "enterprise"); // (The accounting and billing modules' pages come from the modules; invoicing is core.) // Workforce and project controls have no menu page of their own here (the workforce pages come from the module): it lives on the project; the pages of government contracting and capture come from their modules.
         Assert.DoesNotContain(after, e => e.ModuleId != "core");
         Assert.Contains(after, e => e.Href == "time");
         Assert.Contains(after, e => e.Href == "resourcing"); // Staffing is core.
         Assert.Equal(before.Count(e => e.ModuleId == "core"), after.Count);
-        Assert.Equal("billing", NavCatalog.OwnerOf("billing/invoices/123")?.ModuleId); // The page guard finds the module of a URL.
+        Assert.Equal("enterprise", NavCatalog.OwnerOf("setup/companies/123")?.ModuleId); // The page guard finds the module of a URL.
     }
 
     [Fact]
@@ -300,12 +300,12 @@ public sealed class LicenseBannerTests
     public void An_unlicensed_page_says_which_module_it_needs_and_what_to_do()
     {
         using var ctx = Context(Status(false, 100), OrgRoles.Admin);
-        var entry = NavCatalog.OwnerOf("billing/invoices")!;
+        var entry = NavCatalog.OwnerOf("setup/companies")!;
 
         var message = ctx.Render<Workbench.Ui.Layout.ModuleNeeded>(p => p.Add(c => c.Entry, entry));
 
         var text = message.Find("[data-testid=module-needed]").TextContent;
-        Assert.Contains("Invoice needs the billing module", text);
+        Assert.Contains("Companies needs the enterprise module", text);
         Assert.Contains("Setup › License", text);
     }
 }

@@ -16,7 +16,7 @@ public static class IntegrationOutbox
     /// <summary>The event type of the "Send test" delivery; not in the catalog and never fanned out.</summary>
     public const string PingEventType = "ping";
 
-    internal static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
+    public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
         DefaultIgnoreCondition = JsonIgnoreCondition.Never,
         WriteIndented = false,
@@ -35,7 +35,7 @@ public static class IntegrationOutbox
         return row;
     }
 
-    internal static IntegrationOutboxEvent Build(string eventType, string subject, Guid subjectId, object data, string? actor, DateTime occurredAtUtc)
+    public static IntegrationOutboxEvent Build(string eventType, string subject, Guid subjectId, object data, string? actor, DateTime occurredAtUtc)
     {
         var row = new IntegrationOutboxEvent
         {

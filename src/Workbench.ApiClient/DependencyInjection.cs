@@ -1,7 +1,6 @@
 using Workbench.ApiClient.Licensing;
 using Microsoft.Extensions.DependencyInjection;
 using Workbench.ApiClient.Security;
-using Workbench.Contracts.Costpoint;
 using Workbench.Contracts.Sheets;
 
 namespace Workbench.ApiClient;
@@ -20,7 +19,6 @@ public static class DependencyInjection
         services.AddHttpClient<Contracts.Scheduling.IPlanFloatService, HttpPlanFloatService>(client => client.BaseAddress = serverBaseAddress);
         services.AddWorkbenchSchedulingClients(serverBaseAddress);
         services.AddCollaborationClients(serverBaseAddress);
-        services.AddHttpClient<ICostpointService, HttpCostpointService>(client => client.BaseAddress = serverBaseAddress);
         services.AddProjectAccountingClients(serverBaseAddress);
         services.AddIdentityClients(serverBaseAddress);
         services.AddAutomationClients(serverBaseAddress);
@@ -41,7 +39,6 @@ public static class DependencyInjection
         services.AddProcurementClients(serverBaseAddress);
         services.AddLeaveClients(serverBaseAddress);
         services.AddPerDiemResourcingClients(serverBaseAddress);
-        services.AddRevenueClients(serverBaseAddress);
         services.AddReportClients(serverBaseAddress);
         services.AddApprovalClients(serverBaseAddress);
         services.AddMigrationClients(serverBaseAddress);
@@ -59,7 +56,6 @@ public static class DependencyInjection
         services.AddTravelClients(serverBaseAddress);
         services.AddSourcingClients(serverBaseAddress);
         services.AddAccountingExportClients(serverBaseAddress);
-        services.AddAccountingLiveClients(serverBaseAddress);
         services.AddIntegrationClients(serverBaseAddress);
         services.AddReceiptClients(serverBaseAddress);
         services.AddCustomizationClients(serverBaseAddress);

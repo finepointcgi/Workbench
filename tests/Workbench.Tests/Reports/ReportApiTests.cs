@@ -10,20 +10,17 @@ namespace Workbench.Tests.Reports;
 public sealed class ReportApiTests
 {
     [Fact]
-    public async Task Estimates_at_completion_is_listed_to_open_not_to_run()
+    public async Task Pages_that_license_modules_list_are_not_listed_without_them_and_the_rest_is_listed_to_open_not_to_run()
     {
         await using var factory = new WorkbenchWebFactory("Development", testAuth: true);
         using var finance = factory.CreateClientAs("pm@example.com");
         using var employee = factory.CreateClientAs("analyst@example.com");
 
         var catalog = await new HttpStandardReportService(finance).ListAsync();
-        var eac = catalog.Single(r => r.Key == StandardReportKeys.EstimatesAtCompletion);
-        Assert.True(eac.Available && eac.PageOnly && eac.PageLink is not null);
-        Assert.Equal("accounting/revenue/estimates", eac.PageLink);
-        Assert.DoesNotContain(catalog.Where(r => !r.PageOnly), r => r.Key == StandardReportKeys.EstimatesAtCompletion);
+        Assert.DoesNotContain(catalog, r => r.Key == "estimates-at-completion"); // The estimates at completion page is listed by the billing module, which is not loaded here.
         Assert.DoesNotContain(catalog, r => r.Key == "incurred-cost"); // The incurred cost page is listed by the government contracting module, which is not loaded here.
 
-        await Assert.ThrowsAsync<ArgumentException>(() => new HttpStandardReportService(finance).RunAsync(StandardReportKeys.EstimatesAtCompletion, new ReportParameters()));
+        await Assert.ThrowsAsync<WorkbenchNotFoundException>(() => new HttpStandardReportService(finance).RunAsync("estimates-at-completion", new ReportParameters()));
         Assert.All((await new HttpStandardReportService(employee).ListAsync()).Where(r => r.PageOnly), r => Assert.False(r.Available));
     }
 

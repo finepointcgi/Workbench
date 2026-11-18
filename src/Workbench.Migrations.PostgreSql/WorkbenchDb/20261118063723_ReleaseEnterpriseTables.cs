@@ -1,0 +1,28 @@
+﻿using System;
+using Microsoft.EntityFrameworkCore.Migrations;
+
+#nullable disable
+
+namespace Workbench.Migrations.PostgreSql.WorkbenchDb
+{
+    /// <summary>
+    /// The <c>enterprise</c> license module owns the tables of Jira and GitLab sync, the Costpoint mirror and customer share links (20 tables). This migration only moves their <b>EF ownership</b> out of core's
+    /// model snapshot: it changes no table and drops no data. Databases made before it keep the tables with their rows; the module's own
+    /// migration creates them only where they do not exist (<c>__EFMigrationsHistory_enterprise</c>). Core's earlier migrations no longer
+    /// create these tables either, so a new install without the module has none. See docs/operations/module-extraction-enterprise.md.
+    /// </summary>
+    public partial class ReleaseEnterpriseTables : Migration
+    {
+        /// <inheritdoc />
+        protected override void Up(MigrationBuilder migrationBuilder)
+        {
+            // Intentionally empty: ownership of these tables moved to the enterprise module; no table is touched.
+        }
+
+        /// <inheritdoc />
+        protected override void Down(MigrationBuilder migrationBuilder)
+        {
+            // Intentionally empty: nothing was dropped, so there is nothing to put back.
+        }
+    }
+}

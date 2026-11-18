@@ -1,6 +1,5 @@
 using Workbench.Contracts;
 using Workbench.Contracts.Collaboration;
-using Workbench.Contracts.Costpoint;
 using Workbench.Contracts.Identity;
 using Workbench.Contracts.Scheduling;
 using Workbench.Contracts.Sheets;
@@ -130,15 +129,6 @@ public sealed class PermissionEnforcementTests
         var sheet = await host.Sheets.CreateAsync(new CreateSheetRequest("Plan", null, false));
 
         Assert.Equal(WorkspaceRole.Owner, await host.Get<ISheetPermissions>().GetMyRoleAsync(sheet.Id));
-    }
-
-    [Fact]
-    public async Task Manual_costpoint_sync_is_for_admins()
-    {
-        await using var seeded = await CreateAsync();
-
-        await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => seeded.As(Owner).Host.Get<ICostpointService>().SyncNowAsync());
-        await Assert.ThrowsAsync<WorkbenchNotFoundException>(() => seeded.As(Outsider).Host.Get<ICostpointService>().GetPlanVsActualAsync(seeded.SheetId));
     }
 
     [Fact]

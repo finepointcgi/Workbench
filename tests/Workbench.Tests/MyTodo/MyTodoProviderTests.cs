@@ -7,7 +7,6 @@ using Workbench.Contracts.MyTodo;
 using Workbench.Contracts.MyWork;
 using Workbench.Contracts.Payroll;
 using Workbench.Contracts.Purchasing;
-using Workbench.Contracts.Revenue;
 using Workbench.Contracts.Sheets;
 using Workbench.Domain.ProjectAccounting;
 using static Workbench.Tests.Identity.SeededHost;
@@ -77,32 +76,6 @@ public sealed class MyTodoProviderTests
         Assert.Equal("Review 3 approvals waiting on you", old.Title);
         Assert.Equal("2 timesheets, 1 expense report; the oldest has waited 3 business days.", old.Reason);
         Assert.Equal("approvals", old.Link);
-    }
-
-    [Fact]
-    public void Eac_is_needed_for_cost_to_cost_projects_every_90_days_and_after_a_rejection()
-    {
-        var project = new Project { Code = "1001", Name = "Modernization" };
-        EstimateDto Estimate(DateOnly asOf, EstimateState state, string? note = null) =>
-            new(Guid.NewGuid(), project.Id, "1001", null, null, asOf, 1m, 2m, null, state, Owner, asOf.ToDateTime(TimeOnly.MinValue), null, null, note);
-        RevenueSetupDto Setup(RevenueMethodKind method) => new(Guid.NewGuid(), project.Id, "1001", "M", null, null, null, null, method, null, null, null, null, null, Finance, DateTime.UtcNow);
-        ProjectRevenueDto Detail(RevenueMethodKind method, params EstimateDto[] estimates) =>
-            new(project.Id, "1001", "M", Guid.NewGuid(), "C1", "CPFF", [], null, [Setup(method)], estimates, [], [], true);
-        var context = Context();
-
-        Assert.Null(EacReviewTodoProvider.For(project, Detail(RevenueMethodKind.Billings), context)); // no EAC used
-        Assert.Equal("Submit an estimate at completion for 1001", EacReviewTodoProvider.For(project, Detail(RevenueMethodKind.CostToCost), context)!.Title);
-        Assert.Null(EacReviewTodoProvider.For(project, Detail(RevenueMethodKind.CostToCost, Estimate(Today.AddDays(-30), EstimateState.Approved)), context));
-
-        var due = EacReviewTodoProvider.For(project, Detail(RevenueMethodKind.CostToCost, Estimate(Today.AddDays(-95), EstimateState.Approved)), context)!;
-        Assert.Equal((TodoUrgency.Overdue, Today.AddDays(-5)), (due.Urgency, due.Due));
-        Assert.Equal($"projects/{project.Id}/revenue", due.Link);
-
-        Assert.Null(EacReviewTodoProvider.For(project, Detail(RevenueMethodKind.CostToCost, Estimate(Today.AddDays(-95), EstimateState.Submitted)), context)); // with Finance
-
-        var rejected = EacReviewTodoProvider.For(project, Detail(RevenueMethodKind.CostPlusFee, Estimate(Today.AddDays(-3), EstimateState.Rejected, "Too low")), context)!;
-        Assert.Equal("Revise the EAC for 1001", rejected.Title);
-        Assert.Contains("Too low", rejected.Reason);
     }
 
     [Fact]
