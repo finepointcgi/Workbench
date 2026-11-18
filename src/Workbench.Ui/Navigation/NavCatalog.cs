@@ -138,7 +138,7 @@ public static class NavCatalog
         new(Growth, "Business development", Icons.Material.Filled.TrendingUp), // Its pages come from the capture module; the section is empty (and hidden) without it.
         new(Sheets, "Sheets & dashboards", Icons.Material.Filled.TableChart),
         new(Finance, "Finance", Icons.Material.Filled.AccountBalance),
-        new(Materials, "Materials", Icons.Material.Filled.PrecisionManufacturing),
+        new(Materials, "Materials", Icons.Material.Filled.PrecisionManufacturing), // Its pages come from the materials module; the section is empty (and hidden) without it.
         new(Reports, "Reports", Icons.Material.Filled.Assessment),
         new(Admin, "Admin", Icons.Material.Filled.AdminPanelSettings),
     ];
@@ -242,32 +242,7 @@ public static class NavCatalog
         new(Finance, "Planning", "Planning cycles", "planning/cycles", Icons.Material.Filled.Groups, NavRule.Need(P.BudgetsManage), Detail: "Planning cycle", Keywords: "annual plan budget submissions org unit owners"),
         new(Finance, null, "Revenue by project", "accounting/revenue/projects", Icons.Material.Filled.TrendingUp, NavRule.Need(P.RevenueManage), Detail: "Project", InMenu: false),
 
-        // Materials: the Materials role (and administrators) runs it; Finance reads parts, inventory and the inventory reports
-        // (the other pages still open for Finance from links on those).
-        new(Materials, "Inventory", "Parts", "materials", Icons.Material.Filled.Category, NavRule.Need(P.MaterialsView), MatchAll: true, Keywords: "part master item inventory make buy"),
-        new(Materials, null, "Part", "materials/parts", Icons.Material.Filled.Category, NavRule.Need(P.MaterialsView), Detail: "Part", InMenu: false),
-        new(Materials, "Inventory", "Inventory", "materials/inventory", Icons.Material.Filled.Inventory2, NavRule.Need(P.MaterialsView), Keywords: "stock on hand bins lots serials gfm"),
-        new(Materials, "Inventory", "Receiving", "materials/receiving", Icons.Material.Filled.MoveToInbox, NavRule.Need(P.MaterialsManage), Keywords: "receive po government furnished gfm"),
-        new(Materials, "Inventory", "Transactions", "materials/transactions", Icons.Material.Filled.SwapVert, NavRule.Need(P.MaterialsManage), Keywords: "issue transfer adjustment cycle count"),
-        new(Materials, "Manufacturing", "Bills of materials", "materials/boms", Icons.Material.Filled.AccountTree, NavRule.Need(P.MaterialsManage), Detail: "BOM", Keywords: "bom routing where used"),
-        new(Materials, "Manufacturing", "Work orders", "materials/work-orders", Icons.Material.Filled.Build, NavRule.Need(P.MaterialsManage), Detail: "Work order", Keywords: "wo shop floor kit wip"),
-        new(Materials, "Manufacturing", "MRP", "materials/mrp", Icons.Material.Filled.EventNote, NavRule.Need(P.MaterialsManage), Keywords: "material requirements planning planned orders forecast"),
-        new(Materials, "Quality & engineering", "Quality", "materials/quality", Icons.Material.Filled.VerifiedUser, NavRule.Need(P.MaterialsManage), Detail: "Quality record", Keywords: "inspection queue ncr mrb nonconformance disposition corrective action car supplier quality aql coc"),
-        new(Materials, "Quality & engineering", "Engineering changes", "materials/engineering-changes", Icons.Material.Filled.ChangeCircle, NavRule.Need(P.MaterialsManage), Detail: "Engineering change", Keywords: "eco ecn revision effectivity configuration as built as designed"),
-        new(Materials, null, "Receive on a phone", "m/receive", Icons.Material.Filled.PhoneIphone, NavRule.Need(P.MaterialsManage), MatchAll: true, Keywords: "mobile receiving", InMenu: false),
-        new(Materials, "Inventory", "Inventory reports", "materials/reports", Icons.Material.Filled.Assessment, NavRule.Need(P.MaterialsView), Keywords: "valuation aging gfm wip trace"),
-        new(Materials, "Sales and shipping", "Sales orders", "materials/sales-orders", Icons.Material.Filled.ReceiptLong, NavRule.Need(P.SalesOrdersView), Detail: "Sales order", Keywords: "so customer order clin delivery"),
-        new(Materials, "Sales and shipping", "Shipping", "materials/shipping", Icons.Material.Filled.LocalShipping, NavRule.Need(P.MaterialsManage), Keywords: "pick pack ship shipment dd250 wawf piee tracking"),
-        new(Materials, null, "Pick list", "materials/pick-lists", Icons.Material.Filled.PlaylistAddCheck, NavRule.Need(P.MaterialsView), Detail: "Pick list", InMenu: false),
-        new(Materials, null, "Shipment", "materials/shipments", Icons.Material.Filled.LocalShipping, NavRule.Need(P.MaterialsView), Detail: "Shipment", InMenu: false),
-        new(Materials, null, "Pick on a phone", "m/pick", Icons.Material.Filled.PhoneIphone, NavRule.Need(P.MaterialsManage), MatchAll: true, Keywords: "mobile picking", InMenu: false),
-        new(Materials, "Manufacturing", "Kits", "materials/kits", Icons.Material.Filled.Inventory, NavRule.Need(P.MaterialsManage), Detail: "Kit", Keywords: "kitting pick list stage shortages"),
-        new(Materials, "Manufacturing", "Backflush", "materials/backflush", Icons.Material.Filled.AutoMode, NavRule.Need(P.MaterialsManage), Keywords: "issue on completion backflushing shortages"),
-        new(Materials, "Manufacturing", "Capacity schedule", "materials/capacity", Icons.Material.Filled.ViewTimeline, NavRule.Need(P.MaterialsManage), Keywords: "finite capacity scheduling load chart work center calendar queue"),
-        new(Materials, "Inventory", "Physical inventory", "materials/physical-inventory", Icons.Material.Filled.FactCheck, NavRule.Need(P.MaterialsManage), Detail: "Physical inventory", Keywords: "wall to wall count tags freeze recount"),
-        new(Materials, "Inventory", "Landed cost", "materials/landed-cost", Icons.Material.Filled.LocalShipping, NavRule.Need(P.MaterialsManage), Detail: "Landed cost", Keywords: "freight duty handling allocation receipts"), // Finance: linked from Inventory reports (its menu is at its link budget).
-        new(Materials, "Inventory", "Materials setup", "materials/setup", Icons.Material.Filled.Warehouse, NavRule.Need(P.MaterialsManage), Keywords: "warehouses bins work centers"),
-        new(Materials, null, "Count on a phone", "m/count", Icons.Material.Filled.PhoneIphone, NavRule.Need(P.MaterialsManage), MatchAll: true, Keywords: "mobile physical inventory count tags", InMenu: false),
+        // Materials: its pages come from the materials module (the Materials role and administrators run it; Finance reads parts, inventory and the inventory reports).
 
         // Reports: one place for every report.
         new(Reports, null, "Report catalog", "reports", Icons.Material.Filled.LibraryBooks, NavRule.Everyone, MatchAll: true, Keywords: "reports"),

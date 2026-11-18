@@ -76,7 +76,6 @@ public static class ModuleMap
             "accounting", "cash", "assets", "currencies", "planning", "indirect-rates", "sales-tax", "purchasing", "cards", "vendor-bank", "bank-files"),
         .. Segments(ModuleKeys.Workforce, "hr", "payroll", "resourcing"),
         .. Segments(ModuleKeys.ProjectControls, "evm", "ceilings", "ceiling-overrides", "rate-ceilings", "closeout", "risks"),
-        .. Segments(ModuleKeys.Materials, "materials", "quality", "engineering-changes", "sales-orders", "shipping"),
         .. Segments(ModuleKeys.Enterprise,
             "companies", "integrations", "customization", "automations", "approval-workflows", "access-reviews", "retention", "edi", "costpoint"),
     ]);
@@ -125,9 +124,6 @@ public static class ModuleMap
         ["hr."] = ModuleKeys.Workforce,
         ["hr.workforce."] = ModuleKeys.Core,
         ["hr.reports."] = ModuleKeys.Core,
-        ["materials."] = ModuleKeys.Materials,
-        ["quality."] = ModuleKeys.Materials,
-        ["sales."] = ModuleKeys.Materials,
         ["sheets."] = ModuleKeys.Core,
         ["fields."] = ModuleKeys.Core,
     };
@@ -161,7 +157,7 @@ public static class ModuleMap
         ["people"] = ModuleKeys.Core,
         // "growth" (Business development): the capture module adds the rows (the section itself stays in the menu and is hidden while it is empty).
         ["sheets"] = ModuleKeys.Core,
-        ["materials"] = ModuleKeys.Materials,
+        // "materials": the materials module adds the rows (the section itself stays in the menu and is hidden while it is empty).
         ["reports"] = ModuleKeys.Core,
         ["admin"] = ModuleKeys.Core,
         // "finance" has no default: every group, or page, there must say which module it is.
@@ -239,8 +235,7 @@ public static class ModuleMap
         ["Hr"] = ModuleKeys.Workforce, ["Payroll"] = ModuleKeys.Workforce, ["Resourcing"] = ModuleKeys.Workforce,
         // project controls
         ["Ceilings"] = ModuleKeys.ProjectControls, ["Closeout"] = ModuleKeys.ProjectControls, ["Evm"] = ModuleKeys.ProjectControls, ["Risks"] = ModuleKeys.ProjectControls,
-        // materials
-        ["Materials"] = ModuleKeys.Materials, ["Quality"] = ModuleKeys.Materials,
+        // materials: the Materials and Quality namespaces live in the materials module (its own rows).
         // govcon: the Compliance, IncurredCost and TotalTime namespaces and the parallel run live in the government contracting module (its own rows).
         // enterprise
         ["Automations"] = ModuleKeys.Enterprise, ["Companies"] = ModuleKeys.Enterprise, ["Customization"] = ModuleKeys.Enterprise,

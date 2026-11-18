@@ -1,6 +1,5 @@
 using Workbench.Contracts.Billing;
 using Workbench.Contracts.Customization;
-using Workbench.Contracts.Materials;
 using Workbench.Contracts.Odcs;
 using Workbench.Contracts.ProjectAccounting;
 using Workbench.Contracts.Purchasing;
@@ -161,26 +160,6 @@ public static class BuiltInForms
                 new("purpose", "Business purpose", LongText)),
         ], [typeof(SaveExpenseReportRequest)]),
 
-        new(E.Part, "Part", "Materials › Parts (new or edit part)",
-        [
-            One(
-                new("number", "Part number", Text, Required: true),
-                new("revision", "Revision", Text),
-                new("description", "Description", Text, Required: true),
-                new("unitOfMeasure", "Unit of measure", Text),
-                new("source", "Make or buy", Select),
-                new("tracking", "Lot/serial tracking", Select),
-                new("costMethod", "Cost method", Select),
-                new("standardCost", "Standard cost", Money),
-                new("preferredVendorId", "Preferred vendor", Select),
-                new("leadTimeDays", "Lead time (days)", Number),
-                new("safetyStock", "Safety stock", Number),
-                new("minimumOrderQuantity", "Minimum order", Number),
-                new("orderMultiple", "Order multiple", Number),
-                new("defaultBinId", "Default location", Select),
-                new("notes", "Notes", LongText),
-                new("isActive", "Active", Bool)),
-        ], [typeof(SavePartRequest)]),
     ];
 
     /// <summary>Entity types that only lists use (their built-in fields are list columns; custom fields may be added).</summary>
@@ -188,7 +167,7 @@ public static class BuiltInForms
 
     public static IReadOnlyList<FormDefinition> All => Catalog.All;
 
-    public static IReadOnlyList<string> ListOnly { get; } = [E.Timesheet, E.SalesOrder];
+    public static IReadOnlyList<string> ListOnly => [E.Timesheet, .. Workbench.Contracts.Modules.ModuleRegistry.Current.RowsOf<Workbench.Contracts.Modules.ModuleListOnlyEntity>().Select(r => r.EntityType)];
 
     public static FormDefinition? Find(string entityType) => All.FirstOrDefault(f => f.EntityType == entityType);
 

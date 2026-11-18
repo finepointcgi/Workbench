@@ -9,11 +9,17 @@ public enum ModuleSeedStage
     /// <summary>After revenue (the ledgers, billing and payables are seeded).</summary>
     AfterRevenue,
 
+    /// <summary>After HR (the sample people exist; before the assistant and planning seeds).</summary>
+    AfterHr,
+
     /// <summary>After planning (before multicurrency and multicompany).</summary>
     AfterPlanning,
 
     /// <summary>After the multicurrency and multicompany seeds (before travel).</summary>
     AfterMulticompany,
+
+    /// <summary>After travel (before sourcing, bank files and tax books).</summary>
+    AfterTravel,
 
     /// <summary>After tax books and the CPSR sample purchase orders.</summary>
     AfterTaxBooks,

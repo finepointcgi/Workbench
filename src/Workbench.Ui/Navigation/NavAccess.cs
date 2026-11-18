@@ -57,12 +57,6 @@ public sealed record NavAccess(
     /// <summary>Runs projects: "Run the projects you manage", or the manager of at least one project.</summary>
     public bool IsPm => IsProjectManager || HasProjectManagerRole;
 
-    /// <summary>Changes parts, inventory, BOMs, work orders and MRP.</summary>
-    public bool IsMaterials => Can(Permission.MaterialsManage);
-
-    /// <summary>Sees the Materials section.</summary>
-    public bool CanViewMaterials => Can(Permission.MaterialsView);
-
     /// <summary>Named as the receiver on an open purchase order.</summary>
     public bool IsReceiver => ReceivableCount > 0;
 
