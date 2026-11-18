@@ -71,7 +71,6 @@ public static class NotificationsHosting
         Workbench.Application.ContractDetail.ContractDetailRegistration.AddWorkbenchContractDetailHosting(services);
         Workbench.Application.Reports.ReportsRegistration.AddWorkbenchReportsHosting(services); // Scheduled reports run as their owner.
         Workbench.Application.Approvals.ApprovalRegistration.AddWorkbenchApprovalsHosting(services);
-        Workbench.Application.Planning.PlanningRegistration.AddWorkbenchPlanningHosting(services); // Recurring journal entries every six hours, when turned on.
         Workbench.Application.Integrations.IntegrationRegistration.AddWorkbenchIntegrationsHosting(services); // Webhook deliveries and scheduled connectors (Integrations:DispatchIntervalSeconds).
         Workbench.Application.Automations.AutomationBuilderRegistration.AddWorkbenchAutomationBuilderHosting(services); // Admin › Automation: queued runs, schedules and thresholds.
         return services;

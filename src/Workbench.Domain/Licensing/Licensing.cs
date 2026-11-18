@@ -75,9 +75,9 @@ public static class ModuleCatalog
 {
     public static IReadOnlyList<ModuleInfo> Default { get; } =
     [
-        new(ModuleIds.Core, "Core", "Free forever: time, timesheets, expenses, leave, customers, contracts, projects, the Plan, sheets, dashboards, search, standard reports, users, roles, MFA, the audit log and importers. Always included.", false),
+        new(ModuleIds.Core, "Core", "Free forever: time, timesheets, expenses, leave, customers, contracts, projects, the Plan, sheets, dashboards, search, standard reports, users, roles, MFA, the audit log and importers; the general ledger, period close, payables, purchasing, payment runs, multi-currency and indirect rates. Always included.", false),
         new(ModuleIds.Billing, "Billing", "Invoices, ready to bill, customer payments, AR aging, unbilled accrual, milestones, retainers, revenue recognition and live accounting push.", false),
-        new(ModuleIds.Accounting, "Accounting", "The general ledger, period close, payables, purchasing, payment runs, cash and bank reconciliation, fixed assets, sales tax, multi-currency, corporate budgets and indirect rates.", false),
+        new(ModuleIds.Accounting, "Accounting", "Cash and bank reconciliation, bank payment files, fixed assets with tax books and depreciation, corporate budgets with planning cycles and recurring journals, and sales and use tax.", false),
         new(ModuleIds.Capture, "Capture", "The business development pipeline: leads, opportunities, accounts, forecast, gates, proposals and pricing.", false),
         new(ModuleIds.Workforce, "Workforce", "HR records, positions, compensation, benefits, onboarding, payroll and the Paylocity file exchange.", false),
         new(ModuleIds.ProjectControls, "Project controls", "Earned value, the risk register, ceilings and closeout, schedule health and the monthly narrative.", false),
@@ -102,7 +102,7 @@ public static class FeatureCatalog
         new(Feature.SingleSignOn, "Single sign-on", "Sign in with your own identity provider (Entra ID, Okta or any OpenID Connect provider), and SCIM provisioning.", Edition.Business, ModuleIds.Enterprise),
         new(Feature.Integrations, "Integrations", "Jira, GitLab, Slack, Teams, Unanet, Costpoint and the other connections to outside systems.", Edition.Business, ModuleIds.Enterprise),
         new(Feature.CustomerLinks, "Customer view links", "A read-only link a contracting officer opens without an account.", Edition.Business, ModuleIds.Enterprise),
-        new(Feature.SupplierPortal, "Supplier portal", "Suppliers quote and confirm orders themselves.", Edition.Business, ModuleIds.Accounting),
+        new(Feature.SupplierPortal, "Supplier portal", "Suppliers quote and confirm orders themselves.", Edition.Business, ModuleIds.Core),
         new(Feature.ApprovalWorkflows, "Custom approval workflows", "Multi-step approvals you design yourself. The standard timesheet, leave and expense approvals stay free.", Edition.Business, ModuleIds.Enterprise),
         new(Feature.IncurredCost, "Incurred cost submission", "Builds the annual incurred cost submission schedules for DCAA.", Edition.Business, ModuleIds.GovCon),
     ];

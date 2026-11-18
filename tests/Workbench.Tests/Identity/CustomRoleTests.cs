@@ -158,12 +158,12 @@ public sealed class CustomRoleTests
     {
         await using var seeded = await CreateAsync();
         var userAdmin = await CreateRoleAsync(seeded, "User admin", Permission.AdminUsers, Permission.AdminRoles, Permission.TimeViewAll);
-        var payroll = await CreateRoleAsync(seeded, "Payroll", Permission.CashManage);
+        var payroll = await CreateRoleAsync(seeded, "Payroll", Permission.GlJournalsPost);
         await AssignAsync(seeded, Owner, userAdmin.Id);
 
         seeded.As(Owner);
         var roles = seeded.Host.Get<IRoleService>();
-        await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => roles.CreateAsync(new SaveRoleRequest("Sneaky", null, [Permission.CashManage])));
+        await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => roles.CreateAsync(new SaveRoleRequest("Sneaky", null, [Permission.GlJournalsPost])));
         await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => roles.SetUserRolesAsync(Viewer, [payroll.Id]));
         await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => roles.SetUserRolesAsync(Owner, [userAdmin.Id, BuiltInRoles.Admin.Id]));
         await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => seeded.Host.Get<IUserDirectory>().SetRolesAsync(Viewer, OrgRoles.Finance));

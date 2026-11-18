@@ -1,9 +1,6 @@
 using Workbench.Contracts.Approvals;
-using Workbench.Contracts.Assets;
 using Workbench.Contracts.Assistant;
-using Workbench.Contracts.BankFiles;
 using Workbench.Contracts.Billing;
-using Workbench.Contracts.Cash;
 using Workbench.Contracts.Compliance;
 using Workbench.Contracts.Costpoint;
 using Workbench.Contracts.Currencies;
@@ -66,10 +63,11 @@ public static class ModuleMap
             "reports", "setup", "customers", "org-units", "labor-categories", "approvals", "approval-delegations", "fiscal", "audit", "employees",
             "admin", "host", "users", "invites", "workspaces-admin", "imports", "migration", "reconciliation", "assistant", "me", "support", "help", "license",
             "email-issues", "security-events", "mcp", "company-profile", "accounting-export",
-            "resourcing"), // Staffing: allocations, assignments, capacity, utilization and skills (it stays core: the Plan, timesheets and schedule health read it).
+            "resourcing", // Staffing: allocations, assignments, capacity, utilization and skills (it stays core: the Plan, timesheets and schedule health read it).
+            // The ledger, vendors, purchase orders and payables, currencies and indirect rates are free: too many core features and other modules read their records.
+            "accounting", "currencies", "indirect-rates", "purchasing", "cards"),
         .. Segments(ModuleKeys.Billing, "billing", "revenue", "accounting-live"),
-        .. Segments(ModuleKeys.Accounting,
-            "accounting", "cash", "assets", "currencies", "planning", "indirect-rates", "sales-tax", "purchasing", "cards", "vendor-bank", "bank-files"),
+        // accounting: the cash, assets, planning, sales-tax, bank-files and vendor-bank segments live in the accounting module (its own rows).
         // workforce: the hr and payroll segments live in the workforce module (its own rows); resourcing is core, above.
         // project controls: the evm, ceilings, ceiling-overrides, rate-ceilings, closeout and risks segments live in the project controls module (its own rows).
         .. Segments(ModuleKeys.Enterprise,
@@ -95,25 +93,22 @@ public static class ModuleMap
         ["approvals."] = ModuleKeys.Core,
         ["approvals.workflows.manage"] = ModuleKeys.Enterprise,
         ["setup."] = ModuleKeys.Core,
-        ["setup.currencies"] = ModuleKeys.Accounting,
+        ["setup.currencies"] = ModuleKeys.Core,
         ["setup.companies"] = ModuleKeys.Enterprise,
         ["time."] = ModuleKeys.Core,
         ["labor."] = ModuleKeys.Core,
         ["leave."] = ModuleKeys.Core,
         ["projects."] = ModuleKeys.Core,
-        ["gl."] = ModuleKeys.Accounting,
-        ["planning."] = ModuleKeys.Accounting,
+        ["gl."] = ModuleKeys.Core,
+        // planning.*, tax.*, assets.* and cash.* are the accounting module's own rows.
         ["revenue."] = ModuleKeys.Billing,
-        ["compliance.indirect_rates"] = ModuleKeys.Accounting,
-        ["tax."] = ModuleKeys.Accounting,
-        ["assets."] = ModuleKeys.Accounting,
+        ["compliance.indirect_rates"] = ModuleKeys.Core,
         ["billing."] = ModuleKeys.Billing,
-        ["ap."] = ModuleKeys.Accounting,
-        ["purchasing."] = ModuleKeys.Accounting,
-        ["cash."] = ModuleKeys.Accounting,
+        ["ap."] = ModuleKeys.Core,
+        ["purchasing."] = ModuleKeys.Core,
         // payroll.* and hr.* (but the two below) are the workforce module's own rows.
         ["travel."] = ModuleKeys.Core,
-        ["cards."] = ModuleKeys.Accounting,
+        ["cards."] = ModuleKeys.Core,
         ["hr.workforce."] = ModuleKeys.Core,
         ["hr.reports."] = ModuleKeys.Core,
         ["sheets."] = ModuleKeys.Core,
@@ -158,21 +153,20 @@ public static class ModuleMap
     /// <summary>Groups within a section, as "section/group". Wins over the section.</summary>
     public static IReadOnlyDictionary<string, string> NavGroups { get; } = new Dictionary<string, string>(StringComparer.Ordinal)
     {
-        ["finance/Accounting"] = ModuleKeys.Accounting,
+        ["finance/Accounting"] = ModuleKeys.Core,
         ["finance/Billing & AR"] = ModuleKeys.Billing,
-        ["finance/Payables & purchasing"] = ModuleKeys.Accounting,
-        ["finance/Cash"] = ModuleKeys.Accounting,
-        ["finance/Assets"] = ModuleKeys.Accounting,
-        ["finance/Planning"] = ModuleKeys.Accounting,
+        ["finance/Payables & purchasing"] = ModuleKeys.Core,
+        // finance/Cash, finance/Assets and finance/Planning are the accounting module's (its own rows).
         ["admin/Customization"] = ModuleKeys.Enterprise,
     };
 
     /// <summary>Single pages (by href) that differ from their group or section. Wins over both.</summary>
     public static IReadOnlyDictionary<string, string> NavPages { get; } = Ignoring(
     [
-        .. Segments(ModuleKeys.Accounting,
-            "purchasing/requisitions", "purchasing/receiving", "purchasing/approvals", "planning/my-budget", "planning/submissions",
-            "accounting/indirect-rates", "accounting/reports", "purchasing/reports", "assets/reports", "setup/currencies", "setup/card-programs", "setup/sales-tax"),
+        .. Segments(ModuleKeys.Core,
+            "purchasing/requisitions", "purchasing/receiving", "purchasing/approvals", "cards",
+            "accounting/indirect-rates", "accounting/reports", "purchasing/reports", "setup/currencies", "setup/card-programs"),
+        // accounting: planning/my-budget, planning/submissions, accounting/recurring, accounting/sales-tax, assets/reports and setup/sales-tax are the accounting module's rows.
         .. Segments(ModuleKeys.Billing,
             "billing/invoices", "billing/statements", "accounting/revenue", "accounting/revenue/estimates", "accounting/revenue/setup",
             "accounting/revenue/projects", "accounting/revenue/reports"),
@@ -216,9 +210,10 @@ public static class ModuleMap
         // billing
         ["Billing"] = ModuleKeys.Billing, ["Revenue"] = ModuleKeys.Billing, ["AccountingLive"] = ModuleKeys.Billing,
         // accounting
-        ["Accounting"] = ModuleKeys.Accounting, ["Assets"] = ModuleKeys.Accounting, ["BankFiles"] = ModuleKeys.Accounting, ["Cash"] = ModuleKeys.Accounting,
-        ["Currencies"] = ModuleKeys.Accounting, ["IndirectRates"] = ModuleKeys.Accounting, ["Planning"] = ModuleKeys.Accounting,
-        ["Purchasing"] = ModuleKeys.Accounting, ["SalesTax"] = ModuleKeys.Accounting, ["Travel"] = ModuleKeys.Core,
+        // accounting: the Assets, BankFiles, Cash, Planning and SalesTax namespaces live in the accounting module (its own rows).
+        // The ledger, currencies, indirect rates and purchasing (vendors, purchase orders, payables) are core, and free.
+        ["Accounting"] = ModuleKeys.Core, ["Currencies"] = ModuleKeys.Core, ["IndirectRates"] = ModuleKeys.Core,
+        ["Purchasing"] = ModuleKeys.Core, ["Travel"] = ModuleKeys.Core,
         // capture: the Crm and Pricing namespaces live in the capture module (its own rows).
         // workforce
         ["Resourcing"] = ModuleKeys.Core, // staffing stays core
@@ -237,14 +232,14 @@ public static class ModuleMap
     {
         // Sign-in settings (MFA, sessions) stay core; the single sign-on provider save is a Feature gate on enterprise.
         [typeof(IApprovalWorkflowService)] = ModuleKeys.Enterprise, // Custom workflows; the standard approvals don't change them.
-        [typeof(IBurdenedCostService)] = ModuleKeys.Accounting,
+        [typeof(IBurdenedCostService)] = ModuleKeys.Core,
         [typeof(ICustomerShareLinkService)] = ModuleKeys.Enterprise,
         [typeof(ICustomerViewService)] = ModuleKeys.Enterprise,
         [typeof(IAccessReviewService)] = ModuleKeys.Enterprise,
         [typeof(IRetentionService)] = ModuleKeys.Enterprise,
         [typeof(IEdiService)] = ModuleKeys.Enterprise,
-        [typeof(ICardProgramService)] = ModuleKeys.Accounting,
-        [typeof(ICardChargeService)] = ModuleKeys.Accounting,
+        [typeof(ICardProgramService)] = ModuleKeys.Core,
+        [typeof(ICardChargeService)] = ModuleKeys.Core,
     };
 
     /// <summary>The module <paramref name="service"/> (a Contracts service interface) belongs to, or null when nothing says.</summary>

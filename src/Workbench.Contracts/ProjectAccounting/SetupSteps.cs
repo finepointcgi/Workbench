@@ -14,7 +14,10 @@ public static class SetupSteps
     /// <summary>The payroll pages come from the workforce module: its setup step shows only where a page for it is in the menu.</summary>
     public static bool PayrollAvailable => ModuleMap.ForNav("finance", "Payroll", "payroll") is not null;
 
-    public static IReadOnlyList<SetupStep> For(SetupChecklistDto c) => Steps(c).Where(s => s.Href != "payroll" || PayrollAvailable).ToList();
+    /// <summary>Bank accounts and reconciliation come from the accounting module: its setup step shows only where the cash page is in the menu.</summary>
+    public static bool CashAvailable => ModuleMap.ForNav("finance", "Cash", "cash") is not null;
+
+    public static IReadOnlyList<SetupStep> For(SetupChecklistDto c) => Steps(c).Where(s => (s.Href != "payroll" || PayrollAvailable) && (s.Href != "cash" || CashAvailable)).ToList();
 
     private static SetupStep[] Steps(SetupChecklistDto c) =>
     [

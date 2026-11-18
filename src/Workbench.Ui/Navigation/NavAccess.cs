@@ -21,7 +21,6 @@ public sealed record NavAccess(
     int ApprovalCount = 0,
     int LeavePending = 0,
     int ReceivableCount = 0,
-    bool OwnsBudget = false,
     bool HideGovernment = false,
     IReadOnlySet<string>? UnavailableModules = null,
     IReadOnlySet<string>? Flags = null)
@@ -104,13 +103,11 @@ public sealed record NavAccess(
             }
         }
 
-        var ownsBudget = await TryAsync(services.GetService<Contracts.Planning.IPlanningCycleService>(), async s => (await s.ListMineAsync(cancellationToken)).Count > 0, false);
-
         var hideGovernment = !await TryAsync(services.GetService<Contracts.Company.ICompanyProfileService>(), async s => (await s.GetAsync(cancellationToken)).ShowGovernmentFeatures, true);
         var unavailable = await TryAsync<Contracts.Licensing.ILicenseService, HashSet<string>?>(services.GetService<Contracts.Licensing.ILicenseService>(),
             async s => (await s.GetStatusAsync(cancellationToken)).Modules?.Where(m => !m.Available && m.WholeModule).Select(m => m.Id).ToHashSet(), null);
 
-        return new NavAccess(user, timesheetApprover, leaveApprover, projectManager, approvals, leavePending, receivable, ownsBudget, hideGovernment, unavailable, flags);
+        return new NavAccess(user, timesheetApprover, leaveApprover, projectManager, approvals, leavePending, receivable, hideGovernment, unavailable, flags);
     }
 
     /// <summary>How many documents in the approvals inbox wait on the signed-in user.</summary>

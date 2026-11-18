@@ -24,9 +24,6 @@ else
         <MudTabPanel Text="Actual vs provisional">
             <RateCalculationTab Periods="_periods" />
         </MudTabPanel>
-        <MudTabPanel Text="Budgeted rates">
-            <BudgetedRatesTab Periods="_periods" />
-        </MudTabPanel>
         <MudTabPanel Text="Allocation runs">
             <AllocationRunsTab Periods="_periods" />
         </MudTabPanel>
@@ -36,6 +33,8 @@ else
         <MudTabPanel Text="Pool setup">
             <PoolSetupTab />
         </MudTabPanel>
+        @* The accounting module's Budgeted rates tab (rates from the corporate budgets): none without it. *@
+        <UiSlot Name="indirect-rates.tabs" Parameters="@(new Dictionary<string, object?> { ["Periods"] = _periods })" />
     </MudTabs>
 }
 
