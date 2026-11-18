@@ -32,7 +32,8 @@ public sealed class AccountingExportService(
     AuditRecorder audit,
     SecurityEventLog securityLog,
     TimeProvider clock,
-    CompanyScope? companies = null) : IAccountingExportService
+    CompanyScope? companies = null,
+    Billing.IInvoiceTaxHook? salesTaxHook = null) : IAccountingExportService
 {
     public const string RunEntity = nameof(AccountingExportRun);
     public const string SecurityEventExport = SecurityEventTypes.ExportAccounting;
@@ -114,7 +115,7 @@ public sealed class AccountingExportService(
 
         var mappings = await db.Set<AccountingMapping>().AsNoTracking().Where(m => m.Target == target).ToListAsync(ct);
         var resolver = new MappingResolver(mappings, exporter.Format.Target);
-        var dataset = await ExportDataLoader.BuildAsync(db, request.Kind, marked.Select(c => c.Id).ToList(), resolver, ct);
+        var dataset = await ExportDataLoader.BuildAsync(db, request.Kind, marked.Select(c => c.Id).ToList(), resolver, ct, salesTaxHook);
         var file = exporter.Export(new ExportInput(request.Kind, request.From, request.To, dataset, UtcNow));
         warnings.AddRange(file.Warnings);
         var unmapped = resolver.Unmapped();

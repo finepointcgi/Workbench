@@ -56,51 +56,12 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                 nullable: true);
 
             migrationBuilder.AddColumn<string>(
-                name: "Convention",
-                table: "FixedAsset",
-                type: "character varying(24)",
-                maxLength: 24,
-                nullable: false,
-                defaultValue: "");
-
-            migrationBuilder.AddColumn<decimal>(
-                name: "OpeningAccumulatedDepreciation",
-                table: "FixedAsset",
-                type: "numeric(18,2)",
-                precision: 18,
-                scale: 2,
-                nullable: false,
-                defaultValue: 0m);
-
-            migrationBuilder.AddColumn<DateOnly>(
-                name: "OpeningBalanceDate",
-                table: "FixedAsset",
-                type: "date",
-                nullable: true);
-
-            migrationBuilder.AddColumn<string>(
                 name: "EmploymentType",
                 table: "EmployeePayProfile",
                 type: "character varying(16)",
                 maxLength: 16,
                 nullable: false,
                 defaultValue: "FullTime");
-
-            migrationBuilder.AddColumn<decimal>(
-                name: "CapitalizationThreshold",
-                table: "AssetCategory",
-                type: "numeric(18,2)",
-                precision: 18,
-                scale: 2,
-                nullable: true);
-
-            migrationBuilder.AddColumn<string>(
-                name: "Convention",
-                table: "AssetCategory",
-                type: "character varying(24)",
-                maxLength: 24,
-                nullable: false,
-                defaultValue: "");
 
             migrationBuilder.CreateTable(
                 name: "ComplianceChecklistEntry",
@@ -117,31 +78,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_ComplianceChecklistEntry", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "EmployeePayRate",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    EmployeeId = table.Column<Guid>(type: "uuid", nullable: false),
-                    EffectiveFrom = table.Column<DateOnly>(type: "date", nullable: false),
-                    PayType = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
-                    AnnualSalary = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
-                    HourlyRate = table.Column<decimal>(type: "numeric(18,4)", precision: 18, scale: 4, nullable: true),
-                    Reason = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true, collation: "C"),
-                    CreatedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
-                    CreatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_EmployeePayRate", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_EmployeePayRate_Employee_EmployeeId",
-                        column: x => x.EmployeeId,
-                        principalTable: "Employee",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -179,22 +115,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_MigrationStepRecord", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "PayrollFileLayout",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    ProviderKey = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false, collation: "C"),
-                    HoursLayoutJson = table.Column<string>(type: "character varying(16000)", maxLength: 16000, nullable: true, collation: "C"),
-                    RegisterLayoutJson = table.Column<string>(type: "character varying(16000)", maxLength: 16000, nullable: true, collation: "C"),
-                    UpdatedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_PayrollFileLayout", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -358,11 +278,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                 columns: new[] { "ChecklistKey", "ItemKey", "ReviewedAtUtc" });
 
             migrationBuilder.CreateIndex(
-                name: "IX_EmployeePayRate_EmployeeId_EffectiveFrom",
-                table: "EmployeePayRate",
-                columns: new[] { "EmployeeId", "EffectiveFrom" });
-
-            migrationBuilder.CreateIndex(
                 name: "IX_MigrationSettings_ParallelPeriodId",
                 table: "MigrationSettings",
                 column: "ParallelPeriodId");
@@ -371,12 +286,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                 name: "IX_MigrationStepRecord_StepKey",
                 table: "MigrationStepRecord",
                 column: "StepKey",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PayrollFileLayout_ProviderKey",
-                table: "PayrollFileLayout",
-                column: "ProviderKey",
                 unique: true);
 
             migrationBuilder.CreateIndex(
@@ -426,16 +335,10 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                 name: "ComplianceChecklistEntry");
 
             migrationBuilder.DropTable(
-                name: "EmployeePayRate");
-
-            migrationBuilder.DropTable(
                 name: "MigrationSettings");
 
             migrationBuilder.DropTable(
                 name: "MigrationStepRecord");
-
-            migrationBuilder.DropTable(
-                name: "PayrollFileLayout");
 
             migrationBuilder.DropTable(
                 name: "ReconciliationMapping");
@@ -484,28 +387,9 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                 table: "InvoiceLine");
 
             migrationBuilder.DropColumn(
-                name: "Convention",
-                table: "FixedAsset");
-
-            migrationBuilder.DropColumn(
-                name: "OpeningAccumulatedDepreciation",
-                table: "FixedAsset");
-
-            migrationBuilder.DropColumn(
-                name: "OpeningBalanceDate",
-                table: "FixedAsset");
-
-            migrationBuilder.DropColumn(
                 name: "EmploymentType",
                 table: "EmployeePayProfile");
 
-            migrationBuilder.DropColumn(
-                name: "CapitalizationThreshold",
-                table: "AssetCategory");
-
-            migrationBuilder.DropColumn(
-                name: "Convention",
-                table: "AssetCategory");
         }
     }
 }

@@ -127,7 +127,8 @@
         }
         @if (LiveTarget is { } live && _from is not null && _to is not null)
         {
-            <AccountingPushPanel Target="live" Kind="_kind" From="DateOnly.FromDateTime(_from.Value)" To="DateOnly.FromDateTime(_to.Value)" IncludeSubledger="_subledger" OnPushed="OnPushed" />
+            @* The billing module's live push to QuickBooks Online and Xero: nothing without it, and the file export above works either way. *@
+            <UiSlot Name="accounting-export.push" Parameters="@(new Dictionary<string, object?> { ["Target"] = live, ["Kind"] = _kind, ["From"] = DateOnly.FromDateTime(_from.Value), ["To"] = DateOnly.FromDateTime(_to.Value), ["IncludeSubledger"] = _subledger, ["OnPushed"] = OnPushed })" />
         }
     </MudItem>
 </MudGrid>

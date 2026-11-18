@@ -3,7 +3,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Workbench.Contracts.Accounting;
 using Workbench.Contracts.IndirectRates;
-using Workbench.Contracts.Revenue;
 using Workbench.Contracts.Time;
 using Workbench.Domain.Accounting;
 using Workbench.Domain.Billing;
@@ -12,7 +11,7 @@ using Workbench.Domain.ProjectAccounting;
 namespace Workbench.LoadData;
 
 /// <summary>
-/// The phases that run through the real (permission-checked) services: indirect allocations, revenue setup and runs, and
+/// The phases that run through the real (permission-checked) services: indirect allocations and
 /// last week's timesheets entered and submitted by each employee (which starts their approvals). Plus the funding pass
 /// and the closing checks.
 /// </summary>
@@ -150,34 +149,6 @@ internal sealed partial class LoadGenerator
         Console.WriteLine($"  {times.Count} allocation runs in {timer.Elapsed.TotalSeconds:0.0}s (median {Median(times):0} ms, max {times.Max():0} ms per period)");
     }
 
-    private async Task RevenueAsync()
-    {
-        foreach (var proj in _projects)
-        {
-            var method = proj.Contract.C.Type switch
-            {
-                ContractType.CostPlusFixedFee => RevenueMethodKind.CostPlusFee,
-                ContractType.FirmFixedPrice => RevenueMethodKind.FixedPriceMilestones,
-                ContractType.LaborHour => RevenueMethodKind.TimeAndMaterialsBilled,
-                _ => RevenueMethodKind.TimeAndMaterialsIncurred,
-            };
-            await AsAsync(Finance, sp => sp.GetRequiredService<IRevenueSetupService>().SaveSetupAsync(new SaveRevenueSetupRequest(proj.P.Id, method, Notes: "Load data")));
-        }
-
-        var times = new List<double>();
-        var periods = _periods.Where(p => p.End < LastWeek).TakeLast(12).ToList();
-        foreach (var period in periods)
-        {
-            var one = Stopwatch.StartNew();
-            var result = await AsAsync(Finance, sp => sp.GetRequiredService<IRevenueRunService>().PostAsync(period.Id, new PostRevenueRunRequest()));
-            times.Add(one.Elapsed.TotalMilliseconds);
-            Console.WriteLine($"  revenue run {period.Name}: {one.Elapsed.TotalSeconds:0.0}s");
-            _ = result;
-        }
-
-        Console.WriteLine($"  {times.Count} revenue runs (median {Median(times):0} ms)");
-    }
-
     private async Task ClosePeriodsAsync()
     {
         // Everything before last month is closed; last month (being closed now) and the current month stay open.
@@ -258,7 +229,7 @@ internal sealed partial class LoadGenerator
                      ("ODCs and expense lines", await db.Set<OdcEntry>().CountAsync()), ("AP bills", await db.Set<Workbench.Domain.Purchasing.ApBill>().CountAsync()),
                      ("invoices", await db.Set<Invoice>().CountAsync()), ("payments", await db.Set<Payment>().CountAsync()),
                      ("journal entries", await db.Set<JournalEntry>().CountAsync()), ("approval instances", await db.Set<Workbench.Domain.Approvals.ApprovalInstance>().CountAsync()),
-                     ("revenue runs", await db.Set<Workbench.Domain.Revenue.RevenueRun>().CountAsync()), ("budget lines", await db.Set<BudgetLine>().CountAsync()),
+                     ("budget lines", await db.Set<BudgetLine>().CountAsync()),
                  })
         {
             Console.WriteLine($"  {name,-24} {count,12:N0}");

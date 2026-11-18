@@ -201,7 +201,7 @@ public sealed class SkillService(IWorkbenchDbContextFactory dbFactory, Resourcin
 
     /// <summary>Resource managers, HR and administrators.</summary>
     private async Task<bool> ManagesAsync(CancellationToken ct) =>
-        (await rules.RolesAsync(ct)).HasAny(Permission.ResourcingManage, Permission.HrRecordsManage);
+        (await rules.RolesAsync(ct)).HasAny(Permission.ResourcingManage, "hr.records.manage");
 
     /// <summary>True when the signed-in person is this employee's supervisor.</summary>
     private async Task<bool> SupervisesAsync(Guid employeeId, CancellationToken ct)

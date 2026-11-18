@@ -218,4 +218,4 @@ Nothing was removed; whether the public site keeps describing a paid module is t
   later `AddColumn` default (a `defaultValue: false`) has to be copied into the baseline so a new install equals an existing one. Compare columns, keys and indexes with the previous release for both
   providers; do not trust a model comparison.
 * Materials is the biggest of the three (57 entities, shop floor and sales, the MRP engine, receiving that purchasing decorates); do the item and vendor reader seams first.
-  Workforce still waits on the leave-kernel decision in [module-plugins.md](module-plugins.md#not-done-here-the-leave-kernel).
+  Workforce still waits on the leave-kernel decision in [module-plugins.md](module-plugins.md#the-leave-kernel).

@@ -4,9 +4,7 @@ using Workbench.Application.ProjectAccounting;
 using Workbench.Contracts;
 using Workbench.Contracts.Companies;
 using Workbench.Domain.Accounting;
-using Workbench.Domain.Assets;
 using Workbench.Domain.Billing;
-using Workbench.Domain.Cash;
 using Workbench.Domain.Companies;
 using Workbench.Domain.Identity;
 using Workbench.Domain.ProjectAccounting;
@@ -15,7 +13,7 @@ namespace Workbench.Application.Companies;
 
 public sealed partial class CompanyService(
     IWorkbenchDbContextFactory dbFactory, CompanyScope scope, AuditRecorder audit, TimeProvider clock, Contracts.Accounting.IPeriodCloseService periodClose,
-    Security.SecurityEventLog? securityLog = null) : ICompanyService
+    Security.SecurityEventLog? securityLog = null, IEnumerable<ICompanyRecordSource>? recordSources = null) : ICompanyService
 {
     public const string AuditEntityType = nameof(Company);
 
@@ -183,7 +181,7 @@ public sealed partial class CompanyService(
     /// Adds the default company's row when it's missing. Migrations seed it; an unmigrated database (the in-memory test
     /// database) doesn't have it until a company is first listed or added.
     /// </summary>
-    internal static async Task EnsureDefaultAsync(IWorkbenchDbContext db, CancellationToken ct)
+    public static async Task EnsureDefaultAsync(IWorkbenchDbContext db, CancellationToken ct)
     {
         if (!await db.Set<Company>().AnyAsync(c => c.Id == Company.DefaultId, ct))
         {
@@ -275,11 +273,8 @@ public sealed partial class CompanyService(
             case CompanyRecordKind.Employee:
                 (await db.Set<Employee>().FirstAsync(e => e.Id == id, cancellationToken)).CompanyId = company.Id;
                 break;
-            case CompanyRecordKind.BankAccount:
-                (await db.Set<BankAccount>().FirstAsync(b => b.Id == id, cancellationToken)).CompanyId = company.Id;
-                break;
-            case CompanyRecordKind.FixedAsset:
-                (await db.Set<FixedAsset>().FirstAsync(a => a.Id == id, cancellationToken)).CompanyId = company.Id;
+            case var kind when recordSources?.FirstOrDefault(s => s.Kind == kind) is { } source:
+                await source.AssignAsync(db, id, company.Id, cancellationToken);
                 break;
             default:
                 throw new ArgumentException("Choose what to move.");
@@ -291,7 +286,7 @@ public sealed partial class CompanyService(
     }
 
     /// <summary>One kind of record with its company and, when it can't move, why. Codes are filled in by the caller.</summary>
-    private static async Task<List<CompanyRecordDto>> RecordsAsync(IWorkbenchDbContext db, CompanyRecordKind kind, Guid? only, CancellationToken ct)
+    private async Task<List<CompanyRecordDto>> RecordsAsync(IWorkbenchDbContext db, CompanyRecordKind kind, Guid? only, CancellationToken ct)
     {
         const string Posted = "It has posted ledger activity, which stays in its company. Add a new record in the other company instead.";
         switch (kind)
@@ -324,25 +319,11 @@ public sealed partial class CompanyService(
                 return (await db.Set<Employee>().AsNoTracking().Where(e => only == null || e.Id == only).ToListAsync(ct))
                     .Select(e => new CompanyRecordDto(kind, e.Id, e.EmployeeNumber, e.DisplayName, e.CompanyId, "", null)).ToList();
 
-            case CompanyRecordKind.BankAccount:
-            {
-                var accounts = await db.Set<BankAccount>().AsNoTracking().Where(b => only == null || b.Id == only).ToListAsync(ct);
-                var ids = accounts.Select(a => a.Id).ToList();
-                var used = (await db.Set<BankTransaction>().AsNoTracking().Where(t => ids.Contains(t.BankAccountId)).Select(t => t.BankAccountId).Distinct().ToListAsync(ct)).ToHashSet();
-                return accounts.Select(b => new CompanyRecordDto(kind, b.Id, $"····{b.AccountNumberLast4}", b.Name, b.CompanyId, "",
-                    used.Contains(b.Id) ? "It has imported bank statements, which stay in its company." : null)).ToList();
-            }
+            case var other when recordSources?.FirstOrDefault(s => s.Kind == other) is { } source:
+                return (await source.ListAsync(db, only, ct)).ToList();
 
-            case CompanyRecordKind.FixedAsset:
-            {
-                var assets = await db.Set<FixedAsset>().AsNoTracking().Where(a => only == null || a.Id == only).ToListAsync(ct);
-                var ids = assets.Select(a => a.Id).ToList();
-                var posted = (await db.Set<JournalEntry>().AsNoTracking().Where(e => e.Source == JournalSource.Asset && e.SourceId != null && ids.Contains(e.SourceId.Value))
-                        .Select(e => e.SourceId!.Value).ToListAsync(ct))
-                    .Concat(await db.Set<AssetDepreciation>().AsNoTracking().Where(d => ids.Contains(d.AssetId)).Select(d => d.AssetId).ToListAsync(ct))
-                    .ToHashSet();
-                return assets.Select(a => new CompanyRecordDto(kind, a.Id, a.TagNumber, a.Description, a.CompanyId, "", posted.Contains(a.Id) ? Posted : null)).ToList();
-            }
+            case CompanyRecordKind.BankAccount or CompanyRecordKind.FixedAsset:
+                return []; // Owned by the accounting module, which is not installed.
 
             default:
                 throw new ArgumentException("Choose what to list.");

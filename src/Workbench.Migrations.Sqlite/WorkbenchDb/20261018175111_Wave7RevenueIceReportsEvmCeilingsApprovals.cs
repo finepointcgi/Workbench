@@ -76,157 +76,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 });
 
             migrationBuilder.CreateTable(
-                name: "RevenueDelivery",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ProjectId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ClinId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    DeliveredOn = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    Quantity = table.Column<decimal>(type: "TEXT", precision: 18, scale: 4, nullable: false),
-                    Description = table.Column<string>(type: "TEXT", maxLength: 500, nullable: false),
-                    RecordedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    RecordedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_RevenueDelivery", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_RevenueDelivery_Clin_ClinId",
-                        column: x => x.ClinId,
-                        principalTable: "Clin",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_RevenueDelivery_Project_ProjectId",
-                        column: x => x.ProjectId,
-                        principalTable: "Project",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "RevenueEstimate",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ProjectId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ClinId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    AsOf = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    EstimatedCost = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    EstimatedRevenue = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    Notes = table.Column<string>(type: "TEXT", maxLength: 2000, nullable: true),
-                    Status = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    SubmittedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    SubmittedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    DecidedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    DecidedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    DecisionNote = table.Column<string>(type: "TEXT", maxLength: 1000, nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_RevenueEstimate", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_RevenueEstimate_Clin_ClinId",
-                        column: x => x.ClinId,
-                        principalTable: "Clin",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_RevenueEstimate_Project_ProjectId",
-                        column: x => x.ProjectId,
-                        principalTable: "Project",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "RevenueRun",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    FiscalPeriodId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ProjectId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Status = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    PostedKey = table.Column<string>(type: "TEXT", maxLength: 80, nullable: true),
-                    RecognizedToDate = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    PeriodRevenue = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    BilledToDate = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    RevenueAdjustment = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    UnbilledBalance = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    BillingsInExcessBalance = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    LossProvisionBalance = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    JournalEntryId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    ReversalEntryId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    PostedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    PostedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    ReversedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    ReversedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    ReversalReason = table.Column<string>(type: "TEXT", maxLength: 1000, nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_RevenueRun", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_RevenueRun_FiscalPeriod_FiscalPeriodId",
-                        column: x => x.FiscalPeriodId,
-                        principalTable: "FiscalPeriod",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_RevenueRun_GlJournalEntries_JournalEntryId",
-                        column: x => x.JournalEntryId,
-                        principalTable: "GlJournalEntries",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_RevenueRun_GlJournalEntries_ReversalEntryId",
-                        column: x => x.ReversalEntryId,
-                        principalTable: "GlJournalEntries",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_RevenueRun_Project_ProjectId",
-                        column: x => x.ProjectId,
-                        principalTable: "Project",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "RevenueSetup",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ProjectId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ClinId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    Method = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
-                    FeeRate = table.Column<decimal>(type: "TEXT", precision: 18, scale: 4, nullable: true),
-                    OdcMarkupRate = table.Column<decimal>(type: "TEXT", precision: 18, scale: 4, nullable: true),
-                    TransactionPrice = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: true),
-                    UnitPrice = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: true),
-                    Notes = table.Column<string>(type: "TEXT", maxLength: 1000, nullable: true),
-                    UpdatedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_RevenueSetup", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_RevenueSetup_Clin_ClinId",
-                        column: x => x.ClinId,
-                        principalTable: "Clin",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_RevenueSetup_Project_ProjectId",
-                        column: x => x.ProjectId,
-                        principalTable: "Project",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "SavedReports",
                 columns: table => new
                 {
@@ -267,41 +116,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         principalTable: "ApprovalWorkflow",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "RevenueRunLine",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    RunId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ClinId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    Method = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
-                    CostToDate = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    EstimatedCost = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: true),
-                    EstimatedRevenue = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: true),
-                    PercentComplete = table.Column<decimal>(type: "TEXT", precision: 9, scale: 6, nullable: true),
-                    RecognizedToDate = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    BilledToDate = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    ExpectedLoss = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    LossProvision = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    Note = table.Column<string>(type: "TEXT", maxLength: 1000, nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_RevenueRunLine", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_RevenueRunLine_Clin_ClinId",
-                        column: x => x.ClinId,
-                        principalTable: "Clin",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_RevenueRunLine_RevenueRun_RunId",
-                        column: x => x.RunId,
-                        principalTable: "RevenueRun",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -500,78 +314,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 column: "SavedReportId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_RevenueDelivery_ClinId",
-                table: "RevenueDelivery",
-                column: "ClinId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_RevenueDelivery_ProjectId_DeliveredOn",
-                table: "RevenueDelivery",
-                columns: new[] { "ProjectId", "DeliveredOn" });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_RevenueEstimate_ClinId",
-                table: "RevenueEstimate",
-                column: "ClinId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_RevenueEstimate_ProjectId_ClinId_AsOf",
-                table: "RevenueEstimate",
-                columns: new[] { "ProjectId", "ClinId", "AsOf" });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_RevenueEstimate_Status",
-                table: "RevenueEstimate",
-                column: "Status");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_RevenueRun_FiscalPeriodId",
-                table: "RevenueRun",
-                column: "FiscalPeriodId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_RevenueRun_JournalEntryId",
-                table: "RevenueRun",
-                column: "JournalEntryId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_RevenueRun_PostedKey",
-                table: "RevenueRun",
-                column: "PostedKey",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_RevenueRun_ProjectId_FiscalPeriodId",
-                table: "RevenueRun",
-                columns: new[] { "ProjectId", "FiscalPeriodId" });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_RevenueRun_ReversalEntryId",
-                table: "RevenueRun",
-                column: "ReversalEntryId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_RevenueRunLine_ClinId",
-                table: "RevenueRunLine",
-                column: "ClinId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_RevenueRunLine_RunId",
-                table: "RevenueRunLine",
-                column: "RunId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_RevenueSetup_ClinId",
-                table: "RevenueSetup",
-                column: "ClinId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_RevenueSetup_ProjectId_ClinId",
-                table: "RevenueSetup",
-                columns: new[] { "ProjectId", "ClinId" },
-                unique: true);
-
-            migrationBuilder.CreateIndex(
                 name: "IX_SavedReports_OwnerEmail",
                 table: "SavedReports",
                 column: "OwnerEmail");
@@ -596,25 +338,10 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "ReportSchedules");
 
             migrationBuilder.DropTable(
-                name: "RevenueDelivery");
-
-            migrationBuilder.DropTable(
-                name: "RevenueEstimate");
-
-            migrationBuilder.DropTable(
-                name: "RevenueRunLine");
-
-            migrationBuilder.DropTable(
-                name: "RevenueSetup");
-
-            migrationBuilder.DropTable(
                 name: "ApprovalInstance");
 
             migrationBuilder.DropTable(
                 name: "SavedReports");
-
-            migrationBuilder.DropTable(
-                name: "RevenueRun");
 
             migrationBuilder.DropTable(
                 name: "ApprovalWorkflowVersion");

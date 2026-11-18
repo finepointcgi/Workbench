@@ -133,42 +133,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 });
 
             migrationBuilder.CreateTable(
-                name: "CashForecastItems",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Name = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    Amount = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    Frequency = table.Column<int>(type: "INTEGER", nullable: false),
-                    StartDate = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    EndDate = table.Column<DateOnly>(type: "TEXT", nullable: true),
-                    IsActive = table.Column<bool>(type: "INTEGER", nullable: false),
-                    UpdatedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_CashForecastItems", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "CashSettings",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    PayrollAmount = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: true),
-                    PayCycleDays = table.Column<int>(type: "INTEGER", nullable: false),
-                    PayDateAnchor = table.Column<DateOnly>(type: "TEXT", nullable: true),
-                    MatchDateWindowDays = table.Column<int>(type: "INTEGER", nullable: false),
-                    UpdatedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_CashSettings", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "Comment",
                 columns: table => new
                 {
@@ -185,134 +149,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_Comment", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "CpActuals",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ProjectId = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    WbsId = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    FiscalPeriod = table.Column<string>(type: "TEXT", maxLength: 7, nullable: false),
-                    Hours = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    Cost = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    SyncedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_CpActuals", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "CpBudgets",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ProjectId = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    WbsId = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    FiscalPeriod = table.Column<string>(type: "TEXT", maxLength: 7, nullable: false),
-                    Hours = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    Amount = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    SyncedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_CpBudgets", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "CpEmployees",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    EmployeeId = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    Name = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    Email = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    OrganizationId = table.Column<string>(type: "TEXT", maxLength: 64, nullable: true),
-                    LaborCategoryId = table.Column<string>(type: "TEXT", maxLength: 64, nullable: true),
-                    Active = table.Column<bool>(type: "INTEGER", nullable: false),
-                    SyncedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_CpEmployees", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "CpLaborCategories",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    LaborCategoryId = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    Name = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    SyncedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_CpLaborCategories", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "CpProjects",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ProjectId = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    Name = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    OrganizationId = table.Column<string>(type: "TEXT", maxLength: 64, nullable: true),
-                    Start = table.Column<DateOnly>(type: "TEXT", nullable: true),
-                    End = table.Column<DateOnly>(type: "TEXT", nullable: true),
-                    Active = table.Column<bool>(type: "INTEGER", nullable: false),
-                    SyncedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_CpProjects", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "CpSyncRuns",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Source = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
-                    StartedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    FinishedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    Status = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    Projects = table.Column<int>(type: "INTEGER", nullable: false),
-                    WbsElements = table.Column<int>(type: "INTEGER", nullable: false),
-                    Employees = table.Column<int>(type: "INTEGER", nullable: false),
-                    LaborCategories = table.Column<int>(type: "INTEGER", nullable: false),
-                    Budgets = table.Column<int>(type: "INTEGER", nullable: false),
-                    Actuals = table.Column<int>(type: "INTEGER", nullable: false),
-                    Inserted = table.Column<int>(type: "INTEGER", nullable: false),
-                    Updated = table.Column<int>(type: "INTEGER", nullable: false),
-                    Deleted = table.Column<int>(type: "INTEGER", nullable: false),
-                    Skipped = table.Column<int>(type: "INTEGER", nullable: false),
-                    Error = table.Column<string>(type: "TEXT", maxLength: 4000, nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_CpSyncRuns", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "CpWbsElements",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ProjectId = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    WbsId = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    ParentWbsId = table.Column<string>(type: "TEXT", maxLength: 64, nullable: true),
-                    Name = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    Level = table.Column<int>(type: "INTEGER", nullable: false),
-                    ChargeAllowed = table.Column<bool>(type: "INTEGER", nullable: false),
-                    SyncedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_CpWbsElements", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -593,22 +429,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 });
 
             migrationBuilder.CreateTable(
-                name: "PayrollProviderSetting",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ProviderKey = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
-                    EarningCodes = table.Column<string>(type: "TEXT", maxLength: 2000, nullable: false),
-                    ExportSalariedRegularHours = table.Column<bool>(type: "INTEGER", nullable: false),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    UpdatedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_PayrollProviderSetting", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "PerDiemRateBatch",
                 columns: table => new
                 {
@@ -881,74 +701,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         name: "FK_FiscalPeriod_FiscalYear_FiscalYearId",
                         column: x => x.FiscalYearId,
                         principalTable: "FiscalYear",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "AssetCategory",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Code = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
-                    Name = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    DefaultMethod = table.Column<string>(type: "TEXT", maxLength: 24, nullable: false),
-                    DefaultLifeYears = table.Column<int>(type: "INTEGER", nullable: false),
-                    MacrsRecoveryYears = table.Column<int>(type: "INTEGER", nullable: true),
-                    AssetAccountId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    AccumulatedDepreciationAccountId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ExpenseAccountId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    IsActive = table.Column<bool>(type: "INTEGER", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_AssetCategory", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_AssetCategory_GlAccounts_AccumulatedDepreciationAccountId",
-                        column: x => x.AccumulatedDepreciationAccountId,
-                        principalTable: "GlAccounts",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_AssetCategory_GlAccounts_AssetAccountId",
-                        column: x => x.AssetAccountId,
-                        principalTable: "GlAccounts",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_AssetCategory_GlAccounts_ExpenseAccountId",
-                        column: x => x.ExpenseAccountId,
-                        principalTable: "GlAccounts",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "BankAccounts",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Name = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    BankName = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    AccountNumberLast4 = table.Column<string>(type: "TEXT", maxLength: 4, nullable: false),
-                    ProtectedAccountNumber = table.Column<string>(type: "TEXT", maxLength: 2000, nullable: true),
-                    RoutingNumber = table.Column<string>(type: "TEXT", maxLength: 9, nullable: true),
-                    GlAccountId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Currency = table.Column<string>(type: "TEXT", maxLength: 3, nullable: false),
-                    IsActive = table.Column<bool>(type: "INTEGER", nullable: false),
-                    CsvMappingJson = table.Column<string>(type: "TEXT", maxLength: 4000, nullable: true),
-                    CreatedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    CreatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    UpdatedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_BankAccounts", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_BankAccounts_GlAccounts_GlAccountId",
-                        column: x => x.GlAccountId,
-                        principalTable: "GlAccounts",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                 });
@@ -1359,27 +1111,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 });
 
             migrationBuilder.CreateTable(
-                name: "BankCloseWaivers",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    FiscalPeriodId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Reason = table.Column<string>(type: "TEXT", maxLength: 1000, nullable: false),
-                    WaivedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    WaivedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_BankCloseWaivers", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_BankCloseWaivers_FiscalPeriod_FiscalPeriodId",
-                        column: x => x.FiscalPeriodId,
-                        principalTable: "FiscalPeriod",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "GlJournalEntries",
                 columns: table => new
                 {
@@ -1437,68 +1168,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         name: "FK_UnbilledAccrual_FiscalPeriod_FiscalPeriodId",
                         column: x => x.FiscalPeriodId,
                         principalTable: "FiscalPeriod",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "BankReconciliations",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    BankAccountId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    StatementEndDate = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    StatementEndingBalance = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    Status = table.Column<int>(type: "INTEGER", nullable: false),
-                    GlBalance = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    DepositsInTransit = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    OutstandingPayments = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    UnrecordedBankItems = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    Note = table.Column<string>(type: "TEXT", maxLength: 1000, nullable: true),
-                    StartedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    StartedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    CompletedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    CompletedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    ReopenedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    ReopenedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    ReopenReason = table.Column<string>(type: "TEXT", maxLength: 1000, nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_BankReconciliations", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_BankReconciliations_BankAccounts_BankAccountId",
-                        column: x => x.BankAccountId,
-                        principalTable: "BankAccounts",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "BankStatementImports",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    BankAccountId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Format = table.Column<int>(type: "INTEGER", nullable: false),
-                    FileName = table.Column<string>(type: "TEXT", maxLength: 260, nullable: false),
-                    PeriodStart = table.Column<DateOnly>(type: "TEXT", nullable: true),
-                    PeriodEnd = table.Column<DateOnly>(type: "TEXT", nullable: true),
-                    OpeningBalance = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: true),
-                    ClosingBalance = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: true),
-                    TransactionCount = table.Column<int>(type: "INTEGER", nullable: false),
-                    DuplicateCount = table.Column<int>(type: "INTEGER", nullable: false),
-                    Content = table.Column<string>(type: "TEXT", nullable: false),
-                    ImportedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    ImportedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_BankStatementImports", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_BankStatementImports_BankAccounts_BankAccountId",
-                        column: x => x.BankAccountId,
-                        principalTable: "BankAccounts",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                 });
@@ -2024,35 +1693,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 });
 
             migrationBuilder.CreateTable(
-                name: "AssetDepreciationRun",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    FiscalPeriodId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    JournalEntryId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    Total = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    AssetCount = table.Column<int>(type: "INTEGER", nullable: false),
-                    RunBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    RunAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_AssetDepreciationRun", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_AssetDepreciationRun_FiscalPeriod_FiscalPeriodId",
-                        column: x => x.FiscalPeriodId,
-                        principalTable: "FiscalPeriod",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_AssetDepreciationRun_GlJournalEntries_JournalEntryId",
-                        column: x => x.JournalEntryId,
-                        principalTable: "GlJournalEntries",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "Invoice",
                 columns: table => new
                 {
@@ -2151,81 +1791,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         name: "FK_Payment_GlJournalEntries_JournalEntryId",
                         column: x => x.JournalEntryId,
                         principalTable: "GlJournalEntries",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "PayrollRun",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    PayGroupId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    PayPeriodId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Status = table.Column<string>(type: "TEXT", maxLength: 24, nullable: false),
-                    CreatedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    CreatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    ExportedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    ExportedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    ExportFileName = table.Column<string>(type: "TEXT", maxLength: 260, nullable: true),
-                    ExportContent = table.Column<string>(type: "TEXT", nullable: true),
-                    RegisterId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    PostedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    PostedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    JournalEntryId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    VoidedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    VoidedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    VoidReason = table.Column<string>(type: "TEXT", maxLength: 1000, nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_PayrollRun", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_PayrollRun_GlJournalEntries_JournalEntryId",
-                        column: x => x.JournalEntryId,
-                        principalTable: "GlJournalEntries",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_PayrollRun_PayGroup_PayGroupId",
-                        column: x => x.PayGroupId,
-                        principalTable: "PayGroup",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_PayrollRun_PayPeriod_PayPeriodId",
-                        column: x => x.PayPeriodId,
-                        principalTable: "PayPeriod",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "BankMatches",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    BankAccountId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Rule = table.Column<int>(type: "INTEGER", nullable: false),
-                    Confidence = table.Column<int>(type: "INTEGER", nullable: false),
-                    Note = table.Column<string>(type: "TEXT", maxLength: 500, nullable: true),
-                    MatchedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    MatchedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    ReconciliationId = table.Column<Guid>(type: "TEXT", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_BankMatches", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_BankMatches_BankAccounts_BankAccountId",
-                        column: x => x.BankAccountId,
-                        principalTable: "BankAccounts",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_BankMatches_BankReconciliations_ReconciliationId",
-                        column: x => x.ReconciliationId,
-                        principalTable: "BankReconciliations",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                 });
@@ -2639,106 +2204,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         principalTable: "Payment",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "PayrollExportLine",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    RunId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    EmployeeId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Category = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    EarningCode = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
-                    Hours = table.Column<decimal>(type: "TEXT", precision: 9, scale: 2, nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_PayrollExportLine", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_PayrollExportLine_Employee_EmployeeId",
-                        column: x => x.EmployeeId,
-                        principalTable: "Employee",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_PayrollExportLine_PayrollRun_RunId",
-                        column: x => x.RunId,
-                        principalTable: "PayrollRun",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "PayrollRegister",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    RunId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    FileName = table.Column<string>(type: "TEXT", maxLength: 260, nullable: false),
-                    ContentHash = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    Status = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    ImportedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    ImportedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    JournalEntryId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    ReversalEntryId = table.Column<Guid>(type: "TEXT", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_PayrollRegister", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_PayrollRegister_PayrollRun_RunId",
-                        column: x => x.RunId,
-                        principalTable: "PayrollRun",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "BankTransactions",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    BankAccountId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ImportId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Date = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    Amount = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    Type = table.Column<int>(type: "INTEGER", nullable: false),
-                    Description = table.Column<string>(type: "TEXT", maxLength: 500, nullable: false),
-                    CheckNumber = table.Column<string>(type: "TEXT", maxLength: 32, nullable: true),
-                    BankReference = table.Column<string>(type: "TEXT", maxLength: 100, nullable: true),
-                    Fingerprint = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    MatchId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    JournalEntryId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    CreatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_BankTransactions", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_BankTransactions_BankAccounts_BankAccountId",
-                        column: x => x.BankAccountId,
-                        principalTable: "BankAccounts",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_BankTransactions_BankMatches_MatchId",
-                        column: x => x.MatchId,
-                        principalTable: "BankMatches",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.SetNull);
-                    table.ForeignKey(
-                        name: "FK_BankTransactions_BankStatementImports_ImportId",
-                        column: x => x.ImportId,
-                        principalTable: "BankStatementImports",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_BankTransactions_GlJournalEntries_JournalEntryId",
-                        column: x => x.JournalEntryId,
-                        principalTable: "GlJournalEntries",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -3323,67 +2788,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 });
 
             migrationBuilder.CreateTable(
-                name: "PayrollRegisterLine",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    RegisterId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    EmployeeId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    ProviderEmployeeId = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    EmployeeName = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    CheckDate = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    GrossWages = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    EmployeeTaxes = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    EmployerTaxes = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    Deductions = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    EmployerBenefits = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    NetPay = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_PayrollRegisterLine", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_PayrollRegisterLine_Employee_EmployeeId",
-                        column: x => x.EmployeeId,
-                        principalTable: "Employee",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_PayrollRegisterLine_PayrollRegister_RegisterId",
-                        column: x => x.RegisterId,
-                        principalTable: "PayrollRegister",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "BankMatchLines",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    MatchId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    BankAccountId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    JournalLineId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Amount = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_BankMatchLines", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_BankMatchLines_BankMatches_MatchId",
-                        column: x => x.MatchId,
-                        principalTable: "BankMatches",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_BankMatchLines_GlJournalLines_JournalLineId",
-                        column: x => x.JournalLineId,
-                        principalTable: "GlJournalLines",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "BilledSource",
                 columns: table => new
                 {
@@ -3705,193 +3109,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         onDelete: ReferentialAction.Cascade);
                 });
 
-            migrationBuilder.CreateTable(
-                name: "FixedAsset",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    TagNumber = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
-                    Description = table.Column<string>(type: "TEXT", maxLength: 500, nullable: false),
-                    CategoryId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    AcquisitionDate = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    InServiceDate = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    Cost = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    SalvageValue = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    UsefulLifeYears = table.Column<int>(type: "INTEGER", nullable: false),
-                    Method = table.Column<string>(type: "TEXT", maxLength: 24, nullable: false),
-                    MacrsRecoveryYears = table.Column<int>(type: "INTEGER", nullable: true),
-                    Location = table.Column<string>(type: "TEXT", maxLength: 200, nullable: true),
-                    CustodianEmployeeId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    SerialNumber = table.Column<string>(type: "TEXT", maxLength: 100, nullable: true),
-                    Status = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    AssetAccountId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    AccumulatedDepreciationAccountId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ExpenseAccountId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    OrgUnitId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    ProjectId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    WbsElementId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    IsGovernmentFurnished = table.Column<bool>(type: "INTEGER", nullable: false),
-                    IsContractorAcquired = table.Column<bool>(type: "INTEGER", nullable: false),
-                    ContractId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    GovernmentPropertyNumber = table.Column<string>(type: "TEXT", maxLength: 64, nullable: true),
-                    AccumulatedDepreciation = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    VendorId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    SourceBillLineId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    CapitalizationEntryId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    DisposedOn = table.Column<DateOnly>(type: "TEXT", nullable: true),
-                    DisposalProceeds = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: true),
-                    DisposalReason = table.Column<string>(type: "TEXT", maxLength: 1000, nullable: true),
-                    DisposalEntryId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    CreatedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    CreatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_FixedAsset", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_FixedAsset_ApBillLine_SourceBillLineId",
-                        column: x => x.SourceBillLineId,
-                        principalTable: "ApBillLine",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_FixedAsset_AssetCategory_CategoryId",
-                        column: x => x.CategoryId,
-                        principalTable: "AssetCategory",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_FixedAsset_Contract_ContractId",
-                        column: x => x.ContractId,
-                        principalTable: "Contract",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_FixedAsset_Employee_CustodianEmployeeId",
-                        column: x => x.CustodianEmployeeId,
-                        principalTable: "Employee",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_FixedAsset_GlAccounts_AccumulatedDepreciationAccountId",
-                        column: x => x.AccumulatedDepreciationAccountId,
-                        principalTable: "GlAccounts",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_FixedAsset_GlAccounts_AssetAccountId",
-                        column: x => x.AssetAccountId,
-                        principalTable: "GlAccounts",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_FixedAsset_GlAccounts_ExpenseAccountId",
-                        column: x => x.ExpenseAccountId,
-                        principalTable: "GlAccounts",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_FixedAsset_GlJournalEntries_CapitalizationEntryId",
-                        column: x => x.CapitalizationEntryId,
-                        principalTable: "GlJournalEntries",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_FixedAsset_GlJournalEntries_DisposalEntryId",
-                        column: x => x.DisposalEntryId,
-                        principalTable: "GlJournalEntries",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_FixedAsset_OrgUnit_OrgUnitId",
-                        column: x => x.OrgUnitId,
-                        principalTable: "OrgUnit",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_FixedAsset_Project_ProjectId",
-                        column: x => x.ProjectId,
-                        principalTable: "Project",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_FixedAsset_Vendor_VendorId",
-                        column: x => x.VendorId,
-                        principalTable: "Vendor",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_FixedAsset_WbsElement_WbsElementId",
-                        column: x => x.WbsElementId,
-                        principalTable: "WbsElement",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "AssetDepreciation",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    AssetId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    FiscalPeriodId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    RunId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    PeriodStart = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    Amount = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_AssetDepreciation", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_AssetDepreciation_AssetDepreciationRun_RunId",
-                        column: x => x.RunId,
-                        principalTable: "AssetDepreciationRun",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_AssetDepreciation_FiscalPeriod_FiscalPeriodId",
-                        column: x => x.FiscalPeriodId,
-                        principalTable: "FiscalPeriod",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_AssetDepreciation_FixedAsset_AssetId",
-                        column: x => x.AssetId,
-                        principalTable: "FixedAsset",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "AssetTransfer",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    AssetId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    TransferredOn = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    FromLocation = table.Column<string>(type: "TEXT", maxLength: 200, nullable: true),
-                    ToLocation = table.Column<string>(type: "TEXT", maxLength: 200, nullable: true),
-                    FromCustodianEmployeeId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    ToCustodianEmployeeId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    FromOrgUnitId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    ToOrgUnitId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    FromProjectId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    ToProjectId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    Reason = table.Column<string>(type: "TEXT", maxLength: 1000, nullable: true),
-                    TransferredBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    CreatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_AssetTransfer", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_AssetTransfer_FixedAsset_AssetId",
-                        column: x => x.AssetId,
-                        principalTable: "FixedAsset",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
             migrationBuilder.CreateIndex(
                 name: "IX_AccessReviewItem_AccessReviewId_UserEmail",
                 table: "AccessReviewItem",
@@ -4007,58 +3224,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_AssetCategory_AccumulatedDepreciationAccountId",
-                table: "AssetCategory",
-                column: "AccumulatedDepreciationAccountId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_AssetCategory_AssetAccountId",
-                table: "AssetCategory",
-                column: "AssetAccountId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_AssetCategory_Code",
-                table: "AssetCategory",
-                column: "Code",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_AssetCategory_ExpenseAccountId",
-                table: "AssetCategory",
-                column: "ExpenseAccountId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_AssetDepreciation_AssetId_FiscalPeriodId",
-                table: "AssetDepreciation",
-                columns: new[] { "AssetId", "FiscalPeriodId" },
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_AssetDepreciation_FiscalPeriodId",
-                table: "AssetDepreciation",
-                column: "FiscalPeriodId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_AssetDepreciation_RunId",
-                table: "AssetDepreciation",
-                column: "RunId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_AssetDepreciationRun_FiscalPeriodId",
-                table: "AssetDepreciationRun",
-                column: "FiscalPeriodId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_AssetDepreciationRun_JournalEntryId",
-                table: "AssetDepreciationRun",
-                column: "JournalEntryId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_AssetTransfer_AssetId",
-                table: "AssetTransfer",
-                column: "AssetId");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_Attachment_SheetId_ItemId",
                 table: "Attachment",
                 columns: new[] { "SheetId", "ItemId" });
@@ -4072,84 +3237,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "IX_AuditEvent_OccurredAtUtc",
                 table: "AuditEvent",
                 column: "OccurredAtUtc");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_BankAccounts_GlAccountId",
-                table: "BankAccounts",
-                column: "GlAccountId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_BankAccounts_Name",
-                table: "BankAccounts",
-                column: "Name",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_BankCloseWaivers_FiscalPeriodId",
-                table: "BankCloseWaivers",
-                column: "FiscalPeriodId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_BankMatches_BankAccountId_ReconciliationId",
-                table: "BankMatches",
-                columns: new[] { "BankAccountId", "ReconciliationId" });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_BankMatches_ReconciliationId",
-                table: "BankMatches",
-                column: "ReconciliationId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_BankMatchLines_BankAccountId_JournalLineId",
-                table: "BankMatchLines",
-                columns: new[] { "BankAccountId", "JournalLineId" },
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_BankMatchLines_JournalLineId",
-                table: "BankMatchLines",
-                column: "JournalLineId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_BankMatchLines_MatchId",
-                table: "BankMatchLines",
-                column: "MatchId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_BankReconciliations_BankAccountId_StatementEndDate",
-                table: "BankReconciliations",
-                columns: new[] { "BankAccountId", "StatementEndDate" },
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_BankStatementImports_BankAccountId_ImportedAtUtc",
-                table: "BankStatementImports",
-                columns: new[] { "BankAccountId", "ImportedAtUtc" });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_BankTransactions_BankAccountId_Date",
-                table: "BankTransactions",
-                columns: new[] { "BankAccountId", "Date" });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_BankTransactions_BankAccountId_Fingerprint",
-                table: "BankTransactions",
-                columns: new[] { "BankAccountId", "Fingerprint" });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_BankTransactions_ImportId",
-                table: "BankTransactions",
-                column: "ImportId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_BankTransactions_JournalEntryId",
-                table: "BankTransactions",
-                column: "JournalEntryId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_BankTransactions_MatchId",
-                table: "BankTransactions",
-                column: "MatchId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Baseline_SheetId_CapturedAtUtc",
@@ -4299,47 +3386,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 columns: new[] { "ModificationId", "Sequence" });
 
             migrationBuilder.CreateIndex(
-                name: "IX_CpActuals_ProjectId_WbsId_FiscalPeriod",
-                table: "CpActuals",
-                columns: new[] { "ProjectId", "WbsId", "FiscalPeriod" },
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_CpBudgets_ProjectId_WbsId_FiscalPeriod",
-                table: "CpBudgets",
-                columns: new[] { "ProjectId", "WbsId", "FiscalPeriod" },
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_CpEmployees_EmployeeId",
-                table: "CpEmployees",
-                column: "EmployeeId",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_CpLaborCategories_LaborCategoryId",
-                table: "CpLaborCategories",
-                column: "LaborCategoryId",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_CpProjects_ProjectId",
-                table: "CpProjects",
-                column: "ProjectId",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_CpSyncRuns_StartedAtUtc",
-                table: "CpSyncRuns",
-                column: "StartedAtUtc");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_CpWbsElements_ProjectId_WbsId",
-                table: "CpWbsElements",
-                columns: new[] { "ProjectId", "WbsId" },
-                unique: true);
-
-            migrationBuilder.CreateIndex(
                 name: "IX_Customer_Code",
                 table: "Customer",
                 column: "Code",
@@ -4442,82 +3488,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 table: "FiscalYear",
                 column: "Year",
                 unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_FixedAsset_AccumulatedDepreciationAccountId",
-                table: "FixedAsset",
-                column: "AccumulatedDepreciationAccountId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_FixedAsset_AssetAccountId",
-                table: "FixedAsset",
-                column: "AssetAccountId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_FixedAsset_CapitalizationEntryId",
-                table: "FixedAsset",
-                column: "CapitalizationEntryId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_FixedAsset_CategoryId",
-                table: "FixedAsset",
-                column: "CategoryId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_FixedAsset_ContractId",
-                table: "FixedAsset",
-                column: "ContractId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_FixedAsset_CustodianEmployeeId",
-                table: "FixedAsset",
-                column: "CustodianEmployeeId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_FixedAsset_DisposalEntryId",
-                table: "FixedAsset",
-                column: "DisposalEntryId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_FixedAsset_ExpenseAccountId",
-                table: "FixedAsset",
-                column: "ExpenseAccountId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_FixedAsset_OrgUnitId",
-                table: "FixedAsset",
-                column: "OrgUnitId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_FixedAsset_ProjectId",
-                table: "FixedAsset",
-                column: "ProjectId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_FixedAsset_SourceBillLineId",
-                table: "FixedAsset",
-                column: "SourceBillLineId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_FixedAsset_Status",
-                table: "FixedAsset",
-                column: "Status");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_FixedAsset_TagNumber",
-                table: "FixedAsset",
-                column: "TagNumber",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_FixedAsset_VendorId",
-                table: "FixedAsset",
-                column: "VendorId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_FixedAsset_WbsElementId",
-                table: "FixedAsset",
-                column: "WbsElementId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_FundingAction_ClinId_EffectiveDate",
@@ -4890,52 +3860,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 table: "PayPeriod",
                 columns: new[] { "PayGroupId", "Start" },
                 unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PayrollExportLine_EmployeeId",
-                table: "PayrollExportLine",
-                column: "EmployeeId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PayrollExportLine_RunId",
-                table: "PayrollExportLine",
-                column: "RunId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PayrollProviderSetting_ProviderKey",
-                table: "PayrollProviderSetting",
-                column: "ProviderKey",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PayrollRegister_RunId_ContentHash",
-                table: "PayrollRegister",
-                columns: new[] { "RunId", "ContentHash" });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PayrollRegisterLine_EmployeeId",
-                table: "PayrollRegisterLine",
-                column: "EmployeeId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PayrollRegisterLine_RegisterId",
-                table: "PayrollRegisterLine",
-                column: "RegisterId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PayrollRun_JournalEntryId",
-                table: "PayrollRun",
-                column: "JournalEntryId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PayrollRun_PayGroupId_PayPeriodId",
-                table: "PayrollRun",
-                columns: new[] { "PayGroupId", "PayPeriodId" });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PayrollRun_PayPeriodId",
-                table: "PayrollRun",
-                column: "PayPeriodId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_PerDiemLine_OdcEntryId",
@@ -5386,25 +4310,10 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "AppUser");
 
             migrationBuilder.DropTable(
-                name: "AssetDepreciation");
-
-            migrationBuilder.DropTable(
-                name: "AssetTransfer");
-
-            migrationBuilder.DropTable(
                 name: "Attachment");
 
             migrationBuilder.DropTable(
                 name: "AuditEvent");
-
-            migrationBuilder.DropTable(
-                name: "BankCloseWaivers");
-
-            migrationBuilder.DropTable(
-                name: "BankMatchLines");
-
-            migrationBuilder.DropTable(
-                name: "BankTransactions");
 
             migrationBuilder.DropTable(
                 name: "BaselineEntry");
@@ -5417,12 +4326,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
 
             migrationBuilder.DropTable(
                 name: "BudgetLine");
-
-            migrationBuilder.DropTable(
-                name: "CashForecastItems");
-
-            migrationBuilder.DropTable(
-                name: "CashSettings");
 
             migrationBuilder.DropTable(
                 name: "ChargeAssignment");
@@ -5444,27 +4347,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
 
             migrationBuilder.DropTable(
                 name: "ContractModificationChange");
-
-            migrationBuilder.DropTable(
-                name: "CpActuals");
-
-            migrationBuilder.DropTable(
-                name: "CpBudgets");
-
-            migrationBuilder.DropTable(
-                name: "CpEmployees");
-
-            migrationBuilder.DropTable(
-                name: "CpLaborCategories");
-
-            migrationBuilder.DropTable(
-                name: "CpProjects");
-
-            migrationBuilder.DropTable(
-                name: "CpSyncRuns");
-
-            migrationBuilder.DropTable(
-                name: "CpWbsElements");
 
             migrationBuilder.DropTable(
                 name: "CustomerBillingProfile");
@@ -5528,15 +4410,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
 
             migrationBuilder.DropTable(
                 name: "PaymentApplication");
-
-            migrationBuilder.DropTable(
-                name: "PayrollExportLine");
-
-            migrationBuilder.DropTable(
-                name: "PayrollProviderSetting");
-
-            migrationBuilder.DropTable(
-                name: "PayrollRegisterLine");
 
             migrationBuilder.DropTable(
                 name: "PerDiemLine");
@@ -5617,19 +4490,7 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "ApPaymentRun");
 
             migrationBuilder.DropTable(
-                name: "AssetDepreciationRun");
-
-            migrationBuilder.DropTable(
-                name: "FixedAsset");
-
-            migrationBuilder.DropTable(
                 name: "GlJournalLines");
-
-            migrationBuilder.DropTable(
-                name: "BankMatches");
-
-            migrationBuilder.DropTable(
-                name: "BankStatementImports");
 
             migrationBuilder.DropTable(
                 name: "Baseline");
@@ -5656,9 +4517,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "Payment");
 
             migrationBuilder.DropTable(
-                name: "PayrollRegister");
-
-            migrationBuilder.DropTable(
                 name: "PerDiemRateBatch");
 
             migrationBuilder.DropTable(
@@ -5683,19 +4541,10 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "ApBillLine");
 
             migrationBuilder.DropTable(
-                name: "AssetCategory");
-
-            migrationBuilder.DropTable(
-                name: "BankReconciliations");
-
-            migrationBuilder.DropTable(
                 name: "Invoice");
 
             migrationBuilder.DropTable(
                 name: "LeavePolicy");
-
-            migrationBuilder.DropTable(
-                name: "PayrollRun");
 
             migrationBuilder.DropTable(
                 name: "ApBill");
@@ -5705,9 +4554,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
 
             migrationBuilder.DropTable(
                 name: "PurchaseOrderLine");
-
-            migrationBuilder.DropTable(
-                name: "BankAccounts");
 
             migrationBuilder.DropTable(
                 name: "PayPeriod");

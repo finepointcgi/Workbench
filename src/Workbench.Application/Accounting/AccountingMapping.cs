@@ -5,7 +5,7 @@ using Workbench.Domain.ProjectAccounting;
 
 namespace Workbench.Application.Accounting;
 
-internal static class AccountingMapping
+public static class AccountingMapping
 {
     public static AccountKind ToContract(this AccountType v) => (AccountKind)(int)v;
     public static AccountType ToDomain(this AccountKind v) => (AccountType)(int)v;
@@ -33,7 +33,7 @@ internal static class AccountingMapping
 }
 
 /// <summary>Codes and names for the segments on journal lines, loaded once per operation.</summary>
-internal sealed class LedgerLookups
+public sealed class LedgerLookups
 {
     public required Dictionary<Guid, Account> Accounts { get; init; }
     public required Dictionary<Guid, FiscalPeriod> Periods { get; init; }

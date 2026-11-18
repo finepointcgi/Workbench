@@ -21,7 +21,7 @@ namespace Workbench.Application.Billing;
 /// <item>Unbilled accrual: debit AR unbilled, credit revenue; reversed on the first day of the next period.</item>
 /// </list>
 /// </summary>
-public sealed class BillingLedger(GeneralLedger ledger)
+public sealed class BillingLedger(GeneralLedger ledger, IInvoiceTaxHook? salesTaxHook = null, IEnumerable<Currencies.IForeignBalanceSource>? foreignBanks = null)
 {
     public const string Cash = "1010";
     public const string ArBilled = "1110";
@@ -57,7 +57,7 @@ public sealed class BillingLedger(GeneralLedger ledger)
         }
 
         // Sales tax lines are owed to the taxing jurisdiction, not earned: they credit the sales tax liability.
-        var salesTax = invoice.Lines.Any(l => l.Kind == InvoiceLineKind.SalesTax) ? await SalesTax.SalesTaxSupport.SalesTaxPayableNumberAsync(db, ct) : null;
+        var salesTax = invoice.Lines.Any(l => l.Kind == InvoiceLineKind.SalesTax) ? (salesTaxHook is null ? SalesTaxDefaults.PayableNumber : await salesTaxHook.PayableNumberAsync(db, ct)) : null;
         var credits = invoice.Lines.Select(l => (
             Account: l.Kind is InvoiceLineKind.FeeWithhold or InvoiceLineKind.WithholdRelease
                 ? ArUnbilled
@@ -99,7 +99,7 @@ public sealed class BillingLedger(GeneralLedger ledger)
         }
 
         var currency = payment.CurrencyCode!;
-        var cash = await CurrencySupport.ForeignCashAccountAsync(db, currency, ct)
+        var cash = await CurrencySupport.ForeignCashAccountAsync(db, currency, foreignBanks, ct)
             ?? await db.Set<Account>().AsNoTracking().Where(a => a.Number == Cash).Select(a => (Guid?)a.Id).FirstOrDefaultAsync(ct)
             ?? throw new InvalidOperationException($"Account {Cash} isn't in the chart of accounts. Install the default chart (Accounting › Chart of accounts) first.");
         var ar = await db.Set<Account>().AsNoTracking().Where(a => a.Number == ArBilled).Select(a => (Guid?)a.Id).FirstOrDefaultAsync(ct)
