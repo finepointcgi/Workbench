@@ -1,7 +1,6 @@
 using MudBlazor.Services;
 using Workbench.Api;
 using Workbench.Application;
-using Workbench.Costpoint;
 using Workbench.Infrastructure;
 using Workbench.Infrastructure.Persistence;
 using Workbench.Web.Calendar;
@@ -9,12 +8,10 @@ using Workbench.Web.Components;
 using Workbench.Web.Diagnostics;
 using Workbench.Web.Hubs;
 using Workbench.Web.Identity;
-using Workbench.Web.Integrations;
 using Workbench.Web.Notifications;
 using Workbench.Web.Security;
 using Workbench.Web.Supplier;
 using Workbench.Web.Forms;
-using Workbench.Web.Customer;
 using Workbench.Web.Tenancy;
 using Workbench.Web.Storage;
 
@@ -71,7 +68,6 @@ builder.AddWorkbenchDemoReset();
 builder.AddWorkbenchTenancyHosting();
 builder.Services.AddWorkbenchLiveUpdatesHub();
 builder.Services.AddWorkbenchNotificationsHub();
-builder.Services.AddCostpointSource(builder.Configuration);
 
 var app = builder.Build();
 if (modules.Results.Count > 0)
@@ -148,12 +144,10 @@ app.MapWorkbenchOrganizationExport(); // Hosted: the way out for a lapsed organi
 app.MapWorkbenchSignup(); // Hosted signup /signup and the license server's /api/v1/host/entitlements (MultiTenant; docs/admin-guide/hosted-signup.md).
 app.MapWorkbenchSupplierPortal();
 app.MapWorkbenchPublicForms(); // Public form links /f/{token} (wave E).
-app.MapWorkbenchCustomerView(); // Customer links /c/{token}: one contract's funding and invoice status, read only.
 app.MapWorkbenchLiveUpdatesHub();
 app.MapWorkbenchNotificationsHub();
 app.MapWorkbenchEmailEvents(); // Bounce and complaint webhooks from SendGrid and SES (docs/operations/email.md).
-app.MapWorkbenchJiraWebhooks(); // Jira issue webhooks for linked projects (docs/integrations/jira.md).
-app.MapWorkbenchGitLabWebhooks(); // GitLab issue, epic and milestone webhooks for linked projects (docs/integrations/gitlab.md).
+modules.MapHostEndpoints(app); // The enterprise module's anonymous entry points: customer links /c/{token}, and the Jira and GitLab webhooks /webhooks/jira and /webhooks/gitlab.
 app.MapWorkbenchCalendarFeed(); // Read-only per-person .ics feeds behind a private token.
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode()

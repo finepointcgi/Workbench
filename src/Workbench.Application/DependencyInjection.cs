@@ -5,7 +5,6 @@ using Workbench.Application.Licensing;
 using Workbench.Application.Billing;
 using Workbench.Application.Collaboration;
 using Workbench.Application.ContractDetail;
-using Workbench.Application.Costpoint;
 using Workbench.Application.Identity;
 using Workbench.Application.Imports;
 using Workbench.Application.IndirectRates;
@@ -49,7 +48,6 @@ public static class DependencyInjection
         services.AddScoped<ISheetBulkEditService, SheetBulkEditService>(); // Paste, fill and clear in one save (one reflow, one automation batch). // Saved grid views (sort, filter, hidden columns) and sheet exports.
         services.AddWorkbenchScheduling();
         services.AddWorkbenchCollaboration();
-        services.AddWorkbenchCostpoint();
         services.AddWorkbenchProjectAccounting();
         services.AddWorkbenchAutomation();
         services.AddWorkbenchMyWork();

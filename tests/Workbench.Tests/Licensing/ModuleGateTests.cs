@@ -157,12 +157,12 @@ public sealed class ModuleGateTests
         Assert.All(refused, r => Assert.Contains(r, FeatureGated)); // Only the feature gates that were always there.
     }
 
-    /// <summary>The actions gated by feature before the module map existed. They are the only changes refused with the shipped flags.</summary>
+    /// <summary>The actions gated by feature before the module map existed that are still in the product. They are the only changes refused with the shipped flags. (The Jira and GitLab connection saves and the customer link create are gated in the enterprise module, and its tests check them.)</summary>
     private static readonly HashSet<string> FeatureGated =
     [
         "ICompanyService.CreateAsync", "ISignInSettingsService.SaveProviderAsync", "IConnectorService.CreateAsync", "IConnectorService.UpdateAsync",
-        "IJiraConnectionService.SaveAsync", "IGitLabConnectionService.SaveAsync", "ISlackNotificationService.ConnectAsync", "ITeamsNotificationService.ConnectAsync",
-        "ICustomerShareLinkService.CreateAsync", "ISupplierPortalAdminService.AddContactAsync", "ISupplierPortalAdminService.SendSignInLinkAsync",
+        "ISlackNotificationService.ConnectAsync", "ITeamsNotificationService.ConnectAsync",
+        "ISupplierPortalAdminService.AddContactAsync", "ISupplierPortalAdminService.SendSignInLinkAsync",
         "ISupplierPortalAdminService.ReactivateContactAsync", "IApprovalWorkflowService.SaveAsync", "IApprovalWorkflowService.CreateRecordWorkflowAsync",
     ];
 
@@ -187,7 +187,7 @@ public sealed class ModuleGateTests
             }
         }
 
-        Assert.True(tried > 500, $"Only {tried} changes were tried.");
+        Assert.True(tried > 450, $"Only {tried} changes were tried.");
         Assert.Equal(FeatureGated.Order(), refusedNow.Order()); // Exactly the feature gates, which are always on.
     }
 

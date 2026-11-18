@@ -4,7 +4,6 @@ using Workbench.Application.Collaboration;
 using Workbench.Application.Sheets;
 using Workbench.Contracts.Automation;
 using Workbench.Contracts.Collaboration;
-using Workbench.Contracts.Costpoint;
 using Workbench.Contracts.Dashboards;
 using Workbench.Contracts.Financials;
 using Workbench.Contracts.Identity;
@@ -58,7 +57,6 @@ public static class IdentityRegistration
         services.Decorate<ICommentService, PermissionCheckingCommentService>();
         services.Decorate<IAttachmentService, PermissionCheckingAttachmentService>();
         services.Decorate<IActivityService, PermissionCheckingActivityService>();
-        services.Decorate<ICostpointService, PermissionCheckingCostpointService>();
         services.Decorate<IPeopleService, PermissionCheckingPeopleService>();
         services.Decorate<IContractService, PermissionCheckingContractService>();
         services.Decorate<IProjectService, PermissionCheckingProjectService>();
