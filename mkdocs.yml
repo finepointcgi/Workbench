@@ -201,6 +201,9 @@ nav:
           - Alerts: operations/alerts.md
           - License modules as plugins: operations/module-plugins.md
           - "Extracting a module: government contracting": operations/module-extraction-govcon.md
+          - "Delivering the paid modules": operations/module-delivery.md
+          - "Module extraction: summary and whole-set check": operations/module-extraction-summary.md
+          - "Removing paid code from the public history": operations/module-history.md
           - Performance: operations/performance.md
           - Runbooks: operations/runbooks.md
           - Incident response: operations/incident-response.md

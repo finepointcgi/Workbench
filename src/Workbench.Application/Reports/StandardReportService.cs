@@ -72,10 +72,6 @@ public sealed partial class StandardReportService(
         new(StandardReportKeys.ApAging, "AP aging summary",
             "Open payables by vendor and days past due.", "Purchasing", [AsOf], "purchasing/reports",
             a => a.Can(Permission.ApReportsView) ? null : "Payables need the \"See AP reports\" permission."),
-        new(StandardReportKeys.EstimatesAtCompletion, "Estimates at completion (EAC)",
-            "What each project is now expected to cost and earn at completion: project managers submit them, Finance approves.",
-            "Projects", [], "accounting/revenue/estimates",
-            a => a.Can(Permission.RevenueManage) ? null : "Estimates at completion are reviewed by Finance; a project manager submits theirs from the project's Revenue tab.", PageOnly: true),
     ];
 
     public async Task<IReadOnlyList<StandardReportDto>> ListAsync(CancellationToken cancellationToken = default)

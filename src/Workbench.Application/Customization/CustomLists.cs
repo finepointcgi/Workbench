@@ -84,7 +84,8 @@ public static class StatusSetCatalog
     public static StatusSetDefinition Get(string key) => Find(key) ?? throw new ArgumentException($"There is no status set '{key}'.");
 }
 
-public sealed class CustomListService(IWorkbenchDbContextFactory dbFactory, CustomizableEntityRegistry registry, AuditRecorder audit, TimeProvider clock) : ICustomListService
+public sealed class CustomListService(IWorkbenchDbContextFactory dbFactory, CustomizableEntityRegistry registry, AuditRecorder audit, TimeProvider clock,
+    IEnumerable<IValueListUsage>? valueListUsages = null) : ICustomListService
 {
     private const string AuditList = "ValueList";
     private const string AuditStatus = "StatusLabel";
@@ -393,7 +394,20 @@ public sealed class CustomListService(IWorkbenchDbContextFactory dbFactory, Cust
         return fields.GroupBy(f => f.ValueListKey!).ToDictionary(g => g.Key, g => g.Select(f => $"{registry.Find(f.EntityType)?.Label ?? f.EntityType} › {f.Label}").ToList());
     }
 
-    private static async Task<bool> IsCodeUsedAsync(IWorkbenchDbContext db, string listKey, string code, CancellationToken ct)
+    private async Task<bool> AnyUsageAsync(IWorkbenchDbContext db, string listKey, string code, CancellationToken ct)
+    {
+        foreach (var usage in valueListUsages!.Where(u => u.ListKey == listKey))
+        {
+            if (await usage.IsUsedAsync(db, code, ct))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private async Task<bool> IsCodeUsedAsync(IWorkbenchDbContext db, string listKey, string code, CancellationToken ct)
     {
         var fieldIds = await db.Set<CustomFieldDefinition>().Where(f => f.ValueListKey == listKey).Select(f => f.Id).ToListAsync(ct);
         if (fieldIds.Count > 0)
@@ -410,8 +424,7 @@ public sealed class CustomListService(IWorkbenchDbContextFactory dbFactory, Cust
             ValueListCatalog.VendorBusinessSize => await db.Set<D.Purchasing.Vendor>().AnyAsync(v => v.BusinessSize == code, ct),
             ValueListCatalog.VendorSocioEconomic => (await db.Set<D.Purchasing.Vendor>().Where(v => v.SocioEconomicCategories != null).Select(v => v.SocioEconomicCategories!).ToListAsync(ct))
                 .Any(s => s.Split(',', StringSplitOptions.TrimEntries).Contains(code, StringComparer.OrdinalIgnoreCase)),
-            ValueListCatalog.TaxExemptionReasons => await db.Set<D.SalesTax.TaxExemptionCertificate>().AnyAsync(c => c.Reason == code, ct),
-            _ => false,
+            _ => valueListUsages is not null && await AnyUsageAsync(db, listKey, code, ct),
         };
     }
 
@@ -438,4 +451,15 @@ public static class ValueLists
             ? stored.Items.OrderBy(i => i.Order).Select(i => new ValueListItemDto(i.Code, i.Label, i.Order, i.IsActive)).ToList()
             : ValueListCatalog.Find(key)?.Items.Select((i, n) => new ValueListItemDto(i.Code, i.Label, n, true)).ToList() ?? [];
     }
+}
+
+/// <summary>
+/// Tells the lists page whether a code of a built-in value list is in use by a record of a license module (so it can't be removed). The accounting module answers for
+/// the sales tax exemption reasons. A list nobody answers for has no module records.
+/// </summary>
+public interface IValueListUsage
+{
+    string ListKey { get; }
+
+    Task<bool> IsUsedAsync(IWorkbenchDbContext db, string code, CancellationToken cancellationToken);
 }

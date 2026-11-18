@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Workbench.Application.Financials;
 using Workbench.Contracts;
-using Workbench.Contracts.Ceilings;
 using Workbench.Contracts.Financials;
 using Workbench.Contracts.ProjectAccounting;
 using Workbench.Contracts.Projects;
@@ -19,9 +18,9 @@ namespace Workbench.Application.Projects;
 public sealed class ProjectHubService(
     IWorkbenchDbContextFactory dbFactory,
     ProjectHubAccess hubAccess,
-    ICeilingService ceilings,
     Resourcing.ProjectStaffingService staffing,
-    TimeProvider clock) : IProjectHubService
+    TimeProvider clock,
+    IEnumerable<IProjectAlertSource>? alertSources = null) : IProjectHubService
 {
     private const int DueSoonDays = 14;
     private static readonly string[] DoneStatuses = ["Done", "Complete", "Completed"];
@@ -105,7 +104,11 @@ public sealed class ProjectHubService(
                 alerts.AddRange(funding.Alerts.Select(a => new ProjectAlertDto((ProjectAlertLevel)(int)a.Level, "funding", a.Message, "financials")));
             }
 
-            alerts.AddRange(await CeilingAlertsAsync(project.Id, cancellationToken));
+            foreach (var source in alertSources ?? [])
+            {
+                alerts.AddRange(await source.AlertsAsync(project.Id, cancellationToken));
+            }
+
             alerts.AddRange(StaffingAlerts(await staffing.GetPlanAsync(project.Id, cancellationToken)));
         }
 
@@ -227,28 +230,6 @@ public sealed class ProjectHubService(
         {
             yield return new ProjectAlertDto(ProjectAlertLevel.Warning, "staffing", $"{item.Title}. {item.Reason}", "plan");
         }
-    }
-
-    private async Task<IEnumerable<ProjectAlertDto>> CeilingAlertsAsync(Guid projectId, CancellationToken ct)
-    {
-        ProjectCeilingStatusDto status;
-        try
-        {
-            status = await ceilings.GetProjectStatusAsync(projectId, ct);
-        }
-        catch (Exception ex) when (ex is UnauthorizedAccessException or WorkbenchNotFoundException)
-        {
-            return [];
-        }
-
-        return status.Ceilings
-            .Where(c => c.Ceiling.IsActive)
-            .SelectMany(c => c.Measures.Where(m => m.Level != CeilingAlertLevel.Ok).Select(m => new ProjectAlertDto(
-                m.Level == CeilingAlertLevel.Warning ? ProjectAlertLevel.Warning : ProjectAlertLevel.Critical,
-                "ceiling",
-                $"{c.Ceiling.Label}: {m.Metric.ToString().ToLowerInvariant()} at {m.PercentConsumed:0.#}% of the ceiling.",
-                "ceilings")))
-            .ToList();
     }
 
     private ProjectScheduleDto Schedule(Guid sheetId, HubContext context)

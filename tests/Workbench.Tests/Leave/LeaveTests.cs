@@ -7,19 +7,18 @@ using Workbench.Contracts.Time;
 using Workbench.Domain.Leave;
 using Workbench.Domain.Notifications;
 using Workbench.Domain.ProjectAccounting;
-using Workbench.Tests.Payroll;
 using static Workbench.Tests.Identity.SeededHost;
 
 namespace Workbench.Tests.Leave;
 
 public sealed class LeaveTests
 {
-    private static readonly DateOnly Week1 = PayrollKit.PeriodStart;
+    private static readonly DateOnly Week1 = LeaveKit.PeriodStart;
 
     [Fact]
     public async Task Accrual_uses_the_tier_for_years_of_service_and_is_idempotent_per_pay_period()
     {
-        await using var kit = await PayrollKit.CreateAsync();
+        await using var kit = await LeaveKit.CreateAsync();
         var pto = await kit.PtoPolicyAsync(tiers: [new(0, 4m), new(5, 6m), new(10, 8m)]);
         await kit.UpdateEmployeeAsync(kit.Fx.PmId, e => e.HireDate = new DateOnly(2020, 3, 1)); // 6 years on 2026-10-18
 
@@ -37,7 +36,7 @@ public sealed class LeaveTests
     [Fact]
     public async Task Accrual_stops_at_the_cap_and_waits_out_the_waiting_period()
     {
-        await using var kit = await PayrollKit.CreateAsync();
+        await using var kit = await LeaveKit.CreateAsync();
         var pto = await kit.PtoPolicyAsync(tiers: [new(0, 4m), new(2, 4m, MaxBalance: 50m)], cap: 30m, waiting: 90);
         await kit.UpdateEmployeeAsync(kit.Fx.ViewerId, e => e.HireDate = new DateOnly(2026, 9, 1)); // inside the waiting period
         await kit.UpdateEmployeeAsync(kit.Fx.PmId, e => e.HireDate = new DateOnly(2025, 6, 1));     // 1 year: policy cap 30
@@ -56,7 +55,7 @@ public sealed class LeaveTests
     [Fact]
     public async Task Per_hour_worked_accrual_counts_approved_non_leave_hours_and_annual_grants_come_once_a_year()
     {
-        await using var kit = await PayrollKit.CreateAsync();
+        await using var kit = await LeaveKit.CreateAsync();
         var perHour = await kit.PtoPolicyAsync(AccrualMethodKind.PerHourWorked, [new(0, 0.05m)]);
         await kit.AddApprovedHoursAsync(kit.Fx.AnalystId, kit.PtoWbs, (Week1, 8)); // leave doesn't earn leave
         kit.As(Admin);
@@ -67,7 +66,7 @@ public sealed class LeaveTests
         Assert.Equal(0.4m, await kit.LedgerHoursAsync(kit.Fx.AnalystId, perHour.Id) + 8m); // 8 h worked × 0.05; the 8 h of PTO is usage
         Assert.Equal(40m, await kit.LedgerHoursAsync(kit.Fx.AnalystId, sick.Id));
 
-        var next = (await kit.Groups.ListPeriodsAsync(kit.Group.Id, 2026)).Single(p => p.Start == Week1.AddDays(14));
+        var next = await kit.PeriodAsync(Week1.AddDays(14));
         await kit.Balances.RunAccrualAsync(next.Id);
         Assert.Equal(40m, await kit.LedgerHoursAsync(kit.Fx.AnalystId, sick.Id));
     }
@@ -75,7 +74,7 @@ public sealed class LeaveTests
     [Fact]
     public async Task Year_end_forfeits_hours_above_the_carryover_limit_once()
     {
-        await using var kit = await PayrollKit.CreateAsync();
+        await using var kit = await LeaveKit.CreateAsync();
         var pto = await kit.PtoPolicyAsync(carryover: 80m);
         await kit.Balances.AdjustAsync(new AdjustLeaveRequest(kit.Fx.AnalystId, pto.Id, 120m, "Opening", new DateOnly(2026, 1, 1)));
         await kit.Balances.AdjustAsync(new AdjustLeaveRequest(kit.Fx.ViewerId, pto.Id, 50m, "Opening", new DateOnly(2026, 1, 1)));
@@ -90,7 +89,7 @@ public sealed class LeaveTests
     [Fact]
     public async Task Usage_comes_from_approved_timesheets_and_a_reopened_timesheet_gives_it_back()
     {
-        await using var kit = await PayrollKit.CreateAsync();
+        await using var kit = await LeaveKit.CreateAsync();
         var pto = await kit.PtoPolicyAsync();
         await kit.Balances.AdjustAsync(new AdjustLeaveRequest(kit.Fx.AnalystId, pto.Id, 40m, "Opening", new DateOnly(2026, 1, 1)));
         await kit.AddApprovedHoursAsync(kit.Fx.AnalystId, kit.PtoWbs, (Week1, 8), (Week1.AddDays(1), 4));
@@ -111,7 +110,7 @@ public sealed class LeaveTests
     [Fact]
     public async Task An_approved_request_pre_fills_the_timesheet_and_holidays_pre_fill_the_holiday_code()
     {
-        await using var kit = await PayrollKit.CreateAsync();
+        await using var kit = await LeaveKit.CreateAsync();
         var pto = await kit.PtoPolicyAsync();
         await kit.Balances.AdjustAsync(new AdjustLeaveRequest(kit.Fx.AnalystId, pto.Id, 40m, "Opening"));
         kit.As(Admin);
@@ -157,7 +156,7 @@ public sealed class LeaveTests
     [Fact]
     public async Task Leave_beyond_the_balance_is_blocked_when_the_policy_disallows_negative_balances()
     {
-        await using var kit = await PayrollKit.CreateAsync();
+        await using var kit = await LeaveKit.CreateAsync();
         var pto = await kit.PtoPolicyAsync(allowNegative: false);
         await kit.Balances.AdjustAsync(new AdjustLeaveRequest(kit.Fx.AnalystId, pto.Id, 4m, "Opening"));
 
@@ -175,7 +174,7 @@ public sealed class LeaveTests
     [Fact]
     public async Task Leave_beyond_the_balance_only_warns_when_negative_balances_are_allowed()
     {
-        await using var kit = await PayrollKit.CreateAsync();
+        await using var kit = await LeaveKit.CreateAsync();
         var pto = await kit.PtoPolicyAsync(allowNegative: true);
 
         kit.As(Editor);
@@ -191,7 +190,7 @@ public sealed class LeaveTests
     [Fact]
     public async Task Resource_planning_sees_company_holidays_and_approved_leave_only()
     {
-        await using var kit = await PayrollKit.CreateAsync();
+        await using var kit = await LeaveKit.CreateAsync();
         var pto = await kit.PtoPolicyAsync();
         await kit.Balances.AdjustAsync(new AdjustLeaveRequest(kit.Fx.AnalystId, pto.Id, 40m, "Opening"));
         kit.As(Admin);
@@ -215,7 +214,7 @@ public sealed class LeaveTests
     [Fact]
     public async Task Only_the_supervisor_decides_and_admins_own_policies_and_holidays()
     {
-        await using var kit = await PayrollKit.CreateAsync();
+        await using var kit = await LeaveKit.CreateAsync();
         var pto = await kit.PtoPolicyAsync(allowNegative: true);
         kit.As(Editor);
         var request = await kit.Requests.CreateAsync(new CreateLeaveRequest(pto.Id, Week1, Week1));
@@ -243,7 +242,7 @@ public sealed class LeaveTests
     [Fact]
     public async Task Adjustments_need_a_reason_and_are_audited()
     {
-        await using var kit = await PayrollKit.CreateAsync();
+        await using var kit = await LeaveKit.CreateAsync();
         var pto = await kit.PtoPolicyAsync();
         await Assert.ThrowsAsync<ArgumentException>(() => kit.Balances.AdjustAsync(new AdjustLeaveRequest(kit.Fx.AnalystId, pto.Id, 8m, " ")));
         var entry = await kit.Balances.AdjustAsync(new AdjustLeaveRequest(kit.Fx.AnalystId, pto.Id, 8m, "Donated leave"));
@@ -252,20 +251,6 @@ public sealed class LeaveTests
         await using var db = await kit.Factory.CreateAsync();
         var audit = await db.Set<AuditEvent>().SingleAsync(a => a.EntityType == "LeaveBalance");
         Assert.Equal(("Adjusted", "Donated leave", Finance), (audit.Action, audit.Reason, audit.Actor));
-    }
-
-    [Fact]
-    public async Task Posting_payroll_runs_the_periods_leave_accrual()
-    {
-        await using var kit = await PayrollKit.CreateAsync();
-        var pto = await kit.PtoPolicyAsync();
-        var run = await kit.Runs.StartAsync(kit.Group.Id, kit.Period.Id);
-        await kit.Runs.ExportHoursAsync(run.Id, new ExportHoursRequest(true));
-        await kit.Runs.ImportRegisterAsync(run.Id, new ImportRegisterRequest("r.csv", PayrollKit.Register));
-        await kit.Runs.PostAsync(run.Id);
-
-        Assert.Equal(4m, await kit.LedgerHoursAsync(kit.Fx.AnalystId, pto.Id));
-        Assert.Equal(0, (await kit.Balances.RunAccrualAsync(kit.Period.Id)).EntriesAdded);
     }
 
     [Theory]
@@ -279,7 +264,7 @@ public sealed class LeaveTests
     [Fact]
     public async Task The_federal_template_is_idempotent()
     {
-        await using var kit = await PayrollKit.CreateAsync();
+        await using var kit = await LeaveKit.CreateAsync();
         kit.As(Admin);
         Assert.Equal(11, await kit.Holidays.ApplyFederalTemplateAsync(2026));
         Assert.Equal(0, await kit.Holidays.ApplyFederalTemplateAsync(2026));

@@ -1,7 +1,6 @@
 using System.Net.Http.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Workbench.Contracts.Migration;
-using Workbench.Contracts.Payroll;
 
 namespace Workbench.ApiClient;
 
@@ -58,29 +57,6 @@ public sealed class HttpReconciliationService(HttpClient http) : IReconciliation
         await (await http.GetAsync($"{Base}/runs/{runId}/export", cancellationToken)).ReadAsync<ReconExportFile>(cancellationToken);
 }
 
-public sealed class HttpPayrollLayoutService(HttpClient http) : IPayrollLayoutService
-{
-    private static string Url(string provider, string suffix = "") => $"api/v1/payroll/layouts/{Uri.EscapeDataString(provider)}{suffix}";
-
-    public async Task<PayrollLayoutDto> GetAsync(string providerKey, CancellationToken cancellationToken = default) =>
-        await (await http.GetAsync(Url(providerKey), cancellationToken)).ReadAsync<PayrollLayoutDto>(cancellationToken);
-
-    public async Task<PayrollLayoutDto> GetDefaultAsync(string providerKey, CancellationToken cancellationToken = default) =>
-        await (await http.GetAsync(Url(providerKey, "/default"), cancellationToken)).ReadAsync<PayrollLayoutDto>(cancellationToken);
-
-    public async Task<PayrollLayoutDto> SaveAsync(string providerKey, SavePayrollLayoutRequest request, CancellationToken cancellationToken = default) =>
-        await (await http.PutAsJsonAsync(Url(providerKey), request, cancellationToken)).ReadAsync<PayrollLayoutDto>(cancellationToken);
-
-    public async Task<PayrollLayoutDto> ResetAsync(string providerKey, CancellationToken cancellationToken = default) =>
-        await (await http.DeleteAsync(Url(providerKey), cancellationToken)).ReadAsync<PayrollLayoutDto>(cancellationToken);
-
-    public async Task<RegisterTestResultDto> TestRegisterAsync(string providerKey, TestRegisterSampleRequest request, CancellationToken cancellationToken = default) =>
-        await (await http.PostAsJsonAsync(Url(providerKey, "/test-register"), request, cancellationToken)).ReadAsync<RegisterTestResultDto>(cancellationToken);
-
-    public async Task<HoursTemplateTestDto> TestHoursTemplateAsync(string providerKey, TestHoursTemplateRequest request, CancellationToken cancellationToken = default) =>
-        await (await http.PostAsJsonAsync(Url(providerKey, "/test-hours"), request, cancellationToken)).ReadAsync<HoursTemplateTestDto>(cancellationToken);
-}
-
 public static class MigrationClientRegistration
 {
     public static IServiceCollection AddMigrationClients(this IServiceCollection services, Uri serverBaseAddress)
@@ -91,7 +67,6 @@ public static class MigrationClientRegistration
             c.BaseAddress = serverBaseAddress;
             c.Timeout = TimeSpan.FromMinutes(10);
         });
-        services.AddHttpClient<IPayrollLayoutService, HttpPayrollLayoutService>(c => c.BaseAddress = serverBaseAddress);
         return services;
     }
 }

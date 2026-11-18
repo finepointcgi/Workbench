@@ -29,10 +29,10 @@ public sealed class ModuleSeatTests
         return $"WB2.{B64(payload)}.{B64(Signer.SignData(payload, HashAlgorithmName.SHA256, DSASignatureFormat.IeeeP1363FixedFieldConcatenation))}";
     }
 
-    /// <summary>Billing and accounting enforced (a pricing choice made for these tests), the rest as shipped.</summary>
+    /// <summary>Billing, enterprise and accounting enforced (a pricing choice made for these tests), the rest as shipped. (Accounting has no permission in the shipped product, so seats are counted on billing and enterprise.)</summary>
     private static Task<Identity.SeededHost> HostAsync(int communityMax = 0) => CreateAsync(s =>
     {
-        var modules = ModuleCatalog.Default.Select(m => m.Id is ModuleIds.Billing or ModuleIds.Accounting ? m with { Enforced = true } : m).ToList();
+        var modules = ModuleCatalog.Default.Select(m => m.Id is ModuleIds.Billing or ModuleIds.Accounting or ModuleIds.Enterprise ? m with { Enforced = true, WholeModule = true } : m).ToList();
         s.Replace(ServiceDescriptor.Singleton(new LicenseOptions { PublicKeyPem = PublicKey, Modules = modules, CommunityMaxPeople = communityMax }));
         s.Replace(ServiceDescriptor.Singleton<TimeProvider>(new MyWorkServiceTests.FixedClock(Today)));
     });
@@ -43,12 +43,12 @@ public sealed class ModuleSeatTests
         await using var seeded = await HostAsync();
         var licenses = seeded.As(Admin).Host.Get<ILicenseService>();
 
-        var status = await licenses.ActivateAsync(new ActivateLicenseRequest(Issue("\"billing\",\"accounting\"", "{\"accounting\":3,\"billing\":4}")));
+        var status = await licenses.ActivateAsync(new ActivateLicenseRequest(Issue("\"billing\",\"enterprise\"", "{\"enterprise\":3,\"billing\":4}")));
 
-        var accounting = status.Modules!.Single(m => m.Id == "accounting");
+        var enterprise = status.Modules!.Single(m => m.Id == "enterprise");
         var billing = status.Modules!.Single(m => m.Id == "billing");
-        Assert.Equal((2, 3), (accounting.SeatsUsed, accounting.SeatsAllowed)); // The administrator and the Finance user.
-        Assert.Equal((2, 4), (billing.SeatsUsed, billing.SeatsAllowed));
+        Assert.Equal((2, 3), (enterprise.SeatsUsed, enterprise.SeatsAllowed)); // The administrator and the Finance user (Finance holds the custom workflow permission).
+        Assert.Equal((0, 4), (billing.SeatsUsed, billing.SeatsAllowed)); // Its one permission (revenue.manage) comes with the billing module, which is not loaded here: nobody reaches the module in this build.
         Assert.Null(status.Modules!.Single(m => m.Id == "capture").SeatsAllowed); // Not enforced: nothing limits it.
         Assert.Equal(0, status.Modules!.Single(m => m.Id == "core").SeatsUsed);
     }
@@ -58,13 +58,13 @@ public sealed class ModuleSeatTests
     {
         await using var seeded = await HostAsync();
         var host = seeded.As(Admin).Host;
-        await host.Get<ILicenseService>().ActivateAsync(new ActivateLicenseRequest(Issue("\"billing\",\"accounting\"", "{\"accounting\":3}")));
+        await host.Get<ILicenseService>().ActivateAsync(new ActivateLicenseRequest(Issue("\"enterprise\"", "{\"enterprise\":3}")));
         var invites = host.Get<IInviteService>();
 
-        await invites.CreateAsync(new CreateInviteRequest("second.finance@example.com", "Second Finance", OrgRoles.Finance)); // The third accounting seat; pending invitations hold one.
+        await invites.CreateAsync(new CreateInviteRequest("second.finance@example.com", "Second Finance", OrgRoles.Finance)); // The third enterprise seat; pending invitations hold one.
         var refused = await Assert.ThrowsAsync<WorkbenchEditionException>(() => invites.CreateAsync(new CreateInviteRequest("third.finance@example.com", "Third Finance", OrgRoles.Finance)));
 
-        Assert.Contains("Accounting", refused.Message);
+        Assert.Contains("Enterprise", refused.Message);
         Assert.Contains("(3)", refused.Message);
         Assert.Contains("Setup › License", refused.Message);
         Assert.Contains("without", refused.Message);
@@ -77,15 +77,15 @@ public sealed class ModuleSeatTests
     {
         await using var seeded = await HostAsync();
         var host = seeded.As(Admin).Host;
-        await host.Get<ILicenseService>().ActivateAsync(new ActivateLicenseRequest(Issue("\"billing\",\"accounting\"", "{\"accounting\":2}")));
+        await host.Get<ILicenseService>().ActivateAsync(new ActivateLicenseRequest(Issue("\"enterprise\"", "{\"enterprise\":2}")));
         var users = host.Get<IUserAdminService>();
         var invites = host.Get<IInviteService>();
 
         var refused = await Assert.ThrowsAsync<WorkbenchEditionException>(() => users.SetRolesAsync(Owner, OrgRoles.Finance));
-        Assert.Contains("Accounting", refused.Message);
+        Assert.Contains("Enterprise", refused.Message);
         await users.SetRolesAsync(Owner, OrgRoles.Timekeeper); // A core role is fine.
 
-        await users.SetRolesAsync(Finance, OrgRoles.Employee); // The Finance person leaves accounting: a seat is free.
+        await users.SetRolesAsync(Finance, OrgRoles.Employee); // The Finance person leaves enterprise: a seat is free.
         await users.SetRolesAsync(Owner, OrgRoles.Finance);
         await Assert.ThrowsAsync<WorkbenchEditionException>(() => invites.CreateAsync(new CreateInviteRequest("again@example.com", "Again", OrgRoles.Finance)));
 
@@ -99,9 +99,9 @@ public sealed class ModuleSeatTests
         var host = seeded.As(Admin).Host;
         var users = host.Get<IUserAdminService>();
         await users.DeactivateAsync(Finance);
-        await host.Get<ILicenseService>().ActivateAsync(new ActivateLicenseRequest(Issue("\"billing\",\"accounting\"", "{\"accounting\":1}")));
+        await host.Get<ILicenseService>().ActivateAsync(new ActivateLicenseRequest(Issue("\"enterprise\"", "{\"enterprise\":1}")));
         await users.SetRolesAsync(Owner, OrgRoles.Employee);
-        await Assert.ThrowsAsync<WorkbenchEditionException>(() => users.ReactivateAsync(Finance)); // The administrator holds the one accounting seat.
+        await Assert.ThrowsAsync<WorkbenchEditionException>(() => users.ReactivateAsync(Finance)); // The administrator holds the one enterprise seat.
     }
 
     [Fact]

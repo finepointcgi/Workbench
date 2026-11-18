@@ -88,7 +88,7 @@ public sealed class OutboundUrlGuard(IOutboundDns dns, IOptions<IntegrationOptio
 
     public bool AllowHttp => options.Value.AllowHttp;
 
-    internal static Uri ParseShape(string? url, string what, bool allowHttp)
+    public static Uri ParseShape(string? url, string what, bool allowHttp)
     {
         if (string.IsNullOrWhiteSpace(url) || !Uri.TryCreate(url.Trim(), UriKind.Absolute, out var uri))
         {

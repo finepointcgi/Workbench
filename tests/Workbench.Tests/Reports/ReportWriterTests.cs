@@ -25,8 +25,8 @@ public sealed class ReportWriterTests
         Assert.DoesNotContain(pm, s => s.Key is ReportSourceKeys.GlLines or ReportSourceKeys.ApBills or ReportSourceKeys.GlBudgets);
 
         var finance = await kit.As(Finance).Writer.ListSourcesAsync();
-        Assert.Equal(8, finance.Count);
-        Assert.Contains(finance, s => s.Key == ReportSourceKeys.GlBudgets);
+        Assert.Equal(7, finance.Count); // The corporate budgets source (GlBudgets) is the accounting module's.
+        Assert.DoesNotContain(finance, s => s.Key == ReportSourceKeys.GlBudgets);
         Assert.Contains(finance.Single(s => s.Key == ReportSourceKeys.TimeEntries).Fields, f => f.Key == "labor_cost" && f.Restricted);
     }
 

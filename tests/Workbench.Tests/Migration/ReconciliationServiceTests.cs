@@ -187,6 +187,5 @@ public sealed class ReconciliationServiceTests
         host.User.Email = ImportHost.Employee;
         await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => host.Get<IMigrationService>().GetChecklistAsync());
         await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => host.Get<IReconciliationService>().ListRunsAsync());
-        await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => host.Get<Workbench.Contracts.Payroll.IPayrollLayoutService>().GetAsync("paylocity"));
     }
 }

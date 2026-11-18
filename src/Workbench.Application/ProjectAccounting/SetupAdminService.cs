@@ -5,7 +5,7 @@ using Workbench.Domain.ProjectAccounting;
 
 namespace Workbench.Application.ProjectAccounting;
 
-public sealed class SetupAdminService(IWorkbenchDbContextFactory dbFactory, AuditRecorder audit) : ISetupAdminService
+public sealed class SetupAdminService(IWorkbenchDbContextFactory dbFactory, AuditRecorder audit, IEnumerable<IBankAccountProbe>? bankProbes = null) : ISetupAdminService
 {
     public async Task<OrgUnitDto> UpdateOrgUnitAsync(Guid orgUnitId, CreateOrgUnitRequest request, CancellationToken cancellationToken = default)
     {
@@ -121,11 +121,30 @@ public sealed class SetupAdminService(IWorkbenchDbContextFactory dbFactory, Audi
             await db.Set<Domain.Identity.AppUser>().CountAsync(u => u.IsActive, cancellationToken) > 1
                 || await db.Set<Domain.Security.UserInvite>().AnyAsync(cancellationToken),
             await db.Set<Domain.Accounting.Account>().AnyAsync(a => a.IsActive, cancellationToken),
-            await db.Set<Domain.Cash.BankAccount>().AnyAsync(cancellationToken),
-            await db.Set<Domain.Payroll.PayrollProviderSetting>().AnyAsync(cancellationToken),
+            bankProbes is not null && await AnyBankAccountAsync(db, bankProbes, cancellationToken), // Bank accounts belong to the accounting module (it registers the probe).
+            await db.Set<Domain.Payroll.PayGroup>().AnyAsync(cancellationToken), // Payroll is set up: a pay group exists (the payroll module makes them).
             await db.Set<Domain.Approvals.ApprovalWorkflow>().AnyAsync(w => w.CurrentVersionId != null, cancellationToken),
             await db.Set<Domain.Accounting.IndirectRate>().AnyAsync(cancellationToken),
             await db.Set<Domain.Billing.ContractBillingSettings>().AnyAsync(cancellationToken)
                 || await db.Set<Domain.Billing.CustomerBillingProfile>().AnyAsync(cancellationToken));
     }
+
+    private static async Task<bool> AnyBankAccountAsync(IWorkbenchDbContext db, IEnumerable<IBankAccountProbe> probes, CancellationToken ct)
+    {
+        foreach (var probe in probes)
+        {
+            if (await probe.AnyAsync(db, ct))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+}
+
+/// <summary>Answers "is a bank account set up?" for the setup checklist. Bank accounts are the accounting module's records; it registers the probe, and without it the step is not offered.</summary>
+public interface IBankAccountProbe
+{
+    Task<bool> AnyAsync(IWorkbenchDbContext db, CancellationToken cancellationToken);
 }
