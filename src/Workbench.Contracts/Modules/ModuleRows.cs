@@ -52,8 +52,22 @@ public static class ModuleCatalogs
     /// <summary>Home page and dashboard widgets: <see cref="ModuleHomeWidget"/>.</summary>
     public const string HomeWidgets = "home-widget";
 
+    /// <summary>Cost a module charges to projects that the financials and burdened cost count as direct cost: <c>ProjectCostSource</c> (Workbench.Application).</summary>
+    public const string ProjectCostSources = "project-cost-source";
+
+    /// <summary>Record types that have a list but no built-in form (their list columns are their fields): <see cref="ModuleListOnlyEntity"/>.</summary>
+    public const string ListOnlyEntities = "list-only-entity";
+
     /// <summary>Status sets administrators may relabel (Setup › Lists): <c>StatusSetDefinition</c> (Workbench.Application).</summary>
     public const string StatusSets = "status-set";
+}
+
+/// <summary>A record type a module owns that has a list page but no form: custom fields and saved views see its list columns as its fields.</summary>
+public sealed record ModuleListOnlyEntity(string EntityType, IReadOnlyList<Customization.EntityFieldDto> Fields) : IModuleRow
+{
+    public string Catalog => ModuleCatalogs.ListOnlyEntities;
+
+    public string RowKey => EntityType;
 }
 
 /// <summary>A list page whose saved views a module owns (the key of a <c>ListViewDefinition</c>).</summary>

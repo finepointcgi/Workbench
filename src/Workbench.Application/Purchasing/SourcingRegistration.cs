@@ -27,7 +27,7 @@ public static class SourcingRegistration
         services.AddScoped<SupplierPortalLog>();
         services.AddScoped<SupplierSignIn>();
         services.AddScoped<SupplierDocuments>();
-        services.AddScoped<IItemReader, PartItemReader>(); // How sourcing, EDI and AP credits read parts; a materials module replaces it.
+        services.AddScoped<IItemReader, NoItemReader>(); // How sourcing, EDI and the supplier portal read parts (none without the materials module, which replaces it).
         services.AddScoped<IRfqService, RfqService>();
         services.AddScoped<Contracts.Compliance.IProcurementCompetitionSource, RfqCompetitionSource>(); // CPSR files read RFQ competition (wins over the compliance default).
         services.AddScoped<ISupplierPortalService, SupplierPortalService>();

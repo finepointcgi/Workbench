@@ -7,7 +7,6 @@ using Workbench.Application.Identity;
 using Workbench.Application.ProjectAccounting;
 using Workbench.Contracts;
 using Workbench.Contracts.Purchasing;
-using Workbench.Domain.Materials;
 using Workbench.Domain.Purchasing;
 
 namespace Workbench.Application.Purchasing.Edi;
@@ -187,14 +186,10 @@ public sealed partial class EdiService(
 
         var lineIds = po.Lines.Select(l => l.Id).ToList();
         var rfqLines = await db.Set<RfqLine>().AsNoTracking().Where(l => l.PurchaseOrderLineId != null && lineIds.Contains(l.PurchaseOrderLineId.Value)).ToListAsync(ct);
-        var links = await db.Set<MaterialPurchaseLink>().AsNoTracking().Where(l => l.PurchaseOrderLineId != null && lineIds.Contains(l.PurchaseOrderLineId.Value)).ToListAsync(ct);
-        var partIds = rfqLines.Where(l => l.PartId != null).Select(l => l.PartId!.Value).Concat(links.Select(l => l.PartId)).Distinct().ToList();
-        var parts = await (itemReader ?? PartItemReader.Instance).ReadAsync(db, partIds, ct);
-        var partByLine = new Dictionary<Guid, ItemRef>();
-        foreach (var l in links.Where(l => parts.ContainsKey(l.PartId)))
-        {
-            partByLine[l.PurchaseOrderLineId!.Value] = parts[l.PartId];
-        }
+        var partIds = rfqLines.Where(l => l.PartId != null).Select(l => l.PartId!.Value).Distinct().ToList();
+        var items = itemReader ?? NoItemReader.Instance;
+        var parts = await items.ReadAsync(db, partIds, ct);
+        var partByLine = new Dictionary<Guid, ItemRef>(await items.ReadForPurchaseOrderLinesAsync(db, lineIds, ct));
 
         foreach (var l in rfqLines.Where(l => l.PartId is { } p && parts.ContainsKey(p)))
         {

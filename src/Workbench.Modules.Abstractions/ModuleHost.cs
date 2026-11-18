@@ -475,8 +475,21 @@ public sealed class ModuleHost
                 continue;
             }
 
+            var decorations = scratch.Where(d => d.ServiceType == typeof(ModuleServiceDecoration)).Select(d => d.ImplementationInstance).OfType<ModuleServiceDecoration>().ToList();
+            if (decorations.FirstOrDefault(d => !services.Any(s => s.ServiceType == d.Service && !s.IsKeyedService)) is { } missing)
+            {
+                Drop(module, $"ConfigureServices failed: the host has no {missing.Service.Name} to decorate");
+                dropped = true;
+                continue;
+            }
+
             foreach (var descriptor in scratch)
             {
+                if (descriptor.ServiceType == typeof(ModuleServiceDecoration))
+                {
+                    continue;
+                }
+
                 // Framework registries that are added with TryAdd (such as the one AddHttpClient makes) already exist in the host's collection:
                 // a second copy would make the host's own later AddHttpClient fail. Public service types are never skipped (modules add several).
                 if (descriptor.ImplementationInstance is not null && !descriptor.ServiceType.IsPublic && services.Any(d => d.ServiceType == descriptor.ServiceType))
@@ -486,12 +499,39 @@ public sealed class ModuleHost
 
                 services.Add(descriptor);
             }
+
+            foreach (var decoration in decorations)
+            {
+                Decorate(services, decoration);
+            }
         }
 
         if (dropped)
         {
             Publish(this);
         }
+    }
+
+    /// <summary>Wraps the last registration of the service in the decorator (which takes the original as a constructor parameter), keeping its lifetime.</summary>
+    private static void Decorate(IServiceCollection services, ModuleServiceDecoration decoration)
+    {
+        var index = -1;
+        for (var i = services.Count - 1; i >= 0; i--)
+        {
+            if (services[i].ServiceType == decoration.Service && !services[i].IsKeyedService)
+            {
+                index = i;
+                break;
+            }
+        }
+
+        var original = services[index];
+        services[index] = ServiceDescriptor.Describe(
+            decoration.Service,
+            sp => ActivatorUtilities.CreateInstance(sp, decoration.Decorator, original.ImplementationInstance
+                ?? original.ImplementationFactory?.Invoke(sp)
+                ?? ActivatorUtilities.CreateInstance(sp, original.ImplementationType!)),
+            original.Lifetime);
     }
 
     /// <summary>Maps every module's endpoints on <paramref name="api"/> (the <c>/api/v1</c> group).</summary>
