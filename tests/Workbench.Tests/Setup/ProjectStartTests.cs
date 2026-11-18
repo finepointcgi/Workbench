@@ -3,7 +3,6 @@ using Workbench.Application;
 using Workbench.Application.Scheduling;
 using Workbench.Contracts.Financials;
 using Workbench.Contracts.ProjectAccounting;
-using Workbench.Domain.Ceilings;
 using Workbench.Domain.ProjectAccounting;
 using Workbench.Contracts.Scheduling;
 using Workbench.Contracts.Sheets;
@@ -104,11 +103,10 @@ public sealed class ProjectStartTests
     }
 
     [Fact]
-    public async Task Starting_from_a_contract_uses_its_dates_clins_and_labor_hours()
+    public async Task Starting_from_a_contract_uses_its_dates_and_clins()
     {
         await using var seeded = await SeededHost.CreateAsync();
         var fixture = await ProjectAccountingFixture.SeedAsync(seeded);
-        Guid laborCategory;
         await using (var db = await seeded.Host.Get<IWorkbenchDbContextFactory>().CreateAsync())
         {
             var contract = db.Set<Contract>().Single(c => c.Id == fixture.Contract2);
@@ -117,8 +115,6 @@ public sealed class ProjectStartTests
             var base1 = new Clin { ContractId = contract.Id, Number = "0001", Description = "Engineering services", PeriodStart = Mon, PeriodEnd = Mon.AddYears(1) };
             var travel = new Clin { ContractId = contract.Id, Number = "0002", Description = "Travel", PeriodStart = Mon, PeriodEnd = Mon.AddYears(1) };
             db.Set<Clin>().AddRange(base1, travel);
-            laborCategory = db.Set<LaborCategory>().Single().Id;
-            db.Set<Ceiling>().Add(new Ceiling { Level = CeilingLevel.Clin, ContractId = contract.Id, ClinId = base1.Id, LaborCategoryId = laborCategory, HoursCeiling = 1200, CreatedBy = "test" });
             await db.SaveChangesAsync();
         }
 
@@ -130,10 +126,7 @@ public sealed class ProjectStartTests
         Assert.Equal(2, items.Count);
         var mappings = await seeded.Host.Get<Workbench.Contracts.Contracts.IClinService>().ListWbsMappingsAsync(project.Id);
         Assert.Equal(2, mappings.Count(m => m.ClinId is not null));
-        var budget = Assert.Single(await seeded.Host.Get<IBudgetService>().ListVersionsAsync(project.Id));
-        var detail = await seeded.Host.Get<IBudgetService>().GetVersionAsync(budget.Id);
-        var line = Assert.Single(detail!.Lines);
-        Assert.Equal(("3006.01", laborCategory, 1200m), (line.WbsCode, line.LaborCategoryId!.Value, line.Hours));
+        Assert.Empty(await seeded.Host.Get<IBudgetService>().ListVersionsAsync(project.Id)); // the first budget comes from the contract's labor-category hour ceilings, which are the project controls module's
     }
 
     [Fact]

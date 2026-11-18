@@ -37,8 +37,10 @@ public sealed class ApBillService(
     TimeProvider clock,
     ILogger<ApBillService> logger,
     ApprovalEngine? approvals = null,
-    SalesTax.UseTaxAccrual? useTax = null,
-    Customization.DocumentNumbers? documentNumbers = null) : IApBillService
+    Billing.IBillTaxHook? useTax = null,
+    Customization.DocumentNumbers? documentNumbers = null,
+    IVendorReturnSource? vendorReturns = null,
+    IEnumerable<IBillLineGuard>? lineGuards = null) : IApBillService
 {
     private Customization.DocumentNumbers DocNumbers => documentNumbers ?? new(dbFactory, clock);
 
@@ -410,7 +412,7 @@ public sealed class ApBillService(
     }
 
     /// <summary>A posted document can only be voided once nothing settles against it or was built on it.</summary>
-    private static async Task EnsureNothingDependsOnAsync(IWorkbenchDbContext db, ApBill bill, CancellationToken ct)
+    private async Task EnsureNothingDependsOnAsync(IWorkbenchDbContext db, ApBill bill, CancellationToken ct)
     {
         var title = ApCredits.Title(bill);
         var paid = await db.Set<ApPayment>().AsNoTracking().Where(p => p.BillId == bill.Id && p.Status != ApPaymentStatus.Void)
@@ -454,14 +456,12 @@ public sealed class ApBillService(
         }
 
         var lineIds = bill.Lines.Select(l => l.Id).ToList();
-        if (await db.Set<Domain.Assets.FixedAsset>().AsNoTracking().Where(a => a.SourceBillLineId != null && lineIds.Contains(a.SourceBillLineId!.Value)).Select(a => a.TagNumber).FirstOrDefaultAsync(ct) is { } tag)
+        foreach (var guard in lineGuards ?? [])
         {
-            throw new InvalidOperationException($"A line of {title} is fixed asset {tag}. Remove the asset first.");
-        }
-
-        if (await db.Set<Domain.Materials.LandedCharge>().AsNoTracking().AnyAsync(c => c.ApBillLineId != null && lineIds.Contains(c.ApBillLineId!.Value) && c.Status != Domain.Materials.LandedChargeStatus.Cancelled, ct))
-        {
-            throw new InvalidOperationException($"A line of {title} is allocated as a landed cost. Cancel that charge first.");
+            if (await guard.BlockingReasonAsync(db, lineIds, ct) is { } reason)
+            {
+                throw new InvalidOperationException($"A line of {title} {reason}");
+            }
         }
     }
 
@@ -522,7 +522,7 @@ public sealed class ApBillService(
             }
         }
 
-        var tax = await db.Set<Domain.SalesTax.ApBillTax>().FirstOrDefaultAsync(t => t.BillId == bill.Id, ct);
+        var tax = useTax is null ? null : await useTax.FindAsync(db, bill.Id, ct);
         if (tax?.UseTaxJournalEntryId is { } useTaxEntry)
         {
             var entry = await db.Set<JournalEntry>().Include(e => e.Lines).FirstAsync(e => e.Id == useTaxEntry, ct);
@@ -539,17 +539,10 @@ public sealed class ApBillService(
     /// <summary>A void AP debit memo from a quality return puts the return's debit memo back to open.</summary>
     private async Task ReopenQualityReturnAsync(IWorkbenchDbContext db, ApBill bill, CancellationToken ct)
     {
-        if (bill.QualityDebitMemoId is not { } id || await db.Set<Domain.Quality.VendorDebitMemo>().FirstOrDefaultAsync(m => m.Id == id, ct) is not { } quality
-            || quality.Status != Domain.Quality.DebitMemoStatus.Applied)
+        if (bill.QualityDebitMemoId is { } id && vendorReturns is not null)
         {
-            return;
+            await vendorReturns.ReopenAsync(db, id, $"{bill.Number} was voided", ct);
         }
-
-        quality.Status = Domain.Quality.DebitMemoStatus.Open;
-        quality.AppliedBy = null;
-        quality.AppliedAtUtc = null;
-        quality.AppliedReference = null;
-        audit.Record(db, "VendorDebitMemo", quality.Id, "Reopened", new { Status = "Applied" }, new { Status = "Open" }, $"{bill.Number} was voided");
     }
 
     public async Task<IReadOnlyList<LinkableOdcDto>> ListLinkableOdcsAsync(Guid vendorId, CancellationToken cancellationToken = default)

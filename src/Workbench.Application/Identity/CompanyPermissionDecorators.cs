@@ -4,17 +4,13 @@ using Workbench.Application.Collaboration;
 using Workbench.Application.Companies;
 using Workbench.Contracts;
 using Workbench.Contracts.Accounting;
-using Workbench.Contracts.Assets;
 using Workbench.Contracts.Billing;
-using Workbench.Contracts.Cash;
 using Workbench.Contracts.Companies;
 using Workbench.Contracts.Identity;
 using Workbench.Contracts.ProjectAccounting;
 using Workbench.Contracts.Purchasing;
 using Workbench.Domain.Accounting;
-using Workbench.Domain.Assets;
 using Workbench.Domain.Billing;
-using Workbench.Domain.Cash;
 using Workbench.Domain.ProjectAccounting;
 using Workbench.Domain.Purchasing;
 using BillingPaymentDto = Workbench.Contracts.Billing.PaymentDto;
@@ -48,8 +44,7 @@ public static class CompanyPermissionRegistration
         services.Decorate<IPaymentService, CompanyScopedPaymentService>();
         services.Decorate<IApBillService, CompanyScopedApBillService>();
         services.Decorate<IApPaymentService, CompanyScopedApPaymentService>();
-        services.Decorate<IAssetService, CompanyScopedAssetService>();
-        services.Decorate<IBankAccountService, CompanyScopedBankAccountService>();
+        // The fixed asset and bank account services are the accounting module's: it applies the same company filter to them (AccountingCompanyScoping).
         return services;
     }
 }
@@ -689,131 +684,3 @@ public sealed class CompanyScopedApPaymentService(IApPaymentService inner, Compa
         }
     }
 }
-
-public sealed class CompanyScopedAssetService(IAssetService inner, CompanyGuard guard, IWorkbenchDbContextFactory dbFactory) : IAssetService
-{
-    public async Task<IReadOnlyList<AssetSummaryDto>> ListAsync(AssetQuery query, CancellationToken cancellationToken = default)
-    {
-        return await guard.FilterAsync<FixedAsset, AssetSummaryDto>(await inner.ListAsync(query, cancellationToken), a => a.Id, cancellationToken);
-    }
-
-    public async Task<AssetDto> GetAsync(Guid assetId, CancellationToken cancellationToken = default)
-    {
-        await guard.EnsureAsync<FixedAsset>(assetId, "Asset", cancellationToken);
-        return await inner.GetAsync(assetId, cancellationToken);
-    }
-
-    public Task<AssetSettingsDto> GetSettingsAsync(CancellationToken cancellationToken = default) => inner.GetSettingsAsync(cancellationToken);
-
-    public async Task<AssetDto> CreateAsync(SaveAssetRequest request, CancellationToken cancellationToken = default)
-    {
-        var result = await inner.CreateAsync(request, cancellationToken);
-        await guard.StampNewAsync<FixedAsset>(result.Asset.Id, cancellationToken);
-        return result;
-    }
-
-    public async Task<AssetDto> UpdateAsync(Guid assetId, SaveAssetRequest request, CancellationToken cancellationToken = default)
-    {
-        await guard.EnsureAsync<FixedAsset>(assetId, "Asset", cancellationToken);
-        return await inner.UpdateAsync(assetId, request, cancellationToken);
-    }
-
-    public async Task<IReadOnlyList<CapitalizableBillLineDto>> ListCapitalizableBillLinesAsync(CancellationToken cancellationToken = default)
-    {
-        return await guard.FilterAsync<ApBill, CapitalizableBillLineDto>(await inner.ListCapitalizableBillLinesAsync(cancellationToken), l => l.BillId, cancellationToken);
-    }
-
-    public async Task<AssetDto> CapitalizeAsync(CapitalizeBillLineRequest request, CancellationToken cancellationToken = default)
-    {
-        var billId = await BillOfLineAsync(request.BillLineId, cancellationToken);
-        if (billId is { } id)
-        {
-            await guard.EnsureAsync<ApBill>(id, "AP bill", cancellationToken);
-        }
-
-        var result = await inner.CapitalizeAsync(request, cancellationToken);
-        if (billId is { } bill && await BillCompanyAsync(bill, cancellationToken) is { } company)
-        {
-            await guard.SetCompanyAsync<FixedAsset>(result.Asset.Id, company, cancellationToken);
-        }
-
-        return result;
-    }
-
-    public async Task<AssetDto> TransferAsync(Guid assetId, TransferAssetRequest request, CancellationToken cancellationToken = default)
-    {
-        await guard.EnsureAsync<FixedAsset>(assetId, "Asset", cancellationToken);
-        if (request.CompanyId is { } target && !(await guard.ViewAsync(cancellationToken)).CanUse(target))
-        {
-            throw WorkbenchNotFoundException.For("Company", target);
-        }
-
-        return await inner.TransferAsync(assetId, request, cancellationToken);
-    }
-
-    public async Task<IReadOnlyList<AssetTransferRowDto>> ListTransfersAsync(DateOnly? from = null, DateOnly? to = null, CancellationToken cancellationToken = default)
-    {
-        return await guard.FilterAsync<FixedAsset, AssetTransferRowDto>(await inner.ListTransfersAsync(from, to, cancellationToken), t => t.AssetId, cancellationToken);
-    }
-
-    public async Task<AssetDto> DisposeAsync(Guid assetId, DisposeAssetRequest request, CancellationToken cancellationToken = default)
-    {
-        await guard.EnsureAsync<FixedAsset>(assetId, "Asset", cancellationToken);
-        return await inner.DisposeAsync(assetId, request, cancellationToken);
-    }
-
-    public Task<IReadOnlyList<AssetCategoryDto>> ListCategoriesAsync(CancellationToken cancellationToken = default) => inner.ListCategoriesAsync(cancellationToken);
-
-    public Task<AssetCategoryDto> SaveCategoryAsync(Guid? categoryId, SaveAssetCategoryRequest request, CancellationToken cancellationToken = default) => inner.SaveCategoryAsync(categoryId, request, cancellationToken);
-
-    public Task DeleteCategoryAsync(Guid categoryId, CancellationToken cancellationToken = default) => inner.DeleteCategoryAsync(categoryId, cancellationToken);
-
-    private async Task<Guid?> BillOfLineAsync(Guid billLineId, CancellationToken ct)
-    {
-        await using var db = await dbFactory.CreateAsync(ct);
-        return await db.Set<ApBillLine>().AsNoTracking().Where(l => l.Id == billLineId).Select(l => (Guid?)l.BillId).FirstOrDefaultAsync(ct);
-    }
-
-    /// <summary>A capitalized bill line becomes an asset of the bill's company.</summary>
-    private async Task<Guid?> BillCompanyAsync(Guid billId, CancellationToken ct)
-    {
-        await using var db = await dbFactory.CreateAsync(ct);
-        return await db.Set<ApBill>().AsNoTracking().Where(b => b.Id == billId).Select(b => (Guid?)b.CompanyId).FirstOrDefaultAsync(ct);
-    }
-}
-
-public sealed class CompanyScopedBankAccountService(IBankAccountService inner, CompanyGuard guard) : IBankAccountService
-{
-    public async Task<IReadOnlyList<BankAccountDto>> ListAsync(bool includeInactive = true, CancellationToken cancellationToken = default)
-    {
-        return await guard.FilterAsync<BankAccount, BankAccountDto>(await inner.ListAsync(includeInactive, cancellationToken), b => b.Id, cancellationToken);
-    }
-
-    public async Task<BankAccountDto> GetAsync(Guid bankAccountId, CancellationToken cancellationToken = default)
-    {
-        await guard.EnsureAsync<BankAccount>(bankAccountId, "Bank account", cancellationToken);
-        return await inner.GetAsync(bankAccountId, cancellationToken);
-    }
-
-    public async Task<BankAccountDto> CreateAsync(SaveBankAccountRequest request, CancellationToken cancellationToken = default)
-    {
-        var result = await inner.CreateAsync(request, cancellationToken);
-        await guard.StampNewAsync<BankAccount>(result.Id, cancellationToken);
-        return result;
-    }
-
-    public async Task<BankAccountDto> UpdateAsync(Guid bankAccountId, SaveBankAccountRequest request, CancellationToken cancellationToken = default)
-    {
-        await guard.EnsureAsync<BankAccount>(bankAccountId, "Bank account", cancellationToken);
-        return await inner.UpdateAsync(bankAccountId, request, cancellationToken);
-    }
-
-    public async Task<BankAccountNumberDto> RevealAccountNumberAsync(Guid bankAccountId, CancellationToken cancellationToken = default)
-    {
-        await guard.EnsureAsync<BankAccount>(bankAccountId, "Bank account", cancellationToken);
-        return await inner.RevealAccountNumberAsync(bankAccountId, cancellationToken);
-    }
-
-    public Task<IReadOnlyList<CashGlAccountDto>> ListCashGlAccountsAsync(CancellationToken cancellationToken = default) => inner.ListCashGlAccountsAsync(cancellationToken);
-}
-

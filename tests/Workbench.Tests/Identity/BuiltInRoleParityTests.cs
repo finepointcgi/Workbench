@@ -16,7 +16,6 @@ public sealed class BuiltInRoleParityTests
         [Permission.AdminRoles] = r => r.IsAdmin(),
         [Permission.AdminSecurity] = r => r.IsAdmin(),
         [Permission.AdminRetention] = r => r.IsAdmin(),
-        [Permission.AdminCompliance] = r => r.IsAdmin(),
         [Permission.AdminIntegrations] = r => r.IsAdmin(),
         [Permission.AdminAssistant] = r => r.IsAdmin(),
         [Permission.AdminSupport] = r => r.IsAdmin(),
@@ -43,7 +42,6 @@ public sealed class BuiltInRoleParityTests
         [Permission.TimeTeam] = r => r.IsAdmin() || r.HasFlag(OrgRoles.Timekeeper), // NavAccess.ShowTeamTime
         [Permission.LaborCostView] = r => r.IsFinance(),
         [Permission.LaborCostRatesManage] = r => r.IsFinance(),
-        [Permission.TimeTotalTime] = r => r.IsFinance(),
         [Permission.LeaveBalancesManage] = r => r.IsFinance(),
         [Permission.LeavePoliciesManage] = r => r.IsAdmin(),
         [Permission.ProjectsViewAll] = r => r.IsFinance() || r.IsResourceManager(), // Project visibility's "every project" (Finance, Admin, Resource manager).
@@ -52,24 +50,14 @@ public sealed class BuiltInRoleParityTests
         [Permission.ProjectsFinancialsView] = r => r.IsFinance(),
         [Permission.ResourcingManage] = r => r.IsResourceManager(),
         [Permission.ResourcingView] = r => r.IsFinance(),
-        [Permission.EvmManage] = r => r.IsFinance(),
-        [Permission.CeilingsManage] = r => r.IsFinance(),
         [Permission.GlAccountsManage] = r => r.IsFinance(),
         [Permission.GlJournalsPost] = r => r.IsFinance(),
         [Permission.GlPostingManage] = r => r.IsFinance(),
         [Permission.GlClose] = r => r.IsFinance(),
         [Permission.GlReportsView] = r => r.IsFinance(),
-        [Permission.GlRecurringManage] = r => r.IsFinance(),
         [Permission.GlExport] = r => r.IsFinance(),
         [Permission.GlRevaluation] = r => r.IsFinance(),
-        [Permission.BudgetsManage] = r => r.IsFinance(),
-        [Permission.RevenueManage] = r => r.IsFinance(),
         [Permission.IndirectRatesManage] = r => r.IsFinance(),
-        [Permission.IncurredCostManage] = r => r.IsFinance(),
-        [Permission.CasCpsrManage] = r => r.IsFinance(),
-        [Permission.SalesTaxManage] = r => r.IsFinance(),
-        [Permission.AssetsManage] = r => r.IsFinance(),
-        [Permission.AssetsDepreciationRun] = r => r.IsFinance(),
         [Permission.BillingInvoicesManage] = r => r.IsFinance(),
         [Permission.BillingPaymentsRecord] = r => r.IsFinance(),
         [Permission.BillingReportsView] = r => r.IsFinance(),
@@ -81,33 +69,10 @@ public sealed class BuiltInRoleParityTests
         [Permission.ApReportsView] = r => r.IsFinance(),
         [Permission.PurchaseOrdersManage] = r => r.IsFinance(),
         [Permission.SourcingManage] = r => r.IsFinance(),
-        [Permission.CashManage] = r => r.IsFinance(),
-        [Permission.CashForecastView] = r => r.IsFinance(),
-        [Permission.PayrollRun] = r => r.IsFinance(),
-        [Permission.PayrollSetup] = r => r.IsFinance(),
-        [Permission.PayrollProfilesManage] = r => r.IsFinance(),
-        [Permission.PayRatesView] = r => r.IsFinance(),
         [Permission.TravelManage] = r => r.IsFinance(),
         [Permission.CardsManage] = r => r.IsFinance(),
-        [Permission.HrRecordsManage] = r => r.IsHr(),
-        [Permission.HrPositionsManage] = r => r.IsHr(),
-        [Permission.HrCompensationManage] = r => r.IsHr(),
         [Permission.HrWorkforceView] = r => r.IsHr() || r.IsFinance(),
-        [Permission.HrBenefitsManage] = r => r.IsHr(),
-        [Permission.HrOnboardingManage] = r => r.IsHr(),
         [Permission.HrRestrictedReports] = r => r.IsHr(),
-        [Permission.PipelineView] = r => r.CanViewPipeline(),
-        [Permission.CaptureManage] = r => r.IsBusinessDevelopment(),
-        [Permission.OpportunitiesEditAll] = r => r.IsAdmin(),
-        [Permission.BpChargeCode] = r => r.IsFinance(),
-        [Permission.PricingManage] = r => r.CanPrice(),
-        [Permission.MaterialsView] = r => r.CanViewMaterials(),
-        [Permission.MaterialsManage] = r => r.IsMaterials(),
-        [Permission.MaterialsCosting] = r => r.IsFinance(),
-        [Permission.QualityDispositions] = r => r.IsFinance() || r.IsMaterials(),
-        [Permission.SalesOrdersView] = r => r.CanViewMaterials() || r.IsBusinessDevelopment(),
-        [Permission.SalesOrdersManage] = r => r.CanViewMaterials(),
-        [Permission.SalesCreditHold] = r => r.IsFinance(),
         [Permission.RestrictedColumnsView] = r => r.IsFinance(),
         [Permission.SheetFormsPublic] = r => r.IsFinance() || r.IsProjectManager(), // New in wave E: public form links (also needs the workspace's Owner role).
 
@@ -182,7 +147,6 @@ public sealed class BuiltInRoleParityTests
         Assert.DoesNotContain("reports/standard/project-status", Menu(OrgRoles.Finance, managesProject: true));
         Assert.Contains("odcs", Menu(OrgRoles.ProjectManager));
         Assert.DoesNotContain("odcs", Menu(OrgRoles.Employee));
-        Assert.Contains("materials/sales-orders", Menu(OrgRoles.BusinessDevelopment));
         Assert.Contains("admin/roles", Menu(OrgRoles.Admin));
         Assert.DoesNotContain("admin/roles", Menu(OrgRoles.Finance));
         Assert.Equal("Setup", NavCatalog.TitleFor(NavCatalog.Sections.Single(s => s.Key == NavCatalog.Admin), new NavAccess(new CurrentUserInfo("x@example.com", "X", OrgRoles.Finance, null))));

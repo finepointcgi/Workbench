@@ -36,6 +36,7 @@ public sealed class WorkbenchDbContext(DbContextOptions<WorkbenchDbContext> opti
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(WorkbenchDbContext).Assembly);
+        Workbench.Plugins.ModuleHost.Current.ApplyModel(modelBuilder); // Entities of license modules loaded from the modules folder (docs/operations/module-plugins.md).
         ProviderConventions.Apply(modelBuilder, Database);
     }
 }

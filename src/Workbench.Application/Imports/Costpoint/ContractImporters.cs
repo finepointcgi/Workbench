@@ -87,7 +87,7 @@ public class ContractImporter : CostpointImporter
         new("Funded", "Funded", false, "Funded (obligated) to date.", "TOT_FUNDED_AMT", "FUNDED_AMT", "Funded", "Funded Value", "Funded Amount"),
     ];
 
-    internal static ContractKind? ParseKind(string text) => text.Trim().ToUpperInvariant().Replace(" ", "").Replace("-", "") switch
+    public static ContractKind? ParseKind(string text) => text.Trim().ToUpperInvariant().Replace(" ", "").Replace("-", "") switch
     {
         "FFP" or "FP" or "FIRMFIXEDPRICE" or "FIXEDPRICE" => ContractKind.FirmFixedPrice,
         "T&M" or "TM" or "TANDM" or "TIMEANDMATERIALS" or "TIME&MATERIALS" => ContractKind.TimeAndMaterials,

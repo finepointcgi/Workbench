@@ -87,7 +87,7 @@ else
     </div>
     @if (_projectId is null)
     {
-        <PipelineDemandPanel Map="_map" />
+        <UiSlot Name="resourcing.heatmap.panels" Parameters="@(new Dictionary<string, object?> { ["Map"] = _map })" />
     }
 }
 

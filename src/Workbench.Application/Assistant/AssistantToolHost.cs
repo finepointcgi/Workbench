@@ -25,9 +25,7 @@ public sealed class AssistantToolHost(AssistantToolbox toolbox, SecurityEventLog
         ["list_projects"] = "projects",
         ["get_project_financials"] = "projects",
         ["get_budget_versions"] = "projects",
-        ["get_earned_value"] = "projects",
         ["list_clin_funding"] = "projects",
-        ["get_ceilings"] = "projects",
         ["get_project_staffing"] = "projects",
         ["get_project_cost_ledger"] = "accounting",
         ["get_timesheet_status"] = "time",
@@ -40,16 +38,17 @@ public sealed class AssistantToolHost(AssistantToolbox toolbox, SecurityEventLog
         ["read_sheet"] = "sheets",
     };
 
-    private static readonly IReadOnlyList<AssistantToolInfo> All = AssistantToolbox.Specs
-        .Where(s => Areas.ContainsKey(s.Name))
-        .Select(s => new AssistantToolInfo(s.Name, s.Activity, s.Description, Areas[s.Name], s.Schema))
-        .ToList();
+    private string? AreaOf(string name) => Areas.GetValueOrDefault(name) ?? toolbox.ContributedMcpArea(name);
 
-    public IReadOnlyList<AssistantToolInfo> Tools => All;
+    public IReadOnlyList<AssistantToolInfo> Tools => toolbox.AllSpecs
+        .Select(s => (Spec: s, Area: AreaOf(s.Name)))
+        .Where(t => t.Area is not null)
+        .Select(t => new AssistantToolInfo(t.Spec.Name, t.Spec.Activity, t.Spec.Description, t.Area!, t.Spec.Schema))
+        .ToList();
 
     public async Task<AssistantToolCallResult> CallAsync(string name, string argumentsJson, CancellationToken cancellationToken = default)
     {
-        AssistantToolResult result = Areas.ContainsKey(name)
+        AssistantToolResult result = AreaOf(name) is not null
             ? await toolbox.RunAsync(name, argumentsJson, cancellationToken)
             : AssistantToolResult.Error(AssistantToolOutcome.Invalid, $"There is no tool named '{AssistantToolbox.Clip(name, 40)}'.");
 

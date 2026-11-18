@@ -27,7 +27,6 @@ public sealed class NumberingTests
         Assert.Equal("PO-000042", await numbers.NextAsync(DocumentNumberTypes.PurchaseOrder));
         Assert.Equal("PO-000043", await numbers.NextAsync(DocumentNumberTypes.PurchaseOrder));
         Assert.Equal("RFQ-000001", await numbers.NextAsync(DocumentNumberTypes.Rfq));
-        Assert.Equal("NCR-000001", await numbers.NextAsync(DocumentNumberTypes.Nonconformance));
         Assert.Equal("W56HZV26C0042-0001", await numbers.NextAsync(DocumentNumberTypes.Invoice, new(Contract: "W56HZV26C0042")));
         Assert.Equal("W56HZV26C0043-0001", await numbers.NextAsync(DocumentNumberTypes.Invoice, new(Contract: "W56HZV26C0043")));
 
@@ -85,27 +84,6 @@ public sealed class NumberingTests
 
         host.As(SeededHost.Finance);
         await Assert.ThrowsAsync<Contracts.WorkbenchForbiddenException>(() => numbering.SaveAsync("purchase-order", new("X-{seq:6}")));
-    }
-
-    [Fact]
-    public async Task In_unit_of_work_numbers_are_gapless_and_unique_within_the_save()
-    {
-        var factory = TestDb.CreateFactory();
-        await using (var db = await factory.CreateAsync())
-        {
-            var a = await DocumentNumbers.NextInUnitOfWorkAsync(db, DocumentNumberTypes.Inspection, null, new DateOnly(2026, 10, 20), default);
-            var b = await DocumentNumbers.NextInUnitOfWorkAsync(db, DocumentNumberTypes.Inspection, null, new DateOnly(2026, 10, 20), default);
-            Assert.Equal(("INS-000001", "INS-000002"), (a.Number, b.Number));
-            // Not saved: nothing was allocated.
-        }
-
-        await using (var db = await factory.CreateAsync())
-        {
-            Assert.Equal("INS-000001", (await DocumentNumbers.NextInUnitOfWorkAsync(db, DocumentNumberTypes.Inspection, null, new DateOnly(2026, 10, 20), default)).Number);
-            await db.SaveChangesAsync();
-        }
-
-        Assert.Equal("INS-000002", await new DocumentNumbers(factory, Clock).NextAsync(DocumentNumberTypes.Inspection));
     }
 
     [Fact]

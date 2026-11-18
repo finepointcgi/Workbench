@@ -21,21 +21,46 @@ public static class ApiKeyScopes
     /// <summary>The area that lets AI assistants connect over the Model Context Protocol (<c>/api/v1/mcp</c>).</summary>
     public const string Mcp = "mcp";
 
-    public static IReadOnlyList<ApiKeyAreaDto> Areas { get; } =
+    /// <summary>Every area: the built-in ones (plus segments loaded modules add to them), then the areas modules add.</summary>
+    public static IReadOnlyList<ApiKeyAreaDto> Areas => Union().Areas;
+
+    private sealed record UnionView(Modules.ModuleSet Set, IReadOnlyList<ApiKeyAreaDto> Areas);
+
+    private static UnionView? _union;
+
+    private static UnionView Union()
+    {
+        var set = Modules.ModuleRegistry.Current;
+        if (_union is { } cached && ReferenceEquals(cached.Set, set))
+        {
+            return cached;
+        }
+
+        if (set.IsEmpty)
+        {
+            return _union = new UnionView(set, BuiltInAreas);
+        }
+
+        var extra = set.Modules.SelectMany(m => m.ApiKeySegments).GroupBy(kv => kv.Key).ToDictionary(g => g.Key, g => g.SelectMany(kv => kv.Value).ToList());
+        var areas = BuiltInAreas.Select(a => extra.TryGetValue(a.Key, out var more) ? a with { PathSegments = [.. a.PathSegments, .. more] } : a)
+            .Concat(set.Modules.SelectMany(m => m.ApiKeyAreas)).ToList();
+        return _union = new UnionView(set, areas);
+    }
+
+    /// <summary>The built-in areas alone.</summary>
+    public static IReadOnlyList<ApiKeyAreaDto> BuiltInAreas { get; } =
     [
         new("sheets", "Sheets, dashboards and tasks", "Sheets, items, columns, comments, workspaces, dashboards and assigned work.",
             ["sheets", "workspaces", "dashboards", "my-work", "my-tasks", "my-todo", "plan-template"]),
-        new("projects", "Projects and contracts", "Projects, WBS, contracts, CLINs, funding, ceilings, closeout, resourcing, earned value and risks.",
-            ["projects", "project-hub", "project-start", "project-plans", "contracts", "wbs", "assignments", "budgets", "clins", "modifications", "closeout", "resourcing", "evm", "ceilings", "ceiling-overrides", "rate-ceilings", "risks"]),
+        new("projects", "Projects and contracts", "Projects, WBS, contracts, CLINs, funding and resourcing (and, with the project controls module, ceilings, closeout, earned value and risks).",
+            ["projects", "project-hub", "project-start", "project-plans", "contracts", "wbs", "assignments", "budgets", "clins", "modifications", "resourcing"]),
         new("time", "Time and expenses", "Timesheets, ODCs, expense reports and receipts, leave, per diem and total time.",
-            ["time", "expense-reports", "odc-approvals", "odcs", "leave", "per-diem", "total-time", "travel", "cards", "receipts"]),
-        new("billing", "Billing and revenue", "Invoices, receipts, receivables and revenue recognition.", ["billing", "revenue"]),
+            ["time", "expense-reports", "odc-approvals", "odcs", "leave", "per-diem", "travel", "cards", "receipts"]),
+        new("billing", "Billing", "Invoices, receipts and receivables.", ["billing"]),
         new("purchasing", "Purchasing and payables", "Vendors, requisitions, purchase orders, receiving, AP bills and payments.", ["purchasing", "edi"]),
-        new("accounting", "Accounting", "Chart of accounts, journal, fiscal calendar, period close, cash, assets, currencies, companies, budgets and incurred cost.",
-            ["accounting", "fiscal", "audit", "cash", "assets", "currencies", "companies", "planning", "incurred-cost", "indirect-rates", "sales-tax", "accounting-export"]),
-        new("people", "People and payroll", "HR records and payroll. Pay rates stay masked unless the key's roles may reveal them.", ["employees", "hr", "payroll"]),
-        new("crm", "Business development and pricing", "Accounts, opportunities, pipeline and proposal pricing.", ["crm", "pricing"]),
-        new("materials", "Materials and manufacturing", "Parts, inventory, BOMs, work orders and MRP.", ["materials", "quality", "engineering-changes"]),
+        new("accounting", "Accounting", "Chart of accounts, journal, fiscal calendar, period close, currencies, companies and indirect rates (and, with the accounting module, cash, fixed assets, corporate budgets and sales tax).",
+            ["accounting", "fiscal", "audit", "currencies", "companies", "indirect-rates", "accounting-export"]),
+        new("people", "People and payroll", "Employees (and, with the workforce module, HR records and payroll; pay rates stay masked unless the key's roles may reveal them).", ["employees"]),
         new("reports", "Reports", "Standard reports, the report writer and saved reports.", ["reports"]),
         new("setup", "Setup and approvals", "Organization setup lists (customers, labor categories, org units), approval workflows, the approval inbox and custom fields.",
             ["setup", "customers", "org-units", "labor-categories", "approvals", "approval-workflows", "approval-delegations", "customization", "company-profile"]),

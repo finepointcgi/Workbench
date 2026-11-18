@@ -4,7 +4,7 @@ using Workbench.Contracts;
 
 namespace Workbench.ApiClient;
 
-internal static class ApiResponses
+public static class ApiResponses
 {
     /// <summary>
     /// Maps 402 to <see cref="WorkbenchEditionException"/>, 404 to <see cref="WorkbenchNotFoundException"/>, 403 to <see cref="WorkbenchForbiddenException"/> and 400 to

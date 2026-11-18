@@ -16,7 +16,7 @@ public static class SetupRegistration
         services.AddScoped<MyTodo.IMyTodoProvider, ProjectPlanTodoProvider>();
         services.AddScoped<MyTodo.IMyTodoProvider, MyTodo.SetupTodoProvider>();
         services.AddScoped<ISetupAdminService, SetupAdminService>();
-        services.AddScoped<Contracts.Risks.IRiskService, Risks.RiskService>();
+        services.AddScoped<Projects.IContractCeilingSource, Projects.NoContractCeilingSource>(); // Project controls' labor-category hour ceilings, when that module is loaded.
         return services;
     }
 }

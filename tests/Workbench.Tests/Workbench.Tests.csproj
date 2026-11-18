@@ -31,12 +31,22 @@
     <!-- MS Project XML files for the import and export tests. -->
     <None Include="Scheduling\Samples\**" CopyToOutputDirectory="PreserveNewest" />
     <!-- Recorded ADP, Paychex and Gusto API responses for the payroll adapter tests. -->
-    <None Include="Payroll\Fixtures\**" CopyToOutputDirectory="PreserveNewest" />
     <!-- Golden files for the accounting export layouts. -->
     <None Include="AccountingExport\Golden\**" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="Integrations\GitLab\Fixtures\**" CopyToOutputDirectory="PreserveNewest" />
     <!-- A WB2 key issued by the license server's own signer, for the cross-check test. -->
     <None Include="Licensing\Samples\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The private module repository's tests reuse this project's kits (TestDb, fixtures, the web factory): see docs/operations/module-extraction-govcon.md. -->
+    <InternalsVisibleTo Include="Workbench.Module.GovCon.Tests" />
+    <InternalsVisibleTo Include="Workbench.Module.Capture.Tests" />
+    <InternalsVisibleTo Include="Workbench.Module.Materials.Tests" />
+    <InternalsVisibleTo Include="Workbench.Module.ProjectControls.Tests" />
+    <InternalsVisibleTo Include="Workbench.Module.Workforce.Tests" />
+    <InternalsVisibleTo Include="Workbench.Module.Accounting.Tests" />
+    <InternalsVisibleTo Include="Workbench.Module.Billing.Tests" />
+    <InternalsVisibleTo Include="Workbench.Module.Enterprise.Tests" />
   </ItemGroup>
 
   <ItemGroup>
@@ -47,6 +57,13 @@
     <ProjectReference Include="..\..\src\Workbench.ApiClient\Workbench.ApiClient.csproj" />
     <ProjectReference Include="..\..\src\Workbench.Migrations.PostgreSql\Workbench.Migrations.PostgreSql.csproj" />
     <ProjectReference Include="..\..\src\Workbench.Migrations.Sqlite\Workbench.Migrations.Sqlite.csproj" />
+    <ProjectReference Include="..\..\src\Workbench.Modules.Abstractions\Workbench.Modules.Abstractions.csproj" />
+    <!-- The sample license module stays out of the host's references: the module loader tests load it from a folder, like a real plugin. -->
+    <ProjectReference Include="..\Workbench.SampleModule\Workbench.SampleModule.csproj" ReferenceOutputAssembly="false" OutputItemType="SampleModuleOutput" />
   </ItemGroup>
+
+  <Target Name="CopySampleModule" AfterTargets="CopyFilesToOutputDirectory">
+    <Copy SourceFiles="@(SampleModuleOutput)" DestinationFolder="$(OutDir)modules-sample" />
+  </Target>
 
 </Project>

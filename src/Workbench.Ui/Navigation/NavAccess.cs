@@ -21,11 +21,13 @@ public sealed record NavAccess(
     int ApprovalCount = 0,
     int LeavePending = 0,
     int ReceivableCount = 0,
-    bool ManagesOpportunities = false,
-    bool OwnsBudget = false,
     bool HideGovernment = false,
-    IReadOnlySet<string>? UnavailableModules = null)
+    IReadOnlySet<string>? UnavailableModules = null,
+    IReadOnlySet<string>? Flags = null)
 {
+    /// <summary>True when a module's <see cref="INavAccessFlag"/> with this key holds for the signed-in user (such as "manages an opportunity").</summary>
+    public bool HasFlag(string key) => Flags?.Contains(key) == true;
+
     /// <summary>False for a module the license doesn't include and that is enforced; its pages are hidden. <c>UnavailableModules</c> null: every module.</summary>
     public bool HasModule(string moduleId) => UnavailableModules?.Contains(moduleId) != true;
 
@@ -46,28 +48,13 @@ public sealed record NavAccess(
     public bool IsResourceManager => Can(Permission.ResourcingManage);
 
     /// <summary>Manages personnel records (HR).</summary>
-    public bool IsHr => Can(Permission.HrRecordsManage);
+    public bool IsHr => Can("hr.records.manage");
 
     /// <summary>Holds "Run the projects you manage" (whether or not they manage a project yet).</summary>
     public bool HasProjectManagerRole => Can(Permission.ProjectsManageOwn);
 
     /// <summary>Runs projects: "Run the projects you manage", or the manager of at least one project.</summary>
     public bool IsPm => IsProjectManager || HasProjectManagerRole;
-
-    /// <summary>Changes parts, inventory, BOMs, work orders and MRP.</summary>
-    public bool IsMaterials => Can(Permission.MaterialsManage);
-
-    /// <summary>Sees the Materials section.</summary>
-    public bool CanViewMaterials => Can(Permission.MaterialsView);
-
-    /// <summary>Sees the whole capture pipeline.</summary>
-    public bool SeesPipeline => Can(Permission.PipelineView);
-
-    /// <summary>The pipeline, or the capture/proposal manager of an opportunity (who sees just theirs).</summary>
-    public bool ShowBusinessDevelopment => SeesPipeline || ManagesOpportunities;
-
-    /// <summary>Prices proposals.</summary>
-    public bool CanPrice => Can(Permission.PricingManage);
 
     /// <summary>Named as the receiver on an open purchase order.</summary>
     public bool IsReceiver => ReceivableCount > 0;
@@ -107,16 +94,20 @@ public sealed record NavAccess(
         var projectManager = user.EmployeeId is { } employeeId && await TryAsync(services.GetService<IProjectService>(),
             async s => (await s.ListProjectsAsync(cancellationToken)).Any(p => p.ProjectManagerId == employeeId), false);
         var approvals = await CountApprovalsAsync(services, cancellationToken);
-        var opportunities = !user.Can(Permission.PipelineView) && await TryAsync(services.GetService<Contracts.Crm.IOpportunityService>(),
-            async s => (await s.ListAsync(new Contracts.Crm.OpportunityFilter(MineOnly: true), cancellationToken)).Count > 0, false);
-
-        var ownsBudget = await TryAsync(services.GetService<Contracts.Planning.IPlanningCycleService>(), async s => (await s.ListMineAsync(cancellationToken)).Count > 0, false);
+        var flags = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var flag in services.GetServices<INavAccessFlag>())
+        {
+            if (await TryAsync(flag, f => f.HoldsAsync(user, services, cancellationToken), false))
+            {
+                flags.Add(flag.Key);
+            }
+        }
 
         var hideGovernment = !await TryAsync(services.GetService<Contracts.Company.ICompanyProfileService>(), async s => (await s.GetAsync(cancellationToken)).ShowGovernmentFeatures, true);
         var unavailable = await TryAsync<Contracts.Licensing.ILicenseService, HashSet<string>?>(services.GetService<Contracts.Licensing.ILicenseService>(),
             async s => (await s.GetStatusAsync(cancellationToken)).Modules?.Where(m => !m.Available && m.WholeModule).Select(m => m.Id).ToHashSet(), null);
 
-        return new NavAccess(user, timesheetApprover, leaveApprover, projectManager, approvals, leavePending, receivable, opportunities, ownsBudget, hideGovernment, unavailable);
+        return new NavAccess(user, timesheetApprover, leaveApprover, projectManager, approvals, leavePending, receivable, hideGovernment, unavailable, flags);
     }
 
     /// <summary>How many documents in the approvals inbox wait on the signed-in user.</summary>
@@ -144,4 +135,16 @@ public sealed record NavAccess(
     internal static bool IsExpected(Exception ex) =>
         ex is HttpRequestException or UnauthorizedAccessException or TaskCanceledException or InvalidOperationException
             or ArgumentException or WorkbenchNotFoundException or NotSupportedException;
+}
+
+/// <summary>
+/// A relationship a module reports for the menu: "this user is the capture manager of an opportunity" lets them see the pages of it without
+/// the permission that shows everything. Registered in <c>ConfigureServices</c>; <c>ModuleNavEntry.AlsoWhenFlag</c> names the <see cref="Key"/>.
+/// Cosmetic like the rest of <see cref="NavAccess"/>: the page's services check again. A failure counts as "no".
+/// </summary>
+public interface INavAccessFlag
+{
+    string Key { get; }
+
+    Task<bool> HoldsAsync(CurrentUserInfo user, IServiceProvider services, CancellationToken cancellationToken);
 }

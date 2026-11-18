@@ -139,7 +139,7 @@ public sealed class HttpAuditLogService(HttpClient http) : IAuditLogService
     }
 }
 
-internal static class HttpProjectAccountingExtensions
+public static class HttpProjectAccountingExtensions
 {
     public static async Task<IReadOnlyList<T>> ReadListAsync<T>(this Task<HttpResponseMessage> responseTask, CancellationToken cancellationToken)
     {

@@ -3,7 +3,6 @@ using Workbench.Contracts.Accounting;
 using Workbench.Contracts.Billing;
 using Workbench.Contracts.Identity;
 using Workbench.Contracts.MyTodo;
-using Workbench.Contracts.Payroll;
 using Workbench.Domain.ProjectAccounting;
 
 namespace Workbench.Application.MyTodo;
@@ -90,37 +89,6 @@ public sealed class PeriodCloseTodoProvider : IMyTodoProvider
                 $"Close {period}", "Every close check passes. Close the period so nothing more posts to it.",
                 context.UrgencyFor(due), due, "accounting/close", "Close period", Priority: 3);
         }
-    }
-}
-
-/// <summary>Payroll runs waiting on Finance: hours to export, the register to import, the journal to post.</summary>
-public sealed class PayrollTodoProvider : IMyTodoProvider
-{
-    public string Name => "Payroll";
-
-    public async Task<IReadOnlyList<MyTodoItem>> GetAsync(MyTodoContext context, CancellationToken cancellationToken)
-    {
-        if (!context.User.Can(Permission.PayrollRun) || context.Service<IPayrollRunService>() is not { } runs)
-        {
-            return [];
-        }
-
-        return (await runs.ListAsync(cancellationToken: cancellationToken)).Select(r => For(r, context)).OfType<MyTodoItem>().ToList();
-    }
-
-    public static MyTodoItem? For(PayrollRunDto run, MyTodoContext context)
-    {
-        var range = MyTodoRules.Range(run.PeriodStart, run.PeriodEnd);
-        var (title, reason, due) = run.Status switch
-        {
-            PayrollRunState.Draft => ($"Export hours for payroll ({range})", $"{run.PayGroupCode}: check the hours and send them to {run.ProviderKey}. Pay date {run.CheckDate:MMM d}.", run.CheckDate.AddDays(-2)),
-            PayrollRunState.Exported => ($"Import the payroll register ({range})", $"{run.PayGroupCode}: hours went to {run.ProviderKey}; import the register once payroll is processed.", run.CheckDate),
-            PayrollRunState.RegisterImported => ($"Post payroll for {range}", $"{run.PayGroupCode}: the register is imported ({ReceivingTodoProvider.Money(run.RegisterGross ?? 0)} gross). Post it to the general ledger.", run.CheckDate),
-            _ => ((string?)null, (string?)null, default(DateOnly)),
-        };
-        return title is null
-            ? null
-            : new MyTodoItem($"payroll:{run.Id}:{run.Status}", TodoCategories.Finance, title, reason!, context.UrgencyFor(due), due, $"payroll/runs/{run.Id}", "Open payroll run", Priority: 4);
     }
 }
 

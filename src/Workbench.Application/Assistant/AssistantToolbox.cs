@@ -7,9 +7,7 @@ using Workbench.Contracts;
 using Workbench.Contracts.Accounting;
 using Workbench.Contracts.Approvals;
 using Workbench.Contracts.Assistant;
-using Workbench.Contracts.Ceilings;
 using Workbench.Contracts.Contracts;
-using Workbench.Contracts.Evm;
 using Workbench.Contracts.Financials;
 using Workbench.Contracts.Identity;
 using Workbench.Contracts.Odcs;
@@ -44,8 +42,24 @@ public sealed record AssistantToolSpec(string Name, string Description, string A
 /// from the caller's scope, so it runs as the signed-in user and sees exactly what they could open. There are no write
 /// tools, no SQL and no free-form queries: arguments are names, codes and dates, validated here.
 /// </summary>
-public sealed class AssistantToolbox(IServiceProvider services, TimeProvider clock, ILogger<AssistantToolbox> logger)
+public sealed class AssistantToolbox(IServiceProvider services, TimeProvider clock, ILogger<AssistantToolbox> logger, IEnumerable<IAssistantToolContribution>? contributions = null)
 {
+    private readonly IReadOnlyList<IAssistantToolContribution> _contributed = (contributions ?? [])
+        .Where(c => Specs.All(s => s.Name != c.Spec.Name) && IsSafe(c.Spec)).GroupBy(c => c.Spec.Name, StringComparer.Ordinal).Select(g => g.First()).ToList();
+
+    /// <summary>The rules every tool keeps (the safety tests check the built-in ones): a read-only name and a strict schema. A module tool that breaks them is not offered.</summary>
+    private static bool IsSafe(AssistantToolSpec spec) =>
+        System.Text.RegularExpressions.Regex.IsMatch(spec.Name, "^(list|get|read)_[a-z_]+$")
+        && spec.Schema["additionalProperties"] is { } strict && strict.GetValueKind() == JsonValueKind.False;
+
+    /// <summary>The built-in tools and those license modules contribute (<see cref="IAssistantToolContribution"/>). A module tool never replaces a built-in one.</summary>
+    public IReadOnlyList<AssistantToolSpec> AllSpecs => _contributed.Count == 0 ? Specs : [.. Specs, .. _contributed.Select(c => c.Spec)];
+
+    public AssistantToolSpec? FindSpec(string name) => AllSpecs.FirstOrDefault(s => s.Name == name);
+
+    /// <summary>The API key area a tool is offered under over MCP, or null when it isn't offered there (built-in areas are in <c>AssistantToolHost</c>).</summary>
+    public string? ContributedMcpArea(string name) => _contributed.FirstOrDefault(c => c.Spec.Name == name)?.McpArea;
+
     private static readonly CultureInfo Invariant = CultureInfo.InvariantCulture;
 
     public static IReadOnlyList<AssistantToolSpec> Specs { get; } =
@@ -58,18 +72,11 @@ public sealed class AssistantToolbox(IServiceProvider services, TimeProvider clo
             ("project", "string", "Project code (e.g. 1001) or name", true)),
         Spec("get_budget_versions", "A project's budget versions (baseline, current, forecasts) with totals.", "Reading budget versions",
             ("project", "string", "Project code or name", true)),
-        Spec("get_earned_value",
-            "Earned value status for a project's reporting period: BCWS, BCWP, ACWP, SV, CV, SPI, CPI, EAC, VAC per control account, and the variance analyses (cause, impact, corrective action).",
-            "Reading earned value",
-            ("project", "string", "Project code or name", true)),
         Spec("list_clin_funding",
             "Funding status of CLINs on the contracts the user may see: funded value, incurred, remaining, burn per day and projected exhaustion date. Use for 'which CLINs will run out of funding' questions.",
             "Reading CLIN funding",
             ("contract", "string", "Optional contract number (or its start)", false),
             ("within_days", "integer", "Only CLINs projected to run out within this many days (e.g. 92 for a quarter)", false)),
-        Spec("get_ceilings", "Hours, cost and billing ceilings that apply to a project or contract, with consumption and alert level.", "Reading ceilings",
-            ("project", "string", "Project code or name", false),
-            ("contract", "string", "Contract number", false)),
         Spec("get_timesheet_status",
             "Who has and hasn't submitted a timesheet for a period (the user's direct reports, or everyone for timekeepers and Finance).",
             "Checking timesheet submissions",
@@ -111,7 +118,7 @@ public sealed class AssistantToolbox(IServiceProvider services, TimeProvider clo
     /// <summary>Runs a tool. Never throws for permission, validation or missing records: those become an error result.</summary>
     public async Task<AssistantToolResult> RunAsync(string name, string inputJson, CancellationToken cancellationToken)
     {
-        if (Find(name) is null)
+        if (FindSpec(name) is not { } spec)
         {
             return AssistantToolResult.Error(AssistantToolOutcome.Invalid, $"There is no tool named '{Clip(name, 40)}'. The assistant can only read data with its listed tools.");
         }
@@ -124,15 +131,18 @@ public sealed class AssistantToolbox(IServiceProvider services, TimeProvider clo
                 throw new ArgumentException("Tool input must be a JSON object.");
             }
 
-            var args = new Args(doc.RootElement, Find(name)!);
+            var args = new Args(doc.RootElement, spec);
+            if (_contributed.FirstOrDefault(c => c.Spec.Name == name) is { } contributed)
+            {
+                return await contributed.RunAsync(doc.RootElement, services, cancellationToken);
+            }
+
             return name switch
             {
                 "list_projects" => await ListProjectsAsync(args, cancellationToken),
                 "get_project_financials" => await ProjectFinancialsAsync(args, cancellationToken),
                 "get_budget_versions" => await BudgetVersionsAsync(args, cancellationToken),
-                "get_earned_value" => await EarnedValueAsync(args, cancellationToken),
                 "list_clin_funding" => await ClinFundingAsync(args, cancellationToken),
-                "get_ceilings" => await CeilingsAsync(args, cancellationToken),
                 "get_timesheet_status" => await TimesheetStatusAsync(args, cancellationToken),
                 "get_timesheet_flags" => await TimesheetFlagsAsync(args, cancellationToken),
                 "get_hours_by_charge_code" => await HoursAsync(args, cancellationToken),
@@ -242,43 +252,6 @@ public sealed class AssistantToolbox(IServiceProvider services, TimeProvider clo
             summary, [new($"{project.Code} budgets", $"projects/{project.Id}/budgets")], [$"Project:{project.Id}", .. versions.Select(v => $"BudgetVersion:{v.Id}")]);
     }
 
-    private async Task<AssistantToolResult> EarnedValueAsync(Args args, CancellationToken ct)
-    {
-        var project = await ResolveProjectAsync(args.Required("project"), ct);
-        var evm = Get<IEvmService>();
-        if (await evm.GetBaselineAsync(project.Id, ct) is null)
-        {
-            var none = $"Project {project.Code} has no earned value baseline (PMB), so there are no EVM figures.";
-            return new(AssistantToolOutcome.Ok, new { summary = none }, none, [new($"{project.Code} earned value", $"projects/{project.Id}/evm")], [$"Project:{project.Id}"]);
-        }
-
-        var status = await evm.GetStatusAsync(project.Id, cancellationToken: ct);
-        var variances = await evm.ListVariancesAsync(project.Id, cancellationToken: ct);
-        var t = status.Total;
-        var summary = $"Project {project.Code} earned value for {status.Period.Name}{(status.IsFrozen ? " (closed)" : " (open)")}: BAC {Money(t.Bac)}, BCWS {Money(t.Bcws)}, BCWP {Money(t.Bcwp)}, ACWP {Money(t.Acwp)}, "
-            + $"SV {Money(t.Sv)}, CV {Money(t.Cv)}, SPI {Index(t.Spi)}, CPI {Index(t.Cpi)}, EAC {Money(t.Eac)}, VAC {Money(t.Vac)}"
-            + (variances.Count(v => v.NeedsVar) is var n and > 0 ? $"; {n} control account{(n == 1 ? "" : "s")} beyond variance thresholds" : "") + ".";
-        return new(AssistantToolOutcome.Ok,
-            new
-            {
-                summary,
-                period = new { status.Period.Name, status.Period.Start, status.Period.End, state = status.Period.State.ToString(), status.IsFrozen },
-                totals = Metrics(t),
-                controlAccounts = status.ControlAccounts.Select(ca => new
-                {
-                    code = ca.Code, name = ca.Name, cumulative = Metrics(ca.Cumulative), period = new { ca.Period.Bcws, ca.Period.Bcwp, ca.Period.Acwp, ca.Period.Sv, ca.Period.Cv },
-                    ca.NeedsVar, reasons = ca.VarianceReasons,
-                }),
-                variances = variances.Where(v => v.NeedsVar || v.Cause is not null).Select(v => new { v.Code, v.Name, v.Sv, v.Cv, v.Vac, v.Cause, v.Impact, v.CorrectiveAction, v.ManagerEac }),
-                managementReserve = status.ManagementReserve,
-                undistributedBudget = status.UndistributedBudget,
-                costBasis = status.CostBasis,
-                notes = status.Notes,
-            },
-            summary, [new($"{project.Code} earned value", $"projects/{project.Id}/evm")],
-            [$"Project:{project.Id}", .. status.ControlAccounts.Select(c => $"WbsElement:{c.WbsElementId}")]);
-    }
-
     private async Task<AssistantToolResult> ClinFundingAsync(Args args, CancellationToken ct)
     {
         var contractRef = args.Text("contract");
@@ -340,47 +313,6 @@ public sealed class AssistantToolbox(IServiceProvider services, TimeProvider clo
 
         return new(AssistantToolOutcome.Ok, new { summary, asOf = today, withinDays, clins = rows }, summary,
             citations.Count > 0 ? citations : [new("Contract funding", finance ? "setup/contracts" : "reports/standard/funding-status")], records);
-    }
-
-    private async Task<AssistantToolResult> CeilingsAsync(Args args, CancellationToken ct)
-    {
-        var ceilings = Get<ICeilingService>();
-        IReadOnlyList<CeilingStatusDto> list;
-        string scope;
-        AssistantCitation citation;
-        var records = new List<string>();
-        if (args.Text("project") is { } projectRef)
-        {
-            var project = await ResolveProjectAsync(projectRef, ct);
-            list = (await ceilings.GetProjectStatusAsync(project.Id, ct)).Ceilings;
-            scope = $"project {project.Code}";
-            citation = new($"{project.Code} ceilings", $"projects/{project.Id}/ceilings");
-            records.Add($"Project:{project.Id}");
-        }
-        else if (args.Text("contract") is { } contractRef)
-        {
-            var contract = (await ContractsAsync(contractRef, ct)).FirstOrDefault() ?? throw new WorkbenchNotFoundException($"No contract matches “{contractRef}”.");
-            list = (await ceilings.GetContractStatusAsync(contract.Id, ct)).Ceilings;
-            scope = $"contract {contract.ContractNumber}";
-            citation = new($"{contract.ContractNumber} ceilings", $"setup/contracts/{contract.Id}");
-            records.Add($"Contract:{contract.Id}");
-        }
-        else
-        {
-            throw new ArgumentException("Say which project or contract.");
-        }
-
-        records.AddRange(list.Select(c => $"Ceiling:{c.Ceiling.Id}"));
-        var rows = list.Select(c => new
-        {
-            c.Ceiling.Label, mode = c.Ceiling.Mode.ToString(), level = c.Level.ToString(),
-            measures = c.Measures.Select(m => new { metric = m.Metric.ToString(), m.Limit, m.EffectiveLimit, m.Consumed, m.Remaining, m.PercentConsumed, level = m.Level.ToString() }),
-        }).ToList();
-        var summary = list.Count == 0
-            ? $"No ceilings apply to {scope}."
-            : $"{list.Count} ceiling(s) on {scope}: " + string.Join("; ", list.Select(c => $"{c.Ceiling.Label} ({c.Ceiling.Mode}) " + string.Join(", ",
-                c.Measures.Select(m => $"{m.Metric} {Percent(m.PercentConsumed)} used ({Amount(m.Metric, m.Consumed)} of {Amount(m.Metric, m.EffectiveLimit ?? m.Limit)})")) + $", {c.Level}")) + ".";
-        return new(AssistantToolOutcome.Ok, new { summary, ceilings = rows }, summary, [citation], records);
     }
 
     private async Task<AssistantToolResult> TimesheetStatusAsync(Args args, CancellationToken ct)
@@ -661,28 +593,19 @@ public sealed class AssistantToolbox(IServiceProvider services, TimeProvider clo
 
     private static T? Single<T>(IReadOnlyList<T> list) where T : class => list.Count == 1 ? list[0] : null;
 
-    private static object Metrics(EvmMetrics m) => new
-    {
-        bac = m.Bac, bcws = m.Bcws, bcwp = m.Bcwp, acwp = m.Acwp, sv = m.Sv, cv = m.Cv, svPercent = m.SvPercent, cvPercent = m.CvPercent, spi = m.Spi, cpi = m.Cpi,
-        eacCpi = m.EacCpi, eacCpiSpi = m.EacCpiSpi, eac = m.Eac, etc = m.Etc, vac = m.Vac, tcpi = m.Tcpi, percentComplete = m.PercentComplete, percentSpent = m.PercentSpent,
-    };
-
-    internal static string Money(decimal value) =>
+    public static string Money(decimal value) =>
         value < 0 ? "-$" + (-value).ToString("N0", Invariant) : "$" + value.ToString("N0", Invariant);
 
     /// <summary>A fraction as a whole percent ("95%"), the same on every server culture.</summary>
-    internal static string Percent(decimal fraction) => (fraction * 100).ToString("0", Invariant) + "%";
-
-    private static string Index(decimal? value) => value is { } v ? v.ToString("0.00", Invariant) : "n/a";
-
-    private static string Amount(CeilingMetric metric, decimal value) => metric == CeilingMetric.Hours ? $"{value:N0} h" : Money(value);
+    public static string Percent(decimal fraction) => (fraction * 100).ToString("0", Invariant) + "%";
 
     private static bool IsAppRelative(string link) =>
         !string.IsNullOrWhiteSpace(link) && !link.Contains("//", StringComparison.Ordinal) && !link.Contains(':', StringComparison.Ordinal) && !link.StartsWith('/');
 
-    internal static string? Clip(string? value, int max) => value is null ? null : value.Length <= max ? value : value[..max] + "…";
+    public static string? Clip(string? value, int max) => value is null ? null : value.Length <= max ? value : value[..max] + "…";
 
-    private static AssistantToolSpec Spec(string name, string description, string activity, params (string Name, string Type, string Description, bool Required)[] parameters)
+    /// <summary>Builds a tool spec with the standard strict schema (named string, integer or boolean parameters, no extra properties).</summary>
+    public static AssistantToolSpec Spec(string name, string description, string activity, params (string Name, string Type, string Description, bool Required)[] parameters)
     {
         var properties = new JsonObject();
         foreach (var p in parameters)
@@ -754,4 +677,21 @@ public sealed class AssistantToolbox(IServiceProvider services, TimeProvider clo
             ? DateOnly.TryParseExact(text, "yyyy-MM-dd", Invariant, DateTimeStyles.None, out var d) ? d : throw new ArgumentException($"'{name}' must be a date like 2026-10-31.")
             : null;
     }
+}
+
+/// <summary>
+/// An assistant tool a license module adds. Register it in the module's <c>ConfigureServices</c>; with the module absent the tool does not
+/// exist. Like the built-in tools it is read-only and runs as the signed-in user: call the module's permission-checked services through
+/// <paramref name="services"/>, validate arguments (unknown properties are already refused against <see cref="Spec"/>'s schema, which
+/// <see cref="AssistantToolbox.Spec"/> builds strictly), and return an <see cref="AssistantToolResult"/>. Permission, validation and
+/// not-found exceptions become error results, as for the built-in tools.
+/// </summary>
+public interface IAssistantToolContribution
+{
+    AssistantToolSpec Spec { get; }
+
+    /// <summary>The API key area (for example <c>projects</c>) the tool is offered under over MCP; null keeps it to the in-app assistant.</summary>
+    string? McpArea => null;
+
+    Task<AssistantToolResult> RunAsync(JsonElement input, IServiceProvider services, CancellationToken cancellationToken);
 }

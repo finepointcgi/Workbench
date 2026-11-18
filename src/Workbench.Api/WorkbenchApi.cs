@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
 using Workbench.Contracts;
 
 namespace Workbench.Api;
@@ -19,7 +20,6 @@ public static class WorkbenchApi
         v1.MapItemEndpoints();
         v1.MapSchedulingEndpoints();
         v1.MapCollaborationEndpoints();
-        v1.MapCostpointEndpoints();
         v1.MapProjectAccountingEndpoints();
         v1.MapIdentityEndpoints();
         v1.MapAutomationEndpoints();
@@ -32,7 +32,6 @@ public static class WorkbenchApi
         v1.MapOdcEndpoints();
         v1.MapFinancialsEndpoints();
         v1.MapSetupEndpoints();
-        v1.MapRiskEndpoints();
         v1.MapAccountingEndpoints();
         v1.MapSecurityAdminEndpoints();
         v1.MapContractDetailEndpoints();
@@ -44,16 +43,9 @@ public static class WorkbenchApi
         v1.MapCompanyProfileEndpoints();
         v1.MapImportEndpoints();
         v1.MapProcurementEndpoints();
-        v1.MapAssetEndpoints();
-        v1.MapCashEndpoints();
-        v1.MapPayrollLeaveEndpoints();
-        v1.MapPaylocityEndpoints();
+        v1.MapLeaveEndpoints();
         v1.MapPerDiemResourcingEndpoints();
-        v1.MapRevenueEndpoints();
-        v1.MapIncurredCostEndpoints();
         v1.MapReportEndpoints();
-        v1.MapEvmEndpoints();
-        v1.MapCeilingEndpoints();
         v1.MapApprovalEndpoints();
         v1.MapProjectHubEndpoints();
         v1.MapMyTodoEndpoints();
@@ -62,37 +54,24 @@ public static class WorkbenchApi
         v1.MapSupportEndpoints();
         v1.MapMigrationEndpoints();
         v1.MapTaskEndpoints();
-        v1.MapHrEndpoints();
-        v1.MapMaterialsEndpoints();
-        v1.MapCrmEndpoints();
-        v1.MapPricingEndpoints();
         v1.MapAssistantEndpoints();
         v1.MapMcpEndpoints(); // MCP for outside AI clients, API keys only (docs/integrations/mcp.md).
-        v1.MapPlanningEndpoints();
-        v1.MapTotalTimeEndpoints();
         v1.MapCurrencyEndpoints();
         v1.MapCompanyEndpoints();
-        v1.MapGovernmentBillingEndpoints();
         v1.MapCommercialBillingEndpoints();
         v1.MapTravelEndpoints();
-        v1.MapSalesShippingEndpoints();
-        v1.MapQualityEndpoints();
-        v1.MapShopFloorEndpoints();
         v1.MapSourcingEndpoints();
-        v1.MapBankFileEndpoints();
         v1.MapAccountingExportEndpoints();
-        v1.MapAccountingLiveEndpoints();
-        v1.MapSalesTaxEndpoints();
         v1.MapIntegrationEndpoints();
-        v1.MapJiraEndpoints(); // Jira sync: connection and project links (under /integrations).
-        v1.MapGitLabEndpoints(); // GitLab sync: connection and project links (under /integrations).
-        v1.MapComplianceEndpoints();
         v1.MapReceiptEndpoints();
         v1.MapCustomizationEndpoints();
         v1.MapRoleEndpoints();
         v1.MapAutomationBuilderEndpoints();
         v1.MapLayoutEndpoints();
         v1.MapSheetExtrasEndpoints();
+
+        // License modules loaded from the modules folder map theirs on the same group: authorized, with the same error mapping.
+        app.ServiceProvider.GetService<Workbench.Plugins.ModuleHost>()?.MapEndpoints(v1);
 
         return app;
     }

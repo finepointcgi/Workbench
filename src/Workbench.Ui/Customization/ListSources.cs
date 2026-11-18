@@ -1,10 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Workbench.Contracts.Billing;
-using Workbench.Contracts.Crm;
 using Workbench.Contracts.Customization;
 using Workbench.Contracts.Dashboards;
-using Workbench.Contracts.Hr;
-using Workbench.Contracts.Materials;
 using Workbench.Contracts.Odcs;
 using Workbench.Contracts.ProjectAccounting;
 using Workbench.Contracts.Projects;
@@ -18,8 +15,12 @@ namespace Workbench.Ui.Customization;
 /// through the same permission-checked services the page uses, with the page's own definition, so a chart never shows more
 /// than the list would.
 /// </summary>
-public interface IListSource
+public interface IListSource : Workbench.Contracts.Modules.IModuleRow
 {
+    string Workbench.Contracts.Modules.IModuleRow.Catalog => Workbench.Contracts.Modules.ModuleCatalogs.ListSources;
+
+    string Workbench.Contracts.Modules.IModuleRow.RowKey => ListKey;
+
     string ListKey { get; }
 
     string Title { get; }
@@ -76,7 +77,8 @@ public static class ListSources
 {
     private static T Get<T>(IServiceProvider sp) where T : notnull => sp.GetRequiredService<T>();
 
-    public static IReadOnlyList<IListSource> All { get; } =
+    /// <summary>The list pages the product ships, and (in <see cref="All"/>) those loaded modules add.</summary>
+    public static IReadOnlyList<IListSource> BuiltIn { get; } =
     [
         new ListSource<ProjectHubRowDto>(CustomizableLists.Projects, "Projects", async (sp, ct) =>
         {
@@ -85,8 +87,6 @@ public static class ListSources
         }),
         new ListSource<ContractDto>(CustomizableLists.Contracts, "Contracts", async (sp, ct) =>
             (await Get<IContractService>(sp).ListContractsAsync(ct), Setup.ContractsPage._definition)),
-        new ListSource<EmployeeSummaryDto>(CustomizableLists.People, "People", async (sp, ct) =>
-            (await Get<IHrPersonnelService>(sp).ListAsync(new EmployeeQuery(null, false), ct), Hr.PeoplePage._definition)),
         new ListSource<VendorDto>(CustomizableLists.Vendors, "Vendors", async (sp, ct) =>
             (await Get<IVendorService>(sp).ListAsync(false, ct), Purchasing.VendorsPage._definition)),
         new ListSource<PurchaseOrderSummaryDto>(CustomizableLists.PurchaseOrders, "Purchase orders", async (sp, ct) =>
@@ -99,13 +99,11 @@ public static class ListSources
             ((await Get<ITimesheetApprovalService>(sp).GetTeamStatusAsync(DateOnly.FromDateTime(DateTime.Today), ct)).Members, Time.TeamPage._definition)),
         new ListSource<ExpenseReportDto>(CustomizableLists.ExpenseReports, "Expense reports", async (sp, ct) =>
             (await Get<IExpenseReportService>(sp).ListMyReportsAsync(ct), Pages.Odcs.Expenses._definition)),
-        new ListSource<OpportunityDto>(CustomizableLists.Opportunities, "Opportunities", async (sp, ct) =>
-            (await Get<IOpportunityService>(sp).ListAsync(new OpportunityFilter(), ct), Crm.OpportunityListPage._definition)),
-        new ListSource<PartSummaryDto>(CustomizableLists.Parts, "Parts", async (sp, ct) =>
-            (await Get<IPartService>(sp).ListAsync(new PartQuery(), ct), Materials.PartsPage._definition)),
-        new ListSource<SalesOrderSummaryDto>(CustomizableLists.SalesOrders, "Sales orders", async (sp, ct) =>
-            (await Get<ISalesOrderService>(sp).ListAsync(new SalesOrderQuery(), ct), Sales.SalesOrdersPage._definition)),
     ];
+
+    private static readonly Workbench.Contracts.Modules.RowCatalog<IListSource> Catalog = new(BuiltIn);
+
+    public static IReadOnlyList<IListSource> All => Catalog.All;
 
     public static IListSource? Find(string listKey) => All.FirstOrDefault(s => s.ListKey == listKey);
 }

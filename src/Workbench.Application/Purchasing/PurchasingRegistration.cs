@@ -22,6 +22,7 @@ public static class PurchasingRegistration
         services.AddDataProtection();
         services.AddSingleton<TaxIdProtector>();
         services.TryAddScoped<FileStorage>();
+        services.AddScoped<IVendorReader, VendorTableReader>(); // How other areas read vendors; an accounting module that owns vendors replaces it.
         services.AddScoped<IVendorService, VendorService>();
         services.AddScoped<ISubcontractService, SubcontractService>();
         services.AddScoped<IApBillService, ApBillService>();

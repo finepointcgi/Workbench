@@ -218,13 +218,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
 
             migrationBuilder.AddColumn<Guid>(
                 name: "CompanyId",
-                table: "FixedAsset",
-                type: "uuid",
-                nullable: false,
-                defaultValue: new Guid("00000000-0000-0000-0000-00000000c001"));
-
-            migrationBuilder.AddColumn<Guid>(
-                name: "CompanyId",
                 table: "Employee",
                 type: "uuid",
                 nullable: false,
@@ -241,13 +234,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
             migrationBuilder.AddColumn<Guid>(
                 name: "CompanyId",
                 table: "Contract",
-                type: "uuid",
-                nullable: false,
-                defaultValue: new Guid("00000000-0000-0000-0000-00000000c001"));
-
-            migrationBuilder.AddColumn<Guid>(
-                name: "CompanyId",
-                table: "BankAccounts",
                 type: "uuid",
                 nullable: false,
                 defaultValue: new Guid("00000000-0000-0000-0000-00000000c001"));
@@ -414,38 +400,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                 });
 
             migrationBuilder.CreateTable(
-                name: "ContractGovernmentBilling",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    ContractId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Format = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
-                    Financing = table.Column<string>(type: "character varying(24)", maxLength: 24, nullable: false),
-                    IsSmallBusiness = table.Column<bool>(type: "boolean", nullable: false),
-                    ProgressPaymentRate = table.Column<decimal>(type: "numeric(9,6)", precision: 9, scale: 6, nullable: false),
-                    LiquidationRate = table.Column<decimal>(type: "numeric(9,6)", precision: 9, scale: 6, nullable: false),
-                    CostBasis = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
-                    ContractPrice = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: true),
-                    IssueByDodaac = table.Column<string>(type: "character varying(6)", maxLength: 6, nullable: true, collation: "C"),
-                    AdminByDodaac = table.Column<string>(type: "character varying(6)", maxLength: 6, nullable: true, collation: "C"),
-                    PayOfficeDodaac = table.Column<string>(type: "character varying(6)", maxLength: 6, nullable: true, collation: "C"),
-                    ShipToDodaac = table.Column<string>(type: "character varying(6)", maxLength: 6, nullable: true, collation: "C"),
-                    DeliveryDocument = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
-                    UpdatedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_ContractGovernmentBilling", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_ContractGovernmentBilling_Contract_ContractId",
-                        column: x => x.ContractId,
-                        principalTable: "Contract",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "Currencies",
                 columns: table => new
                 {
@@ -546,82 +500,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                 });
 
             migrationBuilder.CreateTable(
-                name: "GlBudgetVersions",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    FiscalYearId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Kind = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
-                    Name = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false, collation: "C"),
-                    Description = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true, collation: "C"),
-                    Status = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
-                    SourceVersionId = table.Column<Guid>(type: "uuid", nullable: true),
-                    CreatedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
-                    CreatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    AdoptedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
-                    AdoptedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_GlBudgetVersions", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_GlBudgetVersions_FiscalYear_FiscalYearId",
-                        column: x => x.FiscalYearId,
-                        principalTable: "FiscalYear",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_GlBudgetVersions_GlBudgetVersions_SourceVersionId",
-                        column: x => x.SourceVersionId,
-                        principalTable: "GlBudgetVersions",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "GlRecurringSettings",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    AutoGenerate = table.Column<bool>(type: "boolean", nullable: false),
-                    LastAutoRunUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    LastAutoRunSummary = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true, collation: "C"),
-                    UpdatedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_GlRecurringSettings", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "GlRecurringTemplates",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    Name = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false, collation: "C"),
-                    Description = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false, collation: "C"),
-                    Frequency = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
-                    PostingDay = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
-                    StartDate = table.Column<DateOnly>(type: "date", nullable: false),
-                    EndDate = table.Column<DateOnly>(type: "date", nullable: true),
-                    Occurrences = table.Column<int>(type: "integer", nullable: true),
-                    AmountMode = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
-                    BaseAmount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    PostAutomatically = table.Column<bool>(type: "boolean", nullable: false),
-                    AutoReverse = table.Column<bool>(type: "boolean", nullable: false),
-                    IsActive = table.Column<bool>(type: "boolean", nullable: false),
-                    CreatedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
-                    CreatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    UpdatedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_GlRecurringTemplates", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "LaborCostPolicy",
                 columns: table => new
                 {
@@ -635,125 +513,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_LaborCostPolicy", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "PerformanceBasedPaymentEvent",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    ContractId = table.Column<Guid>(type: "uuid", nullable: false),
-                    ClinId = table.Column<Guid>(type: "uuid", nullable: true),
-                    Order = table.Column<int>(type: "integer", nullable: false),
-                    Description = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false, collation: "C"),
-                    Criteria = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true, collation: "C"),
-                    Amount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    PlannedDate = table.Column<DateOnly>(type: "date", nullable: false),
-                    CompletedDate = table.Column<DateOnly>(type: "date", nullable: true),
-                    CompletedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
-                    Evidence = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true, collation: "C"),
-                    EvidenceReference = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true, collation: "C"),
-                    InvoiceId = table.Column<Guid>(type: "uuid", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_PerformanceBasedPaymentEvent", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_PerformanceBasedPaymentEvent_Clin_ClinId",
-                        column: x => x.ClinId,
-                        principalTable: "Clin",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_PerformanceBasedPaymentEvent_Contract_ContractId",
-                        column: x => x.ContractId,
-                        principalTable: "Contract",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_PerformanceBasedPaymentEvent_Invoice_InvoiceId",
-                        column: x => x.InvoiceId,
-                        principalTable: "Invoice",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "PieeSubmission",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    InvoiceId = table.Column<Guid>(type: "uuid", nullable: false),
-                    DocumentType = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
-                    Status = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
-                    FileName = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: true, collation: "C"),
-                    ExportedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    ExportedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
-                    Reference = table.Column<string>(type: "character varying(100)", maxLength: 100, nullable: true, collation: "C"),
-                    SubmittedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    SubmittedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
-                    RejectionReason = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true, collation: "C"),
-                    StatusChangedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    StatusChangedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C")
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_PieeSubmission", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_PieeSubmission_Invoice_InvoiceId",
-                        column: x => x.InvoiceId,
-                        principalTable: "Invoice",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "ProgressPaymentRequest",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    ContractId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Number = table.Column<int>(type: "integer", nullable: false),
-                    RequestDate = table.Column<DateOnly>(type: "date", nullable: false),
-                    CostsThrough = table.Column<DateOnly>(type: "date", nullable: false),
-                    IsSmallBusiness = table.Column<bool>(type: "boolean", nullable: false),
-                    ContractPrice = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    ProgressPaymentRate = table.Column<decimal>(type: "numeric(9,6)", precision: 9, scale: 6, nullable: false),
-                    LiquidationRate = table.Column<decimal>(type: "numeric(9,6)", precision: 9, scale: 6, nullable: false),
-                    CostBasis = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
-                    PaidCosts = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    UnpaidCosts = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    IncurredToDate = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    EstimateToComplete = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    SubcontractorPaid = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    SubcontractorLiquidated = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    SubcontractorApproved = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    PreviousRequested = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    CostsOfDelivered = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    PriceOfDelivered = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    UnliquidatedAdvances = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    LiquidatedToDate = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    Amount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    InvoiceId = table.Column<Guid>(type: "uuid", nullable: true),
-                    Notes = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: true, collation: "C"),
-                    CreatedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
-                    CreatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_ProgressPaymentRequest", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_ProgressPaymentRequest_Contract_ContractId",
-                        column: x => x.ContractId,
-                        principalTable: "Contract",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_ProgressPaymentRequest_Invoice_InvoiceId",
-                        column: x => x.InvoiceId,
-                        principalTable: "Invoice",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -1056,178 +815,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                 });
 
             migrationBuilder.CreateTable(
-                name: "GlBudgetLines",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    VersionId = table.Column<Guid>(type: "uuid", nullable: false),
-                    AccountId = table.Column<Guid>(type: "uuid", nullable: false),
-                    OrgUnitId = table.Column<Guid>(type: "uuid", nullable: false),
-                    FiscalPeriodId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Amount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    UpdatedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_GlBudgetLines", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_GlBudgetLines_FiscalPeriod_FiscalPeriodId",
-                        column: x => x.FiscalPeriodId,
-                        principalTable: "FiscalPeriod",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_GlBudgetLines_GlAccounts_AccountId",
-                        column: x => x.AccountId,
-                        principalTable: "GlAccounts",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_GlBudgetLines_GlBudgetVersions_VersionId",
-                        column: x => x.VersionId,
-                        principalTable: "GlBudgetVersions",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_GlBudgetLines_OrgUnit_OrgUnitId",
-                        column: x => x.OrgUnitId,
-                        principalTable: "OrgUnit",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "GlPlanningCycles",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    FiscalYearId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Name = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false, collation: "C"),
-                    Instructions = table.Column<string>(type: "character varying(4000)", maxLength: 4000, nullable: true, collation: "C"),
-                    DueDate = table.Column<DateOnly>(type: "date", nullable: true),
-                    VersionId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Status = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
-                    OpenedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
-                    OpenedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    AdoptedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
-                    AdoptedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_GlPlanningCycles", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_GlPlanningCycles_FiscalYear_FiscalYearId",
-                        column: x => x.FiscalYearId,
-                        principalTable: "FiscalYear",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_GlPlanningCycles_GlBudgetVersions_VersionId",
-                        column: x => x.VersionId,
-                        principalTable: "GlBudgetVersions",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "GlRecurringRuns",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    TemplateId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Occurrence = table.Column<int>(type: "integer", nullable: false),
-                    ScheduledDate = table.Column<DateOnly>(type: "date", nullable: false),
-                    FiscalPeriodId = table.Column<Guid>(type: "uuid", nullable: true),
-                    Status = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
-                    JournalEntryId = table.Column<Guid>(type: "uuid", nullable: true),
-                    ReversalEntryId = table.Column<Guid>(type: "uuid", nullable: true),
-                    Message = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true, collation: "C"),
-                    Amount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    GeneratedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
-                    GeneratedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_GlRecurringRuns", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_GlRecurringRuns_FiscalPeriod_FiscalPeriodId",
-                        column: x => x.FiscalPeriodId,
-                        principalTable: "FiscalPeriod",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_GlRecurringRuns_GlJournalEntries_JournalEntryId",
-                        column: x => x.JournalEntryId,
-                        principalTable: "GlJournalEntries",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.SetNull);
-                    table.ForeignKey(
-                        name: "FK_GlRecurringRuns_GlJournalEntries_ReversalEntryId",
-                        column: x => x.ReversalEntryId,
-                        principalTable: "GlJournalEntries",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_GlRecurringRuns_GlRecurringTemplates_TemplateId",
-                        column: x => x.TemplateId,
-                        principalTable: "GlRecurringTemplates",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "GlRecurringTemplateLines",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    TemplateId = table.Column<Guid>(type: "uuid", nullable: false),
-                    LineNumber = table.Column<int>(type: "integer", nullable: false),
-                    AccountId = table.Column<Guid>(type: "uuid", nullable: false),
-                    OrgUnitId = table.Column<Guid>(type: "uuid", nullable: true),
-                    ProjectId = table.Column<Guid>(type: "uuid", nullable: true),
-                    WbsElementId = table.Column<Guid>(type: "uuid", nullable: true),
-                    Side = table.Column<string>(type: "character varying(8)", maxLength: 8, nullable: false),
-                    Amount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    Percent = table.Column<decimal>(type: "numeric(18,4)", precision: 18, scale: 4, nullable: false),
-                    Memo = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: true, collation: "C")
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_GlRecurringTemplateLines", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_GlRecurringTemplateLines_GlAccounts_AccountId",
-                        column: x => x.AccountId,
-                        principalTable: "GlAccounts",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_GlRecurringTemplateLines_GlRecurringTemplates_TemplateId",
-                        column: x => x.TemplateId,
-                        principalTable: "GlRecurringTemplates",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_GlRecurringTemplateLines_OrgUnit_OrgUnitId",
-                        column: x => x.OrgUnitId,
-                        principalTable: "OrgUnit",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_GlRecurringTemplateLines_Project_ProjectId",
-                        column: x => x.ProjectId,
-                        principalTable: "Project",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_GlRecurringTemplateLines_WbsElement_WbsElementId",
-                        column: x => x.WbsElementId,
-                        principalTable: "WbsElement",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "TravelAuthorizationDestination",
                 columns: table => new
                 {
@@ -1313,79 +900,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                         onDelete: ReferentialAction.SetNull);
                 });
 
-            migrationBuilder.CreateTable(
-                name: "GlBudgetSubmissions",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    CycleId = table.Column<Guid>(type: "uuid", nullable: false),
-                    OrgUnitId = table.Column<Guid>(type: "uuid", nullable: false),
-                    OwnerEmployeeId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Status = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
-                    Revision = table.Column<int>(type: "integer", nullable: false),
-                    SubmittedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
-                    SubmittedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    DecidedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
-                    DecidedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    DecisionComment = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true, collation: "C"),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_GlBudgetSubmissions", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_GlBudgetSubmissions_Employee_OwnerEmployeeId",
-                        column: x => x.OwnerEmployeeId,
-                        principalTable: "Employee",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_GlBudgetSubmissions_GlPlanningCycles_CycleId",
-                        column: x => x.CycleId,
-                        principalTable: "GlPlanningCycles",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_GlBudgetSubmissions_OrgUnit_OrgUnitId",
-                        column: x => x.OrgUnitId,
-                        principalTable: "OrgUnit",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "GlBudgetSubmissionLines",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    SubmissionId = table.Column<Guid>(type: "uuid", nullable: false),
-                    AccountId = table.Column<Guid>(type: "uuid", nullable: false),
-                    FiscalPeriodId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Amount = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_GlBudgetSubmissionLines", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_GlBudgetSubmissionLines_FiscalPeriod_FiscalPeriodId",
-                        column: x => x.FiscalPeriodId,
-                        principalTable: "FiscalPeriod",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_GlBudgetSubmissionLines_GlAccounts_AccountId",
-                        column: x => x.AccountId,
-                        principalTable: "GlAccounts",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_GlBudgetSubmissionLines_GlBudgetSubmissions_SubmissionId",
-                        column: x => x.SubmissionId,
-                        principalTable: "GlBudgetSubmissions",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
             migrationBuilder.InsertData(
                 table: "Companies",
                 columns: new[] { "Id", "Code", "CreatedAtUtc", "Ein", "FiscalYearStartMonth", "HomeCurrencyCode", "IsActive", "LegalName", "UpdatedAtUtc", "UpdatedBy" },
@@ -1437,11 +951,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                 column: "CompanyId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_FixedAsset_CompanyId",
-                table: "FixedAsset",
-                column: "CompanyId");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_Employee_CompanyId",
                 table: "Employee",
                 column: "CompanyId");
@@ -1449,11 +958,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
             migrationBuilder.CreateIndex(
                 name: "IX_Contract_CompanyId",
                 table: "Contract",
-                column: "CompanyId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_BankAccounts_CompanyId",
-                table: "BankAccounts",
                 column: "CompanyId");
 
             migrationBuilder.CreateIndex(
@@ -1536,12 +1040,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                 column: "FiscalPeriodId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_ContractGovernmentBilling_ContractId",
-                table: "ContractGovernmentBilling",
-                column: "ContractId",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
                 name: "IX_CorporateCard_EmployeeId",
                 table: "CorporateCard",
                 column: "EmployeeId");
@@ -1600,137 +1098,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_GlBudgetLines_AccountId",
-                table: "GlBudgetLines",
-                column: "AccountId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_GlBudgetLines_FiscalPeriodId",
-                table: "GlBudgetLines",
-                column: "FiscalPeriodId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_GlBudgetLines_OrgUnitId",
-                table: "GlBudgetLines",
-                column: "OrgUnitId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_GlBudgetLines_VersionId_AccountId_OrgUnitId_FiscalPeriodId",
-                table: "GlBudgetLines",
-                columns: new[] { "VersionId", "AccountId", "OrgUnitId", "FiscalPeriodId" },
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_GlBudgetLines_VersionId_FiscalPeriodId",
-                table: "GlBudgetLines",
-                columns: new[] { "VersionId", "FiscalPeriodId" });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_GlBudgetSubmissionLines_AccountId",
-                table: "GlBudgetSubmissionLines",
-                column: "AccountId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_GlBudgetSubmissionLines_FiscalPeriodId",
-                table: "GlBudgetSubmissionLines",
-                column: "FiscalPeriodId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_GlBudgetSubmissionLines_SubmissionId_AccountId_FiscalPeriod~",
-                table: "GlBudgetSubmissionLines",
-                columns: new[] { "SubmissionId", "AccountId", "FiscalPeriodId" },
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_GlBudgetSubmissions_CycleId_OrgUnitId",
-                table: "GlBudgetSubmissions",
-                columns: new[] { "CycleId", "OrgUnitId" },
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_GlBudgetSubmissions_OrgUnitId",
-                table: "GlBudgetSubmissions",
-                column: "OrgUnitId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_GlBudgetSubmissions_OwnerEmployeeId",
-                table: "GlBudgetSubmissions",
-                column: "OwnerEmployeeId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_GlBudgetVersions_FiscalYearId_Name",
-                table: "GlBudgetVersions",
-                columns: new[] { "FiscalYearId", "Name" },
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_GlBudgetVersions_SourceVersionId",
-                table: "GlBudgetVersions",
-                column: "SourceVersionId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_GlPlanningCycles_FiscalYearId",
-                table: "GlPlanningCycles",
-                column: "FiscalYearId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_GlPlanningCycles_VersionId",
-                table: "GlPlanningCycles",
-                column: "VersionId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_GlRecurringRuns_FiscalPeriodId",
-                table: "GlRecurringRuns",
-                column: "FiscalPeriodId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_GlRecurringRuns_JournalEntryId",
-                table: "GlRecurringRuns",
-                column: "JournalEntryId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_GlRecurringRuns_ReversalEntryId",
-                table: "GlRecurringRuns",
-                column: "ReversalEntryId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_GlRecurringRuns_TemplateId_Occurrence",
-                table: "GlRecurringRuns",
-                columns: new[] { "TemplateId", "Occurrence" },
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_GlRecurringTemplateLines_AccountId",
-                table: "GlRecurringTemplateLines",
-                column: "AccountId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_GlRecurringTemplateLines_OrgUnitId",
-                table: "GlRecurringTemplateLines",
-                column: "OrgUnitId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_GlRecurringTemplateLines_ProjectId",
-                table: "GlRecurringTemplateLines",
-                column: "ProjectId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_GlRecurringTemplateLines_TemplateId",
-                table: "GlRecurringTemplateLines",
-                column: "TemplateId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_GlRecurringTemplateLines_WbsElementId",
-                table: "GlRecurringTemplateLines",
-                column: "WbsElementId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_GlRecurringTemplates_Name",
-                table: "GlRecurringTemplates",
-                column: "Name",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
                 name: "IX_IntercompanyAccounts_CompanyId_CounterpartyCompanyId",
                 table: "IntercompanyAccounts",
                 columns: new[] { "CompanyId", "CounterpartyCompanyId" },
@@ -1755,38 +1122,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                 name: "IX_LaborCostPolicy_EffectiveFrom",
                 table: "LaborCostPolicy",
                 column: "EffectiveFrom");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PerformanceBasedPaymentEvent_ClinId",
-                table: "PerformanceBasedPaymentEvent",
-                column: "ClinId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PerformanceBasedPaymentEvent_ContractId_Order",
-                table: "PerformanceBasedPaymentEvent",
-                columns: new[] { "ContractId", "Order" });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PerformanceBasedPaymentEvent_InvoiceId",
-                table: "PerformanceBasedPaymentEvent",
-                column: "InvoiceId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PieeSubmission_InvoiceId",
-                table: "PieeSubmission",
-                column: "InvoiceId",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_ProgressPaymentRequest_ContractId_Number",
-                table: "ProgressPaymentRequest",
-                columns: new[] { "ContractId", "Number" },
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_ProgressPaymentRequest_InvoiceId",
-                table: "ProgressPaymentRequest",
-                column: "InvoiceId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_TravelAuthorization_EmployeeId_Status",
@@ -1865,14 +1200,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                 onDelete: ReferentialAction.Restrict);
 
             migrationBuilder.AddForeignKey(
-                name: "FK_BankAccounts_Companies_CompanyId",
-                table: "BankAccounts",
-                column: "CompanyId",
-                principalTable: "Companies",
-                principalColumn: "Id",
-                onDelete: ReferentialAction.Restrict);
-
-            migrationBuilder.AddForeignKey(
                 name: "FK_Contract_Companies_CompanyId",
                 table: "Contract",
                 column: "CompanyId",
@@ -1883,14 +1210,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
             migrationBuilder.AddForeignKey(
                 name: "FK_Employee_Companies_CompanyId",
                 table: "Employee",
-                column: "CompanyId",
-                principalTable: "Companies",
-                principalColumn: "Id",
-                onDelete: ReferentialAction.Restrict);
-
-            migrationBuilder.AddForeignKey(
-                name: "FK_FixedAsset_Companies_CompanyId",
-                table: "FixedAsset",
                 column: "CompanyId",
                 principalTable: "Companies",
                 principalColumn: "Id",
@@ -1973,20 +1292,12 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                 table: "ApPaymentRun");
 
             migrationBuilder.DropForeignKey(
-                name: "FK_BankAccounts_Companies_CompanyId",
-                table: "BankAccounts");
-
-            migrationBuilder.DropForeignKey(
                 name: "FK_Contract_Companies_CompanyId",
                 table: "Contract");
 
             migrationBuilder.DropForeignKey(
                 name: "FK_Employee_Companies_CompanyId",
                 table: "Employee");
-
-            migrationBuilder.DropForeignKey(
-                name: "FK_FixedAsset_Companies_CompanyId",
-                table: "FixedAsset");
 
             migrationBuilder.DropForeignKey(
                 name: "FK_GlAccounts_Companies_CompanyId",
@@ -2027,9 +1338,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                 name: "CompanyPeriodCloses");
 
             migrationBuilder.DropTable(
-                name: "ContractGovernmentBilling");
-
-            migrationBuilder.DropTable(
                 name: "Currencies");
 
             migrationBuilder.DropTable(
@@ -2042,34 +1350,10 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                 name: "ExchangeRates");
 
             migrationBuilder.DropTable(
-                name: "GlBudgetLines");
-
-            migrationBuilder.DropTable(
-                name: "GlBudgetSubmissionLines");
-
-            migrationBuilder.DropTable(
-                name: "GlRecurringRuns");
-
-            migrationBuilder.DropTable(
-                name: "GlRecurringSettings");
-
-            migrationBuilder.DropTable(
-                name: "GlRecurringTemplateLines");
-
-            migrationBuilder.DropTable(
                 name: "IntercompanyAccounts");
 
             migrationBuilder.DropTable(
                 name: "LaborCostPolicy");
-
-            migrationBuilder.DropTable(
-                name: "PerformanceBasedPaymentEvent");
-
-            migrationBuilder.DropTable(
-                name: "PieeSubmission");
-
-            migrationBuilder.DropTable(
-                name: "ProgressPaymentRequest");
 
             migrationBuilder.DropTable(
                 name: "TravelAuthorizationDestination");
@@ -2093,12 +1377,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                 name: "CurrencyRevaluations");
 
             migrationBuilder.DropTable(
-                name: "GlBudgetSubmissions");
-
-            migrationBuilder.DropTable(
-                name: "GlRecurringTemplates");
-
-            migrationBuilder.DropTable(
                 name: "TravelAuthorization");
 
             migrationBuilder.DropTable(
@@ -2106,12 +1384,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
 
             migrationBuilder.DropTable(
                 name: "CardProgram");
-
-            migrationBuilder.DropTable(
-                name: "GlPlanningCycles");
-
-            migrationBuilder.DropTable(
-                name: "GlBudgetVersions");
 
             migrationBuilder.DropIndex(
                 name: "IX_Project_CompanyId",
@@ -2150,20 +1422,12 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                 table: "GlAccounts");
 
             migrationBuilder.DropIndex(
-                name: "IX_FixedAsset_CompanyId",
-                table: "FixedAsset");
-
-            migrationBuilder.DropIndex(
                 name: "IX_Employee_CompanyId",
                 table: "Employee");
 
             migrationBuilder.DropIndex(
                 name: "IX_Contract_CompanyId",
                 table: "Contract");
-
-            migrationBuilder.DropIndex(
-                name: "IX_BankAccounts_CompanyId",
-                table: "BankAccounts");
 
             migrationBuilder.DropIndex(
                 name: "IX_ApPaymentRun_CompanyId",
@@ -2283,10 +1547,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
 
             migrationBuilder.DropColumn(
                 name: "CompanyId",
-                table: "FixedAsset");
-
-            migrationBuilder.DropColumn(
-                name: "CompanyId",
                 table: "Employee");
 
             migrationBuilder.DropColumn(
@@ -2296,10 +1556,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
             migrationBuilder.DropColumn(
                 name: "CompanyId",
                 table: "Contract");
-
-            migrationBuilder.DropColumn(
-                name: "CompanyId",
-                table: "BankAccounts");
 
             migrationBuilder.DropColumn(
                 name: "CompanyId",

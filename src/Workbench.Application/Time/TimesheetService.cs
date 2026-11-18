@@ -26,7 +26,8 @@ public sealed class TimesheetService(
     TimekeepingClock clock,
     AccessControl access,
     ITimesheetNotifier notifier,
-    ApprovalEngine? approvals = null) : ITimesheetService
+    ApprovalEngine? approvals = null,
+    IEnumerable<Projects.ICeilingProximitySource>? ceilingSources = null) : ITimesheetService
 {
     private readonly ApprovalEngine _approvals = approvals ?? new ApprovalEngine(clock.Provider);
 
@@ -56,7 +57,7 @@ public sealed class TimesheetService(
             await db.SaveChangesAsync(cancellationToken);
         }
 
-        return await TimesheetQueries.BuildDetailAsync(db, sheet, me, clock, projects, cancellationToken);
+        return await TimesheetQueries.BuildDetailAsync(db, sheet, me, clock, projects, ceilingSources, cancellationToken);
     }
 
     public async Task<IReadOnlyList<TimesheetDto>> ListMyTimesheetsAsync(CancellationToken cancellationToken = default)
@@ -81,7 +82,7 @@ public sealed class TimesheetService(
             throw new UnauthorizedAccessException("Only the employee, their approver, timekeepers, Finance and administrators can view this timesheet.");
         }
 
-        return await TimesheetQueries.BuildDetailAsync(db, sheet, owner, clock, isOwner ? projects : null, cancellationToken);
+        return await TimesheetQueries.BuildDetailAsync(db, sheet, owner, clock, isOwner ? projects : null, ceilingSources, cancellationToken);
     }
 
     public async Task<TimesheetDetailDto> SaveEntriesAsync(Guid timesheetId, SaveTimeEntriesRequest request, CancellationToken cancellationToken = default)
@@ -296,7 +297,7 @@ public sealed class TimesheetService(
 
         sheet.UpdatedAtUtc = now;
         await db.SaveChangesAsync(cancellationToken);
-        return await TimesheetQueries.BuildDetailAsync(db, sheet, me, clock, projects, cancellationToken);
+        return await TimesheetQueries.BuildDetailAsync(db, sheet, me, clock, projects, ceilingSources, cancellationToken);
     }
 
     public async Task<SubmitTimesheetResult> SubmitAsync(Guid timesheetId, SubmitTimesheetRequest request, CancellationToken cancellationToken = default)
@@ -364,7 +365,7 @@ public sealed class TimesheetService(
         var approvers = route.NotifyEmails;
         await notifier.NotifyAsync(new TimesheetNotification(TimesheetEvent.Submitted, sheet.Id, me.DisplayName, me.Email, approvers,
             sheet.PeriodStart, sheet.Total(), me.DisplayName, null), cancellationToken);
-        return new SubmitTimesheetResult(await TimesheetQueries.BuildDetailAsync(db, sheet, me, clock, projects, cancellationToken), warnings);
+        return new SubmitTimesheetResult(await TimesheetQueries.BuildDetailAsync(db, sheet, me, clock, projects, ceilingSources, cancellationToken), warnings);
     }
 
     public async Task<TimesheetDetailDto> ReopenAsync(Guid timesheetId, string reason, CancellationToken cancellationToken = default)
@@ -410,7 +411,7 @@ public sealed class TimesheetService(
         var actor = isOwner ? owner : await TimesheetQueries.FindByEmailAsync(db, currentUser.Email, cancellationToken);
         await notifier.NotifyAsync(new TimesheetNotification(TimesheetEvent.Reopened, sheet.Id, owner.DisplayName, owner.Email, recipients,
             sheet.PeriodStart, sheet.Total(), actor?.DisplayName ?? currentUser.Email, why), cancellationToken);
-        return await TimesheetQueries.BuildDetailAsync(db, sheet, owner, clock, isOwner ? projects : null, cancellationToken);
+        return await TimesheetQueries.BuildDetailAsync(db, sheet, owner, clock, isOwner ? projects : null, ceilingSources, cancellationToken);
     }
 
     private async Task<Employee> MeAsync(IWorkbenchDbContext db, CancellationToken cancellationToken) =>

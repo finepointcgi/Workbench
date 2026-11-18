@@ -127,7 +127,7 @@ public sealed class HttpAccountingReportService(HttpClient http) : IAccountingRe
         await (await http.PostAsJsonAsync("api/v1/accounting/reports/export", request, cancellationToken)).ReadLedgerAsync<AccountingExportFile>(cancellationToken);
 }
 
-internal static class LedgerUrls
+public static class LedgerUrls
 {
     public static string With(string path, params (string Name, object? Value)[] query)
     {

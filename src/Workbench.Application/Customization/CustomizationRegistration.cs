@@ -2,10 +2,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Workbench.Contracts.Billing;
-using Workbench.Contracts.Crm;
 using Workbench.Contracts.Customization;
 using Workbench.Contracts.Identity;
-using Workbench.Contracts.Materials;
 using Workbench.Contracts.Odcs;
 using Workbench.Contracts.ProjectAccounting;
 using Workbench.Contracts.Purchasing;
@@ -108,17 +106,6 @@ public static class CustomizationRegistration
             StatusSet = StatusSetCatalog.TimesheetStatus, Status = t => t.Status.ToString(), IsLocked = t => t.Status == D.ProjectAccounting.TimesheetStatus.Approved,
             OwnerEmployee = t => t.EmployeeId, ManageRoles = r => r.CanViewAllTimesheets(),
             CanReadAsync = CustomizableEntity.ReadVia<ITimesheetService>(async (s, id, ct) => await s.GetAsync(id, ct)),
-        });
-        services.AddCustomizableEntity(new CustomizableEntity<D.Materials.Part>
-        {
-            Key = E.Part, Label = "Part", LabelPlural = "Parts", Title = p => new RecordTitle(p.Id, p.Number + " · " + p.Description), Link = id => $"materials/parts/{id}", ManageRoles = r => r.IsMaterials(),
-            CanReadAsync = CustomizableEntity.ReadVia<IPartService>(async (s, id, ct) => await s.GetAsync(id, ct)),
-        });
-        services.AddCustomizableEntity(new CustomizableEntity<D.Crm.Opportunity>
-        {
-            Key = E.Opportunity, Label = "Opportunity", LabelPlural = "Opportunities", Title = o => new RecordTitle(o.Id, o.Number + " · " + o.Name), Link = id => $"bd/opportunities/{id}",
-            StatusSet = StatusSetCatalog.OpportunityStage, Status = o => o.Stage.ToString(), ManageRoles = r => r.IsBusinessDevelopment(),
-            CanReadAsync = CustomizableEntity.ReadVia<IOpportunityService>(async (s, id, ct) => await s.GetAsync(id, ct)),
         });
         return services;
     }

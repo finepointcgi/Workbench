@@ -25,8 +25,9 @@ public sealed class ApCreditService(
     AccessControl access,
     IOptions<PurchasingOptions> options,
     TimeProvider clock,
-    IOptions<Materials.MaterialsOptions>? materialsOptions = null,
-    Customization.DocumentNumbers? documentNumbers = null) : IApCreditService
+    Customization.DocumentNumbers? documentNumbers = null,
+    IVendorReturnSource? vendorReturns = null,
+    Billing.IBillTaxHook? billTax = null) : IApCreditService
 {
     private Customization.DocumentNumbers DocNumbers => documentNumbers ?? new(dbFactory, clock);
 
@@ -397,11 +398,11 @@ public sealed class ApCreditService(
         SaveBillRequest save;
         await using (var db = await dbFactory.CreateAsync(cancellationToken))
         {
-            var quality = await db.Set<Domain.Quality.VendorDebitMemo>().AsNoTracking().FirstOrDefaultAsync(m => m.Id == qualityDebitMemoId, cancellationToken)
+            var quality = (vendorReturns is null ? null : await vendorReturns.FindAsync(db, qualityDebitMemoId, cancellationToken))
                 ?? throw WorkbenchNotFoundException.For("Debit memo", qualityDebitMemoId);
-            if (quality.Status != Domain.Quality.DebitMemoStatus.Open)
+            if (!quality.IsOpen)
             {
-                throw new InvalidOperationException($"{quality.Number} is already {quality.Status.ToString().ToLowerInvariant()}.");
+                throw new InvalidOperationException($"{quality.Number} is already {quality.Status.ToLowerInvariant()}.");
             }
 
             if (await db.Set<ApBill>().AsNoTracking().Where(b => b.QualityDebitMemoId == quality.Id && b.Status != ApBillStatus.Void).Select(b => b.Number).FirstOrDefaultAsync(cancellationToken) is { } existing)
@@ -411,17 +412,14 @@ public sealed class ApCreditService(
 
             // The return debited the receiving clearing account (the PO line's account), so the memo credits it back.
             var poLine = quality.PurchaseOrderLineId is { } lid ? await db.Set<PurchaseOrderLine>().AsNoTracking().FirstOrDefaultAsync(l => l.Id == lid, cancellationToken) : null;
-            var accountNumber = materialsOptions?.Value.ReceivedNotInvoicedAccountNumber ?? "1405";
+            var accountNumber = quality.ClearingAccountNumber;
             var account = poLine?.AccountId
                 ?? await db.Set<Account>().AsNoTracking().Where(a => a.Number == accountNumber && a.IsActive).Select(a => (Guid?)a.Id).FirstOrDefaultAsync(cancellationToken)
                 ?? throw new ArgumentException($"No active receiving clearing account {accountNumber}; set up the materials accounts first.");
             var org = poLine?.OrgUnitId ?? await db.Set<OrgUnit>().AsNoTracking().OrderBy(o => o.Code).Select(o => (Guid?)o.Id).FirstOrDefaultAsync(cancellationToken)
                 ?? throw new ArgumentException("Add an organization first.");
-            var part = await db.Set<Domain.Materials.Part>().AsNoTracking().Where(p => p.Id == quality.PartId).Select(p => p.Number).FirstOrDefaultAsync(cancellationToken);
-            var ncr = await db.Set<Domain.Quality.Nonconformance>().AsNoTracking().Where(n => n.Id == quality.NonconformanceId).Select(n => n.Number).FirstOrDefaultAsync(cancellationToken);
-            var description = $"Returned {quality.Quantity:0.####} × {part} ({ncr}{(quality.ReturnAuthorization is { } rma ? $", RMA {rma}" : "")})";
             save = new SaveBillRequest(quality.VendorId, quality.ReturnAuthorization is { } ra ? $"RMA {ra}" : quality.Number, quality.Date < Today ? Today : quality.Date,
-                [new SaveBillLineRequest(BillLineKind.Account, description, quality.Amount, AccountId: account, OrgUnitId: org)],
+                [new SaveBillLineRequest(BillLineKind.Account, quality.Description, quality.Amount, AccountId: account, OrgUnitId: org)],
                 Description: $"Return to vendor {quality.Number}", Kind: BillKind.DebitMemo);
         }
 
@@ -430,12 +428,7 @@ public sealed class ApCreditService(
         {
             var bill = await db.Set<ApBill>().FirstAsync(b => b.Id == memo.Bill.Id, cancellationToken);
             bill.QualityDebitMemoId = qualityDebitMemoId;
-            var quality = await db.Set<Domain.Quality.VendorDebitMemo>().FirstAsync(m => m.Id == qualityDebitMemoId, cancellationToken);
-            quality.Status = Domain.Quality.DebitMemoStatus.Applied;
-            quality.AppliedBy = Me;
-            quality.AppliedAtUtc = UtcNow;
-            quality.AppliedReference = $"AP {bill.Number}";
-            audit.Record(db, "VendorDebitMemo", quality.Id, "Applied", new { Status = "Open" }, new { quality.AppliedReference });
+            await vendorReturns!.MarkAppliedAsync(db, qualityDebitMemoId, $"AP {bill.Number}", Me, UtcNow, cancellationToken);
             await db.SaveChangesAsync(cancellationToken);
         }
 
@@ -492,9 +485,9 @@ public sealed class ApCreditService(
             }
         }
 
-        if (await db.Set<Domain.SalesTax.ApBillTax>().AsNoTracking().Where(t => t.BillId == bill.Id).Select(t => (Guid?)t.Id).FirstOrDefaultAsync(cancellationToken) is { } taxId)
+        if (billTax is not null && await billTax.FindAsync(db, bill.Id, cancellationToken) is { } tax)
         {
-            sources[taxId] = "Use tax";
+            sources[tax.Id] = "Use tax";
         }
 
         foreach (var p in await db.Set<ApPayment>().AsNoTracking().Where(p => p.BillId == bill.Id).Select(p => new { p.Id, p.Reference }).ToListAsync(cancellationToken))

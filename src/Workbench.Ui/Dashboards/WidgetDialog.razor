@@ -43,6 +43,15 @@
             {
                 <MudText Typo="Typo.body2" Class="mud-text-secondary">Each person sees their own @Tm.Reword(TypeLabel(_type)).ToLowerInvariant(). Nothing to set up.</MudText>
             }
+            else if (_type == WidgetType.Module)
+            {
+                <MudSelect T="string" @bind-Value="_moduleKey" Label="Widget" data-field="module-widget" HelperText="Computed with each viewer's own access.">
+                    @foreach (var w in Workbench.Contracts.Modules.ModuleRegistry.Current.RowsOf<Workbench.Contracts.Modules.ModuleHomeWidget>().Where(w => w.Key != EarnedValueKey))
+                    {
+                        <MudSelectItem T="string" Value="w.Key">@w.Title</MudSelectItem>
+                    }
+                </MudSelect>
+            }
             else if (_type == WidgetType.Kpi)
             {
                 <MudSelect T="KpiKind?" @bind-Value="_kpi" Label="Figure" data-field="kpi" HelperText="Computed with each viewer's own access: people see only figures their pages show.">
@@ -235,7 +244,7 @@
     private static bool IsPersonal(WidgetType type) => type is WidgetType.MyTodo or WidgetType.ThisWeek or WidgetType.WaitingOnYou or WidgetType.MySheetItems;
 
     private static bool NeedsNoSheet(WidgetType type) =>
-        IsPersonal(type) || type is WidgetType.Kpi or WidgetType.ReportChart or WidgetType.ListViewChart or WidgetType.Shortcuts or WidgetType.Announcement;
+        IsPersonal(type) || type is WidgetType.Kpi or WidgetType.ReportChart or WidgetType.ListViewChart or WidgetType.Shortcuts or WidgetType.Announcement or WidgetType.Module;
 
     public static string KpiLabel(KpiKind kind) => kind switch
     {
@@ -263,11 +272,17 @@
     private int _maxItems = 10;
     private string? _markdown;
     private Guid? _contractId;
+    private string? _moduleKey;
     private IReadOnlyList<ContractDto>? _contracts;
 
     // Dashboards get everything that works without a person behind it; home pages get the personal widgets too.
     private IEnumerable<WidgetType> OfferedTypes => Enum.GetValues<WidgetType>()
-        .Where(t => HomePage || !(IsPersonal(t) || t is WidgetType.ListViewChart or WidgetType.Shortcuts));
+        .Where(t => HomePage || !(IsPersonal(t) || t is WidgetType.ListViewChart or WidgetType.Shortcuts))
+        .Where(t => t != WidgetType.Module || Workbench.Contracts.Modules.ModuleRegistry.Current.RowsOf<Workbench.Contracts.Modules.ModuleHomeWidget>().Any(w => w.Key != EarnedValueKey) || Widget?.Type == WidgetType.Module)
+        // Earned value is offered while the project controls module provides it (a saved one stays on its dashboard either way).
+        .Where(t => t != WidgetType.EarnedValue || Workbench.Contracts.Modules.ModuleRegistry.Current.RowsOf<Workbench.Contracts.Modules.ModuleHomeWidget>().Any(w => w.Key == EarnedValueKey) || Widget?.Type == WidgetType.EarnedValue);
+
+    private const string EarnedValueKey = Workbench.Contracts.Dashboards.ModuleWidgetKeys.EarnedValue;
 
     protected override async Task OnInitializedAsync()
     {
@@ -296,6 +311,7 @@
             (c.Aggregate, c.ValueColumnId, c.FilterColumnId, c.FilterValue, c.Chart, c.GroupColumnId, c.MaxItems, c.Markdown);
         _sheetId = c.SheetId;
         _contractId = c.ContractId;
+        _moduleKey = c.ModuleKey;
         (_pinned, _kpi, _reportId, _viewId) = (c.Pinned, c.Kpi, c.SavedReportId, c.ListViewId);
         _shortcuts = (c.Shortcuts ?? []).Select(l => new ShortcutRow { Label = l.Label, Href = l.Href }).ToList();
         await LoadColumnsAsync();
@@ -315,6 +331,7 @@
             WidgetType.Kpi => _kpi is not null,
             WidgetType.ReportChart => _reportId is not null,
             WidgetType.ListViewChart => _viewId is not null,
+            WidgetType.Module => !string.IsNullOrEmpty(_moduleKey),
             WidgetType.Shortcuts => _shortcuts.Count > 0 && _shortcuts.All(l => !string.IsNullOrWhiteSpace(l.Label) && !string.IsNullOrWhiteSpace(l.Href)),
             var t when NeedsNoSheet(t) => true,
             _ => false,
@@ -358,6 +375,7 @@
         WidgetType.ListViewChart => "List view chart",
         WidgetType.Shortcuts => "Shortcuts",
         WidgetType.Announcement => "Announcement",
+        WidgetType.Module => "Module widget",
         _ => "Rich text",
     };
 
@@ -411,6 +429,7 @@
                 Kpi: _type == WidgetType.Kpi ? _kpi : null,
                 SavedReportId: _type == WidgetType.ReportChart ? _reportId : null,
                 ListViewId: _type == WidgetType.ListViewChart ? _viewId : null,
+                ModuleKey: _type == WidgetType.Module ? _moduleKey : null,
                 Shortcuts: _type == WidgetType.Shortcuts ? _shortcuts.Select(l => new WidgetShortcut(l.Label!.Trim(), l.Href!.Trim().TrimStart('/'))).ToList() : null)
             : _type == WidgetType.RichText ? new WidgetConfig(Markdown: _markdown ?? string.Empty)
             : _type == WidgetType.ContractFunding ? new WidgetConfig(ContractId: _contractId)

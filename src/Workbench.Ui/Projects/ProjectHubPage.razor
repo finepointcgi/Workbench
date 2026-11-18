@@ -2,10 +2,11 @@
 @page "/projects/{ProjectId:guid}/{Tab}"
 @page "/projects/{ProjectId:guid}/{Tab}/{Section}"
 @* One project's page. Tabs reuse the feature pages (rendered Embedded); each shows only when the server would allow it.
-   The older routes (/projects/{id}/financials, /budgets, /revenue, /evm) land here with that tab selected. *@
+   The older routes (/projects/{id}/financials, /budgets, and /revenue with the billing module) land here with that tab selected. *@
 @inject IProjectHubService Hub
 @inject NavigationManager Navigation
 @inject IServiceProvider Services
+@inject IEnumerable<Workbench.Contracts.Modules.ProjectHubTabContribution> TabContributions
 
 <PageTitle>@(_hub is { } h ? $"{h.Project.Code} {TabLabel}" : "Project") · Workbench</PageTitle>
 
@@ -41,7 +42,7 @@ else
         · @ProjectsFormat.Period(p.Start, p.Finish)
     </MudText>
 
-    @* The everyday tabs, then "More" for the occasional ones (revenue, earned value, narrative, ceilings and closeout). *@
+    @* The everyday tabs, then "More" for the occasional ones (schedule health and what license modules add: revenue, earned value, narrative, ceilings and closeout). *@
     @if (_more.Count > 0)
     {
         <div class="d-flex justify-end mb-n2">
@@ -49,7 +50,7 @@ else
                      AriaLabel="More project pages" data-testid="project-more">
                 @foreach (var slug in _more)
                 {
-                    <MudMenuItem Href="@($"projects/{ProjectId}/{slug}")" data-testid="@($"more-{slug}")">@Tm.Reword(ProjectsFormat.Tabs.First(t => t.Slug == slug).Label)</MudMenuItem>
+                    <MudMenuItem Href="@($"projects/{ProjectId}/{slug}")" data-testid="@($"more-{slug}")">@Tm.Reword(_tabSet.Label(slug))</MudMenuItem>
                 }
             </MudMenu>
         </div>
@@ -58,7 +59,7 @@ else
              ActivePanelIndex="_tabs.IndexOf(_tab)" ActivePanelIndexChanged="OnTabChanged" data-testid="project-tabs">
         @foreach (var slug in _tabs)
         {
-            <MudTabPanel Text="@Tm.Reword(ProjectsFormat.Tabs.First(t => t.Slug == slug).Label)" @key="slug" data-testid="@($"tab-{slug}")">
+            <MudTabPanel Text="@Tm.Reword(_tabSet.Label(slug))" @key="slug" data-testid="@($"tab-{slug}")">
                 @if (slug == _tab)
                 {
                     @TabContent(slug)
@@ -92,7 +93,10 @@ else
     private int _reloads;
     private string? _error;
 
-    private string TabLabel => ProjectsFormat.Tabs.FirstOrDefault(t => t.Slug == _tab).Label ?? "";
+    private ProjectTabSet? _tabSetCache;
+    private ProjectTabSet _tabSet => _tabSetCache ??= new ProjectTabSet(TabContributions);
+
+    private string TabLabel => _tabSet.Label(_tab);
 
     private StatusLabels _labels = StatusLabels.Empty;
 
@@ -112,8 +116,8 @@ else
         _tab = _allowed.Contains(requested) ? requested : "overview";
 
         // An occasional tab shows in the bar while it's open; otherwise it's under More.
-        _tabs = _allowed.Where(s => !ProjectsFormat.IsOccasional(s) || s == _tab).ToList();
-        _more = _allowed.Where(s => ProjectsFormat.IsOccasional(s) && s != _tab).ToList();
+        _tabs = _allowed.Where(s => !_tabSet.IsOccasional(s) || s == _tab).ToList();
+        _more = _allowed.Where(s => _tabSet.IsOccasional(s) && s != _tab).ToList();
     }
 
     private async Task LoadAsync()
@@ -124,8 +128,8 @@ else
         {
             _hub = await Hub.GetProjectAsync(ProjectId);
             _loadedProject = ProjectId;
-            _allowed = ProjectsFormat.Tabs.Select(t => t.Slug).Where(s => ProjectsFormat.Allows(_hub.Tabs, s)).ToList();
-            _tabs = _allowed.Where(s => !ProjectsFormat.IsOccasional(s)).ToList();
+            _allowed = _tabSet.All.Select(t => t.Slug).Where(s => _tabSet.Allows(_hub.Tabs, s)).ToList();
+            _tabs = _allowed.Where(s => !_tabSet.IsOccasional(s)).ToList();
         }
         catch (WorkbenchNotFoundException)
         {
@@ -165,16 +169,7 @@ else
         </div>,
         "financials" => @<Workbench.Ui.Pages.Projects.ProjectFinancialsPage ProjectId="ProjectId" Embedded="true" />,
         "budgets" => @<Workbench.Ui.Pages.Projects.ProjectBudgetsPage ProjectId="ProjectId" Embedded="true" />,
-        "revenue" => @<Workbench.Ui.Revenue.ProjectRevenueView ProjectId="ProjectId" Embedded="true" />,
-        "risks" => @<Workbench.Ui.Risks.RiskRegisterPanel ProjectId="ProjectId" />,
-        "evm" => @<Workbench.Ui.Pages.Projects.ProjectEvmPage ProjectId="ProjectId" Embedded="true" />,
         "schedule-health" => @<Workbench.Ui.Gantt.ScheduleHealthPanel SheetId="_hub!.Project.SheetId!.Value" PlanHref="@($"projects/{ProjectId}/plan")" />,
-        "narrative" => @<Workbench.Ui.Assistant.ProjectNarrativeTab ProjectId="ProjectId" />,
-        "ceilings" => @<div>
-            <Workbench.Ui.Ceilings.CeilingsPanel ProjectId="ProjectId" />
-            <MudDivider Class="my-4" />
-            <Workbench.Ui.Ceilings.CloseoutPanel Scope="Workbench.Contracts.Closeout.CloseoutScope.Project" TargetId="ProjectId" Changed="ReloadAsync" />
-        </div>,
         "costs" => @<Workbench.Ui.Pages.Odcs.ProjectOdcs ProjectId="ProjectId" Embedded="true" />,
         // People are staffed on the Plan tab, next to the tasks and dates; this tab is the budget and who has charged. (Without the Plan tab, the assign panel stays here.)
         "staffing" => @<div>
@@ -204,6 +199,8 @@ else
             }
         </div>,
         "setup" => @<ProjectSetupTab Hub="_hub!" Section="@Section" Changed="ReloadAsync" />,
-        _ => @<span />,
+        _ => _tabSet.Find(slug) is { Component: { } component }
+            ? @<DynamicComponent Type="component" Parameters="@(new Dictionary<string, object?> { ["ProjectId"] = ProjectId, ["SheetId"] = _hub!.Project.SheetId, ["Changed"] = EventCallback.Factory.Create(this, ReloadAsync) })" />
+            : @<span />,
     };
 }

@@ -2,7 +2,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Workbench.Domain.Accounting;
 using Workbench.Domain.Files;
-using Workbench.Domain.Materials;
 using Workbench.Domain.ProjectAccounting;
 using Workbench.Domain.Purchasing;
 
@@ -40,7 +39,6 @@ internal sealed class RfqLineConfiguration : IEntityTypeConfiguration<RfqLine>
         b.Property(l => l.OdcType).HasConversion<string>().HasMaxLength(16);
         b.HasIndex(l => l.RequisitionLineId);
         b.HasIndex(l => l.PurchaseOrderLineId);
-        b.HasOne<Part>().WithMany().HasForeignKey(l => l.PartId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<Project>().WithMany().HasForeignKey(l => l.ProjectId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<WbsElement>().WithMany().HasForeignKey(l => l.WbsElementId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<Account>().WithMany().HasForeignKey(l => l.AccountId).OnDelete(DeleteBehavior.Restrict);

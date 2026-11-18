@@ -4,14 +4,12 @@ using Workbench.Application;
 using Workbench.Application.Accounting;
 using Workbench.Application.Approvals;
 using Workbench.Application.Billing;
-using Workbench.Application.Crm;
 using Workbench.Application.Identity;
 using Workbench.Application.Notifications;
 using Workbench.Application.ProjectAccounting;
 using Workbench.Application.Resourcing;
 using Workbench.Contracts.Billing;
 using Workbench.Contracts.Collaboration;
-using Workbench.Contracts.Crm;
 using Workbench.Contracts.Identity;
 using Workbench.Contracts.ProjectAccounting;
 using Workbench.Domain;
@@ -464,8 +462,11 @@ internal static class CommercialDemoSeed
 
         await db.SaveChangesAsync(ct);
 
-        await SeedPipelineAsync(db, services, projects, contracts, ct);
         await SeedInvoicesAsync(db, contexts, contracts, thisMonday, ct);
+
+        // The pipeline of commercial deals (accounts, contacts, opportunities moved through the gates) belongs to the business development
+        // module, which seeds it here when it is loaded; it links the three won deals to the contracts and projects above.
+        await ModuleSeeds.RunAsync(services, db, ModuleSeedStage.CommercialDemo, ct);
     }
 
     private static bool InFirstGroup(List<(string Name, int Level)> outline, int index)
@@ -506,133 +507,6 @@ internal static class CommercialDemoSeed
 
         var phase = leaves.Where(l => !l.Management).ToList();
         return (phase.FirstOrDefault(l => l.Item.Start <= monday.AddDays(4) && l.Item.Finish >= monday) is { Wbs: not null } hit ? hit : phase[^1]).Wbs;
-    }
-
-    // ---- CRM: accounts, contacts and a pipeline, entered through the real services ----
-
-    private static async Task SeedPipelineAsync(WorkbenchDbContext db, IServiceProvider services, Dictionary<string, Project> projects,
-        Dictionary<string, Contract> contracts, CancellationToken ct)
-    {
-        var user = new SeedUser { Email = BdEmail };
-        var kit = new Kit(services, user);
-        var today = DateOnly.FromDateTime(DateTime.Now);
-
-        async Task<Guid> Account(string name, CrmAccountKind kind, string website, string? notes = null) =>
-            (await kit.Accounts.CreateAccountAsync(new SaveCrmAccountRequest(name, kind, Website: website, Notes: notes), ct)).Id;
-        var cobalt = await Account("Cobalt Harbor Logistics", CrmAccountKind.Other, "cobaltharbor-logistics.example", "Regional freight and warehousing. Client since August 2026.");
-        var sundial = await Account("Sundial Media Group", CrmAccountKind.Other, "sundialmedia.example", "Agency-style retainer: brand and campaign work, billed monthly.");
-        var marlow = await Account("Marlow Mutual Insurance", CrmAccountKind.Other, "marlowmutual.example", "Regional insurer; claims modernization.");
-        var lakeshore = await Account("Lakeshore Outfitters", CrmAccountKind.Other, "lakeshore-outfitters.example", "Outdoor retail, 40 stores.");
-        var pinnacle = await Account("Pinnacle Dental Group", CrmAccountKind.Other, "pinnacledental.example", "Eleven clinics; wants a booking platform.");
-        var fernhill = await Account("Fernhill Energy", CrmAccountKind.Other, "fernhill-energy.example", "Utility with a smart-meter data backlog.");
-        var wrenfield = await Account("Wrenfield Retail", CrmAccountKind.Other, "wrenfield-retail.example");
-        var copperline = await Account("Copperline Software", CrmAccountKind.Partner, "copperline.example", "Implementation partner; refers platform work.");
-        var hollis = await Account("Hollis & Vance Advisory", CrmAccountKind.Competitor, "hollisvance.example", "Larger advisory firm; usually the incumbent on insurance work.");
-
-        // The clients we bill are customers too.
-        user.Email = Admin;
-        foreach (var (account, code) in new[] { (cobalt, "COBALT"), (sundial, "SUNDIAL"), (marlow, "MARLOW") })
-        {
-            var customer = await db.Set<Customer>().AsNoTracking().FirstAsync(c => c.Code == code, ct);
-            await kit.Accounts.LinkCustomerAsync(account, customer.Id, ct);
-        }
-
-        user.Email = BdEmail;
-        async Task<Guid> Contact(Guid account, string first, string last, ContactRole role, string title, string email) =>
-            (await kit.Accounts.CreateContactAsync(new SaveCrmContactRequest(account, first, last, role, title, email), ct)).Id;
-        var cobaltCo = await Contact(cobalt, "Nadia", "Petrov", ContactRole.Executive, "VP Operations", "nadia.petrov@cobaltharbor-logistics.example");
-        await Contact(cobalt, "Marcus", "Webb", ContactRole.ContractingSpecialist, "IT Procurement Manager", "marcus.webb@cobaltharbor-logistics.example");
-        var sundialCo = await Contact(sundial, "Rosa", "Alvarez", ContactRole.Executive, "Creative Director", "rosa.alvarez@sundialmedia.example");
-        await Contact(marlow, "Priya", "Raman", ContactRole.Executive, "Chief Technology Officer", "priya.raman@marlowmutual.example");
-        await Contact(marlow, "Daniel", "Kruger", ContactRole.ProgramManager, "Director of Claims", "daniel.kruger@marlowmutual.example");
-        await Contact(lakeshore, "Hannah", "Lopez", ContactRole.Executive, "Head of E-commerce", "hannah.lopez@lakeshore-outfitters.example");
-        await Contact(pinnacle, "Ben", "Tanaka", ContactRole.Executive, "Chief Operating Officer", "ben.tanaka@pinnacledental.example");
-        await Contact(fernhill, "Elena", "Marsh", ContactRole.TechnicalLead, "Head of Data Engineering", "elena.marsh@fernhill-energy.example");
-        await Contact(copperline, "Jordan", "Price", ContactRole.BusinessDevelopment, "Partner Lead", "jordan.price@copperline.example");
-
-        async Task<OpportunityDto> Deal(string name, string description, Guid account, decimal value, int months, ContractKind type, OpportunityKind kind, int pwin, DateOnly close, Guid? incumbent = null) =>
-            await kit.Opportunities.CreateAsync(new SaveOpportunityRequest(name, description, null, account, ContractType: type, Kind: kind, EstimatedValue: value, EstimatedAwardDate: close,
-                PeriodOfPerformanceMonths: months, ProposalDueOn: close.AddDays(-21), IncumbentAccountId: incumbent, Pwin: pwin, Pgo: 100), ct);
-
-        var omni = await Deal("Lakeshore omnichannel analytics strategy", "Where stores and web channels overlap; recommendations and a 12-month roadmap.", lakeshore, 145_000m, 4, ContractKind.FirmFixedPrice, OpportunityKind.New, 60, today.AddDays(24));
-        var booking = await Deal("Pinnacle patient booking platform", "Implementation of an online booking platform across eleven clinics.", pinnacle, 310_000m, 7, ContractKind.TimeAndMaterials, OpportunityKind.New, 35, today.AddDays(70));
-        var meter = await Deal("Fernhill meter data platform discovery", "Eight-week discovery for the smart-meter data backlog.", fernhill, 85_000m, 2, ContractKind.FirmFixedPrice, OpportunityKind.New, 25, today.AddDays(45));
-        var pricing = await Deal("Wrenfield pricing optimization pilot", "A pilot on two categories.", wrenfield, 60_000m, 3, ContractKind.FirmFixedPrice, OpportunityKind.New, 10, today.AddDays(100));
-        var phase2 = await Deal("Cobalt Harbor carrier integration (phase 2)", "Extend the analytics platform to carrier feeds.", cobalt, 120_000m, 3, ContractKind.TimeAndMaterials, OpportunityKind.Recompete, 55, today.AddDays(35));
-        var renewal = await Deal("Sundial retainer renewal and scope increase", "Add paid social to the monthly retainer from October.", sundial, 288_000m, 12, ContractKind.FirmFixedPrice, OpportunityKind.Recompete, 85, today.AddDays(20));
-        var wonCobalt = await Deal("Cobalt Harbor warehouse analytics rollout", "Warehouse analytics from discovery to handover.", cobalt, 320_000m, 7, ContractKind.TimeAndMaterials, OpportunityKind.New, 60, today.AddDays(-40));
-        var wonSundial = await Deal("Sundial brand and campaign retainer", "A 12-month monthly retainer.", sundial, 264_000m, 12, ContractKind.FirmFixedPrice, OpportunityKind.New, 60, today.AddDays(-32));
-        var wonMarlow = await Deal("Marlow claims workflow redesign", "Fixed-fee redesign of the claims workflow.", marlow, 180_000m, 4, ContractKind.FirmFixedPrice, OpportunityKind.New, 50, today.AddDays(-30), hollis);
-        var lost = await Deal("Fernhill trading dashboard", "A dashboard for the trading desk.", fernhill, 95_000m, 3, ContractKind.FirmFixedPrice, OpportunityKind.New, 40, today.AddDays(-50));
-        var passed = await Deal("Pinnacle website refresh", "A marketing site rebuild.", pinnacle, 40_000m, 2, ContractKind.FirmFixedPrice, OpportunityKind.New, 5, today.AddDays(-30));
-
-        var gates = await kit.Gates.ListGatesAsync(cancellationToken: ct);
-        async Task PassAsync(OpportunityDto o, OpportunityStage stage)
-        {
-            var gate = gates.First(g => g.ToStage == stage);
-            user.Email = BdEmail;
-            var review = await kit.Gates.SubmitAsync(o.Id, new SubmitGateReviewRequest(gate.Id, GateRecommendation.Go, gate.Criteria.Select(c => new GateScoreInput(c.Id, 4)).ToList(), $"{gate.Name} for {o.Number}"), ct);
-            if (review.Status == GateReviewStatus.Pending)
-            {
-                user.Email = Admin;
-                await kit.Gates.ApproveAsync(review.Id, new DecideGateRequest("Go."), ct);
-                user.Email = BdEmail;
-            }
-        }
-
-        async Task ToAsync(OpportunityDto o, OpportunityStage target)
-        {
-            foreach (var stage in OpportunityStages.Open.Where(s => s > OpportunityStage.Identified && s <= target))
-            {
-                if (gates.Any(g => g.ToStage == stage))
-                {
-                    await PassAsync(o, stage);
-                }
-                else
-                {
-                    await kit.Opportunities.ChangeStageAsync(o.Id, new ChangeStageRequest(stage), ct);
-                }
-            }
-        }
-
-        await ToAsync(meter, OpportunityStage.Qualified);
-        await ToAsync(phase2, OpportunityStage.Qualified);
-        await ToAsync(booking, OpportunityStage.Capture);
-        await ToAsync(omni, OpportunityStage.Proposal);
-        await ToAsync(renewal, OpportunityStage.Submitted);
-        foreach (var (won, reason, notes, when, value) in new[]
-                 {
-                     (wonCobalt, OutcomeReason.CustomerRelationship, "Chosen after the paid assessment; COO sponsor.", today.AddDays(-35), 320_000m),
-                     (wonSundial, OutcomeReason.PastPerformance, "Referenced our retail campaign work.", today.AddDays(-30), 264_000m),
-                     (wonMarlow, OutcomeReason.Technical, "Strongest workflow redesign approach; beat the incumbent advisory firm.", today.AddDays(-28), 180_000m),
-                 })
-        {
-            await ToAsync(won, OpportunityStage.Submitted);
-            await kit.Opportunities.RecordOutcomeAsync(won.Id, new RecordOutcomeRequest(OpportunityStage.Won, reason, notes, when, value), ct);
-        }
-
-        await ToAsync(lost, OpportunityStage.Submitted);
-        await kit.Opportunities.RecordOutcomeAsync(lost.Id, new RecordOutcomeRequest(OpportunityStage.Lost, OutcomeReason.Price, "Debrief: a packaged product was a quarter of our price.", today.AddDays(-50), 70_000m, "Packaged software vendor"), ct);
-        await kit.Opportunities.RecordOutcomeAsync(passed.Id, new RecordOutcomeRequest(OpportunityStage.NoBid, OutcomeReason.NotAligned, "Web design isn't what we sell."), ct);
-
-        await kit.Accounts.LogActivityAsync(new SaveCrmActivityRequest(CrmActivityKind.Meeting, "Strategy workshop at Lakeshore HQ", "Agreed the roadmap structure; wants a fixed fee.", lakeshore, null, omni.Id, today.AddDays(-9)), ct);
-        await kit.Accounts.LogActivityAsync(new SaveCrmActivityRequest(CrmActivityKind.Call, "Retainer renewal terms", null, sundial, sundialCo, renewal.Id, today.AddDays(-4)), ct);
-        await kit.Accounts.LogActivityAsync(new SaveCrmActivityRequest(CrmActivityKind.Task, "Send the phase 2 scope to Nadia", null, cobalt, cobaltCo, phase2.Id, DueOn: today.AddDays(2), AssignedTo: BdEmail), ct);
-        await kit.Accounts.LogActivityAsync(new SaveCrmActivityRequest(CrmActivityKind.Task, "Follow up with Elena on discovery dates", null, fernhill, null, meter.Id, DueOn: today.AddDays(-1), AssignedTo: BdEmail), ct);
-
-        // The three wins already have their contracts and projects: link them, so no handoff waits.
-        foreach (var (opp, number, code, customerCode) in new[]
-                 {
-                     (wonCobalt.Id, "CH-2026-014", "6001", "COBALT"), (wonSundial.Id, "SM-RET-2026", "6002", "SUNDIAL"), (wonMarlow.Id, "MM-2026-031", "6003", "MARLOW"),
-                 })
-        {
-            var o = await db.Set<Domain.Crm.Opportunity>().FirstAsync(x => x.Id == opp, ct);
-            o.ContractId = contracts[number].Id;
-            o.ProjectId = projects[code].Id;
-            o.CustomerId = (await db.Set<Customer>().AsNoTracking().FirstAsync(c => c.Code == customerCode, ct)).Id;
-        }
-
-        await db.SaveChangesAsync(ct);
     }
 
     // ---- Invoices, through the real billing services ----
@@ -692,36 +566,8 @@ internal static class CommercialDemoSeed
 
     private static DateOnly Min(DateOnly a, DateOnly b) => a < b ? a : b;
 
-    private sealed class Kit
-    {
-        public Kit(IServiceProvider services, SeedUser user)
-        {
-            var factory = (IWorkbenchDbContextFactory)services.GetService(typeof(IWorkbenchDbContextFactory))!;
-            var clock = TimeProvider.System;
-            var audit = new AuditRecorder(user, clock);
-            var access = new CrmAccess(new AccessControl(factory, user), factory);
-            var notifications = new NoNotifications();
-            Accounts = new CrmAccountService(factory, access, notifications, clock);
-            Opportunities = new OpportunityService(factory, access, audit, notifications, clock);
-            Gates = new OpportunityGateService(factory, access, audit, notifications, clock, new ApprovalEngine(clock));
-        }
-
-        public CrmAccountService Accounts { get; }
-        public OpportunityService Opportunities { get; }
-        public OpportunityGateService Gates { get; }
-    }
-
     private sealed class SeedUser : ICurrentUser
     {
         public string Email { get; set; } = "";
-    }
-
-    private sealed class NoNotifications : INotificationPublisher
-    {
-        public Task<bool> PublishAsync(string recipientEmail, string kind, string title, string? body = null, string? link = null, Guid? sheetId = null, Guid? itemId = null) =>
-            Task.FromResult(false);
-
-        public Task<IReadOnlyList<string>> PublishAsync(IEnumerable<string?> recipientEmails, string kind, string title, string? body = null, string? link = null, Guid? sheetId = null, Guid? itemId = null) =>
-            Task.FromResult<IReadOnlyList<string>>([]);
     }
 }

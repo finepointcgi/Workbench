@@ -110,7 +110,7 @@ public sealed class ModuleMapTests
         Assert.All(ModuleCatalog.Default.Where(m => m.Enforced), m => Assert.False(m.WholeModule));
         Assert.DoesNotContain(ModuleCatalog.Default, m => m.Id is "finance" or "controls");
         Assert.False(ModuleCatalog.Default.Single(m => m.Id == ModuleIds.Ai).Enforced); // Reserved for hosted credits; nothing is built.
-        Assert.Equal(ModuleIds.Accounting, FeatureCatalog.ModuleOf(Feature.SupplierPortal)); // Now accounting, and still unenforced.
+        Assert.Equal(ModuleIds.Core, FeatureCatalog.ModuleOf(Feature.SupplierPortal)); // Purchasing is core now (free); the portal still needs the Business edition.
     }
 }
 

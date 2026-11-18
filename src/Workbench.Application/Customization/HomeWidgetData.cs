@@ -2,7 +2,6 @@ using System.Globalization;
 using Microsoft.Extensions.DependencyInjection;
 using Workbench.Contracts;
 using Workbench.Contracts.Billing;
-using Workbench.Contracts.Crm;
 using Workbench.Contracts.Dashboards;
 using Workbench.Contracts.ProjectAccounting;
 using Workbench.Contracts.Purchasing;
@@ -30,10 +29,12 @@ public sealed class HomeWidgetData(IServiceProvider services, TimeProvider clock
         {
             return widget.Type switch
             {
+                WidgetType.Kpi when widget.Config.Kpi is KpiKind.Pipeline => await ModuleWidgetAsync(data, widget, ct, PipelineKpiKey),
                 WidgetType.Kpi when widget.Config.Kpi is { } kind => data with { Kpi = await KpiAsync(kind, ct) },
                 WidgetType.Kpi => data with { Error = "Pick the figure to show." },
                 WidgetType.ReportChart => await ReportChartAsync(data, widget.Config, ct),
                 WidgetType.Announcement => data with { Markdown = widget.Config.Markdown ?? "" },
+                WidgetType.Module => await ModuleWidgetAsync(data, widget, ct),
                 _ => data,
             };
         }
@@ -47,11 +48,50 @@ public sealed class HomeWidgetData(IServiceProvider services, TimeProvider clock
         }
     }
 
+    /// <summary>
+    /// The key of the provider that computes the "Weighted pipeline" figure. The tile type (<see cref="KpiKind.Pipeline"/>) is stored on saved home
+    /// pages, so it stays in the product; the business development module registers the provider, and without it the tile says so.
+    /// </summary>
+    public const string PipelineKpiKey = "kpi.pipeline";
+
+    /// <summary>
+    /// The key of the provider that computes the "Earned value" dashboard widget (<see cref="WidgetType.EarnedValue"/>, stored on saved dashboards, so it stays in the
+    /// product). The project controls module registers the provider; without it the widget says so.
+    /// </summary>
+    public const string EarnedValueKey = ModuleWidgetKeys.EarnedValue;
+
+    /// <summary>Computes a widget whose data a license module provides, by the key of its <see cref="IHomeWidgetProvider"/>.</summary>
+    public async Task<WidgetDataDto> ComputeModuleAsync(WidgetDto widget, string key, CancellationToken ct)
+    {
+        try
+        {
+            return await ModuleWidgetAsync(new WidgetDataDto(widget.Id, widget.Type, null, null, null), widget, ct, key);
+        }
+        catch (Exception ex) when (ex is WorkbenchForbiddenException or UnauthorizedAccessException)
+        {
+            return new WidgetDataDto(widget.Id, widget.Type, null, null, "You don't have access to this figure.");
+        }
+        catch (WorkbenchNotFoundException)
+        {
+            return new WidgetDataDto(widget.Id, widget.Type, null, null, "What this widget shows no longer exists or isn't shared with you.");
+        }
+    }
+
+    /// <summary>A module's widget: the provider registered for <c>Config.ModuleKey</c> (or <paramref name="providerKey"/>). With the module absent there is no provider, and the widget says so.</summary>
+    private async Task<WidgetDataDto> ModuleWidgetAsync(WidgetDataDto data, WidgetDto widget, CancellationToken ct, string? providerKey = null)
+    {
+        var key = providerKey ?? widget.Config.ModuleKey;
+        var provider = key is not null ? services.GetServices<IHomeWidgetProvider>().FirstOrDefault(p => p.Key == key) : null;
+        return provider is null
+            ? data with { Error = "This widget comes from a module that isn't installed or licensed." }
+            : await provider.ComputeAsync(widget, data, ct);
+    }
+
     private async Task<KpiData> KpiAsync(KpiKind kind, CancellationToken ct)
     {
         var kpi = await KpiForAllAsync(kind, ct);
         // Multicompany, within one company: figures that aren't kept per company say they cover every company.
-        return kind is KpiKind.Utilization or KpiKind.OpenPurchaseOrders or KpiKind.Pipeline && await CompanyLimitedAsync(ct)
+        return kind is KpiKind.Utilization or KpiKind.OpenPurchaseOrders && await CompanyLimitedAsync(ct)
             ? kpi with { Detail = $"{kpi.Detail} · all companies" }
             : kpi;
     }
@@ -129,13 +169,6 @@ public sealed class HomeWidgetData(IServiceProvider services, TimeProvider clock
                     $"{orders.Count} open order{(orders.Count == 1 ? "" : "s")}, value not yet billed", "purchasing/orders");
             }
 
-            case KpiKind.Pipeline:
-            {
-                var forecast = await services.GetRequiredService<IPipelineService>().GetForecastAsync(ct);
-                return new KpiData(kind, "Weighted pipeline", forecast.WeightedValue, true, false,
-                    $"{forecast.TotalValue.ToString("C0", Us)} unweighted", "bd/forecast");
-            }
-
             default:
                 throw new ArgumentException($"Unknown KPI {kind}.");
         }
@@ -169,4 +202,17 @@ public sealed class HomeWidgetData(IServiceProvider services, TimeProvider clock
             .ToList();
         return new ChartData(kind, rows.Select(r => r.Label).ToList(), rows.Select(r => r.Value).ToList(), result.Columns[value].Label);
     }
+}
+
+/// <summary>
+/// A home page and dashboard widget a license module provides (<see cref="Workbench.Contracts.Modules.ModuleHomeWidget"/> lists it in the picker;
+/// this computes it). Register it in the module's <c>ConfigureServices</c>. It runs as the viewer, so it must read through the module's
+/// permission-checked services. Return <paramref name="seed"/> with one payload filled in (<c>Kpi</c>, <c>Chart</c>, <c>Metric</c>, <c>Markdown</c>)
+/// or its <c>Error</c> set; throwing <c>WorkbenchForbiddenException</c> shows the usual "no access" notice.
+/// </summary>
+public interface IHomeWidgetProvider
+{
+    string Key { get; }
+
+    Task<WidgetDataDto> ComputeAsync(WidgetDto widget, WidgetDataDto seed, CancellationToken ct);
 }

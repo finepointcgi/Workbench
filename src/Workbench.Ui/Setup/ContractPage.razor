@@ -8,6 +8,7 @@
 @inject Workbench.Contracts.Billing.IInvoiceService Invoices
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
+@inject IEnumerable<Workbench.Contracts.Modules.UiSlotContribution> SlotContributions
 
 <PageTitle>@(_contract?.ContractNumber ?? Tm.Reword("New contract")) · Setup · Workbench</PageTitle>
 
@@ -174,15 +175,8 @@ else
                 <Workbench.Ui.Setup.Clins.FundingStatusTab Status="_fundingStatus" Clins="_clins" Changed="ReloadDetailAsync" />
             }
         </MudTabPanel>
-        <MudTabPanel Text="@Tm.Reword("Ceilings")" data-testid="tab-ceilings">
-            <Workbench.Ui.Ceilings.CeilingsPanel ContractId="detail.Id" />
-        </MudTabPanel>
-        <MudTabPanel Text="Customer link" data-testid="tab-customer-link">
-            <Workbench.Ui.Setup.CustomerLinksPanel ContractId="detail.Id" />
-        </MudTabPanel>
-        <MudTabPanel Text="Closeout" data-testid="tab-closeout">
-            <Workbench.Ui.Ceilings.CloseoutPanel Scope="Workbench.Contracts.Closeout.CloseoutScope.Contract" TargetId="detail.Id" Changed="ReloadDetailAsync" />
-        </MudTabPanel>
+        @* The project controls module's tabs (Ceilings, Closeout) and the enterprise module's Customer link tab: none without them. *@
+        <UiSlot Name="contract.tabs" Parameters="@(new Dictionary<string, object?> { ["ContractId"] = detail.Id, ["Changed"] = EventCallback.Factory.Create(this, ReloadDetailAsync) })" />
     }
     </MudTabs>
 }
@@ -230,6 +224,9 @@ else
     private ContractState _status = ContractState.Active;
     private DateTime? _start = DateTime.Today;
     private DateTime? _end = DateTime.Today.AddYears(1).AddDays(-1);
+    /// <summary>True when a license module adds tabs to the contract page (project controls: Ceilings, then Closeout, after the Customer link tab).</summary>
+    private bool ModuleTabs => SlotContributions.Any(c => c.Slot == "contract.tabs");
+
     private decimal _ceiling;
     private decimal _funded;
     private bool _isPrime = true;
@@ -255,7 +252,7 @@ else
             }
 
             await LoadDetailAsync(c.Id);
-            _tab = Tab switch { "clins" => 1, "modifications" => 2, "history" => 3, "funding" => 4, "ceilings" => 5, "closeout" => 6, _ => 0 };
+            _tab = Tab switch { "clins" => 1, "modifications" => 2, "history" => 3, "funding" => 4, "ceilings" when ModuleTabs => 6, "closeout" when ModuleTabs => 7, _ => 0 };
         }
         else if (_customers.Count == 1)
         {

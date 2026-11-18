@@ -29,7 +29,8 @@ else
     </PurchasingHeader>
     <MudText Class="mud-text-secondary mb-3">Created by @run.CreatedBy@(run.ApprovedBy is null ? "; needs approval by another Finance user." : $"; approved by {run.ApprovedBy}.") Total @PurchasingFormat.Amount(run.Total)@(run.CreditTotal > 0 ? $" after {PurchasingFormat.Amount(run.CreditTotal)} of vendor credits" : "").</MudText>
 
-    <PaymentRunFilesPanel Run="run" Changed="ReloadAsync" />
+    @* Bank payment files: the accounting module. *@
+    <UiSlot Name="purchasing.payment-run.panels" Parameters="@(new Dictionary<string, object?> { ["Run"] = run, ["Changed"] = EventCallback.Factory.Create(this, ReloadAsync) })" />
 
     @if (run.Status == PaymentRunState.Approved)
     {

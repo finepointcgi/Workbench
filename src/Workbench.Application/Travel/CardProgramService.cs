@@ -19,8 +19,11 @@ public sealed class CardProgramService(
     AuditRecorder audit,
     ICurrentUser currentUser,
     INotificationPublisher notifications,
-    TimeProvider clock) : ICardProgramService
+    TimeProvider clock,
+    Purchasing.IVendorReader? vendorReader = null) : ICardProgramService
 {
+    private Purchasing.IVendorReader Vendors => vendorReader ?? Purchasing.VendorTableReader.Instance;
+
     public const string ProgramEntity = nameof(CardProgram);
     public const string CardEntity = nameof(CorporateCard);
     public const string TransactionEntity = nameof(CardTransaction);
@@ -34,7 +37,7 @@ public sealed class CardProgramService(
     {
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var programs = await db.Set<CardProgram>().AsNoTracking().ToListAsync(cancellationToken);
-        return await ToDtosAsync(db, programs.OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase).ToList(), cancellationToken);
+        return await ToDtosAsync(db, programs.OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase).ToList(), Vendors, cancellationToken);
     }
 
     public async Task<CardProgramDto> CreateProgramAsync(SaveCardProgramRequest request, CancellationToken cancellationToken = default)
@@ -45,7 +48,7 @@ public sealed class CardProgramService(
         db.Set<CardProgram>().Add(program);
         audit.Record(db, ProgramEntity, program.Id, "Created", after: Snapshot(program));
         await db.SaveChangesAsync(cancellationToken);
-        return (await ToDtosAsync(db, [program], cancellationToken))[0];
+        return (await ToDtosAsync(db, [program], Vendors, cancellationToken))[0];
     }
 
     public async Task<CardProgramDto> UpdateProgramAsync(Guid programId, SaveCardProgramRequest request, CancellationToken cancellationToken = default)
@@ -63,7 +66,7 @@ public sealed class CardProgramService(
         await ApplyAsync(db, program, request, cancellationToken);
         audit.Record(db, ProgramEntity, program.Id, "Updated", before, Snapshot(program));
         await db.SaveChangesAsync(cancellationToken);
-        return (await ToDtosAsync(db, [program], cancellationToken))[0];
+        return (await ToDtosAsync(db, [program], Vendors, cancellationToken))[0];
     }
 
     public async Task<IReadOnlyList<CorporateCardDto>> ListCardsAsync(Guid? programId = null, CancellationToken cancellationToken = default)
@@ -347,7 +350,7 @@ public sealed class CardProgramService(
             throw new ArgumentException($"There's already a card program named \"{name}\".");
         }
 
-        if (request.VendorId is { } vendorId && !await db.Set<Vendor>().AnyAsync(v => v.Id == vendorId, ct))
+        if (request.VendorId is { } vendorId && !(await Vendors.ReadAsync(db, [vendorId], ct)).ContainsKey(vendorId))
         {
             throw WorkbenchNotFoundException.For("Vendor", vendorId);
         }
@@ -413,12 +416,12 @@ public sealed class CardProgramService(
         p.Name, p.Issuer, p.VendorId, PaymentResponsibility = p.PaymentResponsibility.ToString(), p.LiabilityAccountId, p.UnsubmittedAlertDays, p.IsActive,
     };
 
-    private static async Task<IReadOnlyList<CardProgramDto>> ToDtosAsync(IWorkbenchDbContext db, IReadOnlyList<CardProgram> programs, CancellationToken ct)
+    private static async Task<IReadOnlyList<CardProgramDto>> ToDtosAsync(IWorkbenchDbContext db, IReadOnlyList<CardProgram> programs, Purchasing.IVendorReader vendorReader, CancellationToken ct)
     {
         var vendorIds = programs.Where(p => p.VendorId != null).Select(p => p.VendorId!.Value).ToList();
         var accountIds = programs.Where(p => p.LiabilityAccountId != null).Select(p => p.LiabilityAccountId!.Value).ToList();
         var ids = programs.Select(p => p.Id).ToList();
-        var vendors = await db.Set<Vendor>().AsNoTracking().Where(v => vendorIds.Contains(v.Id)).ToDictionaryAsync(v => v.Id, v => v.Name, ct);
+        var vendors = (await vendorReader.ReadAsync(db, vendorIds, ct)).ToDictionary(v => v.Key, v => v.Value.Name);
         var accounts = await db.Set<Account>().AsNoTracking().Where(a => accountIds.Contains(a.Id)).ToDictionaryAsync(a => a.Id, a => $"{a.Number} {a.Name}", ct);
         var counts = (await db.Set<CorporateCard>().AsNoTracking().Where(c => ids.Contains(c.ProgramId) && c.IsActive).Select(c => c.ProgramId).ToListAsync(ct))
             .GroupBy(id => id).ToDictionary(g => g.Key, g => g.Count());

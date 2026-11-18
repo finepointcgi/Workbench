@@ -49,26 +49,6 @@ public sealed class HttpAssistantAdminService(HttpClient http) : IAssistantAdmin
     }
 }
 
-public sealed class HttpProjectNarrativeService(HttpClient http) : IProjectNarrativeService
-{
-    private static string Period(string path, Guid? periodId) => periodId is { } p ? $"{path}?periodId={p}" : path;
-
-    public async Task<IReadOnlyList<NarrativePeriodDto>> ListPeriodsAsync(Guid projectId, CancellationToken cancellationToken = default) =>
-        await http.GetAsync($"api/v1/assistant/projects/{projectId}/narrative/periods", cancellationToken).ReadListAsync<NarrativePeriodDto>(cancellationToken);
-
-    public async Task<ProjectNarrativeDto?> GetAsync(Guid projectId, Guid? fiscalPeriodId = null, CancellationToken cancellationToken = default)
-    {
-        var response = await http.GetAsync(Period($"api/v1/assistant/projects/{projectId}/narrative", fiscalPeriodId), cancellationToken);
-        return response.StatusCode == HttpStatusCode.NoContent ? null : await response.ReadAsync<ProjectNarrativeDto>(cancellationToken);
-    }
-
-    public async Task<ProjectNarrativeDto> DraftAsync(Guid projectId, Guid? fiscalPeriodId = null, CancellationToken cancellationToken = default) =>
-        await (await http.PostAsync(Period($"api/v1/assistant/projects/{projectId}/narrative/draft", fiscalPeriodId), null, cancellationToken)).ReadAsync<ProjectNarrativeDto>(cancellationToken);
-
-    public async Task<ProjectNarrativeDto> SaveAsync(Guid projectId, SaveProjectNarrativeRequest request, CancellationToken cancellationToken = default) =>
-        await (await http.PutAsJsonAsync($"api/v1/assistant/projects/{projectId}/narrative", request, cancellationToken)).ReadAsync<ProjectNarrativeDto>(cancellationToken);
-}
-
 public sealed class HttpTimesheetFlagService(HttpClient http) : ITimesheetFlagService
 {
     public async Task<IReadOnlyList<TimesheetFlagsDto>> ListForTimesheetsAsync(IReadOnlyCollection<Guid> timesheetIds, CancellationToken cancellationToken = default) =>
@@ -98,7 +78,6 @@ public static class AssistantClientRegistration
     {
         services.AddHttpClient<IAssistantService, HttpAssistantService>(c => c.BaseAddress = serverBaseAddress);
         services.AddHttpClient<IAssistantAdminService, HttpAssistantAdminService>(c => c.BaseAddress = serverBaseAddress);
-        services.AddHttpClient<IProjectNarrativeService, HttpProjectNarrativeService>(c => c.BaseAddress = serverBaseAddress);
         services.AddHttpClient<ITimesheetFlagService, HttpTimesheetFlagService>(c => c.BaseAddress = serverBaseAddress);
         services.AddHttpClient<ITimesheetSubmissionService, HttpTimesheetSubmissionService>(c => c.BaseAddress = serverBaseAddress);
         return services;

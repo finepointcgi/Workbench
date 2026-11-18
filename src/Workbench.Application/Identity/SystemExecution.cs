@@ -29,7 +29,7 @@ public sealed class SystemExecutionContext
 }
 
 /// <summary>Creates the scopes trusted background jobs run in.</summary>
-internal static class SystemExecution
+public static class SystemExecution
 {
     /// <summary>
     /// A new scope whose <see cref="SystemExecutionContext"/> is active. Throws when called while an HTTP request is

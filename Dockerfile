@@ -19,11 +19,11 @@ WORKDIR /src
 COPY Workbench.slnx dotnet-tools.json ./
 COPY src/Workbench.Domain/Workbench.Domain.csproj src/Workbench.Domain/
 COPY src/Workbench.Contracts/Workbench.Contracts.csproj src/Workbench.Contracts/
+COPY src/Workbench.Modules.Abstractions/Workbench.Modules.Abstractions.csproj src/Workbench.Modules.Abstractions/
 COPY src/Workbench.Application/Workbench.Application.csproj src/Workbench.Application/
 COPY src/Workbench.Infrastructure/Workbench.Infrastructure.csproj src/Workbench.Infrastructure/
 COPY src/Workbench.Migrations.PostgreSql/Workbench.Migrations.PostgreSql.csproj src/Workbench.Migrations.PostgreSql/
 COPY src/Workbench.Migrations.Sqlite/Workbench.Migrations.Sqlite.csproj src/Workbench.Migrations.Sqlite/
-COPY src/Workbench.Costpoint/Workbench.Costpoint.csproj src/Workbench.Costpoint/
 COPY src/Workbench.Api/Workbench.Api.csproj src/Workbench.Api/
 COPY src/Workbench.Ui/Workbench.Ui.csproj src/Workbench.Ui/
 COPY src/Workbench.Web/Workbench.Web.csproj src/Workbench.Web/

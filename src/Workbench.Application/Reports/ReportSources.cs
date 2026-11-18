@@ -32,8 +32,12 @@ public sealed record SourceRows(IReadOnlyList<object?[]> Rows, bool Truncated, I
 /// as the module's own permission decorators) and blanks values of restricted fields the user can't read. Users pick
 /// fields and filters by key; there is no way to send SQL or an expression.
 /// </summary>
-public abstract class ReportSource
+public abstract class ReportSource : Workbench.Contracts.Modules.IModuleRow
 {
+    string Workbench.Contracts.Modules.IModuleRow.Catalog => Workbench.Contracts.Modules.ModuleCatalogs.ReportSources;
+
+    string Workbench.Contracts.Modules.IModuleRow.RowKey => Key;
+
     /// <summary>Rows a report may hold; more are cut off and the result says so.</summary>
     public const int RowLimit = 50_000;
 
@@ -72,8 +76,13 @@ public abstract class ReportSource
     protected static string? Lookup<TKey>(IReadOnlyDictionary<TKey, string> names, TKey? key)
         where TKey : struct => key is { } k && names.TryGetValue(k, out var n) ? n : null;
 
-    public static IReadOnlyList<ReportSource> All { get; } =
-        [new GlLineSource(), new TimeEntrySource(), new OdcSource(), new InvoiceSource(), new ApBillSource(), new ProjectWbsSource(), new EmployeeSource(), new Planning.GlBudgetReportSource()];
+    /// <summary>The sources the product ships, and (in <see cref="All"/>) those loaded modules add.</summary>
+    public static IReadOnlyList<ReportSource> BuiltIn { get; } =
+        [new GlLineSource(), new TimeEntrySource(), new OdcSource(), new InvoiceSource(), new ApBillSource(), new ProjectWbsSource(), new EmployeeSource()];
+
+    private static readonly Workbench.Contracts.Modules.RowCatalog<ReportSource> Catalog = new(BuiltIn);
+
+    public static IReadOnlyList<ReportSource> All => Catalog.All;
 
     public static ReportSource? Find(string key) => All.FirstOrDefault(s => s.Key == key);
 }

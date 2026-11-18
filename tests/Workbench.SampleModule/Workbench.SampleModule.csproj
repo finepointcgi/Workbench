@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- A tiny license module built against the plugin contract, used by the module loader tests. It stands in for a private module repo:
+       it references only Workbench.Plugins' assembly, the contracts and the pieces a module's services need. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.13" />
+    <ProjectReference Include="..\..\src\Workbench.Modules.Abstractions\Workbench.Modules.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\Workbench.Application\Workbench.Application.csproj" />
+    <ProjectReference Include="..\..\src\Workbench.Ui\Workbench.Ui.csproj" />
+  </ItemGroup>
+
+</Project>

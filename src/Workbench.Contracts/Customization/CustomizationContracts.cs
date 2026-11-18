@@ -32,8 +32,6 @@ public static class CustomizableEntityTypes
     public const string Invoice = "invoice";
     public const string ExpenseReport = "expense-report";
     public const string Timesheet = "timesheet";
-    public const string Part = "part";
-    public const string Opportunity = "opportunity";
 }
 
 /// <summary>How values are written as text: what the API, CSV and the editors use.</summary>

@@ -71,12 +71,6 @@ public static class ApprovalDefaults
                 Conditions: [new(ApprovalConditionKind.AmountOverPolicyThreshold)], WhenSubmitterIsApprover: SelfApprovalPolicy.Unassigned),
         ]),
 
-        // A go/no-go gate: another member of Business development (else the submitter's supervisor); administrators may decide.
-        ApprovalDocumentTypes.OpportunityGate => new([
-            new("Business development", 1, new(ApproverRuleKind.OrgRole, ApprovalOrgRole.BusinessDevelopment),
-                WhenSubmitterIsApprover: SelfApprovalPolicy.SubmitterSupervisor, AdminsMayAct: true),
-        ]),
-
         // An org unit's budget in a planning cycle: Finance approves (a Finance owner's own unit goes to their supervisor).
         ApprovalDocumentTypes.BudgetSubmission => new([
             new("Finance", 1, new(ApproverRuleKind.OrgRole, ApprovalOrgRole.Finance),
@@ -91,28 +85,12 @@ public static class ApprovalDefaults
             new("Project manager", 1, new(ApproverRuleKind.ProjectManager), WhenSubmitterIsApprover: SelfApprovalPolicy.Skip),
         ]),
 
-        // Material review: another member of Materials (quality and engineering) decides the disposition, then Finance
-        // when the material at cost is over Quality:NcrFinanceThreshold. Administrators may decide.
-        ApprovalDocumentTypes.NcrDisposition => new([
-            new("Material review board", 1, new(ApproverRuleKind.OrgRole, ApprovalOrgRole.Materials),
-                WhenSubmitterIsApprover: SelfApprovalPolicy.SubmitterSupervisor, AdminsMayAct: true),
-            new("Finance", 2, new(ApproverRuleKind.OrgRole, ApprovalOrgRole.Finance),
-                Conditions: [new(ApprovalConditionKind.AmountOverPolicyThreshold)], WhenSubmitterIsApprover: SelfApprovalPolicy.Unassigned),
-        ]),
-
-        // Change control: another member of Materials, then Finance when the cost impact is over Quality:EcoFinanceThreshold.
-        ApprovalDocumentTypes.EngineeringChange => new([
-            new("Change control board", 1, new(ApproverRuleKind.OrgRole, ApprovalOrgRole.Materials),
-                WhenSubmitterIsApprover: SelfApprovalPolicy.SubmitterSupervisor, AdminsMayAct: true),
-            new("Finance", 2, new(ApproverRuleKind.OrgRole, ApprovalOrgRole.Finance),
-                Conditions: [new(ApprovalConditionKind.AmountOverPolicyThreshold)], WhenSubmitterIsApprover: SelfApprovalPolicy.Unassigned),
-        ]),
-
         // A vendor's ACH bank details: another Finance user (never the requester); administrators may decide.
         ApprovalDocumentTypes.VendorBankChange => new([
             new("Finance", 1, new(ApproverRuleKind.OrgRole, ApprovalOrgRole.Finance), WhenSubmitterIsApprover: SelfApprovalPolicy.Unassigned, AdminsMayAct: true),
         ]),
 
+        _ when Contracts.Modules.ModuleRegistry.Current.RowsOf<Contracts.Modules.ModuleApprovalDocumentType>().FirstOrDefault(t => t.Key == documentType) is { } row => row.DefaultWorkflow ?? Record,
         _ when ApprovalDocumentTypes.IsCustom(documentType) => Record,
         _ => throw new ArgumentException($"Unknown document type \"{documentType}\"."),
     };

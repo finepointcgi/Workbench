@@ -72,11 +72,11 @@ public sealed class OrganizationSsoWebTests
 
         // Signed in, but the IdP says the person authenticated 30 minutes ago (its own session).
         await web.SignInAsync(browser, new MockOidcProvider.User(Admin, "Ada", ["pwd"], AuthTime: DateTimeOffset.UtcNow.AddMinutes(-30)));
-        using var stale = await browser.PostAsync($"/api/v1/payroll/profiles/{employee}/reveal", null);
+        using var stale = await browser.PostAsync($"/api/v1/purchasing/vendors/{employee}/tax-id/reveal", null);
         var status = await browser.GetFromJsonAsync<ReauthenticationStatusDto>("/api/v1/users/me/reauthentication");
 
         Assert.Equal(HttpStatusCode.Forbidden, stale.StatusCode);
-        Assert.Contains("sign in again to show pay rates", await stale.Content.ReadAsStringAsync());
+        Assert.Contains("sign in again to show a vendor's tax id", await stale.Content.ReadAsStringAsync());
         Assert.False(status!.IsRecent);
 
         // An IdP that ignores prompt=login doesn't count.
@@ -85,7 +85,7 @@ public sealed class OrganizationSsoWebTests
         Assert.Equal("/account/access-denied?reason=reauth", ignored.Headers.Location!.OriginalString);
 
         using var again = await web.SignInAsync(browser, new MockOidcProvider.User(Admin, "Ada", ["pwd"]), "/account/reauthenticate?returnUrl=/setup");
-        using var fresh = await browser.PostAsync($"/api/v1/payroll/profiles/{employee}/reveal", null);
+        using var fresh = await browser.PostAsync($"/api/v1/purchasing/vendors/{employee}/tax-id/reveal", null);
 
         Assert.Equal("login", web.Idp.LastAuthorizeQuery["prompt"]);
         Assert.Equal("0", web.Idp.LastAuthorizeQuery["max_age"]);

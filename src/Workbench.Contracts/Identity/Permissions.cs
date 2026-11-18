@@ -31,6 +31,7 @@ public static class Permission
     public const string AdminRoles = "admin.roles";
     public const string AdminSecurity = "admin.security";
     public const string AdminRetention = "admin.retention";
+    // The DCAA readiness checklist's permission (its definition ships with the government contracting module; the key stays here because the checklist service, which is core, checks it).
     public const string AdminCompliance = "admin.compliance";
     public const string AdminIntegrations = "admin.integrations";
     public const string AdminAssistant = "admin.assistant";
@@ -64,7 +65,6 @@ public static class Permission
     public const string TimeTeam = "time.team";
     public const string LaborCostView = "labor.cost.view";
     public const string LaborCostRatesManage = "labor.cost_rates.manage";
-    public const string TimeTotalTime = "time.total_time";
     public const string LeaveBalancesManage = "leave.balances.manage";
     public const string LeavePoliciesManage = "leave.policies.manage";
 
@@ -75,8 +75,6 @@ public static class Permission
     public const string ProjectsFinancialsView = "projects.financials.view";
     public const string ResourcingManage = "projects.resourcing.manage";
     public const string ResourcingView = "projects.resourcing.view";
-    public const string EvmManage = "projects.evm.manage";
-    public const string CeilingsManage = "projects.ceilings.manage";
 
     // General ledger and accounting
     public const string GlAccountsManage = "gl.accounts.manage";
@@ -84,17 +82,9 @@ public static class Permission
     public const string GlPostingManage = "gl.posting.manage";
     public const string GlClose = "gl.close";
     public const string GlReportsView = "gl.reports.view";
-    public const string GlRecurringManage = "gl.recurring.manage";
     public const string GlExport = "gl.export";
     public const string GlRevaluation = "gl.revaluation";
-    public const string BudgetsManage = "planning.budgets.manage";
-    public const string RevenueManage = "revenue.manage";
     public const string IndirectRatesManage = "compliance.indirect_rates";
-    public const string IncurredCostManage = "compliance.incurred_cost";
-    public const string CasCpsrManage = "compliance.cas_cpsr";
-    public const string SalesTaxManage = "tax.sales_tax.manage";
-    public const string AssetsManage = "assets.manage";
-    public const string AssetsDepreciationRun = "assets.depreciation.run";
 
     // Billing and receivables
     public const string BillingInvoicesManage = "billing.invoices.manage";
@@ -111,44 +101,21 @@ public static class Permission
     public const string PurchaseOrdersManage = "purchasing.orders.manage";
     public const string SourcingManage = "purchasing.sourcing.manage";
 
-    // Cash
-    public const string CashManage = "cash.manage";
-    public const string CashForecastView = "cash.forecast.view";
+    // Cash, fixed assets, corporate budgets, recurring journals and sales tax: the accounting module defines these permissions (cash.*, assets.*, planning.*, tax.*, gl.recurring.*), see the module repository.
 
-    // Payroll
-    public const string PayrollRun = "payroll.run";
-    public const string PayrollSetup = "payroll.setup";
-    public const string PayrollProfilesManage = "payroll.profiles.manage";
-    public const string PayRatesView = "payroll.pay_rates.view";
+    // Payroll: the workforce module defines its permissions (payroll.*), see the module repository.
 
     // Travel and expenses
     public const string TravelManage = "travel.manage";
     public const string CardsManage = "cards.manage";
 
-    // People (HR)
-    public const string HrRecordsManage = "hr.records.manage";
-    public const string HrPositionsManage = "hr.positions.manage";
-    public const string HrCompensationManage = "hr.compensation.manage";
+    // People (HR): the workforce module defines the personnel, position, compensation, benefit and onboarding permissions (hr.*); these two stay core.
     public const string HrWorkforceView = "hr.workforce.view";
-    public const string HrBenefitsManage = "hr.benefits.manage";
-    public const string HrOnboardingManage = "hr.onboarding.manage";
     public const string HrRestrictedReports = "hr.reports.restricted";
 
-    // Business development and pricing
-    public const string PipelineView = "bd.pipeline.view";
-    public const string CaptureManage = "bd.capture";
-    public const string OpportunitiesEditAll = "bd.opportunities.edit_all";
-    public const string BpChargeCode = "bd.bp_charge_code";
-    public const string PricingManage = "pricing.prices";
+    // Business development and pricing: the capture module defines its permissions (bd.*, pricing.*), see the module repository.
 
-    // Materials, quality and sales
-    public const string MaterialsView = "materials.view";
-    public const string MaterialsManage = "materials.manage";
-    public const string MaterialsCosting = "materials.costing";
-    public const string QualityDispositions = "quality.dispositions.apply";
-    public const string SalesOrdersView = "sales.orders.view";
-    public const string SalesOrdersManage = "sales.orders.manage";
-    public const string SalesCreditHold = "sales.credit_hold";
+    // Materials, quality and sales: the materials module defines its permissions (materials.*, quality.*, sales.*), see the module repository.
 
     // Sheets
     public const string RestrictedColumnsView = "sheets.restricted_columns.view";
@@ -168,7 +135,6 @@ public static class PermissionCatalog
     private const OrgRoles F = OrgRoles.Finance;
     private const OrgRoles A = OrgRoles.Admin;
     private const OrgRoles H = OrgRoles.Hr;
-    private const OrgRoles M = OrgRoles.Materials;
 
     public const string AreaAdministration = "Administration";
     public const string AreaApprovals = "Approvals";
@@ -188,16 +154,22 @@ public static class PermissionCatalog
     public const string AreaFields = "Sensitive fields";
 
     /// <summary>Areas in display order.</summary>
-    public static IReadOnlyList<string> Areas { get; } =
+    public static IReadOnlyList<string> Areas => Union().Areas;
+
+    /// <summary>The built-in areas, without any a loaded module adds.</summary>
+    public static IReadOnlyList<string> BuiltInAreas { get; } =
         [AreaAdministration, AreaApprovals, AreaSetup, AreaTime, AreaProjects, AreaAccounting, AreaBilling, AreaPayables, AreaCash, AreaPayroll, AreaTravel, AreaPeople, AreaGrowth, AreaMaterials, AreaSheets, AreaFields];
 
-    public static IReadOnlyList<PermissionDefinition> All { get; } =
+    /// <summary>Every permission: the built-in catalog, then those the loaded modules add (<see cref="Modules.ModuleRegistry"/>).</summary>
+    public static IReadOnlyList<PermissionDefinition> All => Union().All;
+
+    /// <summary>The built-in catalog alone.</summary>
+    public static IReadOnlyList<PermissionDefinition> BuiltIn { get; } =
     [
         new(Permission.AdminUsers, AreaAdministration, "Administer users", "Invite people, deactivate and reactivate accounts, sign people out everywhere, link users to employees and assign roles.", A, Sensitive: true),
         new(Permission.AdminRoles, AreaAdministration, "Manage roles", "Create, edit, clone and delete custom roles and choose their permissions.", A, Sensitive: true),
         new(Permission.AdminSecurity, AreaAdministration, "Manage sign-in and security", "Sign-in settings (single sign-on, MFA, SCIM, sessions), the security event log and access reviews.", A, Sensitive: true),
         new(Permission.AdminRetention, AreaAdministration, "Manage retention and legal holds", "Record retention policies and legal holds.", A),
-        new(Permission.AdminCompliance, AreaAdministration, "DCAA readiness", "The DCAA accounting system readiness checklist.", A),
         new(Permission.AdminIntegrations, AreaAdministration, "Manage integrations", "API keys, webhooks, connectors and the Costpoint sync.", A, Sensitive: true),
         new(Permission.AdminAssistant, AreaAdministration, "Administer the assistant", "AI assistant settings, usage and audit.", A),
         new(Permission.AdminSupport, AreaAdministration, "Handle support requests", "See and answer everyone's support requests, and hear about new ones.", A),
@@ -227,7 +199,6 @@ public static class PermissionCatalog
         new(Permission.TimeTeam, AreaTime, "Team time for everyone", "The Team time page and timesheet approvals list for the whole organization.", OrgRoles.Timekeeper),
         new(Permission.LaborCostView, AreaFields, "See cost rates and labor cost", "Employee cost rates, labor cost in reports and the labor distribution.", F, Sensitive: true),
         new(Permission.LaborCostRatesManage, AreaTime, "Change cost rates", "Add employee cost rates.", F, Sensitive: true),
-        new(Permission.TimeTotalTime, AreaTime, "Total time accounting", "The labor cost method, uncompensated overtime and effective labor rates.", F),
         new(Permission.LeaveBalancesManage, AreaTime, "Manage leave balances", "See everyone's leave balances, adjust them, run accruals and the leave year end.", F),
         new(Permission.LeavePoliciesManage, AreaTime, "Manage leave policies and holidays", "Leave policies, eligibility and the holiday calendar.", A),
 
@@ -237,8 +208,6 @@ public static class PermissionCatalog
         new(Permission.ProjectsFinancialsView, AreaProjects, "See every project's financials", "Financials, budgets, project costs and financial exports of every project, and contract funding. Project managers always see their own.", F),
         new(Permission.ResourcingManage, AreaProjects, "Staff every project", "Change anyone's allocations on every project and see capacity and utilization.", OrgRoles.ResourceManager),
         new(Permission.ResourcingView, AreaProjects, "See every project's staffing", "Allocations and open demand on every project.", F),
-        new(Permission.EvmManage, AreaProjects, "Manage earned value", "Approve and reject baseline changes and reopen closed earned value periods.", F),
-        new(Permission.CeilingsManage, AreaProjects, "Manage ceilings and closeout", "Hours, cost and billing ceilings, overrides, alerts and contract and project closeout.", F),
 
         new(Permission.GlAccountsManage, AreaAccounting, "Manage the chart of accounts", "Add and change general ledger accounts.", F),
         new(Permission.GlJournalsPost, AreaAccounting, "Post journal entries", "Draft, post and reverse manual journal entries.", F),
@@ -246,16 +215,8 @@ public static class PermissionCatalog
         new(Permission.GlClose, AreaAccounting, "Close fiscal periods", "The period close checklist and closing accounting periods, including closing anyway (with a reason) when a check fails.", F),
         new(Permission.GlReportsView, AreaAccounting, "See financial statements", "Balance sheet, income statement, trial balance, consolidated statements, intercompany balances and the general ledger in the report writer.", F),
         new(Permission.GlExport, AreaAccounting, "Export to accounting software", "Make QuickBooks, Xero and generic accounting files from journal entries, invoices, payments, bills and the chart of accounts, map account names, and see the export history.", F),
-        new(Permission.GlRecurringManage, AreaAccounting, "Manage recurring journals", "Recurring journal templates and runs.", F),
         new(Permission.GlRevaluation, AreaAccounting, "Revalue foreign currency", "Currency revaluation and the foreign currency report.", F),
-        new(Permission.BudgetsManage, AreaAccounting, "Manage corporate budgets", "Budget versions, budget vs actual and planning cycles.", F),
-        new(Permission.RevenueManage, AreaAccounting, "Revenue recognition", "Revenue setup, estimates at completion and revenue recognition runs and reports.", F),
         new(Permission.IndirectRatesManage, AreaAccounting, "Manage indirect rates", "Fringe, overhead and G&A pools and rates.", F),
-        new(Permission.IncurredCostManage, AreaAccounting, "Incurred cost submissions", "Prepare incurred cost (ICE) submissions.", F),
-        new(Permission.CasCpsrManage, AreaAccounting, "CAS disclosure and purchasing review", "The CAS disclosure statement and purchasing system review files.", F),
-        new(Permission.SalesTaxManage, AreaAccounting, "Manage sales and use tax", "Tax rates, jurisdictions, exemption certificates and returns.", F),
-        new(Permission.AssetsManage, AreaAccounting, "Manage fixed assets", "The asset register, categories, transfers, tax books and asset reports.", F),
-        new(Permission.AssetsDepreciationRun, AreaAccounting, "Run depreciation", "Run and post depreciation.", F),
 
         new(Permission.BillingInvoicesManage, AreaBilling, "Bill customers", "Invoices, billing milestones, government billing, progress payments, the unbilled accrual and customer statements.", F),
         new(Permission.BillingPaymentsRecord, AreaBilling, "Record customer payments", "Record and apply customer payments.", F),
@@ -270,38 +231,15 @@ public static class PermissionCatalog
         new(Permission.PurchaseOrdersManage, AreaPayables, "Manage purchase orders", "Every purchase order and requisition, receiving and the three-way match (and its overrides).", F),
         new(Permission.SourcingManage, AreaPayables, "Sourcing", "Requests for quote, the supplier portal and EDI.", F),
 
-        new(Permission.CashManage, AreaCash, "Manage bank accounts", "Bank accounts, statement imports and bank reconciliation.", F),
-        new(Permission.CashForecastView, AreaCash, "See the cash position", "The cash position and cash forecast.", F),
 
-        new(Permission.PayrollRun, AreaPayroll, "Run payroll", "Run, post and void payroll.", F),
-        new(Permission.PayrollSetup, AreaPayroll, "Set up payroll", "Pay groups, payroll providers and payroll file layouts.", F),
-        new(Permission.PayrollProfilesManage, AreaPayroll, "Manage payroll profiles", "Employees' payroll profiles, with pay rates masked.", F),
-        new(Permission.PayRatesView, AreaFields, "View pay rates", "Reveal what employees are paid.", F, Sensitive: true),
 
         new(Permission.TravelManage, AreaTravel, "Manage everyone's travel", "Everyone's trips, travel advances and per diem.", F),
         new(Permission.CardsManage, AreaTravel, "Manage corporate cards", "Card programs, statement imports, everyone's card charges and card reconciliation.", F),
 
-        new(Permission.HrRecordsManage, AreaPeople, "Manage personnel records", "Everyone's personnel records, documents and EEO data, terminated employees and personnel requests.", H, Sensitive: true),
-        new(Permission.HrPositionsManage, AreaPeople, "Manage positions", "Add and change approved positions.", H),
-        new(Permission.HrCompensationManage, AreaPeople, "Change compensation", "Propose and decide compensation changes.", H, Sensitive: true),
         new(Permission.HrWorkforceView, AreaPeople, "See workforce and pay data", "Positions with salary ranges, compensation (and deciding compensation changes), benefits administration and deductions, and workforce reports.", H | F, Sensitive: true),
-        new(Permission.HrBenefitsManage, AreaPeople, "Administer benefits", "Benefit plans, enrollment windows, life events and deductions.", H),
-        new(Permission.HrOnboardingManage, AreaPeople, "Onboarding and offboarding", "Onboarding and offboarding checklists for everyone.", H),
         new(Permission.HrRestrictedReports, AreaPeople, "Restricted HR reports", "EEO-1, VETS-4212, clearance and other restricted HR reports.", H, Sensitive: true),
 
-        new(Permission.PipelineView, AreaGrowth, "See the pipeline", "The whole capture pipeline, accounts and contacts, leads, forecast and gate settings.", OrgRoles.BusinessDevelopment | F),
-        new(Permission.CaptureManage, AreaGrowth, "Capture new business", "Create leads and opportunities, review leads and change go/no-go gates.", OrgRoles.BusinessDevelopment),
-        new(Permission.OpportunitiesEditAll, AreaGrowth, "Edit every opportunity", "Change any opportunity and withdraw anyone's gate review, not just the ones you manage.", A),
-        new(Permission.BpChargeCode, AreaGrowth, "Choose the B&P charge code", "The bid and proposal charge code used by the pipeline.", F),
-        new(Permission.PricingManage, AreaGrowth, "Price proposals", "Build, compare and lock proposal prices (shows cost rates, indirect rates and fee).", OrgRoles.Pricing | F, Sensitive: true),
 
-        new(Permission.MaterialsView, AreaMaterials, "See materials", "Parts, inventory, work orders, quality records and inventory reports.", M | F),
-        new(Permission.MaterialsManage, AreaMaterials, "Run materials", "Change parts, inventory, BOMs, work orders, MRP, quality, engineering changes, kits and shipping.", M),
-        new(Permission.MaterialsCosting, AreaMaterials, "Post inventory value", "Revalue inventory, see work-in-process cost, post landed cost and physical inventory adjustments.", F),
-        new(Permission.QualityDispositions, AreaMaterials, "Apply material review dispositions", "Apply NCR dispositions (they can move inventory and cost).", M | F),
-        new(Permission.SalesOrdersView, AreaMaterials, "See sales orders", "Sales orders, pick lists and shipments.", M | F | OrgRoles.BusinessDevelopment),
-        new(Permission.SalesOrdersManage, AreaMaterials, "Enter sales orders", "Enter and change sales orders.", M | F),
-        new(Permission.SalesCreditHold, AreaMaterials, "Credit holds", "Put sales orders on or off credit hold.", F),
 
         new(Permission.RestrictedColumnsView, AreaSheets, "See restricted columns", "Sheet columns marked \"Finance and owners only\" in every workspace.", F, Sensitive: true),
         new(Permission.SheetFormsPublic, AreaSheets, "Publish public forms",
@@ -314,11 +252,27 @@ public static class PermissionCatalog
         new(Permission.FieldsPricingFee, AreaFields, "See fee and margin", "Fee, fee rate, margin and price in proposal pricing, and the cost volume export. Without it pricing shows cost only.", OrgRoles.Pricing | F, Sensitive: true),
     ];
 
-    private static readonly FrozenDictionary<string, PermissionDefinition> ByKey = All.ToFrozenDictionary(p => p.Key, StringComparer.Ordinal);
+    private sealed record UnionView(Modules.ModuleSet Set, IReadOnlyList<string> Areas, IReadOnlyList<PermissionDefinition> All, FrozenDictionary<string, PermissionDefinition> ByKey);
 
-    public static PermissionDefinition? Find(string key) => ByKey.GetValueOrDefault(key);
+    private static UnionView? _union;
 
-    public static bool Exists(string key) => ByKey.ContainsKey(key);
+    /// <summary>The built-in catalog with the loaded modules' permissions, rebuilt only when the module set changes.</summary>
+    private static UnionView Union()
+    {
+        var set = Modules.ModuleRegistry.Current;
+        if (_union is { } cached && ReferenceEquals(cached.Set, set))
+        {
+            return cached;
+        }
+
+        var all = set.IsEmpty ? BuiltIn : [.. BuiltIn, .. set.Modules.SelectMany(m => m.Permissions)];
+        var areas = set.IsEmpty ? BuiltInAreas : [.. BuiltInAreas, .. set.Modules.SelectMany(m => m.PermissionAreas).Where(a => !BuiltInAreas.Contains(a)).Distinct()];
+        return _union = new UnionView(set, areas, all, all.ToFrozenDictionary(p => p.Key, StringComparer.Ordinal));
+    }
+
+    public static PermissionDefinition? Find(string key) => Union().ByKey.GetValueOrDefault(key);
+
+    public static bool Exists(string key) => Union().ByKey.ContainsKey(key);
 
     /// <summary>The permission's name, or the key itself for one that no longer exists.</summary>
     public static string NameOf(string key) => Find(key)?.Name ?? key;
@@ -339,11 +293,11 @@ public static class PermissionCatalog
         new(Permission.VendorBankDetails, Permission.ApPaymentsManage, "Someone who can change vendor bank details and send payments could redirect payments."),
         new(Permission.ApBillsManage, Permission.ApPaymentsManage, "Entering or approving bills and paying them should be separate."),
         new(Permission.PurchaseOrdersManage, Permission.ApBillsManage, "Ordering goods and approving the vendor's bill should be separate."),
-        new(Permission.PayrollProfilesManage, Permission.PayrollRun, "Someone who can change pay and run payroll could pay themselves more."),
-        new(Permission.HrCompensationManage, Permission.PayrollRun, "Deciding compensation and running payroll should be separate."),
+        new("payroll.profiles.manage", "payroll.run", "Someone who can change pay and run payroll could pay themselves more."),
+        new("hr.compensation.manage", "payroll.run", "Deciding compensation and running payroll should be separate."),
         new(Permission.BillingInvoicesManage, Permission.BillingPaymentsRecord, "Billing customers and recording their payments should be separate."),
-        new(Permission.GlJournalsPost, Permission.CashManage, "Posting journal entries and reconciling the bank should be separate."),
-        new(Permission.LaborCostRatesManage, Permission.PayrollRun, "Setting cost rates and running payroll should be separate."),
+        new(Permission.GlJournalsPost, "cash.manage", "Posting journal entries and reconciling the bank should be separate."),
+        new(Permission.LaborCostRatesManage, "payroll.run", "Setting cost rates and running payroll should be separate."),
     ];
 
     /// <summary>The conflicts present in <paramref name="permissions"/>.</summary>

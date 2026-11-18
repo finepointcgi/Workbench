@@ -8,7 +8,6 @@ using Workbench.Contracts.Automations;
 using Workbench.Contracts.Customization;
 using Workbench.Contracts.Identity;
 using Workbench.Domain.Billing;
-using Workbench.Domain.Crm;
 using Workbench.Domain.ProjectAccounting;
 using Workbench.Domain.Purchasing;
 
@@ -25,8 +24,12 @@ public sealed record AutomationRecordContext(IWorkbenchDbContext Db, object Enti
 /// the audit entity type its module writes, how to name and link to a record, how to find its company, org unit, project
 /// and people, which built-in fields an automation may set, and who may change or read it.
 /// </summary>
-public sealed class AutomationEntity
+public sealed class AutomationEntity : Workbench.Contracts.Modules.IModuleRow
 {
+    string Workbench.Contracts.Modules.IModuleRow.Catalog => Workbench.Contracts.Modules.ModuleCatalogs.AutomationEntities;
+
+    string Workbench.Contracts.Modules.IModuleRow.RowKey => Key;
+
     public required string Key { get; init; }
     public required string Label { get; init; }
     public required Type ClrType { get; init; }
@@ -95,7 +98,8 @@ public static class AutomationEntities
 
     private static Func<OrgRoles, bool> Finance => r => r.IsFinance();
 
-    public static IReadOnlyList<AutomationEntity> All { get; } =
+    /// <summary>The records the product ships, and (in <see cref="All"/>) those loaded modules add.</summary>
+    public static IReadOnlyList<AutomationEntity> BuiltIn { get; } =
     [
         new()
         {
@@ -194,14 +198,11 @@ public static class AutomationEntities
             Writable = Set(nameof(Vendor.ContactName), nameof(Vendor.ContactEmail), nameof(Vendor.ContactPhone)),
             CanWrite = Finance, CanReadAll = r => r.IsFinance() || r.CanViewMaterials(),
         },
-        new()
-        {
-            Key = "opportunity", Label = "Opportunity", ClrType = typeof(Opportunity), LinkFormat = "bd/opportunities/{id}", ProjectProperty = nameof(Opportunity.ProjectId),
-            Writable = Set(nameof(Opportunity.Pwin), nameof(Opportunity.Pgo), nameof(Opportunity.CaptureManagerEmail), nameof(Opportunity.ProposalManagerEmail)),
-            FinanceFields = Set(nameof(Opportunity.EstimatedValue), nameof(Opportunity.AwardedValue)),
-            CanWrite = r => r.IsBusinessDevelopment(), CanReadAll = r => r.IsBusinessDevelopment() || r.IsFinance(),
-        },
     ];
+
+    private static readonly Workbench.Contracts.Modules.RowCatalog<AutomationEntity> Catalog = new(BuiltIn);
+
+    public static IReadOnlyList<AutomationEntity> All => Catalog.All;
 
     public static AutomationEntity? Find(string? key) => key is null ? null : All.FirstOrDefault(e => e.Key == key);
 

@@ -2,7 +2,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Workbench.Application.MyTodo;
 using Workbench.Contracts.Approvals;
-using Workbench.Contracts.Ceilings;
 using Workbench.Contracts.Contracts;
 using Workbench.Contracts.Leave;
 using Workbench.Contracts.MyTodo;
@@ -217,20 +216,13 @@ public sealed class MyTodoServiceTests
     }
 
     [Fact]
-    public async Task Ceilings_and_funding_are_asked_only_for_projects_the_user_manages()
+    public async Task Funding_is_asked_only_for_projects_the_user_manages()
     {
-        var ceilings = new FakeCeilings();
         var funding = new FakeFunding();
-        await using var kit = await MyTodoKit.CreateAsync(services =>
-        {
-            services.AddScoped<ICeilingService>(_ => ceilings);
-            services.AddScoped<IFundingService>(_ => funding);
-        });
+        await using var kit = await MyTodoKit.CreateAsync(services => services.AddScoped<IFundingService>(_ => funding));
 
         var pm = await kit.GetAsync(Owner);
-        var ceiling = Assert.Single(pm.Items, i => i.Key.StartsWith("ceiling:", StringComparison.Ordinal));
-        Assert.Equal("1001 hours is at 92% of its hours ceiling", ceiling.Title);
-        Assert.Equal(TodoUrgency.Today, ceiling.Urgency); // critical
+        Assert.DoesNotContain(pm.Items, i => i.Key.StartsWith("ceiling:", StringComparison.Ordinal)); // ceilings are the project controls module's to-do
         var clin = Assert.Single(pm.Items, i => i.Key.StartsWith("funding:", StringComparison.Ordinal));
         var weeks = (int)Math.Round((new DateOnly(2026, 11, 30).DayNumber - Today.DayNumber) / 7.0);
         Assert.Equal($"1001 is running low on funding: about {weeks} weeks left", clin.Title);
@@ -238,17 +230,16 @@ public sealed class MyTodoServiceTests
         Assert.Contains("Slow spending or ask Finance to request incremental funding.", clin.Reason);
         Assert.Null(clin.Due); // the run-out date is in the reason, not shown as a due date
         Assert.Equal(TodoUrgency.ThisWeek, clin.Urgency);
-        Assert.Equal([kit.Fx.Project1], ceilings.Asked.Distinct());
         Assert.Equal([kit.Fx.Project1], funding.Asked.Distinct());
 
-        ceilings.Asked.Clear();
+        funding.Asked.Clear();
         foreach (var other in new[] { Editor, Viewer, Admin, Finance })
         {
             var todo = await kit.GetAsync(other);
             Assert.DoesNotContain(todo.Items, i => i.Category == TodoCategories.Project);
         }
 
-        Assert.Empty(ceilings.Asked); // other people's projects aren't even read
+        Assert.Empty(funding.Asked); // other people's projects aren't even read
     }
 
     [Fact]
@@ -323,33 +314,6 @@ public sealed class MyTodoServiceTests
             MyTodoItem Item(string key, DateOnly? due) => new($"fixed:{key}", TodoCategories.Sheet, key, "", context.UrgencyFor(due), due, "", "");
             return Task.FromResult<IReadOnlyList<MyTodoItem>>([Item("later", Today.AddDays(30)), Item("week-early", Today.AddDays(1)), Item("today", Today), Item("overdue", Today.AddDays(-3))]);
         }
-    }
-
-    private sealed class FakeCeilings : ICeilingService
-    {
-        public List<Guid> Asked { get; } = [];
-
-        public Task<ProjectCeilingStatusDto> GetProjectStatusAsync(Guid projectId, CancellationToken cancellationToken = default)
-        {
-            Asked.Add(projectId);
-            var ceiling = new CeilingDto(Guid.NewGuid(), CeilingScope.Project, null, null, null, null, projectId, "1001", null, null, null, null, 1000m, null, null,
-                CeilingMode.Warn, [80, 90], false, null, true, "1001 hours");
-            var status = new CeilingStatusDto(ceiling, [new CeilingMeasureDto(CeilingMetric.Hours, 1000m, 1000m, 920m, 80m, 92m, CeilingAlertLevel.Critical)], [], CeilingAlertLevel.Critical, false);
-            return Task.FromResult(new ProjectCeilingStatusDto(projectId, "1001", null, [status], false));
-        }
-
-        public Task<ContractCeilingStatusDto> GetContractStatusAsync(Guid contractId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<CeilingStatusDto> GetAsync(Guid ceilingId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<CeilingDto> CreateAsync(SaveCeilingRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<CeilingDto> UpdateAsync(Guid ceilingId, SaveCeilingRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<CeilingDto> DeactivateAsync(Guid ceilingId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<IReadOnlyList<CeilingOverrideDto>> ListOverridesAsync(Guid ceilingId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<CeilingOverrideDto> GrantOverrideAsync(Guid ceilingId, GrantCeilingOverrideRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<CeilingOverrideDto> RevokeOverrideAsync(Guid overrideId, CeilingReasonRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<IReadOnlyList<RateCeilingDto>> ListRateCeilingsAsync(Guid contractId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<RateCeilingDto> CreateRateCeilingAsync(Guid contractId, SaveRateCeilingRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<RateCeilingDto> DeactivateRateCeilingAsync(Guid rateCeilingId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-        public Task<int> CheckAlertsAsync(Guid contractId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
     private sealed class FakeFunding : IFundingService

@@ -1,7 +1,6 @@
 using System.Net.Http.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Workbench.Contracts.Migration;
-using Workbench.Contracts.Payroll;
 
 namespace Workbench.ApiClient;
 
@@ -15,20 +14,6 @@ public sealed class HttpMigrationService(HttpClient http) : IMigrationService
 
     public async Task<MigrationChecklistDto> SetStepAsync(string stepKey, SetMigrationStepRequest request, CancellationToken cancellationToken = default) =>
         await (await http.PutAsJsonAsync($"api/v1/migration/steps/{Uri.EscapeDataString(stepKey)}", request, cancellationToken)).ReadAsync<MigrationChecklistDto>(cancellationToken);
-}
-
-public sealed class HttpParallelRunService(HttpClient http) : IParallelRunService
-{
-    private const string Base = "api/v1/migration/parallel-run";
-
-    public async Task<ParallelRunDto> GetAsync(Guid? fiscalPeriodId = null, CancellationToken cancellationToken = default) =>
-        await (await http.GetAsync($"{Base}{(fiscalPeriodId is { } id ? $"?periodId={id}" : "")}", cancellationToken)).ReadAsync<ParallelRunDto>(cancellationToken);
-
-    public async Task<ParallelRunDto> UploadAsync(UploadParallelReportRequest request, CancellationToken cancellationToken = default) =>
-        await (await http.PostAsJsonAsync($"{Base}/upload", request, cancellationToken)).ReadAsync<ParallelRunDto>(cancellationToken);
-
-    public async Task<IReadOnlyList<ParallelCauseDto>> ExplainAsync(Guid runId, CancellationToken cancellationToken = default) =>
-        await http.GetAsync($"{Base}/runs/{runId}/causes", cancellationToken).ReadListAsync<ParallelCauseDto>(cancellationToken);
 }
 
 public sealed class HttpReconciliationService(HttpClient http) : IReconciliationService
@@ -72,29 +57,6 @@ public sealed class HttpReconciliationService(HttpClient http) : IReconciliation
         await (await http.GetAsync($"{Base}/runs/{runId}/export", cancellationToken)).ReadAsync<ReconExportFile>(cancellationToken);
 }
 
-public sealed class HttpPayrollLayoutService(HttpClient http) : IPayrollLayoutService
-{
-    private static string Url(string provider, string suffix = "") => $"api/v1/payroll/layouts/{Uri.EscapeDataString(provider)}{suffix}";
-
-    public async Task<PayrollLayoutDto> GetAsync(string providerKey, CancellationToken cancellationToken = default) =>
-        await (await http.GetAsync(Url(providerKey), cancellationToken)).ReadAsync<PayrollLayoutDto>(cancellationToken);
-
-    public async Task<PayrollLayoutDto> GetDefaultAsync(string providerKey, CancellationToken cancellationToken = default) =>
-        await (await http.GetAsync(Url(providerKey, "/default"), cancellationToken)).ReadAsync<PayrollLayoutDto>(cancellationToken);
-
-    public async Task<PayrollLayoutDto> SaveAsync(string providerKey, SavePayrollLayoutRequest request, CancellationToken cancellationToken = default) =>
-        await (await http.PutAsJsonAsync(Url(providerKey), request, cancellationToken)).ReadAsync<PayrollLayoutDto>(cancellationToken);
-
-    public async Task<PayrollLayoutDto> ResetAsync(string providerKey, CancellationToken cancellationToken = default) =>
-        await (await http.DeleteAsync(Url(providerKey), cancellationToken)).ReadAsync<PayrollLayoutDto>(cancellationToken);
-
-    public async Task<RegisterTestResultDto> TestRegisterAsync(string providerKey, TestRegisterSampleRequest request, CancellationToken cancellationToken = default) =>
-        await (await http.PostAsJsonAsync(Url(providerKey, "/test-register"), request, cancellationToken)).ReadAsync<RegisterTestResultDto>(cancellationToken);
-
-    public async Task<HoursTemplateTestDto> TestHoursTemplateAsync(string providerKey, TestHoursTemplateRequest request, CancellationToken cancellationToken = default) =>
-        await (await http.PostAsJsonAsync(Url(providerKey, "/test-hours"), request, cancellationToken)).ReadAsync<HoursTemplateTestDto>(cancellationToken);
-}
-
 public static class MigrationClientRegistration
 {
     public static IServiceCollection AddMigrationClients(this IServiceCollection services, Uri serverBaseAddress)
@@ -105,12 +67,6 @@ public static class MigrationClientRegistration
             c.BaseAddress = serverBaseAddress;
             c.Timeout = TimeSpan.FromMinutes(10);
         });
-        services.AddHttpClient<IParallelRunService, HttpParallelRunService>(c =>
-        {
-            c.BaseAddress = serverBaseAddress;
-            c.Timeout = TimeSpan.FromMinutes(10);
-        });
-        services.AddHttpClient<IPayrollLayoutService, HttpPayrollLayoutService>(c => c.BaseAddress = serverBaseAddress);
         return services;
     }
 }

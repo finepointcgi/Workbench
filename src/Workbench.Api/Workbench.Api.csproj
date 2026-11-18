@@ -3,6 +3,7 @@
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
     <ProjectReference Include="..\Workbench.Contracts\Workbench.Contracts.csproj" />
+    <ProjectReference Include="..\Workbench.Modules.Abstractions\Workbench.Modules.Abstractions.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

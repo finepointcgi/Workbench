@@ -23,7 +23,8 @@ public sealed class BuiltInEntityFieldCatalog : IEntityFieldCatalog
     public static IReadOnlyList<EntityFieldDto> For(string entityType) =>
         Fields.TryGetValue(entityType, out var fields)
             ? fields
-            : throw new ArgumentException($"Unknown entity type \"{entityType}\".", nameof(entityType));
+            : Workbench.Contracts.Modules.ModuleRegistry.Current.RowsOf<Workbench.Contracts.Modules.ModuleListOnlyEntity>().FirstOrDefault(r => r.EntityType == entityType)?.Fields
+                ?? throw new ArgumentException($"Unknown entity type \"{entityType}\".", nameof(entityType));
 
     public async Task<object?> GetValueAsync(string entityType, Guid recordId, string fieldKey, CancellationToken ct = default)
     {
@@ -50,13 +51,6 @@ public sealed class BuiltInEntityFieldCatalog : IEntityFieldCatalog
             new(E.Timesheet, "periodStart", "Period", BuiltInForms.Date, false, false, null, null),
             new(E.Timesheet, "status", "Status", BuiltInForms.Select, false, false, null, null),
             new(E.Timesheet, "totalHours", "Hours", BuiltInForms.Number, false, false, null, null),
-        ];
-        all[E.SalesOrder] =
-        [
-            new(E.SalesOrder, "number", "Order", BuiltInForms.Text, false, false, null, null),
-            new(E.SalesOrder, "customerName", "Customer", BuiltInForms.Text, false, false, null, null),
-            new(E.SalesOrder, "status", "Status", BuiltInForms.Select, false, false, null, null),
-            new(E.SalesOrder, "total", "Total", BuiltInForms.Money, false, false, null, null),
         ];
         return all;
     }

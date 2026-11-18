@@ -16,7 +16,7 @@ public static class IntegrationOutbox
     /// <summary>The event type of the "Send test" delivery; not in the catalog and never fanned out.</summary>
     public const string PingEventType = "ping";
 
-    internal static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
+    public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
         DefaultIgnoreCondition = JsonIgnoreCondition.Never,
         WriteIndented = false,
@@ -35,7 +35,7 @@ public static class IntegrationOutbox
         return row;
     }
 
-    internal static IntegrationOutboxEvent Build(string eventType, string subject, Guid subjectId, object data, string? actor, DateTime occurredAtUtc)
+    public static IntegrationOutboxEvent Build(string eventType, string subject, Guid subjectId, object data, string? actor, DateTime occurredAtUtc)
     {
         var row = new IntegrationOutboxEvent
         {
@@ -79,9 +79,6 @@ public static class IntegrationEventPayloads
     public static EmployeeEventData Employee(Domain.ProjectAccounting.Employee employee) =>
         new(employee.Id, employee.EmployeeNumber, employee.DisplayName, employee.Email, employee.CompanyId, employee.OrgUnitId, employee.SupervisorId,
             employee.HireDate, employee.TerminationDate);
-
-    public static OpportunityStageEventData OpportunityStage(Domain.Crm.Opportunity opportunity, Domain.Crm.OpportunityStage from) =>
-        new(opportunity.Id, opportunity.Number, opportunity.Name, from.ToString(), opportunity.Stage.ToString(), opportunity.EstimatedValue, opportunity.EstimatedAwardDate);
 
     public static PeriodEventData Period(Domain.ProjectAccounting.FiscalPeriod period, int fiscalYear) =>
         new(period.Id, fiscalYear, period.Number, period.Name, period.Start, period.End, period.Status.ToString());

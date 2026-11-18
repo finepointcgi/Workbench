@@ -6,16 +6,16 @@
       "src/Workbench.ApiClient/Workbench.ApiClient.csproj",
       "src/Workbench.Application/Workbench.Application.csproj",
       "src/Workbench.Contracts/Workbench.Contracts.csproj",
-      "src/Workbench.Costpoint/Workbench.Costpoint.csproj",
       "src/Workbench.Domain/Workbench.Domain.csproj",
       "src/Workbench.Infrastructure/Workbench.Infrastructure.csproj",
       "src/Workbench.LicenseServer/Workbench.LicenseServer.csproj",
       "src/Workbench.Migrations.PostgreSql/Workbench.Migrations.PostgreSql.csproj",
       "src/Workbench.Migrations.Sqlite/Workbench.Migrations.Sqlite.csproj",
+      "src/Workbench.Modules.Abstractions/Workbench.Modules.Abstractions.csproj",
       "src/Workbench.Ui/Workbench.Ui.csproj",
       "src/Workbench.Web/Workbench.Web.csproj",
-      "src/Workbench.Worker/Workbench.Worker.csproj",
       "tests/Workbench.LicenseServer.Tests/Workbench.LicenseServer.Tests.csproj",
+      "tests/Workbench.SampleModule/Workbench.SampleModule.csproj",
       "tests/Workbench.Tests/Workbench.Tests.csproj",
       "tools/Workbench.LoadData/Workbench.LoadData.csproj"
     ]

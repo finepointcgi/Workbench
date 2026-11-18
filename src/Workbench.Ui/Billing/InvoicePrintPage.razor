@@ -1,6 +1,6 @@
 @page "/billing/invoices/{InvoiceId:guid}/print"
 @layout Workbench.Ui.Layout.BillingPrintLayout
-@inject IGovernmentBillingService Government
+@inject IInvoiceService Invoices
 @inject IJSRuntime JS
 
 <PageTitle>@(_print?.Invoice.Summary.Number ?? "Invoice") · Print · Workbench</PageTitle>
@@ -9,12 +9,8 @@
     <a href="@($"billing/invoices/{InvoiceId}")">← Back to the invoice</a>
     <span class="spacer"></span>
     <a href="@($"billing/invoices/{InvoiceId}/print?form=invoice")" class="@(IsClean ? "active" : "")" data-testid="form-clean">Commercial invoice</a>
-    <a href="@($"billing/invoices/{InvoiceId}/print?form=sf1034")" class="@(IsSf1034 ? "active" : "")" data-testid="form-sf1034">SF 1034 / SF 1035</a>
+    <UiSlot Name="billing.invoice.print.links" Parameters="@(new Dictionary<string, object?> { ["InvoiceId"] = InvoiceId, ["Active"] = IsSf1034 })" />
     <a href="@($"billing/invoices/{InvoiceId}/print?form=commercial")" class="@(!IsSf1034 && !IsClean ? "active" : "")" data-testid="form-custom">Our invoice layout (CLINs)</a>
-    @if (_voucher?.ProgressPaymentRequestId is { } request)
-    {
-        <a href="@($"billing/progress-payments/{request}/sf1443")">SF 1443</a>
-    }
     <button type="button" @onclick="PrintAsync" data-testid="print-button">Print / save as PDF</button>
 </div>
 
@@ -42,7 +38,7 @@ else
         }
         else if (IsSf1034)
         {
-            <Sf1034Voucher Voucher="_voucher!" />
+            <UiSlot Name="billing.invoice.print.sf1034" Parameters="@(new Dictionary<string, object?> { ["InvoiceId"] = InvoiceId, ["Print"] = _print })" />
         }
         else
         {
@@ -191,7 +187,6 @@ else
     [SupplyParameterFromQuery(Name = "form")]
     public string? Form { get; set; }
 
-    private VoucherDto? _voucher;
     private InvoicePrintDto? _print;
     private string? _error;
 
@@ -205,7 +200,7 @@ else
         "sf1034" => "sf1034",
         "commercial" => "classic",
         _ => _print?.Remittance?.Layout == InvoiceLayoutKind.Commercial ? "clean"
-            : _voucher?.ContractFormat == VoucherFormat.Sf1034 ? "sf1034" : "classic",
+            : _print?.PreferredForm == "sf1034" ? "sf1034" : "classic",
     };
 
     private bool IsSf1034 => Mode == "sf1034";
@@ -216,8 +211,7 @@ else
     {
         try
         {
-            _voucher ??= await Government.GetVoucherAsync(InvoiceId);
-            _print = _voucher.Print;
+            _print = await Invoices.GetPrintAsync(InvoiceId);
         }
         catch (Exception ex)
         {

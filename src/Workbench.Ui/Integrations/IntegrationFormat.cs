@@ -6,7 +6,7 @@ using Workbench.Contracts.Integrations;
 namespace Workbench.Ui.Integrations;
 
 /// <summary>Shared wording, chips and browser helpers for Admin › Integrations.</summary>
-internal static class IntegrationFormat
+public static class IntegrationFormat
 {
     /// <summary>Request/response blocks: monospace, wrapped, scrollable, theme colors.</summary>
     public const string CodeStyle = "font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.8rem; white-space: pre-wrap; word-break: break-all; max-height: 18rem; overflow: auto; background: var(--mud-palette-background-gray); color: var(--mud-palette-text-primary); padding: 8px; border-radius: 4px; margin: 4px 0;";

@@ -1,7 +1,6 @@
 using MudBlazor.Services;
 using Workbench.Api;
 using Workbench.Application;
-using Workbench.Costpoint;
 using Workbench.Infrastructure;
 using Workbench.Infrastructure.Persistence;
 using Workbench.Web.Calendar;
@@ -9,12 +8,10 @@ using Workbench.Web.Components;
 using Workbench.Web.Diagnostics;
 using Workbench.Web.Hubs;
 using Workbench.Web.Identity;
-using Workbench.Web.Integrations;
 using Workbench.Web.Notifications;
 using Workbench.Web.Security;
 using Workbench.Web.Supplier;
 using Workbench.Web.Forms;
-using Workbench.Web.Customer;
 using Workbench.Web.Tenancy;
 using Workbench.Web.Storage;
 
@@ -52,7 +49,12 @@ builder.Services.AddMudServices();
 Workbench.Ui.Company.TermsSnackbarRegistration.AddCompanyWordsInSnackbars(builder.Services);
 builder.Services.AddProblemDetails();
 
-builder.Services.AddWorkbenchApplication();
+// License modules from outside the repository (docs/operations/module-plugins.md). The license is checked before a module's assembly is loaded.
+var moduleLicensed = Workbench.Application.Licensing.ModuleEntitlement.Check(builder.Configuration, TimeProvider.System, out var moduleLicenseNote);
+var modules = Workbench.Plugins.ModuleHost.Load(Workbench.Plugins.ModuleHostOptions.From(builder.Configuration, moduleLicensed,
+    Workbench.Ui.Navigation.NavCatalog.BuiltInSectionKeys, Workbench.Ui.Navigation.NavCatalog.BuiltInHrefs, Workbench.Web.BuiltInRowKeys.All));
+builder.Services.AddSingleton(modules);
+builder.Services.AddWorkbenchApplication(services => modules.ConfigureServices(services, builder.Configuration));
 var licenseOptions = new Workbench.Application.Licensing.LicenseOptions();
 builder.Configuration.GetSection(Workbench.Application.Licensing.LicenseOptions.SectionName).Bind(licenseOptions);
 Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.Replace(builder.Services, ServiceDescriptor.Singleton(licenseOptions)); // License:EditionOverride turns Business on for the demo; License:PublicKeyPem replaces the built-in public key.
@@ -66,9 +68,27 @@ builder.AddWorkbenchDemoReset();
 builder.AddWorkbenchTenancyHosting();
 builder.Services.AddWorkbenchLiveUpdatesHub();
 builder.Services.AddWorkbenchNotificationsHub();
-builder.Services.AddCostpointSource(builder.Configuration);
 
 var app = builder.Build();
+if (modules.Results.Count > 0)
+{
+    app.Logger.LogInformation("Modules: {License}", moduleLicenseNote);
+    modules.LogResults(app.Logger);
+}
+
+// A module the license lists but whose folder is not in the modules folder: nothing to load, so say so (the product runs without it).
+// Not for the development override (Business), which "licenses" every module.
+if (!string.Equals(licenseOptions.EditionOverride?.Trim(), "business", StringComparison.OrdinalIgnoreCase))
+{
+    foreach (var id in Workbench.Domain.Licensing.ModuleCatalog.AllIds.Where(id => id is not (Workbench.Domain.Licensing.ModuleIds.Core or Workbench.Domain.Licensing.ModuleIds.Ai)))
+    {
+        if (moduleLicensed(id) && !modules.Results.Any(r => r.Id == id))
+        {
+            app.Logger.LogWarning("Module {Module} is in the license but is not installed: there is no '{Module}' folder in the modules folder, so the product runs without it. Copy the module's folder there to enable it.", id, id);
+        }
+    }
+}
+
 if (migrateOnly)
 {
     await app.Services.GetRequiredService<DatabaseMigrator>().MigrateAsync();
@@ -112,6 +132,11 @@ app.UseWhen(
     context => !AuthenticationSetup.IsApiRequest(context.Request) && AuthenticationSetup.IsPageNavigation(context.Request),
     branch => branch.UseStatusCodePagesWithRedirects("/not-found"));
 app.UseHttpsRedirection();
+foreach (var (requestPath, physicalPath) in modules.StaticAssets())
+{
+    // Files of a license module's pages (its wwwroot), served where a referenced Razor class library's would be.
+    app.UseStaticFiles(new Microsoft.AspNetCore.Builder.StaticFileOptions { FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(physicalPath), RequestPath = requestPath });
+}
 app.UseRequestLocalization(new Microsoft.AspNetCore.Builder.RequestLocalizationOptions()
     .SetDefaultCulture("en-US").AddSupportedCultures("en-US").AddSupportedUICultures("en-US")); // the request's culture, which Blazor's circuit takes
 app.UseAuthentication();
@@ -132,16 +157,14 @@ app.MapWorkbenchOrganizationExport(); // Hosted: the way out for a lapsed organi
 app.MapWorkbenchSignup(); // Hosted signup /signup and the license server's /api/v1/host/entitlements (MultiTenant; docs/admin-guide/hosted-signup.md).
 app.MapWorkbenchSupplierPortal();
 app.MapWorkbenchPublicForms(); // Public form links /f/{token} (wave E).
-app.MapWorkbenchCustomerView(); // Customer links /c/{token}: one contract's funding and invoice status, read only.
 app.MapWorkbenchLiveUpdatesHub();
 app.MapWorkbenchNotificationsHub();
 app.MapWorkbenchEmailEvents(); // Bounce and complaint webhooks from SendGrid and SES (docs/operations/email.md).
-app.MapWorkbenchJiraWebhooks(); // Jira issue webhooks for linked projects (docs/integrations/jira.md).
-app.MapWorkbenchGitLabWebhooks(); // GitLab issue, epic and milestone webhooks for linked projects (docs/integrations/gitlab.md).
+modules.MapHostEndpoints(app); // The enterprise module's anonymous entry points: customer links /c/{token}, and the Jira and GitLab webhooks /webhooks/jira and /webhooks/gitlab.
 app.MapWorkbenchCalendarFeed(); // Read-only per-person .ics feeds behind a private token.
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode()
-    .AddAdditionalAssemblies(typeof(Workbench.Ui.Routes).Assembly);
+    .AddAdditionalAssemblies([typeof(Workbench.Ui.Routes).Assembly, .. Workbench.Contracts.Modules.ModuleRegistry.Current.Modules.SelectMany(m => m.RoutableAssemblies)]);
 
 app.Run();
 return 0;

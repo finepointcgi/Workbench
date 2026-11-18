@@ -14,13 +14,9 @@ public static class ApprovalDocumentTypes
     public const string HrChange = "hr-change";
     public const string Compensation = "compensation";
 
-    public const string OpportunityGate = "opportunity-gate";
-
     public const string BudgetSubmission = "budget-submission";
     public const string TravelAuthorization = "travel-authorization";
 
-    public const string NcrDisposition = "ncr-disposition";
-    public const string EngineeringChange = "engineering-change";
     public const string VendorBankChange = "vendor-bank-change";
 
     /// <summary>
@@ -37,7 +33,14 @@ public static class ApprovalDocumentTypes
 
     public static bool IsCustom(string? documentType) => documentType is not null && documentType.StartsWith(CustomPrefix, StringComparison.Ordinal) && documentType.Length > CustomPrefix.Length;
 
-    public static readonly IReadOnlyList<string> All = [Timesheet, ExpenseReport, VendorOdc, Requisition, ApBill, Invoice, JournalEntry, LeaveRequest, HrChange, Compensation, OpportunityGate, BudgetSubmission, TravelAuthorization, NcrDisposition, EngineeringChange, VendorBankChange];
+    /// <summary>The document types the product ships, and (in <see cref="All"/>) those loaded modules add.</summary>
+    public static IReadOnlyList<string> BuiltIn { get; } = [Timesheet, ExpenseReport, VendorOdc, Requisition, ApBill, Invoice, JournalEntry, LeaveRequest, HrChange, Compensation, BudgetSubmission, TravelAuthorization, VendorBankChange];
+
+    public static IReadOnlyList<string> All =>
+        Modules.ModuleRegistry.Current.RowsOf<Modules.ModuleApprovalDocumentType>() is { Count: > 0 } extra ? [.. BuiltIn, .. extra.Select(t => t.Key)] : BuiltIn;
+
+    private static Modules.ModuleApprovalDocumentType? FromModule(string documentType) =>
+        Modules.ModuleRegistry.Current.RowsOf<Modules.ModuleApprovalDocumentType>().FirstOrDefault(t => t.Key == documentType);
 
     public static string Label(string documentType) => documentType switch
     {
@@ -51,19 +54,17 @@ public static class ApprovalDocumentTypes
         LeaveRequest => "Leave request",
         HrChange => "Personnel change",
         Compensation => "Compensation change",
-        OpportunityGate => "Opportunity gate (go/no-go)",
         BudgetSubmission => "Org unit budget",
         TravelAuthorization => "Travel authorization",
-        NcrDisposition => "NCR disposition (material review)",
-        EngineeringChange => "Engineering change",
         VendorBankChange => "Vendor bank details change",
         ProjectPlan => "Project plan",
+        _ when FromModule(documentType) is { } row => row.Label,
         _ when IsCustom(documentType) => char.ToUpperInvariant(documentType[CustomPrefix.Length]) + documentType[(CustomPrefix.Length + 1)..].Replace('-', ' '),
         _ => documentType,
     };
 
     /// <summary>Documents whose amount is hours, not money (timesheets and leave requests).</summary>
-    public static bool AmountIsHours(string documentType) => documentType is Timesheet or LeaveRequest;
+    public static bool AmountIsHours(string documentType) => documentType is Timesheet or LeaveRequest || FromModule(documentType)?.AmountIsHours == true;
 }
 
 /// <summary>Who approves a step.</summary>

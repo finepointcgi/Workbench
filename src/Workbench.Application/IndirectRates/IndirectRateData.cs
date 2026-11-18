@@ -7,7 +7,7 @@ using Workbench.Domain.ProjectAccounting;
 namespace Workbench.Application.IndirectRates;
 
 /// <summary>The rates applied to one fiscal year: the basis actually used and each pool's rate (0 for <see cref="Missing"/> pools).</summary>
-internal sealed record RateSet(int FiscalYear, IndirectRateBasis Basis, IReadOnlyDictionary<IndirectPool, decimal> Rates, IReadOnlyList<IndirectPool> Missing)
+public sealed record RateSet(int FiscalYear, IndirectRateBasis Basis, IReadOnlyDictionary<IndirectPool, decimal> Rates, IReadOnlyList<IndirectPool> Missing)
 {
     public decimal Of(IndirectPool pool) => Rates.GetValueOrDefault(pool);
 
@@ -15,7 +15,7 @@ internal sealed record RateSet(int FiscalYear, IndirectRateBasis Basis, IReadOnl
 }
 
 /// <summary>Active pool setups (in cascade order), the rates in force and the fiscal calendar, loaded once per operation.</summary>
-internal sealed class RateBook
+public sealed class RateBook
 {
     private List<IndirectRate> _rates = [];
 
@@ -79,14 +79,24 @@ internal sealed class RateBook
 
     public static string Label(IndirectPool pool) => pool == IndirectPool.GeneralAndAdministrative ? "G&A" : pool.ToString();
 
+    /// <summary>How a pool's allocation base reads in a sentence or a finding (the same words accounting and proposal pricing both use).</summary>
+    public static string BaseLabel(AllocationBase basis) => basis switch
+    {
+        AllocationBase.DirectLabor => "Direct labor",
+        AllocationBase.DirectLaborPlusFringe => "Direct labor + fringe",
+        AllocationBase.TotalCostInput => "Total cost input",
+        AllocationBase.ValueAdded => "Value added",
+        _ => basis.ToString(),
+    };
+
     public static string MissingNote(RateSet set) =>
         $"FY{set.FiscalYear} has no provisional {string.Join(", ", set.Missing.Select(Label))} rate; that burden counts as 0.";
 }
 
 /// <summary>Approved direct cost on one WBS element and date: labor at cost, allowable ODCs and unallowable ODCs (never burdened).</summary>
-internal sealed record DirectCost(Guid ProjectId, Guid WbsElementId, DateOnly Date, decimal Hours, decimal Labor, decimal Odc, decimal Unallowable);
+public sealed record DirectCost(Guid ProjectId, Guid WbsElementId, DateOnly Date, decimal Hours, decimal Labor, decimal Odc, decimal Unallowable);
 
-internal static class DirectCosts
+public static class DirectCosts
 {
     /// <summary>
     /// Approved time on direct WBS elements (hours × the cost rate effective on the work date, per entry to the cent, by
@@ -129,14 +139,14 @@ internal static class DirectCosts
             .ToListAsync(ct);
         result.AddRange(odcs.Select(o => new DirectCost(o.ProjectId, o.WbsElementId, o.IncurredOn, 0,
             0, o.IsUnallowable ? 0 : Money.Round(o.Amount), o.IsUnallowable ? Money.Round(o.Amount) : 0)));
-        result.AddRange((await Materials.MaterialCostActuals.LoadAsync(db, projectId is { } pid ? [pid] : null, start, end, ct))
+        result.AddRange((await Financials.ProjectCostSources.LoadAsync(db, projectId is { } pid ? [pid] : null, start, end, ct))
             .Select(m => new DirectCost(m.ProjectId, m.WbsElementId, m.Date, 0, 0, m.Amount, 0))); // Material issued from inventory: a direct ODC (G&A on total cost input).
         return result;
     }
 }
 
 /// <summary>Which GL accounts make up each pool, and the direct-cost base accounts.</summary>
-internal sealed class PoolAccountMap
+public sealed class PoolAccountMap
 {
     public required Dictionary<IndirectPool, HashSet<Guid>> Pools { get; init; }
     public required HashSet<Guid> DirectLabor { get; init; }
