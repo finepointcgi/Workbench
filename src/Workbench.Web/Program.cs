@@ -76,6 +76,19 @@ if (modules.Results.Count > 0)
     modules.LogResults(app.Logger);
 }
 
+// A module the license lists but whose folder is not in the modules folder: nothing to load, so say so (the product runs without it).
+// Not for the development override (Business), which "licenses" every module.
+if (!string.Equals(licenseOptions.EditionOverride?.Trim(), "business", StringComparison.OrdinalIgnoreCase))
+{
+    foreach (var id in Workbench.Domain.Licensing.ModuleCatalog.AllIds.Where(id => id is not (Workbench.Domain.Licensing.ModuleIds.Core or Workbench.Domain.Licensing.ModuleIds.Ai)))
+    {
+        if (moduleLicensed(id) && !modules.Results.Any(r => r.Id == id))
+        {
+            app.Logger.LogWarning("Module {Module} is in the license but is not installed: there is no '{Module}' folder in the modules folder, so the product runs without it. Copy the module's folder there to enable it.", id, id);
+        }
+    }
+}
+
 if (migrateOnly)
 {
     await app.Services.GetRequiredService<DatabaseMigrator>().MigrateAsync();
