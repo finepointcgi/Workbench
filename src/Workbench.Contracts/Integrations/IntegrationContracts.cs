@@ -1,4 +1,5 @@
 using Workbench.Contracts.Identity;
+using Workbench.Contracts.Modules;
 
 namespace Workbench.Contracts.Integrations;
 
@@ -6,11 +7,18 @@ namespace Workbench.Contracts.Integrations;
 // Every service here is for administrators only (Identity/IntegrationPermissionDecorators.cs).
 
 /// <summary>An event Workbench can send. Keys match the domain catalog (<c>Domain.Integrations.IntegrationEventType</c>).</summary>
-public sealed record WebhookEventInfo(string Key, string Label, string Group, string Description);
+public sealed record WebhookEventInfo(string Key, string Label, string Group, string Description) : IModuleRow
+{
+    // Explicit, so the DTO's JSON stays as it was; a module lists its events as rows (ModuleContribution.Rows).
+    string IModuleRow.Catalog => ModuleCatalogs.IntegrationEvents;
+
+    string IModuleRow.RowKey => Key;
+}
 
 public static class WebhookEventCatalog
 {
-    public static IReadOnlyList<WebhookEventInfo> All { get; } =
+    /// <summary>The events the product sends, and (in <see cref="All"/>) those loaded modules add.</summary>
+    public static IReadOnlyList<WebhookEventInfo> BuiltIn { get; } =
     [
         new("timesheet.submitted", "Timesheet submitted", "Time", "An employee certified and submitted a timesheet."),
         new("timesheet.approved", "Timesheet approved", "Time", "A timesheet finished its approval (every step approved)."),
@@ -30,6 +38,10 @@ public static class WebhookEventCatalog
         new("ncr.dispositioned", "NCR dispositioned", "Materials", "A nonconformance's approved disposition was carried out and the NCR closed."),
         new("sheet.form_submitted", "Form response", "Sheets", "A form added a row to a sheet (signed in or by public link)."),
     ];
+
+    private static readonly RowCatalog<WebhookEventInfo> Catalog = new(BuiltIn);
+
+    public static IReadOnlyList<WebhookEventInfo> All => Catalog.All;
 
     public static bool IsKnown(string key) => All.Any(e => e.Key == key);
 

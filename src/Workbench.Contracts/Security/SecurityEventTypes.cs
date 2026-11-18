@@ -3,6 +3,14 @@ namespace Workbench.Contracts.Security;
 /// <summary>Event names in the security event log. Lower-case, dot-separated: area first, then what happened.</summary>
 public static class SecurityEventTypes
 {
+    /// <summary>Every event name the product writes (the constants below).</summary>
+    public static IReadOnlyList<string> BuiltIn { get; } = typeof(SecurityEventTypes).GetFields()
+        .Where(f => f is { IsLiteral: true } && f.FieldType == typeof(string)).Select(f => (string)f.GetRawConstantValue()!).ToList();
+
+    /// <summary>The built-in names and the ones loaded modules add (<see cref="Modules.ModuleSecurityEventType"/>).</summary>
+    public static IReadOnlyList<string> All =>
+        Modules.ModuleRegistry.Current.RowsOf<Modules.ModuleSecurityEventType>() is { Count: > 0 } extra ? [.. BuiltIn, .. extra.Select(t => t.Key)] : BuiltIn;
+
     public const string SignInSuccess = "signin.success";
     public const string SignInFailure = "signin.failure";
     public const string DevSignIn = "signin.dev";
