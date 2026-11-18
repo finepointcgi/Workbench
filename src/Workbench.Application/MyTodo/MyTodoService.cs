@@ -203,7 +203,6 @@ public static class MyTodoRegistration
         services.AddScoped<IMyTodoProvider, ApprovalTodoProvider>();
         services.AddScoped<IMyTodoProvider, ReceivingTodoProvider>();
         services.AddScoped<IMyTodoProvider, SheetTodoProvider>();
-        services.AddScoped<IMyTodoProvider, EacReviewTodoProvider>();
         services.AddScoped<IMyTodoProvider, FundingTodoProvider>();
         services.AddScoped<IMyTodoProvider, PeriodCloseTodoProvider>();
         services.AddScoped<IMyTodoProvider, ReadyToBillTodoProvider>();

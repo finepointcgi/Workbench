@@ -56,7 +56,7 @@ public static class ApiKeyScopes
             ["projects", "project-hub", "project-start", "project-plans", "contracts", "wbs", "assignments", "budgets", "clins", "modifications", "resourcing"]),
         new("time", "Time and expenses", "Timesheets, ODCs, expense reports and receipts, leave, per diem and total time.",
             ["time", "expense-reports", "odc-approvals", "odcs", "leave", "per-diem", "travel", "cards", "receipts"]),
-        new("billing", "Billing and revenue", "Invoices, receipts, receivables and revenue recognition.", ["billing", "revenue"]),
+        new("billing", "Billing", "Invoices, receipts and receivables.", ["billing"]),
         new("purchasing", "Purchasing and payables", "Vendors, requisitions, purchase orders, receiving, AP bills and payments.", ["purchasing", "edi"]),
         new("accounting", "Accounting", "Chart of accounts, journal, fiscal calendar, period close, currencies, companies and indirect rates (and, with the accounting module, cash, fixed assets, corporate budgets and sales tax).",
             ["accounting", "fiscal", "audit", "currencies", "companies", "indirect-rates", "accounting-export"]),

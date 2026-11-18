@@ -2,6 +2,7 @@
 @using Workbench.Contracts.AccountingExport
 @inject ICurrentUserContext CurrentUser
 @inject NavigationManager Navigation
+@inject IEnumerable<UiSlotContribution> Contributions
 
 <PageTitle>Accounting export · Integrations · Workbench</PageTitle>
 
@@ -34,14 +35,13 @@ else
         <MudTabPanel Text="History" Icon="@Icons.Material.Filled.History">
             <AccountingHistoryTab @key="_historyVersion" />
         </MudTabPanel>
-        <MudTabPanel Text="Live connections" Icon="@Icons.Material.Filled.CloudSync">
-            <AccountingLiveTab @key="_historyVersion" />
-        </MudTabPanel>
+        @* The billing module's Live connections tab (QuickBooks Online and Xero): none without it. *@
+        <UiSlot Name="accounting-export.tabs" Parameters="@(new Dictionary<string, object?> { ["Version"] = _historyVersion })" />
     </MudTabs>
 }
 
 @code {
-    private static readonly string[] Tabs = ["export", "mapping", "history", "connections"];
+    private static readonly string[] Tabs = ["export", "mapping", "history", "connections"]; // "connections" is the billing module's tab and exists only while it is loaded.
 
     [SupplyParameterFromQuery(Name = "tab")]
     public string? TabQuery { get; set; }
@@ -51,7 +51,11 @@ else
     private int _tab;
     private int _historyVersion;
 
-    protected override void OnParametersSet() => _tab = Math.Max(0, Array.IndexOf(Tabs, TabQuery ?? "export"));
+    protected override void OnParametersSet()
+    {
+        var index = Math.Max(0, Array.IndexOf(Tabs, TabQuery ?? "export"));
+        _tab = index >= 3 && !Contributions.Any(c => c.Slot == "accounting-export.tabs") ? 0 : index;
+    }
 
     protected override async Task OnInitializedAsync()
     {

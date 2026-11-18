@@ -66,7 +66,9 @@ public static class ModuleMap
             "resourcing", // Staffing: allocations, assignments, capacity, utilization and skills (it stays core: the Plan, timesheets and schedule health read it).
             // The ledger, vendors, purchase orders and payables, currencies and indirect rates are free: too many core features and other modules read their records.
             "accounting", "currencies", "indirect-rates", "purchasing", "cards"),
-        .. Segments(ModuleKeys.Billing, "billing", "revenue", "accounting-live"),
+        // Invoices, payments and receivables are free (the ledger records too many core features and modules read). "billing" is core.
+        .. Segments(ModuleKeys.Core, "billing"),
+        // billing: the revenue and accounting-live segments live in the billing module (its own rows).
         // accounting: the cash, assets, planning, sales-tax, bank-files and vendor-bank segments live in the accounting module (its own rows).
         // workforce: the hr and payroll segments live in the workforce module (its own rows); resourcing is core, above.
         // project controls: the evm, ceilings, ceiling-overrides, rate-ceilings, closeout and risks segments live in the project controls module (its own rows).
@@ -101,9 +103,9 @@ public static class ModuleMap
         ["projects."] = ModuleKeys.Core,
         ["gl."] = ModuleKeys.Core,
         // planning.*, tax.*, assets.* and cash.* are the accounting module's own rows.
-        ["revenue."] = ModuleKeys.Billing,
+        // revenue.* is the billing module's own row.
         ["compliance.indirect_rates"] = ModuleKeys.Core,
-        ["billing."] = ModuleKeys.Billing,
+        ["billing."] = ModuleKeys.Core,
         ["ap."] = ModuleKeys.Core,
         ["purchasing."] = ModuleKeys.Core,
         // payroll.* and hr.* (but the two below) are the workforce module's own rows.
@@ -154,7 +156,7 @@ public static class ModuleMap
     public static IReadOnlyDictionary<string, string> NavGroups { get; } = new Dictionary<string, string>(StringComparer.Ordinal)
     {
         ["finance/Accounting"] = ModuleKeys.Core,
-        ["finance/Billing & AR"] = ModuleKeys.Billing,
+        ["finance/Billing & AR"] = ModuleKeys.Core,
         ["finance/Payables & purchasing"] = ModuleKeys.Core,
         // finance/Cash, finance/Assets and finance/Planning are the accounting module's (its own rows).
         ["admin/Customization"] = ModuleKeys.Enterprise,
@@ -167,9 +169,8 @@ public static class ModuleMap
             "purchasing/requisitions", "purchasing/receiving", "purchasing/approvals", "cards",
             "accounting/indirect-rates", "accounting/reports", "purchasing/reports", "setup/currencies", "setup/card-programs"),
         // accounting: planning/my-budget, planning/submissions, accounting/recurring, accounting/sales-tax, assets/reports and setup/sales-tax are the accounting module's rows.
-        .. Segments(ModuleKeys.Billing,
-            "billing/invoices", "billing/statements", "accounting/revenue", "accounting/revenue/estimates", "accounting/revenue/setup",
-            "accounting/revenue/projects", "accounting/revenue/reports"),
+        .. Segments(ModuleKeys.Core, "billing/invoices", "billing/statements"),
+        // billing: accounting/revenue, accounting/revenue/estimates, /setup, /projects and /reports are the billing module's rows.
         .. Segments(ModuleKeys.GovCon, "reports/standard/funding-status"),
         .. Segments(ModuleKeys.Enterprise, "setup/companies", "accounting/consolidated", "admin/integrations", "admin/integrations/edi", "setup/approval-workflows"),
     ]);
@@ -208,7 +209,8 @@ public static class ModuleMap
         ["Sheets"] = ModuleKeys.Core, ["Support"] = ModuleKeys.Core, ["Tasks"] = ModuleKeys.Core, ["Tenancy"] = ModuleKeys.Core, ["Time"] = ModuleKeys.Core,
         ["Automation"] = ModuleKeys.Core, // sheet rules
         // billing
-        ["Billing"] = ModuleKeys.Billing, ["Revenue"] = ModuleKeys.Billing, ["AccountingLive"] = ModuleKeys.Billing,
+        // billing: invoices, payments and receivables (the Billing namespace) are core, and free. The Revenue and AccountingLive namespaces live in the billing module (its own rows).
+        ["Billing"] = ModuleKeys.Core,
         // accounting
         // accounting: the Assets, BankFiles, Cash, Planning and SalesTax namespaces live in the accounting module (its own rows).
         // The ledger, currencies, indirect rates and purchasing (vendors, purchase orders, payables) are core, and free.

@@ -12,6 +12,9 @@ public enum ModuleSeedStage
     /// <summary>After cash and bank accounts, before leave (the sample pay group, pay periods and payroll profiles the leave sample data follows).</summary>
     AfterCash,
 
+    /// <summary>After resourcing and skills (the ledgers, billing, indirect rates and payables are seeded): the billing module's revenue recognition sample data.</summary>
+    AfterResourcing,
+
     /// <summary>After revenue (the ledgers, billing and payables are seeded).</summary>
     AfterRevenue,
 
