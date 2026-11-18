@@ -167,7 +167,7 @@ public sealed class ModuleEntitlementTests
         var before = NavCatalog.PaletteEntries(everything).ToList();
         var after = NavCatalog.PaletteEntries(without).ToList();
 
-        Assert.All(new[] { "billing", "accounting", "workforce", "materials", "enterprise" }, id => Assert.Contains(before, e => e.ModuleId == id)); // Project controls has no menu page of its own: it lives on the project; the pages of government contracting and capture come from their modules.
+        Assert.All(new[] { "billing", "accounting", "workforce", "enterprise" }, id => Assert.Contains(before, e => e.ModuleId == id)); // Project controls has no menu page of its own: it lives on the project; the pages of government contracting and capture come from their modules.
         Assert.DoesNotContain(after, e => e.ModuleId != "core");
         Assert.Contains(after, e => e.Href == "time");
         Assert.Contains(after, e => e.Href == "hr"); // The directory is core; only HR administration is Workforce.

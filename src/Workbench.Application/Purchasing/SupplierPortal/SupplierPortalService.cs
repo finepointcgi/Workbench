@@ -2,7 +2,6 @@ using Microsoft.EntityFrameworkCore;
 using Workbench.Application.ProjectAccounting;
 using Workbench.Contracts;
 using Workbench.Contracts.Purchasing;
-using Workbench.Domain.Materials;
 using Workbench.Domain.Purchasing;
 
 namespace Workbench.Application.Purchasing;
@@ -16,7 +15,7 @@ namespace Workbench.Application.Purchasing;
 public sealed class SupplierPortalService(IWorkbenchDbContextFactory dbFactory, SupplierCaller caller, SupplierDocuments documents, TimeProvider clock, IItemReader? itemReader = null)
     : ISupplierPortalService
 {
-    private IItemReader Items => itemReader ?? PartItemReader.Instance;
+    private IItemReader Items => itemReader ?? NoItemReader.Instance;
 
     private DateTime UtcNow => clock.GetUtcNow().UtcDateTime;
 

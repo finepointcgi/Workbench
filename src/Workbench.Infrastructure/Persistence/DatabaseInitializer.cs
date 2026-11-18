@@ -199,7 +199,7 @@ public static class DatabaseInitializer
         await ProjectManagerSeed.SeedAsync(db, cancellationToken); // Sam Patel (Project manager only) runs 1002; a few assigned tasks.
         await LifecycleSeed.SeedAsync(db, cancellationToken); // A project at each stage of its life (5101 set up, 5102 planning, 5103 awaiting approval, 5104 executing).
         await HrSeed.SeedAsync(db, cancellationToken); // HR: Harper Reed (HR role), positions, records, clearances, benefit plans, open enrollment, checklists.
-        await MaterialsSeed.SeedAsync(db, services, cancellationToken); // Mia Torres (Materials), hardware project 3001: parts, 3-level BOM, stock, GFM, work orders.
+        await ModuleSeedsAsync(ModuleSeedStage.AfterHr);
         await AssistantSeed.SeedAsync(db, cancellationToken); // Timesheet flags: the analyst's pending timesheet gets weekend hours, a late day and a moved-hours revision.
         await PlanningSeed.SeedAsync(db, services, cancellationToken); // Planning: this year's adopted budget, next year's cycle (ENG submitted, OPS drafting), rent and accrual recurring journals.
         await ModuleSeedsAsync(ModuleSeedStage.AfterPlanning);
@@ -207,9 +207,7 @@ public static class DatabaseInitializer
         await CompanySeed.SeedAsync(db, services, cancellationToken); // Multicompany: subsidiary FED (contract, project 4001, Jordan Blake E1041) and two weeks of intercompany labor with MAIN.
         await ModuleSeedsAsync(ModuleSeedStage.AfterMulticompany);
         await TravelSeed.SeedAsync(db, cancellationToken); // Travel: analyst@'s approved DC trip TA-000001 on its expense report; Citi corporate card ••4417 with imported charges.
-        await SalesShippingSeed.SeedAsync(db, services, cancellationToken); // Sales orders: SO-000001 (Army, project 3001 spares) released, half shipped on DD250 SHP0001, WAWF receiving report submitted.
-        await QualitySeed.SeedAsync(db, services, cancellationToken); // Quality: Morgan Lee (E1080) inspects; HSG-220 receiving plan, a rejected shipment returned to Digi-Parts (NCR, debit memo, SCAR), ECO adding a thermal pad to SNS-210.
-        await ShopFloorSeed.SeedAsync(db, services, cancellationToken); // Shop floor: RES-KIT backflushed on a PCB build, freight allocated to receipt 1, CAGE frozen for a count, ASM overloaded next week.
+        await ModuleSeedsAsync(ModuleSeedStage.AfterTravel);
         await SourcingSeed.SeedAsync(db, services, cancellationToken); // Sourcing: RFQ-000001 (three quotes, awarded to PRIMA on an issued PO), PRIMA's portal contact Jordan Reyes, DIGI as an EDI partner.
         await BankFilesTaxSeed.SeedAsync(db, services, cancellationToken); // Bank files and sales tax: ACH settings, vendor NETS with approved ACH details, a bill with use tax and an approved ACH run; Fairfax/MD/DC rates and a taxed NVDC invoice.
         await TaxBooksSeed.SeedAsync(db, services, cancellationToken); // Tax books on two assets, an asset transfer, three CPSR sample POs.

@@ -47,7 +47,6 @@ public static class NewCatalog
         new("bill", "Vendor bill", "New vendor bill", Icons.Material.Filled.ReceiptLong, NavRule.Need(P.ApBillsManage), "purchasing/bills/new", Keywords: "ap payable vendor invoice"),
         new("contract", "Contract", "New contract", Icons.Material.Filled.Description, NavRule.Need(P.SetupContracts), "setup/contracts/new", Keywords: "award funding bill rates"),
         new("rfq", "Request for quote", "New request for quote", Icons.Material.Filled.RequestQuote, NavRule.Need(P.SourcingManage), "purchasing/rfqs/new", Keywords: "rfq sourcing quotes"),
-        new("engineering-change", "Engineering change", "New engineering change", Icons.Material.Filled.ChangeCircle, NavRule.Need(P.MaterialsManage), "materials/engineering-changes/new", Keywords: "eco ecn revision"),
         new("automation", "Automation", "New automation", Icons.Material.Filled.Bolt, NavRule.Need(P.AdminAutomations), "admin/automation/new", Keywords: "rule workflow trigger"),
     ];
 

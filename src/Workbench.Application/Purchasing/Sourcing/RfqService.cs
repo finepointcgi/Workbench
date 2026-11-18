@@ -5,7 +5,6 @@ using Workbench.Application.Identity;
 using Workbench.Application.ProjectAccounting;
 using Workbench.Contracts;
 using Workbench.Contracts.Purchasing;
-using Workbench.Domain.Materials;
 using Workbench.Domain.Purchasing;
 
 namespace Workbench.Application.Purchasing;
@@ -26,7 +25,7 @@ public sealed class RfqService(
     Customization.DocumentNumbers? documentNumbers = null,
     IItemReader? itemReader = null) : IRfqService
 {
-    private IItemReader Items => itemReader ?? PartItemReader.Instance;
+    private IItemReader Items => itemReader ?? NoItemReader.Instance;
 
     private Customization.DocumentNumbers DocNumbers => documentNumbers ?? new(dbFactory, clock);
 

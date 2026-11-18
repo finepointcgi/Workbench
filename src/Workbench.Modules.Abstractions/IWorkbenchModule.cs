@@ -18,6 +18,14 @@ public static class ModuleContract
 /// <param name="Configuration">The host's configuration (the module reads its own section, conventionally <c>Modules:&lt;id&gt;</c>).</param>
 /// <param name="Folder">The folder the module was loaded from (its own files, such as templates, sit there).</param>
 /// <param name="Logger">A logger named for the module.</param>
+/// <summary>
+/// A module's request to wrap a service the <b>host</b> already registered (the module's own scratch collection cannot see it): register one as
+/// a singleton instance in <see cref="IWorkbenchModule.ConfigureServices"/>. The host applies it right after copying the module's services,
+/// so the decorator sits where a built-in decorator registered at that point would: inside the permission and edition decorators. The
+/// decorator takes the original as a constructor parameter; the original's lifetime is kept. A service the host does not have refuses the module.
+/// </summary>
+public sealed record ModuleServiceDecoration(Type Service, Type Decorator);
+
 public sealed record ModuleContext(IConfiguration Configuration, string Folder, ILogger Logger);
 
 /// <summary>

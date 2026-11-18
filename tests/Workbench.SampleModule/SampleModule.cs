@@ -120,6 +120,7 @@ public sealed class SampleModule : IWorkbenchModule
         services.AddScoped<IReconciliationSource, SampleReconciliationSource>();
         services.AddSingleton(new MigrationStepContribution("sample-widgets", "Sample widgets", "Load the sample module's widgets.", ["people"], [], After: "people"));
         services.AddScoped<IItemReader, SampleItemReader>();
+        services.AddSingleton(new ModuleServiceDecoration(typeof(IVendorReader), typeof(SampleVendorReaderDecorator))); // Wraps a service the host registered (a module's own scratch collection cannot see it).
     }
 
     public void MapEndpoints(IEndpointRouteBuilder api) =>

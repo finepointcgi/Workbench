@@ -17,8 +17,6 @@ public static class ApprovalDocumentTypes
     public const string BudgetSubmission = "budget-submission";
     public const string TravelAuthorization = "travel-authorization";
 
-    public const string NcrDisposition = "ncr-disposition";
-    public const string EngineeringChange = "engineering-change";
     public const string VendorBankChange = "vendor-bank-change";
 
     /// <summary>
@@ -36,7 +34,7 @@ public static class ApprovalDocumentTypes
     public static bool IsCustom(string? documentType) => documentType is not null && documentType.StartsWith(CustomPrefix, StringComparison.Ordinal) && documentType.Length > CustomPrefix.Length;
 
     /// <summary>The document types the product ships, and (in <see cref="All"/>) those loaded modules add.</summary>
-    public static IReadOnlyList<string> BuiltIn { get; } = [Timesheet, ExpenseReport, VendorOdc, Requisition, ApBill, Invoice, JournalEntry, LeaveRequest, HrChange, Compensation, BudgetSubmission, TravelAuthorization, NcrDisposition, EngineeringChange, VendorBankChange];
+    public static IReadOnlyList<string> BuiltIn { get; } = [Timesheet, ExpenseReport, VendorOdc, Requisition, ApBill, Invoice, JournalEntry, LeaveRequest, HrChange, Compensation, BudgetSubmission, TravelAuthorization, VendorBankChange];
 
     public static IReadOnlyList<string> All =>
         Modules.ModuleRegistry.Current.RowsOf<Modules.ModuleApprovalDocumentType>() is { Count: > 0 } extra ? [.. BuiltIn, .. extra.Select(t => t.Key)] : BuiltIn;
@@ -58,8 +56,6 @@ public static class ApprovalDocumentTypes
         Compensation => "Compensation change",
         BudgetSubmission => "Org unit budget",
         TravelAuthorization => "Travel authorization",
-        NcrDisposition => "NCR disposition (material review)",
-        EngineeringChange => "Engineering change",
         VendorBankChange => "Vendor bank details change",
         ProjectPlan => "Project plan",
         _ when FromModule(documentType) is { } row => row.Label,

@@ -401,52 +401,6 @@ public sealed class CreditTests
     }
 
     [Fact]
-    public async Task A_quality_return_to_vendor_becomes_an_AP_debit_memo()
-    {
-        await using var kit = await KitInOctoberAsync();
-        Guid qualityId;
-        var clearing = new Account { Number = "1405", Name = "Inventory received not invoiced", Type = AccountType.Asset, NormalBalance = NormalBalance.Debit, IsActive = true };
-        await using (var db = await kit.Factory.CreateAsync())
-        {
-            db.Set<Account>().Add(clearing);
-            var part = new Domain.Materials.Part { Number = "WIDGET-1", Description = "Widget" };
-            db.Set<Domain.Materials.Part>().Add(part);
-            var ncr = new Domain.Quality.Nonconformance { Number = "NCR-000001", PartId = part.Id, Description = "Cracked housing", VendorId = kit.Prima.Id, Quantity = 4, CreatedBy = Finance };
-            db.Set<Domain.Quality.Nonconformance>().Add(ncr);
-            var quality = new Domain.Quality.VendorDebitMemo
-            {
-                Number = "DM-000001", VendorId = kit.Prima.Id, NonconformanceId = ncr.Id, PartId = part.Id, Quantity = 4, UnitPrice = 25m, Amount = 100m,
-                ReturnAuthorization = "RMA-88", Date = PurchasingKit.Day, CreatedBy = Finance, CreatedAtUtc = DateTime.UtcNow,
-            };
-            db.Set<Domain.Quality.VendorDebitMemo>().Add(quality);
-            await db.SaveChangesAsync();
-            qualityId = quality.Id;
-        }
-
-        var memo = await Credits(kit).CreateFromQualityReturnAsync(qualityId);
-        Assert.Equal((BillKind.DebitMemo, BillState.Draft, "RMA RMA-88", 100m), (memo.Bill.Kind, memo.Bill.Status, memo.Bill.InvoiceNumber, memo.Bill.Amount));
-        Assert.Equal("1405", Assert.Single(memo.Lines).AccountNumber);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => Credits(kit).CreateFromQualityReturnAsync(qualityId));
-        await using (var db = await kit.Factory.CreateAsync())
-        {
-            Assert.Equal(Domain.Quality.DebitMemoStatus.Applied, (await db.Set<Domain.Quality.VendorDebitMemo>().SingleAsync()).Status);
-        }
-
-        await ApproveAsync(kit, memo);
-        Assert.Equal(-100m, (await kit.EntriesAsync()).SelectMany(e => e.Lines).Where(l => l.AccountId == clearing.Id).Sum(l => l.Debit - l.Credit));
-        Assert.Equal(100m, await kit.BalanceAsync("2010"));
-
-        // Voiding the AP memo puts the return back to open.
-        await kit.Bills.VoidAsync(memo.Bill.Id, new BillReasonRequest("Vendor replaced the parts"));
-        await using (var db = await kit.Factory.CreateAsync())
-        {
-            Assert.Equal(Domain.Quality.DebitMemoStatus.Open, (await db.Set<Domain.Quality.VendorDebitMemo>().SingleAsync()).Status);
-        }
-
-        Assert.Equal(0m, await kit.BalanceAsync("2010"));
-    }
-
-    [Fact]
     public async Task A_bill_can_pay_a_card_issuer_liability_but_never_AP_itself()
     {
         await using var kit = await PurchasingKit.CreateAsync();

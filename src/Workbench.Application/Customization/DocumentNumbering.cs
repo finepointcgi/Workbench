@@ -11,9 +11,7 @@ using Workbench.Domain.ProjectAccounting;
 using Workbench.Domain.Billing;
 using Workbench.Domain.Companies;
 using Workbench.Domain.Customization;
-using Workbench.Domain.Materials;
 using Workbench.Domain.Purchasing;
-using Workbench.Domain.Quality;
 using Workbench.Domain.Travel;
 
 namespace Workbench.Application.Customization;
@@ -44,14 +42,6 @@ public static class DocumentNumberTypes
     public const string PaymentRun = "payment-run";
     public const string ShipNotice = "ship-notice";
     public const string Invoice = "invoice";
-    public const string SalesOrder = "sales-order";
-    public const string PickList = "pick-list";
-    public const string Shipment = "shipment";
-    public const string Nonconformance = "ncr";
-    public const string CorrectiveAction = "car";
-    public const string EngineeringChange = "eco";
-    public const string Inspection = "inspection";
-    public const string DebitMemo = "debit-memo";
     public const string TravelAuthorization = "travel-authorization";
 
     /// <summary>The types the product ships, and (in <see cref="All"/>) those loaded modules add.</summary>
@@ -65,14 +55,6 @@ public static class DocumentNumberTypes
         DocumentNumberType.For<ApPaymentRun>(PaymentRun, "AP payment runs", "PR-{seq:6}", r => r.Number),
         DocumentNumberType.For<ShipNotice>(ShipNotice, "Advance ship notices", "ASN-{seq:6}", s => s.Number),
         DocumentNumberType.For<Invoice>(Invoice, "Invoices", "{contract}-{seq:4}", i => i.Number),
-        DocumentNumberType.For<SalesOrder>(SalesOrder, "Sales orders", "SO-{seq:6}", s => s.Number),
-        DocumentNumberType.For<PickList>(PickList, "Pick lists", "PK-{seq:6}", p => p.Number),
-        DocumentNumberType.For<Shipment>(Shipment, "Shipments", "SH-{seq:6}", s => s.Number),
-        DocumentNumberType.For<Nonconformance>(Nonconformance, "Nonconformance reports (NCRs)", "NCR-{seq:6}", n => n.Number),
-        DocumentNumberType.For<CorrectiveAction>(CorrectiveAction, "Corrective action requests", "CAR-{seq:6}", c => c.Number),
-        DocumentNumberType.For<EngineeringChange>(EngineeringChange, "Engineering change orders", "ECO-{seq:6}", e => e.Number),
-        DocumentNumberType.For<Inspection>(Inspection, "Inspections", "INS-{seq:6}", i => i.Number),
-        DocumentNumberType.For<VendorDebitMemo>(DebitMemo, "Vendor debit memos", "DM-{seq:6}", m => m.Number),
         DocumentNumberType.For<TravelAuthorization>(TravelAuthorization, "Travel authorizations", "TA-{seq:6}", t => t.Number),
     ];
 

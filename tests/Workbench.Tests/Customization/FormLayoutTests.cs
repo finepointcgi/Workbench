@@ -25,7 +25,6 @@ public sealed class FormLayoutTests
         { E.ApBill, ["vendorId", "invoiceNumber", "invoiceDate", "dueDate", "currencyCode", "description"] },
         { E.Invoice, ["contractId", "type", "periodFrom", "periodTo", "invoiceDate", "releaseWithhold", "notes"] },
         { E.ExpenseReport, ["title", "tripStart", "tripEnd", "purpose"] },
-        { E.Part, ["number", "revision", "description", "unitOfMeasure", "source", "tracking", "costMethod", "standardCost", "preferredVendorId", "leadTimeDays", "safetyStock", "minimumOrderQuantity", "orderMultiple", "defaultBinId", "notes", "isActive"] },
     };
 
     [Theory]
