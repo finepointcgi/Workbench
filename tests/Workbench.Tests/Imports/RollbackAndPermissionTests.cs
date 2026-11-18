@@ -206,7 +206,7 @@ public sealed class ImportPermissionTests
         await using var host = await ImportHost.CreateAsync();
         var kinds = await host.Imports.ListKindsAsync();
         Assert.Equal(21, kinds.Count(k => k.Source is not (ImportSource.Unanet or ImportSource.CaptureExec or ImportSource.HubSpot or ImportSource.Salesforce or ImportSource.GenericCsv)));
-        Assert.Equal(3, kinds.Count(k => k.Source == ImportSource.CaptureExec));
+        Assert.DoesNotContain(kinds, k => k.Source is ImportSource.CaptureExec or ImportSource.HubSpot or ImportSource.Salesforce or ImportSource.GenericCsv); // The CRM importers come with the capture module.
         foreach (var kind in kinds.Where(k => k.SampleFile is not null))
         {
             Assert.True(File.Exists(Samples.PathOf(kind.SampleFile!)), kind.SampleFile);

@@ -210,6 +210,11 @@ public sealed class ModuleSeamTests : IDisposable
         // Core readers: the module's reader replaces the built-in one.
         var item = (await sp.GetRequiredService<IItemReader>().ReadAsync(null!, [new Guid("5a5a5a5a-0000-4000-8000-000000000001")], default)).Values.Single();
         Assert.Equal("SAMPLE-1", item.Number);
+
+        // Decoration: the module wrapped the vendor reader the host registered (the decorator got the host's reader as its parameter).
+        var vendors = sp.GetRequiredService<IVendorReader>();
+        Assert.Equal("SampleVendorReaderDecorator", vendors.GetType().Name);
+        Assert.IsType<VendorTableReader>(vendors.GetType().GetProperty("Inner")!.GetValue(vendors));
     }
 
     [Fact]
@@ -238,7 +243,7 @@ public sealed class ModuleSeamTests : IDisposable
         var checklist = await (await finance.GetAsync("/api/v1/migration/checklist")).Content.ReadFromJsonAsync<MigrationChecklistDto>(Json);
         Assert.DoesNotContain(checklist!.Steps, s => s.Key == "sample-widgets");
 
-        Assert.IsType<PartItemReader>(sp.GetRequiredService<IItemReader>());
+        Assert.IsType<NoItemReader>(sp.GetRequiredService<IItemReader>());
         Assert.IsType<VendorTableReader>(sp.GetRequiredService<IVendorReader>());
     }
 

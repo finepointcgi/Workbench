@@ -25,10 +25,6 @@ public sealed class FormLayoutTests
         { E.ApBill, ["vendorId", "invoiceNumber", "invoiceDate", "dueDate", "currencyCode", "description"] },
         { E.Invoice, ["contractId", "type", "periodFrom", "periodTo", "invoiceDate", "releaseWithhold", "notes"] },
         { E.ExpenseReport, ["title", "tripStart", "tripEnd", "purpose"] },
-        { E.Part, ["number", "revision", "description", "unitOfMeasure", "source", "tracking", "costMethod", "standardCost", "preferredVendorId", "leadTimeDays", "safetyStock", "minimumOrderQuantity", "orderMultiple", "defaultBinId", "notes", "isActive"] },
-        { E.Opportunity, ["name", "solicitationNumber", "description", "agencyAccountId", "agencyName", "naicsCode", "setAside", "contractVehicle", "contractType", "placeOfPerformance", "kind", "incumbentAccountId",
-                          "estimatedValue", "periodOfPerformanceMonths", "estimatedAwardDate", "rfiDueOn", "rfpReleaseOn", "proposalDueOn",
-                          "captureManagerEmail", "proposalManagerEmail", "pwin", "pgo", "weightedValue"] },
     };
 
     [Theory]
@@ -49,7 +45,6 @@ public sealed class FormLayoutTests
     [Fact]
     public void Section_headings_are_kept_where_the_page_has_them()
     {
-        Assert.Equal(["The opportunity", "Value and dates", "People and probability"], BuiltInForms.Get(E.Opportunity).Sections.Select(s => s.Title));
         Assert.Equal(["1. Contract and period"], BuiltInForms.Get(E.Invoice).Sections.Select(s => s.Title));
         Assert.Equal([""], BuiltInForms.Get(E.Project).Sections.Select(s => s.Title));
     }

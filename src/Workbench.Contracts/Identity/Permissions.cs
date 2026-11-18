@@ -132,21 +132,9 @@ public static class Permission
     public const string HrOnboardingManage = "hr.onboarding.manage";
     public const string HrRestrictedReports = "hr.reports.restricted";
 
-    // Business development and pricing
-    public const string PipelineView = "bd.pipeline.view";
-    public const string CaptureManage = "bd.capture";
-    public const string OpportunitiesEditAll = "bd.opportunities.edit_all";
-    public const string BpChargeCode = "bd.bp_charge_code";
-    public const string PricingManage = "pricing.prices";
+    // Business development and pricing: the capture module defines its permissions (bd.*, pricing.*), see the module repository.
 
-    // Materials, quality and sales
-    public const string MaterialsView = "materials.view";
-    public const string MaterialsManage = "materials.manage";
-    public const string MaterialsCosting = "materials.costing";
-    public const string QualityDispositions = "quality.dispositions.apply";
-    public const string SalesOrdersView = "sales.orders.view";
-    public const string SalesOrdersManage = "sales.orders.manage";
-    public const string SalesCreditHold = "sales.credit_hold";
+    // Materials, quality and sales: the materials module defines its permissions (materials.*, quality.*, sales.*), see the module repository.
 
     // Sheets
     public const string RestrictedColumnsView = "sheets.restricted_columns.view";
@@ -166,7 +154,6 @@ public static class PermissionCatalog
     private const OrgRoles F = OrgRoles.Finance;
     private const OrgRoles A = OrgRoles.Admin;
     private const OrgRoles H = OrgRoles.Hr;
-    private const OrgRoles M = OrgRoles.Materials;
 
     public const string AreaAdministration = "Administration";
     public const string AreaApprovals = "Approvals";
@@ -290,19 +277,7 @@ public static class PermissionCatalog
         new(Permission.HrOnboardingManage, AreaPeople, "Onboarding and offboarding", "Onboarding and offboarding checklists for everyone.", H),
         new(Permission.HrRestrictedReports, AreaPeople, "Restricted HR reports", "EEO-1, VETS-4212, clearance and other restricted HR reports.", H, Sensitive: true),
 
-        new(Permission.PipelineView, AreaGrowth, "See the pipeline", "The whole capture pipeline, accounts and contacts, leads, forecast and gate settings.", OrgRoles.BusinessDevelopment | F),
-        new(Permission.CaptureManage, AreaGrowth, "Capture new business", "Create leads and opportunities, review leads and change go/no-go gates.", OrgRoles.BusinessDevelopment),
-        new(Permission.OpportunitiesEditAll, AreaGrowth, "Edit every opportunity", "Change any opportunity and withdraw anyone's gate review, not just the ones you manage.", A),
-        new(Permission.BpChargeCode, AreaGrowth, "Choose the B&P charge code", "The bid and proposal charge code used by the pipeline.", F),
-        new(Permission.PricingManage, AreaGrowth, "Price proposals", "Build, compare and lock proposal prices (shows cost rates, indirect rates and fee).", OrgRoles.Pricing | F, Sensitive: true),
 
-        new(Permission.MaterialsView, AreaMaterials, "See materials", "Parts, inventory, work orders, quality records and inventory reports.", M | F),
-        new(Permission.MaterialsManage, AreaMaterials, "Run materials", "Change parts, inventory, BOMs, work orders, MRP, quality, engineering changes, kits and shipping.", M),
-        new(Permission.MaterialsCosting, AreaMaterials, "Post inventory value", "Revalue inventory, see work-in-process cost, post landed cost and physical inventory adjustments.", F),
-        new(Permission.QualityDispositions, AreaMaterials, "Apply material review dispositions", "Apply NCR dispositions (they can move inventory and cost).", M | F),
-        new(Permission.SalesOrdersView, AreaMaterials, "See sales orders", "Sales orders, pick lists and shipments.", M | F | OrgRoles.BusinessDevelopment),
-        new(Permission.SalesOrdersManage, AreaMaterials, "Enter sales orders", "Enter and change sales orders.", M | F),
-        new(Permission.SalesCreditHold, AreaMaterials, "Credit holds", "Put sales orders on or off credit hold.", F),
 
         new(Permission.RestrictedColumnsView, AreaSheets, "See restricted columns", "Sheet columns marked \"Finance and owners only\" in every workspace.", F, Sensitive: true),
         new(Permission.SheetFormsPublic, AreaSheets, "Publish public forms",

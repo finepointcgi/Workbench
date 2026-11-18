@@ -99,15 +99,9 @@ public static class IdentityRegistration
         services.AddWorkbenchMigrationPermissions(); // Cut-over checklist and Costpoint reconciliation: Finance or Admin only.
         services.Decorate<Workbench.Contracts.Tasks.ITaskAssignmentService, PermissionCheckingTaskAssignmentService>(); // Tasks: Viewers read, Editors/Owners assign, assignees update their own status; workload Finance/Admin/PM.
         services.AddWorkbenchHrPermissions(); // HR: records HR/Admin (employees self-service, supervisors/Finance job fields), EEO HR/Admin/self, compensation HR+Finance.
-        services.AddWorkbenchMaterialsPermissions(); // Materials: read Materials/Finance/Admin, change Materials/Admin; revaluation and WIP Finance; own shop labor anyone.
-        services.AddWorkbenchCrmPermissions(); // Business development: pipeline for BD/Finance/Admin; capture and proposal managers edit theirs; everyone else nothing.
-        services.AddWorkbenchPricingPermissions(); // Proposal pricing: Finance, Admin or the Pricing role; the won handoff Finance/Admin.
         services.AddWorkbenchAssistantPermissions(); // Assistant: ask signed in (tools check the user's access); settings/usage/audit Admin; narratives Finance/Admin/PM; flags filtered to reviewees.
         services.AddWorkbenchPlanningPermissions(); // Recurring journals, GL budgets, budget vs actual: Finance/Admin; planning cycles Finance/Admin, org unit owners their own budget.
         services.AddWorkbenchCurrencyPermissions(); // Multicurrency: reads signed in; rates, setup, revaluation and the report Finance/Admin.
-        services.AddWorkbenchSalesShippingPermissions(); // Sales orders: Materials/Finance/Admin change, Business development reads; shipping Materials/Finance/Admin; delivery invoices Finance/Admin.
-        services.AddWorkbenchQualityPermissions(); // Quality and engineering changes: read Materials/Finance/Admin, change Materials/Admin; dispositions and ECOs decided by their workflow.
-        services.AddWorkbenchShopFloorPermissions(); // Kits, backflush, landed cost, physical inventory, capacity schedule: read Materials/Finance/Admin, change Materials/Admin; landed cost and count postings Finance/Admin.
         services.AddWorkbenchSourcingPermissions(); // RFQs, portal admin and EDI: Finance/Admin; the supplier portal: the signed-in vendor contact, own vendor's records only.
         services.AddWorkbenchBankFilePermissions(); // Bank payment files and vendor bank details: Finance or Admin; a vendor bank change is approved by someone other than its requester.
         services.AddWorkbenchAccountingExportPermissions(); // Accounting exports and their mappings: the "Export to accounting software" permission (Finance, Admin).

@@ -74,10 +74,8 @@ public static class ModuleMap
         .. Segments(ModuleKeys.Billing, "billing", "revenue", "accounting-live"),
         .. Segments(ModuleKeys.Accounting,
             "accounting", "cash", "assets", "currencies", "planning", "indirect-rates", "sales-tax", "purchasing", "cards", "vendor-bank", "bank-files"),
-        .. Segments(ModuleKeys.Capture, "crm", "pricing"),
         .. Segments(ModuleKeys.Workforce, "hr", "payroll", "resourcing"),
         .. Segments(ModuleKeys.ProjectControls, "evm", "ceilings", "ceiling-overrides", "rate-ceilings", "closeout", "risks"),
-        .. Segments(ModuleKeys.Materials, "materials", "quality", "engineering-changes", "sales-orders", "shipping"),
         .. Segments(ModuleKeys.Enterprise,
             "companies", "integrations", "customization", "automations", "approval-workflows", "access-reviews", "retention", "edi", "costpoint"),
     ]);
@@ -126,11 +124,6 @@ public static class ModuleMap
         ["hr."] = ModuleKeys.Workforce,
         ["hr.workforce."] = ModuleKeys.Core,
         ["hr.reports."] = ModuleKeys.Core,
-        ["bd."] = ModuleKeys.Capture,
-        ["pricing."] = ModuleKeys.Capture,
-        ["materials."] = ModuleKeys.Materials,
-        ["quality."] = ModuleKeys.Materials,
-        ["sales."] = ModuleKeys.Materials,
         ["sheets."] = ModuleKeys.Core,
         ["fields."] = ModuleKeys.Core,
     };
@@ -162,9 +155,9 @@ public static class ModuleMap
         ["approvals"] = ModuleKeys.Core,
         ["projects"] = ModuleKeys.Core,
         ["people"] = ModuleKeys.Core,
-        ["growth"] = ModuleKeys.Capture,
+        // "growth" (Business development): the capture module adds the rows (the section itself stays in the menu and is hidden while it is empty).
         ["sheets"] = ModuleKeys.Core,
-        ["materials"] = ModuleKeys.Materials,
+        // "materials": the materials module adds the rows (the section itself stays in the menu and is hidden while it is empty).
         ["reports"] = ModuleKeys.Core,
         ["admin"] = ModuleKeys.Core,
         // "finance" has no default: every group, or page, there must say which module it is.
@@ -194,7 +187,6 @@ public static class ModuleMap
             "billing/invoices", "billing/statements", "accounting/revenue", "accounting/revenue/estimates", "accounting/revenue/setup",
             "accounting/revenue/projects", "accounting/revenue/reports"),
         .. Segments(ModuleKeys.Workforce, "resourcing", "hr/benefits/me", "payroll"),
-        .. Segments(ModuleKeys.Capture, "pricing"),
         .. Segments(ModuleKeys.GovCon, "reports/standard/funding-status"),
         .. Segments(ModuleKeys.Enterprise, "setup/companies", "accounting/consolidated", "admin/integrations", "admin/integrations/edi", "setup/approval-workflows"),
     ]);
@@ -238,14 +230,12 @@ public static class ModuleMap
         ["Accounting"] = ModuleKeys.Accounting, ["Assets"] = ModuleKeys.Accounting, ["BankFiles"] = ModuleKeys.Accounting, ["Cash"] = ModuleKeys.Accounting,
         ["Currencies"] = ModuleKeys.Accounting, ["IndirectRates"] = ModuleKeys.Accounting, ["Planning"] = ModuleKeys.Accounting,
         ["Purchasing"] = ModuleKeys.Accounting, ["SalesTax"] = ModuleKeys.Accounting, ["Travel"] = ModuleKeys.Core,
-        // capture
-        ["Crm"] = ModuleKeys.Capture, ["Pricing"] = ModuleKeys.Capture,
+        // capture: the Crm and Pricing namespaces live in the capture module (its own rows).
         // workforce
         ["Hr"] = ModuleKeys.Workforce, ["Payroll"] = ModuleKeys.Workforce, ["Resourcing"] = ModuleKeys.Workforce,
         // project controls
         ["Ceilings"] = ModuleKeys.ProjectControls, ["Closeout"] = ModuleKeys.ProjectControls, ["Evm"] = ModuleKeys.ProjectControls, ["Risks"] = ModuleKeys.ProjectControls,
-        // materials
-        ["Materials"] = ModuleKeys.Materials, ["Quality"] = ModuleKeys.Materials,
+        // materials: the Materials and Quality namespaces live in the materials module (its own rows).
         // govcon: the Compliance, IncurredCost and TotalTime namespaces and the parallel run live in the government contracting module (its own rows).
         // enterprise
         ["Automations"] = ModuleKeys.Enterprise, ["Companies"] = ModuleKeys.Enterprise, ["Customization"] = ModuleKeys.Enterprise,

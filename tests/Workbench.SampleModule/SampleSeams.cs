@@ -148,6 +148,14 @@ internal sealed class SampleReconciliationSource : IReconciliationSource
         Task.FromResult(new ReconDetail(["Item"], [["sample"]]));
 }
 
+/// <summary>A decorator of core's vendor reader, applied through <c>ModuleServiceDecoration</c>: it takes the host's reader as its constructor parameter.</summary>
+internal sealed class SampleVendorReaderDecorator(IVendorReader inner) : IVendorReader
+{
+    public IVendorReader Inner => inner;
+
+    public Task<IReadOnlyDictionary<Guid, VendorRef>> ReadAsync(IWorkbenchDbContext db, IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken) => inner.ReadAsync(db, ids, cancellationToken);
+}
+
 /// <summary>How core reads items once the module owns them (the last registration wins).</summary>
 internal sealed class SampleItemReader : IItemReader
 {
@@ -155,4 +163,7 @@ internal sealed class SampleItemReader : IItemReader
 
     public Task<IReadOnlyDictionary<Guid, ItemRef>> ReadAsync(IWorkbenchDbContext db, IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken) =>
         Task.FromResult<IReadOnlyDictionary<Guid, ItemRef>>(ids.Contains(ItemId) ? new Dictionary<Guid, ItemRef> { [ItemId] = new(ItemId, "SAMPLE-1", "A sample part", "EA") } : new Dictionary<Guid, ItemRef>());
+
+    public Task<IReadOnlyDictionary<Guid, ItemRef>> ReadForPurchaseOrderLinesAsync(IWorkbenchDbContext db, IReadOnlyCollection<Guid> purchaseOrderLineIds, CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyDictionary<Guid, ItemRef>>(new Dictionary<Guid, ItemRef>());
 }

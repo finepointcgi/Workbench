@@ -21,7 +21,7 @@ namespace Workbench.Infrastructure.Persistence;
 /// PRIMA (lowest price on both; price reasonableness on file) as an issued purchase order, which PRIMA acknowledges.
 /// Jordan Reyes (jordan.reyes@primavera.example) is PRIMA's supplier portal contact; the password comes from
 /// <c>SupplierPortal:DemoContactPassword</c> when it's configured (Development), else they use an emailed link. DIGI is
-/// set up as an EDI partner (file drop folder "digi"). Runs once, after the procurement and materials seeds.
+/// set up as an EDI partner (file drop folder "digi"). Runs once, after the procurement seed (and the materials module's, which makes the DIGI vendor first when it is loaded).
 /// </summary>
 internal static class SourcingSeed
 {
@@ -36,6 +36,15 @@ internal static class SourcingSeed
 
         var vendors = await db.Set<Vendor>().AsNoTracking().Where(v => v.Code == "PRIMA" || v.Code == "DIGI" || v.Code == "ACME").ToDictionaryAsync(v => v.Code, cancellationToken);
         var wbs = await db.Set<WbsElement>().AsNoTracking().FirstOrDefaultAsync(w => w.Code == "1001.01.04", cancellationToken);
+        if (!vendors.ContainsKey("DIGI") && vendors.ContainsKey("PRIMA") && vendors.ContainsKey("ACME"))
+        {
+            // The materials module's sample data makes this vendor when it is loaded; without it sourcing brings its own.
+            var created = new Vendor { Code = "DIGI", Name = "Digi-Parts Electronics" };
+            db.Set<Vendor>().Add(created);
+            await db.SaveChangesAsync(cancellationToken);
+            vendors["DIGI"] = created;
+        }
+
         if (vendors.Count < 3 || wbs is null)
         {
             return;

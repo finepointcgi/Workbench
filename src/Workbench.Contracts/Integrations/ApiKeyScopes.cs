@@ -61,8 +61,6 @@ public static class ApiKeyScopes
         new("accounting", "Accounting", "Chart of accounts, journal, fiscal calendar, period close, cash, assets, currencies, companies, budgets and incurred cost.",
             ["accounting", "fiscal", "audit", "cash", "assets", "currencies", "companies", "planning", "indirect-rates", "sales-tax", "accounting-export"]),
         new("people", "People and payroll", "HR records and payroll. Pay rates stay masked unless the key's roles may reveal them.", ["employees", "hr", "payroll"]),
-        new("crm", "Business development and pricing", "Accounts, opportunities, pipeline and proposal pricing.", ["crm", "pricing"]),
-        new("materials", "Materials and manufacturing", "Parts, inventory, BOMs, work orders and MRP.", ["materials", "quality", "engineering-changes"]),
         new("reports", "Reports", "Standard reports, the report writer and saved reports.", ["reports"]),
         new("setup", "Setup and approvals", "Organization setup lists (customers, labor categories, org units), approval workflows, the approval inbox and custom fields.",
             ["setup", "customers", "org-units", "labor-categories", "approvals", "approval-workflows", "approval-delegations", "customization", "company-profile"]),

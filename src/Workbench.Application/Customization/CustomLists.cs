@@ -34,7 +34,12 @@ public static class ValueListCatalog
 
 /// <summary>A built-in status (or other fixed value) set whose labels administrators may rename.</summary>
 public sealed record StatusSetDefinition(string Key, string Name, string Description, Type Values, string? EntityType, bool AllowsSubStatuses, IReadOnlyDictionary<string, string>? Labels = null)
+    : Workbench.Contracts.Modules.IModuleRow
 {
+    string Workbench.Contracts.Modules.IModuleRow.Catalog => Workbench.Contracts.Modules.ModuleCatalogs.StatusSets;
+
+    string Workbench.Contracts.Modules.IModuleRow.RowKey => Key;
+
     public IReadOnlyList<string> ValueNames => Enum.GetNames(Values);
 
     public string DefaultLabel(string value) => Labels?.GetValueOrDefault(value) ?? Words(value);
@@ -55,11 +60,10 @@ public static class StatusSetCatalog
     public const string ApBillStatus = "ap-bill-status";
     public const string TimesheetStatus = "timesheet-status";
     public const string ExpenseReportStatus = "expense-report-status";
-    public const string OpportunityStage = "opportunity-stage";
-    public const string OpportunitySource = "opportunity-source";
     public const string ExpenseCategory = "expense-category";
 
-    public static IReadOnlyList<StatusSetDefinition> All { get; } =
+    /// <summary>The status sets the product ships, and (in <see cref="All"/>) those loaded modules add.</summary>
+    public static IReadOnlyList<StatusSetDefinition> BuiltIn { get; } =
     [
         new(ProjectStatus, "Project status", "Planning, active, on hold and closed projects.", typeof(D.ProjectAccounting.ProjectStatus), CustomizableEntityTypes.Project, true),
         new(ContractStatus, "Contract status", "Pending, active and closed contracts.", typeof(D.ProjectAccounting.ContractStatus), CustomizableEntityTypes.Contract, true),
@@ -68,12 +72,12 @@ public static class StatusSetCatalog
         new(ApBillStatus, "AP bill status", "From draft through approval and posting.", typeof(D.Purchasing.ApBillStatus), CustomizableEntityTypes.ApBill, false),
         new(TimesheetStatus, "Timesheet status", "Draft, submitted, approved and rejected timesheets.", typeof(D.ProjectAccounting.TimesheetStatus), CustomizableEntityTypes.Timesheet, false),
         new(ExpenseReportStatus, "Expense report status", "Draft, submitted, approved and rejected expense reports.", typeof(OdcStatus), CustomizableEntityTypes.ExpenseReport, false),
-        new(OpportunityStage, "Opportunity stage", "The pipeline stages a pursuit moves through.", typeof(D.Crm.OpportunityStage), CustomizableEntityTypes.Opportunity, true,
-            new Dictionary<string, string> { ["NoBid"] = "No bid" }),
-        new(OpportunitySource, "Opportunity source", "Where an opportunity came from (SAM.gov leads keep their link).", typeof(D.Crm.OpportunitySource), null, false,
-            new Dictionary<string, string> { ["Manual"] = "Entered by hand", ["SamGov"] = "SAM.gov", ["CsvImport"] = "CSV import" }),
         new(ExpenseCategory, "Expense and ODC categories", "The categories of other direct costs and expense lines (travel keeps its per diem rules).", typeof(OdcType), null, false),
     ];
+
+    private static readonly Workbench.Contracts.Modules.RowCatalog<StatusSetDefinition> Catalog = new(BuiltIn);
+
+    public static IReadOnlyList<StatusSetDefinition> All => Catalog.All;
 
     public static StatusSetDefinition? Find(string key) => All.FirstOrDefault(s => s.Key == key);
 

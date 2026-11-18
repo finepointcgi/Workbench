@@ -16,6 +16,11 @@
     <link rel="stylesheet" href="@Assets["_content/Workbench.Ui/theme.css"]" />
     <link rel="stylesheet" href="@Assets["_content/Workbench.Ui/a11y.css"]" />
     <link rel="stylesheet" href="@Assets["Workbench.Web.styles.css"]" />
+    @foreach (var sheet in Workbench.Plugins.ModuleHost.Current.StyleSheets())
+    {
+        @* The scoped styles of the pages a license module brings (their build puts the bundle in the module's wwwroot). *@
+        <link rel="stylesheet" href="@sheet" />
+    }
     <ImportMap />
     <link rel="icon" type="image/svg+xml" href="_content/Workbench.Ui/logo/logo.svg" />
     <link rel="icon" type="image/png" href="favicon.png" />

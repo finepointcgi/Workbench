@@ -42,13 +42,11 @@ public static class NewCatalog
 
         new("project", "Project", "New project", Icons.Material.Filled.CreateNewFolder, NavRule.Need(P.ProjectsCreate, P.SetupProjects), "setup/projects/new", NewKind.ProjectDialog, Keywords: "wbs plan request"),
         new("sheet", "Sheet", "New sheet", Icons.Material.Filled.TableChart, NavRule.Everyone, "sheets", NewKind.SheetDialog, Keywords: "grid tracker list"),
-        new("opportunity", "Opportunity", "New opportunity", Icons.Material.Filled.Flag, NavRule.Need(P.CaptureManage), "bd/opportunities/new", Keywords: "pursuit capture rfp bd"),
         new("invoice", "Invoice", "New invoice", Icons.Material.Filled.NoteAdd, NavRule.Need(P.BillingInvoicesManage), "billing/new", Keywords: "bill customer billing"),
         new("journal", "Journal entry", "New journal entry", Icons.Material.Filled.MenuBook, NavRule.Need(P.GlJournalsPost), "accounting/journal/new", Keywords: "je gl general ledger"),
         new("bill", "Vendor bill", "New vendor bill", Icons.Material.Filled.ReceiptLong, NavRule.Need(P.ApBillsManage), "purchasing/bills/new", Keywords: "ap payable vendor invoice"),
         new("contract", "Contract", "New contract", Icons.Material.Filled.Description, NavRule.Need(P.SetupContracts), "setup/contracts/new", Keywords: "award funding bill rates"),
         new("rfq", "Request for quote", "New request for quote", Icons.Material.Filled.RequestQuote, NavRule.Need(P.SourcingManage), "purchasing/rfqs/new", Keywords: "rfq sourcing quotes"),
-        new("engineering-change", "Engineering change", "New engineering change", Icons.Material.Filled.ChangeCircle, NavRule.Need(P.MaterialsManage), "materials/engineering-changes/new", Keywords: "eco ecn revision"),
         new("automation", "Automation", "New automation", Icons.Material.Filled.Bolt, NavRule.Need(P.AdminAutomations), "admin/automation/new", Keywords: "rule workflow trigger"),
     ];
 

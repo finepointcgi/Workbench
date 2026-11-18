@@ -154,8 +154,10 @@ public static class FieldMasker
             return known;
         }
 
-        // Only Workbench contract types carry sensitive fields; a type already being built is a cycle.
-        if (type.Assembly != typeof(SensitiveFieldAttribute).Assembly || !building.Add(type))
+        // Only Workbench contract types carry sensitive fields (a module's contracts assembly keeps the Workbench.Contracts namespaces, so its DTOs
+        // are masked too: a module with a fee or a pay rate in a DTO must not lose its masking by living outside core's assembly);
+        // a type already being built is a cycle.
+        if (!IsContractType(type) || !building.Add(type))
         {
             return Plan.Empty;
         }
@@ -180,6 +182,9 @@ public static class FieldMasker
         Plans[type] = plan;
         return plan;
     }
+
+    private static bool IsContractType(Type type) =>
+        type.Assembly == typeof(SensitiveFieldAttribute).Assembly || type.Namespace?.StartsWith("Workbench.Contracts", StringComparison.Ordinal) == true;
 
     private static bool IsSettable(PropertyInfo property) =>
         property.SetMethod is not null || property.DeclaringType!.GetField($"<{property.Name}>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic) is not null;

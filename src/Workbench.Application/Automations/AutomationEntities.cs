@@ -8,7 +8,6 @@ using Workbench.Contracts.Automations;
 using Workbench.Contracts.Customization;
 using Workbench.Contracts.Identity;
 using Workbench.Domain.Billing;
-using Workbench.Domain.Crm;
 using Workbench.Domain.ProjectAccounting;
 using Workbench.Domain.Purchasing;
 
@@ -198,13 +197,6 @@ public static class AutomationEntities
             Key = "vendor", Label = "Vendor", ClrType = typeof(Vendor), LinkFormat = "purchasing/vendors/{id}",
             Writable = Set(nameof(Vendor.ContactName), nameof(Vendor.ContactEmail), nameof(Vendor.ContactPhone)),
             CanWrite = Finance, CanReadAll = r => r.IsFinance() || r.CanViewMaterials(),
-        },
-        new()
-        {
-            Key = "opportunity", Label = "Opportunity", ClrType = typeof(Opportunity), LinkFormat = "bd/opportunities/{id}", ProjectProperty = nameof(Opportunity.ProjectId),
-            Writable = Set(nameof(Opportunity.Pwin), nameof(Opportunity.Pgo), nameof(Opportunity.CaptureManagerEmail), nameof(Opportunity.ProposalManagerEmail)),
-            FinanceFields = Set(nameof(Opportunity.EstimatedValue), nameof(Opportunity.AwardedValue)),
-            CanWrite = r => r.IsBusinessDevelopment(), CanReadAll = r => r.IsBusinessDevelopment() || r.IsFinance(),
         },
     ];
 

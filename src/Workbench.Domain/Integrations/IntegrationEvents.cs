@@ -18,18 +18,15 @@ public sealed record IntegrationEventType(string Key, string Subject, Type DataT
     public static readonly IntegrationEventType ProjectCreated = new("project.created", "Project", typeof(ProjectEventData));
     public static readonly IntegrationEventType EmployeeHired = new("employee.hired", "Employee", typeof(EmployeeEventData));
     public static readonly IntegrationEventType EmployeeTerminated = new("employee.terminated", "Employee", typeof(EmployeeEventData));
-    public static readonly IntegrationEventType OpportunityStageChanged = new("opportunity.stage_changed", "Opportunity", typeof(OpportunityStageEventData));
     public static readonly IntegrationEventType PeriodClosed = new("period.closed", "FiscalPeriod", typeof(PeriodEventData));
-    public static readonly IntegrationEventType ShipmentShipped = new("shipment.shipped", "Shipment", typeof(ShipmentEventData));
     public static readonly IntegrationEventType RfqAwarded = new("rfq.awarded", "Rfq", typeof(RfqAwardEventData));
-    public static readonly IntegrationEventType NcrDispositioned = new("ncr.dispositioned", "Nonconformance", typeof(NcrEventData));
     public static readonly IntegrationEventType SheetFormSubmitted = new("sheet.form_submitted", "SheetItem", typeof(SheetFormSubmittedEventData));
 
     public static IReadOnlyList<IntegrationEventType> All { get; } =
     [
         TimesheetSubmitted, TimesheetApproved, InvoiceApproved, InvoiceSent, InvoicePaid, BillApproved, BillPaid,
-        PurchaseOrderApproved, ProjectCreated, EmployeeHired, EmployeeTerminated, OpportunityStageChanged, PeriodClosed,
-        ShipmentShipped, RfqAwarded, NcrDispositioned, SheetFormSubmitted,
+        PurchaseOrderApproved, ProjectCreated, EmployeeHired, EmployeeTerminated, PeriodClosed,
+        RfqAwarded, SheetFormSubmitted,
     ];
 
     public static IntegrationEventType? Find(string key) => All.FirstOrDefault(t => t.Key == key);
@@ -86,24 +83,10 @@ public sealed record EmployeeEventData(
     public override Guid GetSubjectId() => EmployeeId;
 }
 
-public sealed record OpportunityStageEventData(
-    Guid OpportunityId, string Number, string Name, string FromStage, string ToStage, decimal EstimatedValue, DateOnly? EstimatedAwardDate)
-    : IntegrationEventData
-{
-    public override Guid GetSubjectId() => OpportunityId;
-}
-
 public sealed record PeriodEventData(Guid FiscalPeriodId, int FiscalYear, int Number, string Name, DateOnly Start, DateOnly End, string Status)
     : IntegrationEventData
 {
     public override Guid GetSubjectId() => FiscalPeriodId;
-}
-
-public sealed record ShipmentEventData(
-    Guid ShipmentId, string Number, string? ShipmentNumber, Guid CompanyId, Guid SalesOrderId, string SalesOrderNumber, Guid CustomerId,
-    Guid? ContractId, DateOnly? ShipDate, string? Carrier, string? TrackingNumber, bool IsFinal, decimal Value) : IntegrationEventData
-{
-    public override Guid GetSubjectId() => ShipmentId;
 }
 
 public sealed record RfqAwardEventData(
@@ -111,13 +94,6 @@ public sealed record RfqAwardEventData(
     string PurchaseOrderNumbers) : IntegrationEventData
 {
     public override Guid GetSubjectId() => RfqId;
-}
-
-public sealed record NcrEventData(
-    Guid NcrId, string Number, Guid PartId, string Lot, string Serial, decimal Quantity, string Disposition, Guid? VendorId, Guid? WorkOrderId)
-    : IntegrationEventData
-{
-    public override Guid GetSubjectId() => NcrId;
 }
 
 /// <summary>A form added a row to a sheet. No answers are sent (cell values can be restricted); read the row through the API.</summary>

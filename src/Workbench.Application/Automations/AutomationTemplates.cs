@@ -23,7 +23,7 @@ public static class AutomationTemplates
     private static AutomationRecipeBlankDto Blank(string key, string label, Kind kind, string? fallback = null, string? dependsOn = null) => new(key, label, kind, fallback, dependsOn);
 
     private sealed record Recipe(string Key, string Name, string Description, string Category, AutomationRecipeScope Scope, string Sentence,
-        IReadOnlyList<AutomationRecipeBlankDto> Blanks, Func<Fill, SaveAutomationRequest> Make);
+        IReadOnlyList<AutomationRecipeBlankDto> Blanks, Func<Fill, SaveAutomationRequest> Make, string? Entity = null);
 
     private static readonly IReadOnlyList<Recipe> Recipes =
     [
@@ -244,20 +244,42 @@ public static class AutomationTemplates
                     null,
                     [new(AutomationActionKind.Notify, [new(RecipientKind.Field, "captureManagerEmail"), new(RecipientKind.Field, "proposalManagerEmail")],
                         "{number} moved to {stage}", "{name} is now in {stage}.")]),
-                TemplateKey: "capture-stage")),
+                TemplateKey: "capture-stage"),
+            "opportunity"), // Offered only while a module provides the "opportunity" automation entity (the capture module).
     ];
 
-    public static IReadOnlyList<AutomationTemplateDto> All { get; } = Recipes
-        .Select(r => new AutomationTemplateDto(r.Key, r.Name, r.Description, r.Category,
-            r.Make(new Fill(r, null, [], new Dictionary<string, string?>())) with { TemplateKey = r.Key }, r.Scope, r.Sentence, r.Blanks))
-        .ToList();
+    private sealed record Offered(Workbench.Contracts.Modules.ModuleSet Set, IReadOnlyList<AutomationTemplateDto> Templates);
+
+    private static Offered? _offered;
+
+    private static bool IsOffered(Recipe recipe) => recipe.Entity is null || AutomationEntities.Find(recipe.Entity) is not null;
+
+    /// <summary>The recipes on offer: every one, except those that need a record type only a module that is not loaded provides.</summary>
+    public static IReadOnlyList<AutomationTemplateDto> All
+    {
+        get
+        {
+            var set = Workbench.Contracts.Modules.ModuleRegistry.Current;
+            if (Volatile.Read(ref _offered) is { } cached && ReferenceEquals(cached.Set, set))
+            {
+                return cached.Templates;
+            }
+
+            var templates = Recipes.Where(IsOffered)
+                .Select(r => new AutomationTemplateDto(r.Key, r.Name, r.Description, r.Category,
+                    r.Make(new Fill(r, null, [], new Dictionary<string, string?>())) with { TemplateKey = r.Key }, r.Scope, r.Sentence, r.Blanks))
+                .ToList();
+            Volatile.Write(ref _offered, new Offered(set, templates));
+            return templates;
+        }
+    }
 
     public static AutomationTemplateDto? Find(string key) => All.FirstOrDefault(t => t.Key == key);
 
     /// <summary>The recipe's automation with its blanks filled in; for sheet recipes, on <paramref name="sheetId"/> with its <paramref name="columns"/>.</summary>
     public static SaveAutomationRequest Build(string key, Guid? sheetId, IReadOnlyList<Column> columns, IReadOnlyDictionary<string, string?> blanks)
     {
-        var recipe = Recipes.FirstOrDefault(r => r.Key == key) ?? throw new Contracts.WorkbenchNotFoundException($"There's no recipe \"{key}\".");
+        var recipe = Recipes.FirstOrDefault(r => r.Key == key && IsOffered(r)) ?? throw new Contracts.WorkbenchNotFoundException($"There's no recipe \"{key}\".");
         if (recipe.Scope == AutomationRecipeScope.Sheet && sheetId is null)
         {
             throw new ArgumentException("This recipe is for a sheet: open it from the sheet's Automate button.");

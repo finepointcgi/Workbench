@@ -3,7 +3,8 @@ using Workbench.Domain.ProjectAccounting;
 
 namespace Workbench.Application.ProjectAccounting;
 
-internal static class Mapping
+/// <summary>Entity to DTO mappings and the argument checks the services share (public: the capture module reuses them).</summary>
+public static class Mapping
 {
     public static EmployeeDto ToDto(this Employee e) =>
         new(e.Id, e.EmployeeNumber, e.Email, e.DisplayName, e.OrgUnitId, e.SupervisorId, e.DefaultLaborCategoryId,
