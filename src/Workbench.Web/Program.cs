@@ -55,7 +55,7 @@ builder.Services.AddProblemDetails();
 // License modules from outside the repository (docs/operations/module-plugins.md). The license is checked before a module's assembly is loaded.
 var moduleLicensed = Workbench.Application.Licensing.ModuleEntitlement.Check(builder.Configuration, TimeProvider.System, out var moduleLicenseNote);
 var modules = Workbench.Plugins.ModuleHost.Load(Workbench.Plugins.ModuleHostOptions.From(builder.Configuration, moduleLicensed,
-    Workbench.Ui.Navigation.NavCatalog.BuiltInSectionKeys, Workbench.Ui.Navigation.NavCatalog.BuiltInHrefs));
+    Workbench.Ui.Navigation.NavCatalog.BuiltInSectionKeys, Workbench.Ui.Navigation.NavCatalog.BuiltInHrefs, Workbench.Web.BuiltInRowKeys.All));
 builder.Services.AddSingleton(modules);
 builder.Services.AddWorkbenchApplication(services => modules.ConfigureServices(services, builder.Configuration));
 var licenseOptions = new Workbench.Application.Licensing.LicenseOptions();
