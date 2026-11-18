@@ -29,7 +29,6 @@ public static class DependencyInjection
         services.AddOdcClients(serverBaseAddress);
         services.AddFinancialsClients(serverBaseAddress);
         services.AddSetupClients(serverBaseAddress);
-        services.AddRiskClients(serverBaseAddress);
         services.AddAccountingClients(serverBaseAddress);
         services.AddSecurityAdminClients(serverBaseAddress);
         services.AddHttpClient<Contracts.Notifications.IEmailDeliverabilityService, HttpEmailDeliverabilityService>(client => client.BaseAddress = serverBaseAddress);
@@ -46,8 +45,6 @@ public static class DependencyInjection
         services.AddPerDiemResourcingClients(serverBaseAddress);
         services.AddRevenueClients(serverBaseAddress);
         services.AddReportClients(serverBaseAddress);
-        services.AddEvmClients(serverBaseAddress);
-        services.AddCeilingClients(serverBaseAddress);
         services.AddApprovalClients(serverBaseAddress);
         services.AddMigrationClients(serverBaseAddress);
         services.AddHttpClient<Contracts.Projects.IProjectHubService, HttpProjectHubService>(client => client.BaseAddress = serverBaseAddress);

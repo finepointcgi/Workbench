@@ -8,7 +8,6 @@ using Workbench.Contracts.Identity;
 using Workbench.Contracts.ProjectAccounting;
 using Workbench.Contracts.Scheduling;
 using Workbench.Contracts.Sheets;
-using Workbench.Domain.Ceilings;
 using Workbench.Domain.Identity;
 using Workbench.Domain.ProjectAccounting;
 
@@ -32,6 +31,7 @@ public sealed class ProjectStartService(
     IClinService clins,
     IBudgetService budgets,
     TimeProvider clock,
+    Projects.IContractCeilingSource ceilingSource,
     IProjectPlanService? planTerms = null,
     ProjectPlanService? handOff = null,
     Contracts.Revenue.IRevenueSetupService? revenueSetup = null) : IProjectStartService
@@ -332,11 +332,7 @@ public sealed class ProjectStartService(
             return;
         }
 
-        await using var db = await dbFactory.CreateAsync(cancellationToken);
-        var hours = await db.Set<Ceiling>().AsNoTracking()
-            .Where(c => c.ContractId == contractId && c.IsActive && c.LaborCategoryId != null && c.HoursCeiling > 0 && c.ProjectId == null && c.WbsElementId == null)
-            .Select(c => new { c.ClinId, LaborCategoryId = c.LaborCategoryId!.Value, Hours = c.HoursCeiling!.Value })
-            .ToListAsync(cancellationToken);
+        var hours = await ceilingSource.HourCeilingsAsync(contractId, cancellationToken);
         if (hours.Count == 0)
         {
             return;
@@ -406,7 +402,7 @@ public sealed class ProjectStartService(
     {
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var priced = await db.Set<ContractLaborRate>().AsNoTracking().Where(r => r.ContractId == contractId).Select(r => r.LaborCategoryId).ToListAsync(cancellationToken);
-        var capped = await db.Set<Ceiling>().AsNoTracking().Where(c => c.ContractId == contractId && c.LaborCategoryId != null).Select(c => c.LaborCategoryId!.Value).ToListAsync(cancellationToken);
+        var capped = await ceilingSource.CappedCategoriesAsync(contractId, cancellationToken);
         return priced.Concat(capped).Distinct().ToList();
     }
 

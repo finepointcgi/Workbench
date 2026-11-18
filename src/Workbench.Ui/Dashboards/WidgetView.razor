@@ -140,8 +140,9 @@ else
             <MudLink Href="@($"projects/{pf.ProjectId}/financials")" Typo="Typo.caption">Open financials</MudLink>
             break;
 
-        case WidgetType.EarnedValue when Data.EarnedValue is { } ev:
-            <Workbench.Ui.Evm.EvmWidgetView Data="ev" />
+        case WidgetType.EarnedValue:
+            @* Computed and drawn by the project controls module (its widget provider and slot component); nothing without it. *@
+            <UiSlot Name="dashboard.widget.earned-value" Parameters="@(new Dictionary<string, object?> { ["Data"] = Data })" />
             break;
 
         case WidgetType.RichText:

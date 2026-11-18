@@ -7,6 +7,14 @@ using Workbench.Domain.Purchasing;
 
 namespace Workbench.Application.Purchasing;
 
+/// <summary>Open purchase order commitments, for the license modules that count them against a limit (the project controls module's ceilings and closeout).</summary>
+public static class OpenCommitments
+{
+    /// <summary>Open PO commitments per WBS element: the order date and committed amount of each open line.</summary>
+    public static Task<IReadOnlyList<(Guid WbsElementId, DateOnly OrderDate, decimal Committed)>> ByWbsAsync(IWorkbenchDbContext db, IReadOnlyCollection<Guid> wbsIds, CancellationToken ct) =>
+        ProcurementSupport.CommitmentsByWbsAsync(db, wbsIds, ct);
+}
+
 /// <summary>Shared rules for requisitions, purchase orders, receiving, the three-way match and commitments.</summary>
 internal static class ProcurementSupport
 {

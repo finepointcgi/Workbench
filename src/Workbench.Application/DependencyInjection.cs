@@ -3,7 +3,6 @@ using Workbench.Application.Accounting;
 using Workbench.Application.Automation;
 using Workbench.Application.Licensing;
 using Workbench.Application.Billing;
-using Workbench.Application.Ceilings;
 using Workbench.Application.Cash;
 using Workbench.Application.Collaboration;
 using Workbench.Application.ContractDetail;
@@ -23,7 +22,6 @@ using Workbench.Application.PerDiem;
 using Workbench.Application.Resourcing;
 using Workbench.Application.Revenue;
 using Workbench.Application.Dashboards;
-using Workbench.Application.Evm;
 using Workbench.Application.MyWork;
 using Workbench.Application.MyTodo;
 using Workbench.Application.Security;
@@ -81,8 +79,7 @@ public static class DependencyInjection
         services.AddWorkbenchResourcing(); // Allocations, capacity, utilization and allocation-based ETC; above AddWorkbenchIdentity.
         services.AddWorkbenchRevenue(); // Revenue recognition: runs post through the GL (JournalSource.Revenue) and add a close check; after billing, above AddWorkbenchIdentity.
         services.AddWorkbenchReports(); // Standard reports, report writer, saved reports and schedules; above AddWorkbenchIdentity.
-        services.AddWorkbenchEvm(); // Earned value (PMB, status, VARs, BCRs, IPMDAR exports); ACWP via IBurdenedCostService; above AddWorkbenchIdentity.
-        services.AddWorkbenchCeilings(); // Ceilings, rate caps and closeout; decorates time, ODCs, expenses, AP bills, POs and invoices; above AddWorkbenchIdentity.
+        // Earned value, ceilings, closeout and risks are the project controls license module (modules/projectcontrols); its decorators of time, ODCs, expenses, AP bills, POs, requisitions and invoices come through registerModules below.
         Approvals.ApprovalRegistration.AddWorkbenchApprovals(services); // Approval workflow engine, inbox, delegation; above AddWorkbenchIdentity.
         services.AddScoped<Contracts.Projects.IProjectHubService, Projects.ProjectHubService>(); // Projects hub (list and project overview); above AddWorkbenchIdentity.
         services.AddWorkbenchMyTodo(); // Home page to-dos: providers read through the permission-checked services above.

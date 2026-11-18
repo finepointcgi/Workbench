@@ -94,9 +94,9 @@ public sealed class RateBook
 }
 
 /// <summary>Approved direct cost on one WBS element and date: labor at cost, allowable ODCs and unallowable ODCs (never burdened).</summary>
-internal sealed record DirectCost(Guid ProjectId, Guid WbsElementId, DateOnly Date, decimal Hours, decimal Labor, decimal Odc, decimal Unallowable);
+public sealed record DirectCost(Guid ProjectId, Guid WbsElementId, DateOnly Date, decimal Hours, decimal Labor, decimal Odc, decimal Unallowable);
 
-internal static class DirectCosts
+public static class DirectCosts
 {
     /// <summary>
     /// Approved time on direct WBS elements (hours × the cost rate effective on the work date, per entry to the cent, by

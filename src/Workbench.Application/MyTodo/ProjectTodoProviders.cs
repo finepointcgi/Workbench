@@ -1,7 +1,5 @@
 using System.Globalization;
-using Workbench.Contracts.Ceilings;
 using Workbench.Contracts.Contracts;
-using Workbench.Contracts.Evm;
 using Workbench.Contracts.Identity;
 using Workbench.Contracts.MyTodo;
 using Workbench.Contracts.Revenue;
@@ -108,89 +106,6 @@ public sealed class EacReviewTodoProvider : IMyTodoProvider
             $"Review the EAC for {project.Code}",
             $"The last estimate at completion is from {latest.AsOf:MMM d, yyyy}. Review it every {ReviewEveryDays} days so revenue stays right.",
             context.UrgencyFor(due), due, link, "Review EAC", Priority: 6);
-    }
-}
-
-/// <summary>EVM variance analysis reports (VARs) a PM still has to write for the reporting period.</summary>
-public sealed class VarianceTodoProvider : IMyTodoProvider
-{
-    /// <summary>Write-ups are due this many days after the reporting period ends.</summary>
-    public const int DueDaysAfterPeriod = 10;
-
-    public string Name => "Variance analysis";
-
-    public async Task<IReadOnlyList<MyTodoItem>> GetAsync(MyTodoContext context, CancellationToken cancellationToken)
-    {
-        if (context.Service<IEvmService>() is not { } evm)
-        {
-            return [];
-        }
-
-        var items = new List<MyTodoItem>();
-        foreach (var project in await context.ManagedProjectsAsync(cancellationToken))
-        {
-            if (await evm.GetBaselineAsync(project.Id, cancellationToken) is null)
-            {
-                continue;
-            }
-
-            var open = (await evm.ListVariancesAsync(project.Id, cancellationToken: cancellationToken))
-                .Where(v => v.NeedsVar && !v.IsComplete && !v.IsFrozen)
-                .ToList();
-            if (open.Count == 0)
-            {
-                continue;
-            }
-
-            var periods = await evm.ListPeriodsAsync(project.Id, cancellationToken);
-            var period = periods.FirstOrDefault(p => p.FiscalPeriodId == open[0].FiscalPeriodId);
-            DateOnly? due = period is null ? null : period.End.AddDays(DueDaysAfterPeriod);
-            items.Add(new MyTodoItem(
-                $"evm:{project.Id}:{open[0].FiscalPeriodId}", TodoCategories.Project,
-                open.Count == 1 ? $"Explain the variance on {open[0].Code}" : $"Write up {open.Count} variances on {project.Code}",
-                $"{open[0].PeriodName}: {string.Join(", ", open.Take(3).Select(v => v.Code))}{(open.Count > 3 ? "…" : "")} crossed a threshold and need a cause, impact and corrective action.",
-                context.UrgencyFor(due, TodoUrgency.ThisWeek), due, $"projects/{project.Id}/evm", "Write variances", Priority: 6));
-        }
-
-        return items;
-    }
-}
-
-/// <summary>Ceilings on a PM's projects that reached a warning threshold.</summary>
-public sealed class CeilingTodoProvider : IMyTodoProvider
-{
-    public string Name => "Ceilings";
-
-    public async Task<IReadOnlyList<MyTodoItem>> GetAsync(MyTodoContext context, CancellationToken cancellationToken)
-    {
-        if (context.Service<ICeilingService>() is not { } ceilings)
-        {
-            return [];
-        }
-
-        var items = new List<MyTodoItem>();
-        foreach (var project in await context.ManagedProjectsAsync(cancellationToken))
-        {
-            var status = await ceilings.GetProjectStatusAsync(project.Id, cancellationToken);
-            foreach (var ceiling in status.Ceilings.Where(c => c.Level >= CeilingAlertLevel.Warning && c.Ceiling.IsActive))
-            {
-                var measure = ceiling.Measures.OrderByDescending(m => m.PercentConsumed).First();
-                var metric = measure.Metric.ToString().ToLowerInvariant();
-                var percent = measure.PercentConsumed.ToString("0", CultureInfo.InvariantCulture);
-                items.Add(new MyTodoItem(
-                    $"ceiling:{ceiling.Ceiling.Id}:{ceiling.Level}", TodoCategories.Project,
-                    ceiling.Level == CeilingAlertLevel.Over
-                        ? $"{ceiling.Ceiling.Label} is over its {metric} ceiling"
-                        : $"{ceiling.Ceiling.Label} is at {percent}% of its {metric} ceiling",
-                    ceiling.Ceiling.Mode == CeilingMode.Block
-                        ? "Charging stops at the limit. Ask for more room or move work to another charge code."
-                        : "Plan the remaining work or ask Finance to raise the ceiling.",
-                    ceiling.Level switch { CeilingAlertLevel.Over => TodoUrgency.Overdue, CeilingAlertLevel.Critical => TodoUrgency.Today, _ => TodoUrgency.ThisWeek },
-                    null, $"projects/{project.Id}/financials", "View ceilings", Priority: (int)ceiling.Level));
-            }
-        }
-
-        return items;
     }
 }
 

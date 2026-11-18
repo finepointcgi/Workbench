@@ -67,7 +67,7 @@ public sealed record WidgetDataDto(
     string? Markdown = null,
     ContractFundingData? ContractFunding = null,
     ProjectFinancialSummaryDto? ProjectFinancials = null,
-    Evm.EvmWidgetData? EarnedValue = null,
+    System.Text.Json.JsonElement? ModulePayload = null,
     KpiData? Kpi = null);
 
 /// <summary>
@@ -87,4 +87,11 @@ public interface IWidgetDataService
 
     Task<WidgetDataDto> GetAsync(Guid dashboardId, Guid widgetId, Guid? companyId, CancellationToken cancellationToken = default) =>
         companyId is null ? GetAsync(dashboardId, widgetId, cancellationToken) : throw new NotSupportedException("This widget source can't filter by company.");
+}
+
+/// <summary>Keys of the widgets a license module computes for a widget type the product stores itself.</summary>
+public static class ModuleWidgetKeys
+{
+    /// <summary>The "Earned value" dashboard widget (<see cref="WidgetType.EarnedValue"/>), provided by the project controls module.</summary>
+    public const string EarnedValue = "widget.earned-value";
 }

@@ -1,13 +1,12 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
-using Workbench.Application.Ceilings;
+using Workbench.Application.Projects;
 using Workbench.Application.Identity;
 using Workbench.Application.Time;
 using Workbench.Contracts;
 using Workbench.Contracts.Assistant;
 using Workbench.Contracts.Time;
 using Workbench.Domain.Assistant;
-using Workbench.Domain.Ceilings;
 using Workbench.Domain.Leave;
 using Workbench.Domain.ProjectAccounting;
 using Workbench.Domain.Resourcing;
@@ -24,7 +23,8 @@ public sealed class TimesheetFlagService(
     ProjectAccess projectAccess,
     AssistantRunner runner,
     TimekeepingClock timekeeping,
-    TimeProvider clock) : ITimesheetFlagService
+    TimeProvider clock,
+    IEnumerable<ICeilingProximitySource>? ceilingSources = null) : ITimesheetFlagService
 {
     private const int HistoryTimesheets = 12;
 
@@ -255,24 +255,18 @@ public sealed class TimesheetFlagService(
         return result;
     }
 
+    /// <summary>How close the charge codes are to a ceiling: asked of the project controls module's source (none without it).</summary>
     private async Task<IReadOnlyList<FlagCeiling>> CeilingsAsync(IWorkbenchDbContext db, IReadOnlyCollection<Guid> wbsIds, CancellationToken ct)
     {
-        if (wbsIds.Count == 0)
+        if (wbsIds.Count == 0 || ceilingSources is null)
         {
             return [];
         }
 
-        var states = await CeilingEngine.ForWbsAsync(db, wbsIds, clock.GetUtcNow().UtcDateTime, ct);
         var list = new List<FlagCeiling>();
-        foreach (var state in states)
+        foreach (var source in ceilingSources)
         {
-            var percent = new[] { CeilingMeasure.Hours, CeilingMeasure.Cost }
-                .Select(m => state.EffectiveLimit(m) is { } limit && limit > 0 ? state.Consumed(m) / limit : 0m)
-                .Max();
-            foreach (var wbsId in wbsIds.Where(state.Wbs.Contains))
-            {
-                list.Add(new FlagCeiling(wbsId, state.Label, decimal.Round(percent, 4), state.Ceiling.Enforcement == CeilingEnforcement.Block));
-            }
+            list.AddRange(await source.ForWbsAsync(db, wbsIds, clock.GetUtcNow().UtcDateTime, ct));
         }
 
         return list;

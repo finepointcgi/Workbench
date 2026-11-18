@@ -194,8 +194,7 @@ public static class DatabaseInitializer
         await ResourcingSeed.SeedSkillsAsync(db, cancellationToken);
         await RevenueSeed.SeedAsync(db, services, cancellationToken);
         await ModuleSeedsAsync(ModuleSeedStage.AfterRevenue);
-        await EvmSeed.SeedAsync(db, services, cancellationToken); // Earned value on 1001: PMB, a closed period, a VAR and baseline changes.
-        await CeilingsSeed.SeedAsync(db, cancellationToken);
+        // Earned value on 1001 (PMB, a closed period, a VAR, baseline changes) and the sample ceilings come from the project controls module's seed, at the stage above.
         await ProjectManagerSeed.SeedAsync(db, cancellationToken); // Sam Patel (Project manager only) runs 1002; a few assigned tasks.
         await LifecycleSeed.SeedAsync(db, cancellationToken); // A project at each stage of its life (5101 set up, 5102 planning, 5103 awaiting approval, 5104 executing).
         await HrSeed.SeedAsync(db, cancellationToken); // HR: Harper Reed (HR role), positions, records, clearances, benefit plans, open enrollment, checklists.

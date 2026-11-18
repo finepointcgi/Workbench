@@ -9,13 +9,12 @@ public static class AssistantPermissionRegistration
 {
     /// <summary>
     /// Assistant: anyone signed in may ask (each tool then checks the user's own access); settings, usage and the audit
-    /// log are Admin; narratives Finance, Admin or the project's PM; timesheet flags filter to the people the user reviews.
+    /// log are Admin; timesheet flags filter to the people the user reviews.
     /// </summary>
     public static IServiceCollection AddWorkbenchAssistantPermissions(this IServiceCollection services)
     {
         services.Decorate<IAssistantService, PermissionCheckingAssistantService>();
         services.Decorate<IAssistantAdminService, PermissionCheckingAssistantAdminService>();
-        services.Decorate<IProjectNarrativeService, PermissionCheckingProjectNarrativeService>();
         services.Decorate<ITimesheetFlagService, PermissionCheckingTimesheetFlagService>();
         services.Decorate<ITimesheetSubmissionService, PermissionCheckingTimesheetSubmissionService>();
         return services;
@@ -61,33 +60,6 @@ internal sealed class PermissionCheckingAssistantAdminService(IAssistantAdminSer
     {
         await access.RequireAsync(Permission.AdminAssistant, "administer the assistant", cancellationToken);
         return await inner.ListAuditAsync(query, cancellationToken);
-    }
-}
-
-internal sealed class PermissionCheckingProjectNarrativeService(IProjectNarrativeService inner, ProjectAccess projects) : IProjectNarrativeService
-{
-    public async Task<IReadOnlyList<NarrativePeriodDto>> ListPeriodsAsync(Guid projectId, CancellationToken cancellationToken = default)
-    {
-        await projects.RequireProjectFinancialsAsync(projectId, "read the project's narratives", cancellationToken);
-        return await inner.ListPeriodsAsync(projectId, cancellationToken);
-    }
-
-    public async Task<ProjectNarrativeDto?> GetAsync(Guid projectId, Guid? fiscalPeriodId = null, CancellationToken cancellationToken = default)
-    {
-        await projects.RequireProjectFinancialsAsync(projectId, "read the project's narratives", cancellationToken);
-        return await inner.GetAsync(projectId, fiscalPeriodId, cancellationToken);
-    }
-
-    public async Task<ProjectNarrativeDto> DraftAsync(Guid projectId, Guid? fiscalPeriodId = null, CancellationToken cancellationToken = default)
-    {
-        await projects.RequireProjectFinancialsAsync(projectId, "draft the project's narrative", cancellationToken);
-        return await inner.DraftAsync(projectId, fiscalPeriodId, cancellationToken);
-    }
-
-    public async Task<ProjectNarrativeDto> SaveAsync(Guid projectId, SaveProjectNarrativeRequest request, CancellationToken cancellationToken = default)
-    {
-        await projects.RequireProjectFinancialsAsync(projectId, "save the project's narrative", cancellationToken);
-        return await inner.SaveAsync(projectId, request, cancellationToken);
     }
 }
 
