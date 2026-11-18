@@ -25,8 +25,6 @@ https://finepointcgi.github.io/Workbench/guide/ (source in `docs/`, built with M
 | `src/Workbench.Migrations.PostgreSql`, `src/Workbench.Migrations.Sqlite` | EF Core migrations, one assembly per provider (`scripts/new-migration.sh`) |
 | `src/Workbench.Api` | Minimal API endpoints (`/api/v1/...`) mapped by the web host |
 | `src/Workbench.ApiClient` | HTTP implementations of the contracts, used by the desktop app |
-| `src/Workbench.Costpoint` | `ICostpointSource` adapter interface and Costpoint record types |
-| `src/Workbench.Worker` | Background service for Costpoint sync and automations |
 | `tests/Workbench.Tests` | xUnit + bUnit tests |
 
 The UI never references EF Core. The web host binds the contracts to `Workbench.Application`;

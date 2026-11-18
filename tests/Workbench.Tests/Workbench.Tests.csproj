@@ -33,7 +33,6 @@
     <!-- Recorded ADP, Paychex and Gusto API responses for the payroll adapter tests. -->
     <!-- Golden files for the accounting export layouts. -->
     <None Include="AccountingExport\Golden\**" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="Integrations\GitLab\Fixtures\**" CopyToOutputDirectory="PreserveNewest" />
     <!-- A WB2 key issued by the license server's own signer, for the cross-check test. -->
     <None Include="Licensing\Samples\**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
@@ -47,6 +46,7 @@
     <InternalsVisibleTo Include="Workbench.Module.Workforce.Tests" />
     <InternalsVisibleTo Include="Workbench.Module.Accounting.Tests" />
     <InternalsVisibleTo Include="Workbench.Module.Billing.Tests" />
+    <InternalsVisibleTo Include="Workbench.Module.Enterprise.Tests" />
   </ItemGroup>
 
   <ItemGroup>
