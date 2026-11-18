@@ -1,4 +1,5 @@
 using Workbench.Application.Assistant;
+using Workbench.Contracts.ProjectAccounting;
 using Workbench.Contracts.Projects;
 using Workbench.Contracts.Time;
 
@@ -51,4 +52,14 @@ public interface ICeilingProximitySource
 
     /// <summary>For each charge code under an hours ceiling: the hours that can still be saved and submitted (the tightest ceiling, with any override).</summary>
     Task<IReadOnlyList<ChargeCeilingRoomDto>> HoursRoomAsync(IWorkbenchDbContext db, IReadOnlyCollection<Guid> wbsIds, DateTime asOfUtc, CancellationToken cancellationToken);
+}
+
+/// <summary>
+/// A step a license module takes when a project is started from the project start flow, after the project exists and before its labor categories are set
+/// (the billing module sets up how the project earns revenue from its contract). Read as a list: a host without the module does nothing. An implementation
+/// that the viewer may not use (setting revenue up is Finance's) returns without failing, so the project is still created.
+/// </summary>
+public interface IProjectStartHook
+{
+    Task OnProjectStartedAsync(ProjectDto project, CancellationToken cancellationToken);
 }

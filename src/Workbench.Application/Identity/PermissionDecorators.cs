@@ -1,6 +1,5 @@
 using Workbench.Contracts;
 using Workbench.Contracts.Collaboration;
-using Workbench.Contracts.Costpoint;
 using Workbench.Contracts.Identity;
 using Workbench.Contracts.Scheduling;
 using Workbench.Contracts.Sheets;
@@ -280,45 +279,5 @@ public sealed class PermissionCheckingActivityService(IActivityService inner, Ac
     {
         await access.RequireSheetRoleAsync(sheetId, WorkspaceRole.Viewer, cancellationToken);
         return await inner.ListAsync(sheetId, itemId, limit, cancellationToken);
-    }
-}
-
-/// <summary>Plan-vs-actual follows the sheet's access; a manual sync is for admins. Lookups are open to anyone signed in.</summary>
-public sealed class PermissionCheckingCostpointService(ICostpointService inner, AccessControl access) : ICostpointService
-{
-    public Task<CostpointStatusDto> GetStatusAsync(CancellationToken cancellationToken = default)
-    {
-        access.RequireSignedIn();
-        return inner.GetStatusAsync(cancellationToken);
-    }
-
-    public Task<IReadOnlyList<CostpointSyncRunDto>> ListSyncRunsAsync(int take = 20, CancellationToken cancellationToken = default)
-    {
-        access.RequireSignedIn();
-        return inner.ListSyncRunsAsync(take, cancellationToken);
-    }
-
-    public async Task<CostpointSyncRunDto> SyncNowAsync(CancellationToken cancellationToken = default)
-    {
-        await access.RequireAsync(Permission.AdminIntegrations, "run the Costpoint sync", cancellationToken);
-        return await inner.SyncNowAsync(cancellationToken);
-    }
-
-    public Task<IReadOnlyList<CostpointProjectDto>> SearchProjectsAsync(string? query, int take = 20, CancellationToken cancellationToken = default)
-    {
-        access.RequireSignedIn();
-        return inner.SearchProjectsAsync(query, take, cancellationToken);
-    }
-
-    public Task<IReadOnlyList<CostpointWbsDto>> SearchWbsAsync(string? projectId, string? query, int take = 20, CancellationToken cancellationToken = default)
-    {
-        access.RequireSignedIn();
-        return inner.SearchWbsAsync(projectId, query, take, cancellationToken);
-    }
-
-    public async Task<PlanVsActualDto> GetPlanVsActualAsync(Guid sheetId, CancellationToken cancellationToken = default)
-    {
-        await access.RequireSheetRoleAsync(sheetId, WorkspaceRole.Viewer, cancellationToken);
-        return await inner.GetPlanVsActualAsync(sheetId, cancellationToken);
     }
 }

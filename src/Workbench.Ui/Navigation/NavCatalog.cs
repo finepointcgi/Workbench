@@ -155,8 +155,6 @@ public static class NavCatalog
         new(MyWork, "Expenses and travel", "Travel", "travel", Icons.Material.Filled.FlightTakeoff, NavRule.Everyone, Detail: "Trip", Keywords: "travel authorization trip request per diem advance"),
         new(MyWork, null, "Leave", "leave", Icons.Material.Filled.BeachAccess, NavRule.Everyone, Keywords: "vacation pto time off"),
         new(MyWork, null, "My requisitions", "purchasing/requisitions", Icons.Material.Filled.PostAdd, NavRule.Everyone, Detail: "Requisition", Keywords: "purchase request buy"),
-        new(MyWork, null, "My budgets", "planning/my-budget", Icons.Material.Filled.TableChart, NavRule.Custom(a => a.OwnsBudget, "Owners of an org unit budget"), Keywords: "org unit budget planning submit"),
-        new(MyWork, null, "Org unit budget", "planning/submissions", Icons.Material.Filled.TableChart, NavRule.Everyone, Detail: "Budget", InMenu: false),
         new(MyWork, null, "Receiving", "purchasing/receiving", Icons.Material.Filled.Inventory, NavRule.Custom(a => a.IsReceiver && !a.Can(P.PurchaseOrdersManage), "People named as the receiver on an open purchase order"), Keywords: "receive goods purchase order"),
 
         // One inbox for every approval; the old approval pages keep their routes and are reached from it.
@@ -177,12 +175,10 @@ public static class NavCatalog
         new(Finance, "Accounting", "Journal entries", "accounting/journal", Icons.Material.Filled.MenuBook, NavRule.Need(P.GlJournalsPost), Detail: "Journal entry", Keywords: "gl general ledger je"),
         new(Finance, "Accounting", "Period close", "accounting/close", Icons.Material.Filled.EventAvailable, NavRule.Need(P.GlClose), Keywords: "fiscal month end"),
         new(Finance, "Accounting", "Month in review", "accounting/month-review", Icons.Material.Filled.CompareArrows, NavRule.Need(P.GlReportsView), Keywords: "what changed since last month variance controller revenue net income"),
-        new(Finance, "Accounting", "Recurring journals", "accounting/recurring", Icons.Material.Filled.EventRepeat, NavRule.Need(P.GlRecurringManage), Keywords: "recurring journal entries rent accrual amortization auto reverse"),
         new(Finance, "Accounting", "Currency revaluation", "accounting/revaluation", Icons.Material.Filled.CurrencyExchange, NavRule.Need(P.GlRevaluation), Keywords: "foreign exchange fx unrealized gain loss month end period close multicurrency"),
         new(Finance, "Accounting", "Foreign currency report", "accounting/foreign-currency", Icons.Material.Filled.Language, NavRule.Need(P.GlRevaluation), Keywords: "fx exposure realized unrealized gain loss multicurrency"),
         new(Finance, "Accounting", "Chart of accounts", "accounting/accounts", Icons.Material.Filled.AccountTree, NavRule.Need(P.GlAccountsManage), Keywords: "gl accounts"),
         new(Finance, "Accounting", "Posting rules", "accounting/posting-rules", Icons.Material.Filled.Rule, NavRule.Need(P.GlPostingManage)),
-        new(Finance, "Accounting", "Sales and use tax return", "accounting/sales-tax", Icons.Material.Filled.ReceiptLong, NavRule.Need(P.SalesTaxManage), InMenu: false, Keywords: "sales tax use tax return jurisdiction state county filing"),
 
 
         new(Finance, "Billing & AR", "Invoices", "billing", Icons.Material.Filled.Receipt, NavRule.Need(P.BillingInvoicesManage), MatchAll: true, Keywords: "billing receivables"),
@@ -206,29 +202,11 @@ public static class NavCatalog
         new(Finance, "Payables & purchasing", "Requests for quote", "purchasing/rfqs", Icons.Material.Filled.RequestQuote, NavRule.Need(P.SourcingManage), Detail: "RFQ", Keywords: "rfq quotes sourcing competition bids award"),
         new(Finance, "Payables & purchasing", "Supplier portal", "purchasing/supplier-portal", Icons.Material.Filled.Storefront, NavRule.Need(P.SourcingManage), Keywords: "vendor portal contacts acknowledgements ship notices asn", InMenu: false), // Linked from Requests for quote.
 
-        new(Finance, "Cash", "Cash and bank accounts", "cash", Icons.Material.Filled.AccountBalanceWallet, NavRule.Need(P.CashManage), MatchAll: true),
-        new(Finance, "Cash", "Import statements", "cash/import", Icons.Material.Filled.UploadFile, NavRule.Need(P.CashManage), Keywords: "bank statement", InMenu: false),
-        new(Finance, "Cash", "Reconcile", "cash/reconcile", Icons.Material.Filled.FactCheck, NavRule.Need(P.CashManage), Detail: "Reconciliation", Keywords: "bank reconciliation"),
-        new(Finance, "Cash", "Reconciliation history", "cash/reconciliations", Icons.Material.Filled.History, NavRule.Need(P.CashManage)),
-        new(Finance, "Cash", "Cash forecast", "cash/forecast", Icons.Material.Filled.ShowChart, NavRule.Need(P.CashForecastView)),
-        new(Finance, "Cash", "Corporate cards", "cards", Icons.Material.Filled.CreditCard, NavRule.Need(P.CardsManage), Keywords: "card statement import reconciliation aging p-card travel card"),
-
-        new(Finance, "Assets", "Asset register", "assets", Icons.Material.Filled.ListAlt, NavRule.Need(P.AssetsManage), MatchAll: true, Detail: "Asset", Keywords: "fixed assets"),
-        new(Finance, "Assets", "Capitalize", "assets/capitalize", Icons.Material.Filled.AddBox, NavRule.Need(P.AssetsManage), InMenu: false),
-        new(Finance, "Assets", "Depreciation", "assets/depreciation", Icons.Material.Filled.TrendingDown, NavRule.Need(P.AssetsDepreciationRun)),
-        new(Finance, "Assets", "Asset categories", "assets/categories", Icons.Material.Filled.Category, NavRule.Need(P.AssetsManage), Keywords: "fixed asset classes useful life depreciation method"),
-        new(Finance, "Assets", "Tax depreciation", "assets/tax", Icons.Material.Filled.RequestQuote, NavRule.Need(P.AssetsManage), Keywords: "tax books macrs section 179 bonus form 4562 mid-quarter book to tax deferred tax federal state amt"),
-        new(Finance, "Assets", "Asset transfers", "assets/transfers", Icons.Material.Filled.SwapHoriz, NavRule.Need(P.AssetsManage), Keywords: "move asset location custodian organization company intercompany history", InMenu: false),
+        new(Finance, "Payables & purchasing", "Corporate cards", "cards", Icons.Material.Filled.CreditCard, NavRule.Need(P.CardsManage), Keywords: "card statement import reconciliation aging p-card travel card"),
 
 
-        new(Finance, "Revenue & compliance", "Revenue", "accounting/revenue", Icons.Material.Filled.TrendingUp, NavRule.Need(P.RevenueManage), MatchAll: true, Keywords: "revenue recognition run"),
-        new(Finance, "Revenue & compliance", "Revenue estimates", "accounting/revenue/estimates", Icons.Material.Filled.Calculate, NavRule.Need(P.RevenueManage), Keywords: "eac etc", InMenu: false),
-        new(Finance, "Revenue & compliance", "Revenue setup", "accounting/revenue/setup", Icons.Material.Filled.Tune, NavRule.Need(P.RevenueManage), InMenu: false),
+
         new(Finance, "Revenue & compliance", "Indirect rates", "accounting/indirect-rates", Icons.Material.Filled.Percent, NavRule.Need(P.IndirectRatesManage), Keywords: "fringe overhead g&a pools"),
-        new(Finance, "Planning", "Budgets", "planning/budgets", Icons.Material.Filled.TableChart, NavRule.Need(P.BudgetsManage), Detail: "Budget version", Keywords: "corporate gl budget versions original revised forecast spread"),
-        new(Finance, "Planning", "Budget vs actual", "planning/budget-vs-actual", Icons.Material.Filled.CompareArrows, NavRule.Need(P.BudgetsManage), Keywords: "variance budget actual income statement org unit pool"),
-        new(Finance, "Planning", "Planning cycles", "planning/cycles", Icons.Material.Filled.Groups, NavRule.Need(P.BudgetsManage), Detail: "Planning cycle", Keywords: "annual plan budget submissions org unit owners"),
-        new(Finance, null, "Revenue by project", "accounting/revenue/projects", Icons.Material.Filled.TrendingUp, NavRule.Need(P.RevenueManage), Detail: "Project", InMenu: false),
 
         // Materials: its pages come from the materials module (the Materials role and administrators run it; Finance reads parts, inventory and the inventory reports).
 
@@ -241,8 +219,6 @@ public static class NavCatalog
         new(Reports, "Standard reports", "Financial statements", "accounting/reports", Icons.Material.Filled.Assessment, NavRule.Need(P.GlReportsView), Keywords: "balance sheet income statement trial balance p&l"),
         new(Reports, "Standard reports", "Consolidated statements", "accounting/consolidated", Icons.Material.Filled.Assessment, NavRule.Need(P.GlReportsView), Keywords: "consolidation eliminations multicompany intercompany companies"),
         new(Reports, "Standard reports", "AP reports", "purchasing/reports", Icons.Material.Filled.Assessment, NavRule.Need(P.ApReportsView), Keywords: "payables aging 1099"),
-        new(Reports, "Standard reports", "Asset reports", "assets/reports", Icons.Material.Filled.Assessment, NavRule.Need(P.AssetsManage)),
-        new(Reports, "Standard reports", "Revenue reports", "accounting/revenue/reports", Icons.Material.Filled.Assessment, NavRule.Need(P.RevenueManage)),
         new(Reports, null, "Saved report", "reports/saved", Icons.Material.Filled.Assessment, NavRule.Everyone, Detail: "Report", InMenu: false),
         new(Reports, null, "Standard report", "reports/standard", Icons.Material.Filled.Assessment, NavRule.Everyone, Detail: "Report", InMenu: false),
 
@@ -257,7 +233,6 @@ public static class NavCatalog
         new(Admin, "Setup", "Per diem rates", "setup/per-diem", Icons.Material.Filled.Hotel, NavRule.Need(P.SetupPerDiem), Keywords: "gsa travel"),
         new(Admin, "Setup", "Currencies and rates", "setup/currencies", Icons.Material.Filled.CurrencyExchange, NavRule.Need(P.SetupCurrencies), Keywords: "exchange rates fx multicurrency euro pound functional currency"),
         new(Admin, "Setup", "Card programs", "setup/card-programs", Icons.Material.Filled.CreditCard, NavRule.Need(P.CardsManage), Keywords: "corporate card issuer cardholder"),
-        new(Admin, "Setup", "Sales and use tax", "setup/sales-tax", Icons.Material.Filled.ReceiptLong, NavRule.Need(P.SalesTaxManage), InMenu: false, Keywords: "sales tax rates jurisdictions tax codes exemption certificates resale avalara"),
         new(Admin, "Setup", "Organization", "setup/organization", Icons.Material.Filled.Tune, NavRule.Need(P.SetupOrganizationView), Keywords: "settings timesheet cadence company"),
         new(Admin, "Setup", "Companies", "setup/companies", Icons.Material.Filled.Domain, NavRule.Need(P.SetupCompanies), Keywords: "multicompany legal entity intercompany ein due to due from"),
         new(Admin, "Setup", "License", "setup/license", Icons.Material.Filled.WorkspacePremium, NavRule.Need(P.AdminOrganization), Keywords: "edition business community seats upgrade subscription pricing key plan"),

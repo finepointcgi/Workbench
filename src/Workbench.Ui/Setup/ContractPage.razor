@@ -175,10 +175,7 @@ else
                 <Workbench.Ui.Setup.Clins.FundingStatusTab Status="_fundingStatus" Clins="_clins" Changed="ReloadDetailAsync" />
             }
         </MudTabPanel>
-        <MudTabPanel Text="Customer link" data-testid="tab-customer-link">
-            <Workbench.Ui.Setup.CustomerLinksPanel ContractId="detail.Id" />
-        </MudTabPanel>
-        @* The project controls module's tabs (Ceilings, Closeout): none without it. *@
+        @* The project controls module's tabs (Ceilings, Closeout) and the enterprise module's Customer link tab: none without them. *@
         <UiSlot Name="contract.tabs" Parameters="@(new Dictionary<string, object?> { ["ContractId"] = detail.Id, ["Changed"] = EventCallback.Factory.Create(this, ReloadDetailAsync) })" />
     }
     </MudTabs>

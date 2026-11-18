@@ -145,7 +145,7 @@ public sealed class NavMenuTests
 
         var links = Links(nav);
         Assert.Equal(["home", "my-work", "approvals", "projects", "sheets", "finance", "reports", "admin"], Sections(nav));
-        foreach (var group in new[] { "Accounting", "Billing & AR", "Payables & purchasing", "Cash", "Assets", "Revenue & compliance" })
+        foreach (var group in new[] { "Accounting", "Billing & AR", "Payables & purchasing" })
         {
             Assert.Single(nav.FindAll($"[data-testid='nav-group-{group}']"));
         }
@@ -195,17 +195,17 @@ public sealed class NavMenuTests
     {
         var ctx = NavTestKit.NewContext(new NavUser(OrgRoles.Finance));
         await using var _ = ctx;
-        ctx.Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>().NavigateTo("cash/reconcile");
+        ctx.Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>().NavigateTo("purchasing/payments");
 
         var nav = ctx.Render<NavMenu>();
-        nav.WaitForAssertion(() => Assert.NotEmpty(nav.FindAll("[data-testid='nav-group-Cash']")));
+        nav.WaitForAssertion(() => Assert.NotEmpty(nav.FindAll("[data-testid='nav-group-Payables & purchasing']")));
 
         Assert.True(Expanded(nav, "nav-finance"));
         Assert.False(Expanded(nav, "nav-my-work"));
-        var cash = nav.Find("[data-testid='nav-group-Cash']");
-        Assert.Equal("cash cash/reconcile cash/reconciliations cash/forecast cards", cash.GetAttribute("data-pages"));
-        Assert.Contains("href=\"cash/reconcile\"", cash.OuterHtml); // links to the group page you're on, so it shows as current
-        Assert.Empty(nav.FindAll("a[href='cash/forecast']")); // a tab, not a menu link
+        var payables = nav.Find("[data-testid='nav-group-Payables & purchasing']");
+        Assert.Contains("cards", payables.GetAttribute("data-pages")!.Split(' '));
+        Assert.Contains("href=\"purchasing/payments\"", payables.OuterHtml); // links to the group page you're on, so it shows as current
+        Assert.Empty(nav.FindAll("[data-testid='nav-group-Cash']")); // Cash, Assets and Planning come with the accounting module.
     }
 
     [Fact]
@@ -215,7 +215,7 @@ public sealed class NavMenuTests
         await using var _ = ctx;
 
         Assert.True(MenuLinkCount(nav) <= 40, $"{MenuLinkCount(nav)} menu links");
-        Assert.True(Links(nav).Count > 70, "every page is still reachable through its group");
+        Assert.True(Links(nav).Count > 55, $"every page is still reachable through its group ({Links(nav).Count} links)");
         Assert.Empty(nav.FindAll("[data-testid='nav-growth']")); // Business development comes with the capture module: an empty section is not shown.
     }
 
@@ -225,12 +225,15 @@ public sealed class NavMenuTests
         var ctx = NavTestKit.NewContext(new NavUser(OrgRoles.Finance));
         await using var _ = ctx;
         var navigation = ctx.Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>();
-        navigation.NavigateTo("cash/forecast");
+        navigation.NavigateTo("purchasing/payments");
         var access = await NavAccess.LoadAsync(ctx.Services);
 
         var tabs = ctx.Render<GroupTabs>(p => p.Add(t => t.Access, access));
-        Assert.Equal(["cash", "cash/reconcile", "cash/reconciliations", "cash/forecast", "cards"], tabs.FindAll("a").Select(a => a.GetAttribute("href")!).ToList());
-        Assert.Equal("Cash", tabs.Find("nav").GetAttribute("aria-label"));
+        var hrefs = tabs.FindAll("a").Select(a => a.GetAttribute("href")!).ToList();
+        Assert.Contains("purchasing/bills", hrefs);
+        Assert.Contains("purchasing/payments", hrefs);
+        Assert.Contains("cards", hrefs);
+        Assert.Equal("Payables & purchasing", tabs.Find("nav").GetAttribute("aria-label"));
 
         navigation.NavigateTo("purchasing/bills/" + Guid.NewGuid());
         tabs.WaitForAssertion(() => Assert.Empty(tabs.FindAll("a")));
@@ -246,8 +249,8 @@ public sealed class NavMenuTests
         await using var _ = ctx;
 
         var finance = nav.FindAll("[data-testid='nav-finance'] a[href]").Select(a => a.TextContent.Trim()).ToList();
-        Assert.Equal(["Accounting", "Billing & AR", "Payables & purchasing", "Cash", "Assets", "Revenue & compliance", "Planning"], finance);
-        Assert.StartsWith("accounting/journal accounting/close accounting/month-review accounting/recurring", nav.Find("[data-testid='nav-group-Accounting']").GetAttribute("data-pages"));
+        Assert.Equal(["Accounting", "Billing & AR", "Payables & purchasing", "Indirect rates"], finance); // "Revenue & compliance" holds only Indirect rates without the billing module, so it shows as that one link.
+        Assert.StartsWith("accounting/journal accounting/close accounting/month-review", nav.Find("[data-testid='nav-group-Accounting']").GetAttribute("data-pages"));
         Assert.EndsWith("accounting/accounts accounting/posting-rules", nav.Find("[data-testid='nav-group-Accounting']").GetAttribute("data-pages"));
         Assert.StartsWith("purchasing/bills purchasing/payments purchasing/orders", nav.Find("[data-testid='nav-group-Payables & purchasing']").GetAttribute("data-pages"));
         Assert.Equal("Setup", nav.FindAll("[data-testid='nav-admin'] a[href]")[0].TextContent.Trim());

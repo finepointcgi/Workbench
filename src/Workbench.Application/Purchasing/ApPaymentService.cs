@@ -27,7 +27,8 @@ public sealed class ApPaymentService(
     SecurityEventLog securityLog,
     IOptions<PurchasingOptions> options,
     TimeProvider clock,
-    Customization.DocumentNumbers? documentNumbers = null) : IApPaymentService
+    Customization.DocumentNumbers? documentNumbers = null,
+    IEnumerable<IForeignBalanceSource>? foreignBanks = null) : IApPaymentService
 {
     private Customization.DocumentNumbers DocNumbers => documentNumbers ?? new(dbFactory, clock);
 
@@ -330,7 +331,7 @@ public sealed class ApPaymentService(
                 payment.ExchangeRate = rate;
                 payment.CashAmount = CurrencyMath.ToFunctional(payment.TransactionAmount, rate);
                 payment.RealizedGainLoss = payment.Amount - payment.CashAmount.Value;
-                var cashAccount = await CurrencySupport.ForeignCashAccountAsync(db, currency, cancellationToken) ?? cash.Id;
+                var cashAccount = await CurrencySupport.ForeignCashAccountAsync(db, currency, foreignBanks, cancellationToken) ?? cash.Id;
                 entry.Lines.Add(CurrencySupport.Line(entry, payables.Id, payment.Amount, $"{vendor.Code} {bill.InvoiceNumber}", currency, payment.TransactionAmount, bill.ExchangeRate));
                 entry.Lines.Add(CurrencySupport.Line(entry, cashAccount, -payment.CashAmount.Value, $"{payment.Method} {payment.Reference}", currency, payment.TransactionAmount, rate));
                 if (payment.RealizedGainLoss != 0)

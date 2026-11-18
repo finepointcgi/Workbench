@@ -2,13 +2,14 @@
 @inject ICurrentUserContext CurrentUser
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
+@inject IEnumerable<UiSlotContribution> Contributions
 
 <PageTitle>Integrations · Workbench</PageTitle>
 
 <MudText Typo="Typo.h4" HtmlTag="h1" Class="mb-1">Integrations</MudText>
 <MudText Class="mud-text-secondary mb-4">
     Connect Workbench to other systems: send events to your own services (webhooks), give programs access to the API with
-    keys, and set up ready-made connections to Teams, Slack, QuickBooks, SFTP, GitLab and Jira.
+    keys, and set up ready-made connections to Teams, Slack, QuickBooks and SFTP (and GitLab and Jira with the Enterprise add-on).
 </MudText>
 
 @if (_me is null && _loading)
@@ -41,17 +42,13 @@ else
         <MudTabPanel Text="Slack alerts" Icon="@Icons.Material.Filled.Forum">
             <SlackTab />
         </MudTabPanel>
-        <MudTabPanel Text="GitLab" Icon="@Icons.Material.Filled.AccountTree">
-            <Workbench.Ui.Integrations.GitLab.GitLabTab />
-        </MudTabPanel>
-        <MudTabPanel Text="Jira" Icon="@Icons.Material.Filled.BugReport">
-            <Workbench.Ui.Integrations.Jira.JiraTab />
-        </MudTabPanel>
+        @* The enterprise module's GitLab and Jira tabs: none without it. *@
+        <UiSlot Name="integrations.tabs" />
     </MudTabs>
 }
 
 @code {
-    private static readonly string[] Tabs = ["webhooks", "deliveries", "api-keys", "connectors", "teams", "slack", "gitlab", "jira"];
+    private static readonly string[] Tabs = ["webhooks", "deliveries", "api-keys", "connectors", "teams", "slack", "gitlab", "jira"]; // "gitlab" and "jira" are the enterprise module's tabs and exist only while it is loaded.
 
     [SupplyParameterFromQuery(Name = "tab")]
     public string? TabQuery { get; set; }
@@ -61,7 +58,11 @@ else
     private int _tab;
     private Guid? _endpointFilter;
 
-    protected override void OnParametersSet() => _tab = Math.Max(0, Array.IndexOf(Tabs, TabQuery ?? "webhooks"));
+    protected override void OnParametersSet()
+    {
+        var index = Math.Max(0, Array.IndexOf(Tabs, TabQuery ?? "webhooks"));
+        _tab = index >= 6 && !Contributions.Any(c => c.Slot == "integrations.tabs") ? 0 : index;
+    }
 
     protected override async Task OnInitializedAsync()
     {

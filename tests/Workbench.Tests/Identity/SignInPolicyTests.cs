@@ -214,20 +214,20 @@ public sealed class SignInPolicyTests
         var raised = new List<ReauthenticationRequiredException>();
         seeded.Host.Get<IReauthenticationService>().Required += raised.Add;
 
-        var bank = await Assert.ThrowsAsync<ReauthenticationRequiredException>(() => seeded.Host.Get<IBankAccountService>().RevealAccountNumberAsync(Guid.NewGuid()));
+        var bank = await Assert.ThrowsAsync<ReauthenticationRequiredException>(() => seeded.Host.Get<Workbench.Contracts.Purchasing.IVendorService>().RevealTaxIdAsync(Guid.NewGuid()));
         var settings = await Assert.ThrowsAsync<ReauthenticationRequiredException>(() => seeded.Host.Get<ISignInSettingsService>().SaveSessionPolicyAsync(new SaveSessionPolicyRequest(10, null)));
         var status = await seeded.Host.Get<IReauthenticationService>().GetStatusAsync();
 
-        Assert.Equal(SensitiveActions.BankDetails, bank.Action);
+        Assert.Equal(SensitiveActions.VendorTaxId, bank.Action);
         Assert.Equal(SensitiveActions.SignInSettingsChange, settings.Action);
         Assert.Equal(2, raised.Count);
         Assert.False(status.IsRecent);
         Assert.Equal(15, status.WindowMinutes);
-        Assert.Contains(await EventsAsync(seeded), e => e.EventType == SecurityEventTypes.ReauthenticationRequired && e.Target == SensitiveActions.BankDetails);
+        Assert.Contains(await EventsAsync(seeded), e => e.EventType == SecurityEventTypes.ReauthenticationRequired && e.Target == SensitiveActions.VendorTaxId);
 
         // After signing in again, the same calls reach the service (which then finds nothing).
         signIn.Facts = new SignInFacts(DateTime.UtcNow, true, "sso");
-        await Assert.ThrowsAsync<WorkbenchNotFoundException>(() => seeded.Host.Get<IBankAccountService>().RevealAccountNumberAsync(Guid.NewGuid()));
+        await Assert.ThrowsAsync<WorkbenchNotFoundException>(() => seeded.Host.Get<Workbench.Contracts.Purchasing.IVendorService>().RevealTaxIdAsync(Guid.NewGuid()));
         Assert.True((await seeded.Host.Get<IReauthenticationService>().GetStatusAsync()).IsRecent);
     }
 
@@ -237,7 +237,7 @@ public sealed class SignInPolicyTests
         var signIn = new FakeSignIn { Facts = new SignInFacts(DateTime.UtcNow.AddHours(-2), false, "sso") };
         await using var seeded = await CreateAsync(s => s.AddScoped<ISignInContext>(_ => signIn));
 
-        var refused = await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => seeded.As(Viewer).Host.Get<IBankAccountService>().RevealAccountNumberAsync(Guid.NewGuid()));
+        var refused = await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => seeded.As(Viewer).Host.Get<Workbench.Contracts.Purchasing.IVendorService>().RevealTaxIdAsync(Guid.NewGuid()));
 
         Assert.IsNotType<ReauthenticationRequiredException>(refused);
     }

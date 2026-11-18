@@ -4,7 +4,6 @@ using Workbench.Application.Collaboration;
 using Workbench.Application.Sheets;
 using Workbench.Contracts.Automation;
 using Workbench.Contracts.Collaboration;
-using Workbench.Contracts.Costpoint;
 using Workbench.Contracts.Dashboards;
 using Workbench.Contracts.Financials;
 using Workbench.Contracts.Identity;
@@ -58,7 +57,6 @@ public static class IdentityRegistration
         services.Decorate<ICommentService, PermissionCheckingCommentService>();
         services.Decorate<IAttachmentService, PermissionCheckingAttachmentService>();
         services.Decorate<IActivityService, PermissionCheckingActivityService>();
-        services.Decorate<ICostpointService, PermissionCheckingCostpointService>();
         services.Decorate<IPeopleService, PermissionCheckingPeopleService>();
         services.Decorate<IContractService, PermissionCheckingContractService>();
         services.Decorate<IProjectService, PermissionCheckingProjectService>();
@@ -82,10 +80,7 @@ public static class IdentityRegistration
         services.AddWorkbenchPurchasingPermissions(); // Purchasing: Finance or Admin; PMs approve the AP bill lines routed to them.
         services.Decorate<Workbench.Contracts.Imports.IImportService, PermissionCheckingImportService>(); // Imports: Finance or Admin.
         services.AddWorkbenchProcurementPermissions(); // Requisitions: any employee for their projects/org; POs and match: Finance/Admin (receivers receive).
-        services.AddWorkbenchAssetPermissions(); // Fixed assets: Finance or Admin only.
-        services.AddWorkbenchCashPermissions(); // Cash management and bank reconciliation: Finance or Admin only.
         services.AddWorkbenchPerDiemResourcingPermissions(); // Per diem imports Finance/Admin; allocations PMs (own projects) and resource managers (all).
-        services.AddWorkbenchRevenuePermissions(); // Revenue: setup, runs and reports Finance/Admin; PMs read their projects and submit their EACs and deliveries.
         services.AddWorkbenchReportPermissions(); // Reports: signed in; row/field rules inside the reports; exports are security events.
         services.Decorate<Workbench.Contracts.Approvals.IApprovalWorkflowService, Approvals.PermissionCheckingApprovalWorkflowService>(); // Approval workflows: read Finance/Admin, change Admin.
         services.AddScoped<Projects.ProjectHubAccess>(); services.Decorate<Workbench.Contracts.Projects.IProjectHubService, PermissionCheckingProjectHubService>(); // Projects hub: list scoped in the service; project page for those on it; team Finance/Admin/PM.
@@ -93,12 +88,9 @@ public static class IdentityRegistration
         services.AddWorkbenchMigrationPermissions(); // Cut-over checklist and Costpoint reconciliation: Finance or Admin only.
         services.Decorate<Workbench.Contracts.Tasks.ITaskAssignmentService, PermissionCheckingTaskAssignmentService>(); // Tasks: Viewers read, Editors/Owners assign, assignees update their own status; workload Finance/Admin/PM.
         services.AddWorkbenchAssistantPermissions(); // Assistant: ask signed in (tools check the user's access); settings/usage/audit Admin; narratives Finance/Admin/PM; flags filtered to reviewees.
-        services.AddWorkbenchPlanningPermissions(); // Recurring journals, GL budgets, budget vs actual: Finance/Admin; planning cycles Finance/Admin, org unit owners their own budget.
         services.AddWorkbenchCurrencyPermissions(); // Multicurrency: reads signed in; rates, setup, revaluation and the report Finance/Admin.
         services.AddWorkbenchSourcingPermissions(); // RFQs, portal admin and EDI: Finance/Admin; the supplier portal: the signed-in vendor contact, own vendor's records only.
-        services.AddWorkbenchBankFilePermissions(); // Bank payment files and vendor bank details: Finance or Admin; a vendor bank change is approved by someone other than its requester.
         services.AddWorkbenchAccountingExportPermissions(); // Accounting exports and their mappings: the "Export to accounting software" permission (Finance, Admin).
-        services.AddWorkbenchSalesTaxPermissions(); // Sales and use tax: Finance or Admin.
         services.AddWorkbenchCompanyPermissions(); // Multicompany: companies/intercompany/consolidation Finance/Admin, access lists Admin; company-owned records limited to the user's companies (outermost).
         services.AddWorkbenchTravelPermissions(); // Travel and cards: travelers their own trips and charges, approvers what routes to them, Finance/Admin everything; card setup and reconciliation Finance/Admin.
         services.AddWorkbenchIntegrationPermissions(); // Integrations: webhooks, API keys and connectors are Admin-only and closed to API keys themselves.

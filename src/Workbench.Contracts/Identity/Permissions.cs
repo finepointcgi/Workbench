@@ -82,15 +82,9 @@ public static class Permission
     public const string GlPostingManage = "gl.posting.manage";
     public const string GlClose = "gl.close";
     public const string GlReportsView = "gl.reports.view";
-    public const string GlRecurringManage = "gl.recurring.manage";
     public const string GlExport = "gl.export";
     public const string GlRevaluation = "gl.revaluation";
-    public const string BudgetsManage = "planning.budgets.manage";
-    public const string RevenueManage = "revenue.manage";
     public const string IndirectRatesManage = "compliance.indirect_rates";
-    public const string SalesTaxManage = "tax.sales_tax.manage";
-    public const string AssetsManage = "assets.manage";
-    public const string AssetsDepreciationRun = "assets.depreciation.run";
 
     // Billing and receivables
     public const string BillingInvoicesManage = "billing.invoices.manage";
@@ -107,9 +101,7 @@ public static class Permission
     public const string PurchaseOrdersManage = "purchasing.orders.manage";
     public const string SourcingManage = "purchasing.sourcing.manage";
 
-    // Cash
-    public const string CashManage = "cash.manage";
-    public const string CashForecastView = "cash.forecast.view";
+    // Cash, fixed assets, corporate budgets, recurring journals and sales tax: the accounting module defines these permissions (cash.*, assets.*, planning.*, tax.*, gl.recurring.*), see the module repository.
 
     // Payroll: the workforce module defines its permissions (payroll.*), see the module repository.
 
@@ -223,14 +215,8 @@ public static class PermissionCatalog
         new(Permission.GlClose, AreaAccounting, "Close fiscal periods", "The period close checklist and closing accounting periods, including closing anyway (with a reason) when a check fails.", F),
         new(Permission.GlReportsView, AreaAccounting, "See financial statements", "Balance sheet, income statement, trial balance, consolidated statements, intercompany balances and the general ledger in the report writer.", F),
         new(Permission.GlExport, AreaAccounting, "Export to accounting software", "Make QuickBooks, Xero and generic accounting files from journal entries, invoices, payments, bills and the chart of accounts, map account names, and see the export history.", F),
-        new(Permission.GlRecurringManage, AreaAccounting, "Manage recurring journals", "Recurring journal templates and runs.", F),
         new(Permission.GlRevaluation, AreaAccounting, "Revalue foreign currency", "Currency revaluation and the foreign currency report.", F),
-        new(Permission.BudgetsManage, AreaAccounting, "Manage corporate budgets", "Budget versions, budget vs actual and planning cycles.", F),
-        new(Permission.RevenueManage, AreaAccounting, "Revenue recognition", "Revenue setup, estimates at completion and revenue recognition runs and reports.", F),
         new(Permission.IndirectRatesManage, AreaAccounting, "Manage indirect rates", "Fringe, overhead and G&A pools and rates.", F),
-        new(Permission.SalesTaxManage, AreaAccounting, "Manage sales and use tax", "Tax rates, jurisdictions, exemption certificates and returns.", F),
-        new(Permission.AssetsManage, AreaAccounting, "Manage fixed assets", "The asset register, categories, transfers, tax books and asset reports.", F),
-        new(Permission.AssetsDepreciationRun, AreaAccounting, "Run depreciation", "Run and post depreciation.", F),
 
         new(Permission.BillingInvoicesManage, AreaBilling, "Bill customers", "Invoices, billing milestones, government billing, progress payments, the unbilled accrual and customer statements.", F),
         new(Permission.BillingPaymentsRecord, AreaBilling, "Record customer payments", "Record and apply customer payments.", F),
@@ -245,8 +231,6 @@ public static class PermissionCatalog
         new(Permission.PurchaseOrdersManage, AreaPayables, "Manage purchase orders", "Every purchase order and requisition, receiving and the three-way match (and its overrides).", F),
         new(Permission.SourcingManage, AreaPayables, "Sourcing", "Requests for quote, the supplier portal and EDI.", F),
 
-        new(Permission.CashManage, AreaCash, "Manage bank accounts", "Bank accounts, statement imports and bank reconciliation.", F),
-        new(Permission.CashForecastView, AreaCash, "See the cash position", "The cash position and cash forecast.", F),
 
 
         new(Permission.TravelManage, AreaTravel, "Manage everyone's travel", "Everyone's trips, travel advances and per diem.", F),
@@ -312,7 +296,7 @@ public static class PermissionCatalog
         new("payroll.profiles.manage", "payroll.run", "Someone who can change pay and run payroll could pay themselves more."),
         new("hr.compensation.manage", "payroll.run", "Deciding compensation and running payroll should be separate."),
         new(Permission.BillingInvoicesManage, Permission.BillingPaymentsRecord, "Billing customers and recording their payments should be separate."),
-        new(Permission.GlJournalsPost, Permission.CashManage, "Posting journal entries and reconciling the bank should be separate."),
+        new(Permission.GlJournalsPost, "cash.manage", "Posting journal entries and reconciling the bank should be separate."),
         new(Permission.LaborCostRatesManage, "payroll.run", "Setting cost rates and running payroll should be separate."),
     ];
 
