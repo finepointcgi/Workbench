@@ -46,8 +46,7 @@ public static class WorkbenchApi
         v1.MapProcurementEndpoints();
         v1.MapAssetEndpoints();
         v1.MapCashEndpoints();
-        v1.MapPayrollLeaveEndpoints();
-        v1.MapPaylocityEndpoints();
+        v1.MapLeaveEndpoints();
         v1.MapPerDiemResourcingEndpoints();
         v1.MapRevenueEndpoints();
         v1.MapReportEndpoints();
@@ -59,7 +58,6 @@ public static class WorkbenchApi
         v1.MapSupportEndpoints();
         v1.MapMigrationEndpoints();
         v1.MapTaskEndpoints();
-        v1.MapHrEndpoints();
         v1.MapAssistantEndpoints();
         v1.MapMcpEndpoints(); // MCP for outside AI clients, API keys only (docs/integrations/mcp.md).
         v1.MapPlanningEndpoints();

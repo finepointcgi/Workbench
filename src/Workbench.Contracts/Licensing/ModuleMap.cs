@@ -7,7 +7,6 @@ using Workbench.Contracts.Cash;
 using Workbench.Contracts.Compliance;
 using Workbench.Contracts.Costpoint;
 using Workbench.Contracts.Currencies;
-using Workbench.Contracts.Hr;
 using Workbench.Contracts.IndirectRates;
 using Workbench.Contracts.Migration;
 using Workbench.Contracts.Modules;
@@ -66,11 +65,12 @@ public static class ModuleMap
             "time", "expense-reports", "odc-approvals", "odcs", "leave", "per-diem", "travel", "receipts", "timesheet-flags",
             "reports", "setup", "customers", "org-units", "labor-categories", "approvals", "approval-delegations", "fiscal", "audit", "employees",
             "admin", "host", "users", "invites", "workspaces-admin", "imports", "migration", "reconciliation", "assistant", "me", "support", "help", "license",
-            "email-issues", "security-events", "mcp", "company-profile", "accounting-export"),
+            "email-issues", "security-events", "mcp", "company-profile", "accounting-export",
+            "resourcing"), // Staffing: allocations, assignments, capacity, utilization and skills (it stays core: the Plan, timesheets and schedule health read it).
         .. Segments(ModuleKeys.Billing, "billing", "revenue", "accounting-live"),
         .. Segments(ModuleKeys.Accounting,
             "accounting", "cash", "assets", "currencies", "planning", "indirect-rates", "sales-tax", "purchasing", "cards", "vendor-bank", "bank-files"),
-        .. Segments(ModuleKeys.Workforce, "hr", "payroll", "resourcing"),
+        // workforce: the hr and payroll segments live in the workforce module (its own rows); resourcing is core, above.
         // project controls: the evm, ceilings, ceiling-overrides, rate-ceilings, closeout and risks segments live in the project controls module (its own rows).
         .. Segments(ModuleKeys.Enterprise,
             "companies", "integrations", "customization", "automations", "approval-workflows", "access-reviews", "retention", "edi", "costpoint"),
@@ -101,7 +101,6 @@ public static class ModuleMap
         ["labor."] = ModuleKeys.Core,
         ["leave."] = ModuleKeys.Core,
         ["projects."] = ModuleKeys.Core,
-        ["projects.resourcing."] = ModuleKeys.Workforce,
         ["gl."] = ModuleKeys.Accounting,
         ["planning."] = ModuleKeys.Accounting,
         ["revenue."] = ModuleKeys.Billing,
@@ -112,10 +111,9 @@ public static class ModuleMap
         ["ap."] = ModuleKeys.Accounting,
         ["purchasing."] = ModuleKeys.Accounting,
         ["cash."] = ModuleKeys.Accounting,
-        ["payroll."] = ModuleKeys.Workforce,
+        // payroll.* and hr.* (but the two below) are the workforce module's own rows.
         ["travel."] = ModuleKeys.Core,
         ["cards."] = ModuleKeys.Accounting,
-        ["hr."] = ModuleKeys.Workforce,
         ["hr.workforce."] = ModuleKeys.Core,
         ["hr.reports."] = ModuleKeys.Core,
         ["sheets."] = ModuleKeys.Core,
@@ -160,13 +158,11 @@ public static class ModuleMap
     /// <summary>Groups within a section, as "section/group". Wins over the section.</summary>
     public static IReadOnlyDictionary<string, string> NavGroups { get; } = new Dictionary<string, string>(StringComparer.Ordinal)
     {
-        ["people/HR administration"] = ModuleKeys.Workforce,
         ["finance/Accounting"] = ModuleKeys.Accounting,
         ["finance/Billing & AR"] = ModuleKeys.Billing,
         ["finance/Payables & purchasing"] = ModuleKeys.Accounting,
         ["finance/Cash"] = ModuleKeys.Accounting,
         ["finance/Assets"] = ModuleKeys.Accounting,
-        ["finance/Payroll"] = ModuleKeys.Workforce,
         ["finance/Planning"] = ModuleKeys.Accounting,
         ["admin/Customization"] = ModuleKeys.Enterprise,
     };
@@ -180,7 +176,6 @@ public static class ModuleMap
         .. Segments(ModuleKeys.Billing,
             "billing/invoices", "billing/statements", "accounting/revenue", "accounting/revenue/estimates", "accounting/revenue/setup",
             "accounting/revenue/projects", "accounting/revenue/reports"),
-        .. Segments(ModuleKeys.Workforce, "resourcing", "hr/benefits/me", "payroll"),
         .. Segments(ModuleKeys.GovCon, "reports/standard/funding-status"),
         .. Segments(ModuleKeys.Enterprise, "setup/companies", "accounting/consolidated", "admin/integrations", "admin/integrations/edi", "setup/approval-workflows"),
     ]);
@@ -226,7 +221,8 @@ public static class ModuleMap
         ["Purchasing"] = ModuleKeys.Accounting, ["SalesTax"] = ModuleKeys.Accounting, ["Travel"] = ModuleKeys.Core,
         // capture: the Crm and Pricing namespaces live in the capture module (its own rows).
         // workforce
-        ["Hr"] = ModuleKeys.Workforce, ["Payroll"] = ModuleKeys.Workforce, ["Resourcing"] = ModuleKeys.Workforce,
+        ["Resourcing"] = ModuleKeys.Core, // staffing stays core
+        // workforce: the Hr and Payroll namespaces live in the workforce module (its own rows).
         // project controls: the Ceilings, Closeout, Evm and Risks namespaces, and the monthly narrative, live in the project controls module (its own rows).
         // materials: the Materials and Quality namespaces live in the materials module (its own rows).
         // govcon: the Compliance, IncurredCost and TotalTime namespaces and the parallel run live in the government contracting module (its own rows).
@@ -244,8 +240,6 @@ public static class ModuleMap
         [typeof(IBurdenedCostService)] = ModuleKeys.Accounting,
         [typeof(ICustomerShareLinkService)] = ModuleKeys.Enterprise,
         [typeof(ICustomerViewService)] = ModuleKeys.Enterprise,
-        [typeof(IHrReportService)] = ModuleKeys.Core,
-        [typeof(IHrAccessService)] = ModuleKeys.Core,
         [typeof(IAccessReviewService)] = ModuleKeys.Enterprise,
         [typeof(IRetentionService)] = ModuleKeys.Enterprise,
         [typeof(IEdiService)] = ModuleKeys.Enterprise,

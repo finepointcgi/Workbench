@@ -111,23 +111,14 @@ public static class Permission
     public const string CashManage = "cash.manage";
     public const string CashForecastView = "cash.forecast.view";
 
-    // Payroll
-    public const string PayrollRun = "payroll.run";
-    public const string PayrollSetup = "payroll.setup";
-    public const string PayrollProfilesManage = "payroll.profiles.manage";
-    public const string PayRatesView = "payroll.pay_rates.view";
+    // Payroll: the workforce module defines its permissions (payroll.*), see the module repository.
 
     // Travel and expenses
     public const string TravelManage = "travel.manage";
     public const string CardsManage = "cards.manage";
 
-    // People (HR)
-    public const string HrRecordsManage = "hr.records.manage";
-    public const string HrPositionsManage = "hr.positions.manage";
-    public const string HrCompensationManage = "hr.compensation.manage";
+    // People (HR): the workforce module defines the personnel, position, compensation, benefit and onboarding permissions (hr.*); these two stay core.
     public const string HrWorkforceView = "hr.workforce.view";
-    public const string HrBenefitsManage = "hr.benefits.manage";
-    public const string HrOnboardingManage = "hr.onboarding.manage";
     public const string HrRestrictedReports = "hr.reports.restricted";
 
     // Business development and pricing: the capture module defines its permissions (bd.*, pricing.*), see the module repository.
@@ -257,20 +248,11 @@ public static class PermissionCatalog
         new(Permission.CashManage, AreaCash, "Manage bank accounts", "Bank accounts, statement imports and bank reconciliation.", F),
         new(Permission.CashForecastView, AreaCash, "See the cash position", "The cash position and cash forecast.", F),
 
-        new(Permission.PayrollRun, AreaPayroll, "Run payroll", "Run, post and void payroll.", F),
-        new(Permission.PayrollSetup, AreaPayroll, "Set up payroll", "Pay groups, payroll providers and payroll file layouts.", F),
-        new(Permission.PayrollProfilesManage, AreaPayroll, "Manage payroll profiles", "Employees' payroll profiles, with pay rates masked.", F),
-        new(Permission.PayRatesView, AreaFields, "View pay rates", "Reveal what employees are paid.", F, Sensitive: true),
 
         new(Permission.TravelManage, AreaTravel, "Manage everyone's travel", "Everyone's trips, travel advances and per diem.", F),
         new(Permission.CardsManage, AreaTravel, "Manage corporate cards", "Card programs, statement imports, everyone's card charges and card reconciliation.", F),
 
-        new(Permission.HrRecordsManage, AreaPeople, "Manage personnel records", "Everyone's personnel records, documents and EEO data, terminated employees and personnel requests.", H, Sensitive: true),
-        new(Permission.HrPositionsManage, AreaPeople, "Manage positions", "Add and change approved positions.", H),
-        new(Permission.HrCompensationManage, AreaPeople, "Change compensation", "Propose and decide compensation changes.", H, Sensitive: true),
         new(Permission.HrWorkforceView, AreaPeople, "See workforce and pay data", "Positions with salary ranges, compensation (and deciding compensation changes), benefits administration and deductions, and workforce reports.", H | F, Sensitive: true),
-        new(Permission.HrBenefitsManage, AreaPeople, "Administer benefits", "Benefit plans, enrollment windows, life events and deductions.", H),
-        new(Permission.HrOnboardingManage, AreaPeople, "Onboarding and offboarding", "Onboarding and offboarding checklists for everyone.", H),
         new(Permission.HrRestrictedReports, AreaPeople, "Restricted HR reports", "EEO-1, VETS-4212, clearance and other restricted HR reports.", H, Sensitive: true),
 
 
@@ -327,11 +309,11 @@ public static class PermissionCatalog
         new(Permission.VendorBankDetails, Permission.ApPaymentsManage, "Someone who can change vendor bank details and send payments could redirect payments."),
         new(Permission.ApBillsManage, Permission.ApPaymentsManage, "Entering or approving bills and paying them should be separate."),
         new(Permission.PurchaseOrdersManage, Permission.ApBillsManage, "Ordering goods and approving the vendor's bill should be separate."),
-        new(Permission.PayrollProfilesManage, Permission.PayrollRun, "Someone who can change pay and run payroll could pay themselves more."),
-        new(Permission.HrCompensationManage, Permission.PayrollRun, "Deciding compensation and running payroll should be separate."),
+        new("payroll.profiles.manage", "payroll.run", "Someone who can change pay and run payroll could pay themselves more."),
+        new("hr.compensation.manage", "payroll.run", "Deciding compensation and running payroll should be separate."),
         new(Permission.BillingInvoicesManage, Permission.BillingPaymentsRecord, "Billing customers and recording their payments should be separate."),
         new(Permission.GlJournalsPost, Permission.CashManage, "Posting journal entries and reconciling the bank should be separate."),
-        new(Permission.LaborCostRatesManage, Permission.PayrollRun, "Setting cost rates and running payroll should be separate."),
+        new(Permission.LaborCostRatesManage, "payroll.run", "Setting cost rates and running payroll should be separate."),
     ];
 
     /// <summary>The conflicts present in <paramref name="permissions"/>.</summary>

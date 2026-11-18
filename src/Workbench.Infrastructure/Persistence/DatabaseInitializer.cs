@@ -187,7 +187,7 @@ public static class DatabaseInitializer
         await ProcurementSeed.SeedAsync(db, services, cancellationToken);
         await AssetsSeed.SeedAsync(db, services, cancellationToken);
         await CashSeed.SeedAsync(db, services, cancellationToken);
-        await PayrollSeed.SeedAsync(db, cancellationToken);
+        await ModuleSeedsAsync(ModuleSeedStage.AfterCash); // The sample pay group, periods, pay rates and payroll profiles come from the workforce module, at the stage above.
         await LeaveSeed.SeedAsync(db, cancellationToken);
         await PerDiemSeed.SeedAsync(db, cancellationToken);
         await ResourcingSeed.SeedAsync(db, cancellationToken);
@@ -197,7 +197,7 @@ public static class DatabaseInitializer
         // Earned value on 1001 (PMB, a closed period, a VAR, baseline changes) and the sample ceilings come from the project controls module's seed, at the stage above.
         await ProjectManagerSeed.SeedAsync(db, cancellationToken); // Sam Patel (Project manager only) runs 1002; a few assigned tasks.
         await LifecycleSeed.SeedAsync(db, cancellationToken); // A project at each stage of its life (5101 set up, 5102 planning, 5103 awaiting approval, 5104 executing).
-        await HrSeed.SeedAsync(db, cancellationToken); // HR: Harper Reed (HR role), positions, records, clearances, benefit plans, open enrollment, checklists.
+        // HR sample data (positions, records, clearances, benefit plans, open enrollment, checklists) comes from the workforce module, at the stage below.
         await ModuleSeedsAsync(ModuleSeedStage.AfterHr);
         await AssistantSeed.SeedAsync(db, cancellationToken); // Timesheet flags: the analyst's pending timesheet gets weekend hours, a late day and a moved-hours revision.
         await PlanningSeed.SeedAsync(db, services, cancellationToken); // Planning: this year's adopted budget, next year's cycle (ENG submitted, OPS drafting), rent and accrual recurring journals.
@@ -226,14 +226,14 @@ public static class DatabaseInitializer
     /// <summary>
     /// The people offered by the development sign-in page, each matching a seeded employee by email
     /// (<see cref="ProjectAccountingSeed"/>, <see cref="ProjectManagerSeed"/>). dev@ is an Admin, pm@ is Finance and a Project
-    /// manager, sam.pm@ is only a Project manager, hr@ is HR (<see cref="HrSeed"/>), the others are plain Employees.
+    /// manager, sam.pm@ is only a Project manager, hr@ is HR (the workforce module's HR sample data), the others are plain Employees.
     /// </summary>
     public static IReadOnlyList<(string Email, string DisplayName, bool IsAdmin, bool IsFinance, bool IsProjectManager, bool IsHr)> DevUsers { get; } =
     [
         ("dev@workbench.local", "Dana Lee", true, false, false, false),
         ("pm@example.com", "Pat Morgan", false, true, true, false),
         (ProjectManagerSeed.SamEmail, "Sam Patel", false, false, true, false),
-        (HrSeed.HarperEmail, "Harper Reed", false, false, false, true),
+        ("hr@example.com", "Harper Reed", false, false, false, true),
         ("analyst@example.com", "Alex Rivera", false, false, false, false),
         ("viewer@example.com", "Val Chen", false, false, false, false),
     ];

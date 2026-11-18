@@ -8,7 +8,6 @@ using Workbench.Contracts.Payroll;
 using Workbench.Domain.Approvals;
 using Workbench.Domain.Leave;
 using Workbench.Domain.ProjectAccounting;
-using Workbench.Tests.Payroll;
 using static Workbench.Tests.Identity.SeededHost;
 
 namespace Workbench.Tests.Leave;
@@ -16,14 +15,14 @@ namespace Workbench.Tests.Leave;
 /// <summary>Leave requests through the approval workflow engine, and leave policy eligibility.</summary>
 public sealed class LeaveWorkflowAndEligibilityTests
 {
-    private static readonly DateOnly Week1 = PayrollKit.PeriodStart;
+    private static readonly DateOnly Week1 = LeaveKit.PeriodStart;
 
     // ---- Approval workflow ----
 
     [Fact]
     public async Task A_leave_request_is_routed_to_the_supervisor_and_decided_from_the_inbox()
     {
-        await using var kit = await PayrollKit.CreateAsync();
+        await using var kit = await LeaveKit.CreateAsync();
         var pto = await kit.PtoPolicyAsync(allowNegative: true);
         kit.As(Editor);
         var request = await kit.Requests.CreateAsync(new CreateLeaveRequest(pto.Id, Week1, Week1.AddDays(1), Comment: "Trip"));
@@ -58,7 +57,7 @@ public sealed class LeaveWorkflowAndEligibilityTests
     [Fact]
     public async Task The_default_workflow_keeps_the_old_rule_supervisor_or_admins_and_never_yourself()
     {
-        await using var kit = await PayrollKit.CreateAsync();
+        await using var kit = await LeaveKit.CreateAsync();
         var pto = await kit.PtoPolicyAsync(allowNegative: true);
         kit.As(Editor);
         var supervised = await kit.Requests.CreateAsync(new CreateLeaveRequest(pto.Id, Week1, Week1));
@@ -91,7 +90,7 @@ public sealed class LeaveWorkflowAndEligibilityTests
     [Fact]
     public async Task Requests_pending_from_before_workflows_are_backfilled_once()
     {
-        await using var kit = await PayrollKit.CreateAsync();
+        await using var kit = await LeaveKit.CreateAsync();
         var pto = await kit.PtoPolicyAsync(allowNegative: true);
         Guid legacyId;
         await using (var db = await kit.Factory.CreateAsync())
@@ -128,7 +127,7 @@ public sealed class LeaveWorkflowAndEligibilityTests
     [Fact]
     public async Task Policies_apply_to_everyone_by_default()
     {
-        await using var kit = await PayrollKit.CreateAsync();
+        await using var kit = await LeaveKit.CreateAsync();
         var pto = await kit.PtoPolicyAsync();
         Assert.True(pto.Eligibility!.IsEveryone);
         await using (var db = await kit.Factory.CreateAsync())
@@ -145,7 +144,7 @@ public sealed class LeaveWorkflowAndEligibilityTests
     [Fact]
     public async Task A_non_exempt_only_policy_accrues_shows_and_can_be_requested_only_by_non_exempt_employees()
     {
-        await using var kit = await PayrollKit.CreateAsync();
+        await using var kit = await LeaveKit.CreateAsync();
         var pto = await kit.PtoPolicyAsync();
         await kit.UpdateEmployeeAsync(kit.Fx.ViewerId, e => e.IsExempt = false);
         kit.As(Admin);
@@ -172,7 +171,7 @@ public sealed class LeaveWorkflowAndEligibilityTests
     [Fact]
     public async Task Org_units_include_sub_units_and_pay_groups_and_employment_types_come_from_the_payroll_profile()
     {
-        await using var kit = await PayrollKit.CreateAsync();
+        await using var kit = await LeaveKit.CreateAsync();
         var pto = await kit.PtoPolicyAsync();
         var (parent, child) = (new OrgUnit { Code = "OPS", Name = "Operations" }, new OrgUnit { Code = "OPS-E", Name = "Engineering" });
         child.ParentId = parent.Id;
@@ -190,17 +189,16 @@ public sealed class LeaveWorkflowAndEligibilityTests
         Assert.Equal(4m, await kit.LedgerHoursAsync(kit.Fx.AnalystId, pto.Id));
 
         // Part-time only: viewer@'s profile says part-time; employees without one count as full-time.
-        await kit.Profiles.SaveAsync(kit.Fx.ViewerId, new SavePayProfileRequest(kit.Group.Id, "3003", PayTypeKind.Hourly, EmploymentType: EmploymentTypeKind.PartTime));
-        Assert.Equal(EmploymentTypeKind.PartTime, (await kit.Profiles.GetAsync(kit.Fx.ViewerId)).EmploymentType);
+        await kit.SetProfileAsync(kit.Fx.ViewerId, employment: Workbench.Domain.Payroll.EmploymentType.PartTime);
         kit.As(Admin);
         var partTime = await kit.Policies.CreateAsync(new SaveLeavePolicyRequest("PT", "Part-time leave", LeaveTypeKind.Other, kit.PtoWbs, AccrualMethodKind.PerPayPeriod,
             [new(0, 2m)], Eligibility: new LeaveEligibilityDto([], [], null, [EmploymentTypeKind.PartTime])));
         // Another pay group only: nobody in BW.
-        var other = await kit.Groups.CreateAsync(new SavePayGroupRequest("MO", "Monthly", PayFrequencyKind.Monthly, "paylocity", "W1234", new DateOnly(2026, 1, 1)));
+        var other = await kit.AddGroupAsync("MO", Workbench.Domain.Payroll.PayFrequency.Monthly, new DateOnly(2026, 1, 1));
         var monthly = await kit.Policies.CreateAsync(new SaveLeavePolicyRequest("MO", "Monthly leave", LeaveTypeKind.Other, kit.PtoWbs, AccrualMethodKind.PerPayPeriod,
             [new(0, 2m)], Eligibility: new LeaveEligibilityDto([], [other.Id], null, [])));
         kit.As(Finance);
-        var next = (await kit.Groups.ListPeriodsAsync(kit.Group.Id, 2026)).Single(p => p.Start == Week1.AddDays(14));
+        var next = await kit.PeriodAsync(Week1.AddDays(14));
         await kit.Balances.RunAccrualAsync(next.Id);
         Assert.Equal(2m, await kit.LedgerHoursAsync(kit.Fx.ViewerId, partTime.Id));
         Assert.Equal(0m, await kit.LedgerHoursAsync(kit.Fx.AnalystId, partTime.Id));
@@ -219,7 +217,7 @@ public sealed class LeaveWorkflowAndEligibilityTests
     [Fact]
     public async Task Hours_left_in_a_policy_that_stopped_applying_can_still_be_used_but_no_more()
     {
-        await using var kit = await PayrollKit.CreateAsync();
+        await using var kit = await LeaveKit.CreateAsync();
         var pto = await kit.PtoPolicyAsync();
         await kit.Balances.AdjustAsync(new AdjustLeaveRequest(kit.Fx.AnalystId, pto.Id, 8m, "Opening", new DateOnly(2026, 1, 1)));
         kit.As(Admin);

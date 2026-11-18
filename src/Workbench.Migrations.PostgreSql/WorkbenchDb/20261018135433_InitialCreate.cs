@@ -594,22 +594,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                 });
 
             migrationBuilder.CreateTable(
-                name: "PayrollProviderSetting",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    ProviderKey = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false, collation: "C"),
-                    EarningCodes = table.Column<string>(type: "character varying(2000)", maxLength: 2000, nullable: false, collation: "C"),
-                    ExportSalariedRegularHours = table.Column<bool>(type: "boolean", nullable: false),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    UpdatedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C")
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_PayrollProviderSetting", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "PerDiemRateBatch",
                 columns: table => new
                 {
@@ -2157,51 +2141,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                 });
 
             migrationBuilder.CreateTable(
-                name: "PayrollRun",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    PayGroupId = table.Column<Guid>(type: "uuid", nullable: false),
-                    PayPeriodId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Status = table.Column<string>(type: "character varying(24)", maxLength: 24, nullable: false),
-                    CreatedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
-                    CreatedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    ExportedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    ExportedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
-                    ExportFileName = table.Column<string>(type: "character varying(260)", maxLength: 260, nullable: true, collation: "C"),
-                    ExportContent = table.Column<string>(type: "text", nullable: true, collation: "C"),
-                    RegisterId = table.Column<Guid>(type: "uuid", nullable: true),
-                    PostedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    PostedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
-                    JournalEntryId = table.Column<Guid>(type: "uuid", nullable: true),
-                    VoidedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
-                    VoidedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: true, collation: "C"),
-                    VoidReason = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true, collation: "C")
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_PayrollRun", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_PayrollRun_GlJournalEntries_JournalEntryId",
-                        column: x => x.JournalEntryId,
-                        principalTable: "GlJournalEntries",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_PayrollRun_PayGroup_PayGroupId",
-                        column: x => x.PayGroupId,
-                        principalTable: "PayGroup",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_PayrollRun_PayPeriod_PayPeriodId",
-                        column: x => x.PayPeriodId,
-                        principalTable: "PayPeriod",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "BankMatches",
                 columns: table => new
                 {
@@ -2640,59 +2579,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                         principalTable: "Payment",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "PayrollExportLine",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    RunId = table.Column<Guid>(type: "uuid", nullable: false),
-                    EmployeeId = table.Column<Guid>(type: "uuid", nullable: false),
-                    Category = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false, collation: "C"),
-                    EarningCode = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false, collation: "C"),
-                    Hours = table.Column<decimal>(type: "numeric(9,2)", precision: 9, scale: 2, nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_PayrollExportLine", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_PayrollExportLine_Employee_EmployeeId",
-                        column: x => x.EmployeeId,
-                        principalTable: "Employee",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_PayrollExportLine_PayrollRun_RunId",
-                        column: x => x.RunId,
-                        principalTable: "PayrollRun",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "PayrollRegister",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    RunId = table.Column<Guid>(type: "uuid", nullable: false),
-                    FileName = table.Column<string>(type: "character varying(260)", maxLength: 260, nullable: false, collation: "C"),
-                    ContentHash = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false, collation: "C"),
-                    Status = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
-                    ImportedBy = table.Column<string>(type: "character varying(320)", maxLength: 320, nullable: false, collation: "C"),
-                    ImportedAtUtc = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
-                    JournalEntryId = table.Column<Guid>(type: "uuid", nullable: true),
-                    ReversalEntryId = table.Column<Guid>(type: "uuid", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_PayrollRegister", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_PayrollRegister_PayrollRun_RunId",
-                        column: x => x.RunId,
-                        principalTable: "PayrollRun",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -3321,40 +3207,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                         principalTable: "WbsElement",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "PayrollRegisterLine",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uuid", nullable: false),
-                    RegisterId = table.Column<Guid>(type: "uuid", nullable: false),
-                    EmployeeId = table.Column<Guid>(type: "uuid", nullable: true),
-                    ProviderEmployeeId = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false, collation: "C"),
-                    EmployeeName = table.Column<string>(type: "character varying(200)", maxLength: 200, nullable: false, collation: "C"),
-                    CheckDate = table.Column<DateOnly>(type: "date", nullable: false),
-                    GrossWages = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    EmployeeTaxes = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    EmployerTaxes = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    Deductions = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    EmployerBenefits = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false),
-                    NetPay = table.Column<decimal>(type: "numeric(18,2)", precision: 18, scale: 2, nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_PayrollRegisterLine", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_PayrollRegisterLine_Employee_EmployeeId",
-                        column: x => x.EmployeeId,
-                        principalTable: "Employee",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_PayrollRegisterLine_PayrollRegister_RegisterId",
-                        column: x => x.RegisterId,
-                        principalTable: "PayrollRegister",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -4893,52 +4745,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_PayrollExportLine_EmployeeId",
-                table: "PayrollExportLine",
-                column: "EmployeeId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PayrollExportLine_RunId",
-                table: "PayrollExportLine",
-                column: "RunId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PayrollProviderSetting_ProviderKey",
-                table: "PayrollProviderSetting",
-                column: "ProviderKey",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PayrollRegister_RunId_ContentHash",
-                table: "PayrollRegister",
-                columns: new[] { "RunId", "ContentHash" });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PayrollRegisterLine_EmployeeId",
-                table: "PayrollRegisterLine",
-                column: "EmployeeId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PayrollRegisterLine_RegisterId",
-                table: "PayrollRegisterLine",
-                column: "RegisterId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PayrollRun_JournalEntryId",
-                table: "PayrollRun",
-                column: "JournalEntryId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PayrollRun_PayGroupId_PayPeriodId",
-                table: "PayrollRun",
-                columns: new[] { "PayGroupId", "PayPeriodId" });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PayrollRun_PayPeriodId",
-                table: "PayrollRun",
-                column: "PayPeriodId");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_PerDiemLine_OdcEntryId",
                 table: "PerDiemLine",
                 column: "OdcEntryId");
@@ -5531,15 +5337,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                 name: "PaymentApplication");
 
             migrationBuilder.DropTable(
-                name: "PayrollExportLine");
-
-            migrationBuilder.DropTable(
-                name: "PayrollProviderSetting");
-
-            migrationBuilder.DropTable(
-                name: "PayrollRegisterLine");
-
-            migrationBuilder.DropTable(
                 name: "PerDiemLine");
 
             migrationBuilder.DropTable(
@@ -5657,9 +5454,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
                 name: "Payment");
 
             migrationBuilder.DropTable(
-                name: "PayrollRegister");
-
-            migrationBuilder.DropTable(
                 name: "PerDiemRateBatch");
 
             migrationBuilder.DropTable(
@@ -5694,9 +5488,6 @@ namespace Workbench.Migrations.PostgreSql.WorkbenchDb
 
             migrationBuilder.DropTable(
                 name: "LeavePolicy");
-
-            migrationBuilder.DropTable(
-                name: "PayrollRun");
 
             migrationBuilder.DropTable(
                 name: "ApBill");

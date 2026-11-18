@@ -1,5 +1,0 @@
-Company Code,Employee Id,Last Name,First Name,Work Email,Original Hire Date,Rehire Date,Termination Date,Status,Department,Job Title,FLSA Status,Full Time/Part Time,SSN,Base Rate
-W1234,1001,Morgan,Pat,Pat.Morgan@example.com,01/01/2024,,,Active,Engineering,Program Manager,Exempt,Full Time,000-00-0000,0.00
-W1234,2002,Rivera,Alex,alex.rivera@example.com,01/01/2024,,,Active,Engineering,Systems Engineer,Non-Exempt,Full Time,000-00-0000,0.00
-W1234,4004,Nguyen,Sam,sam.nguyen@example.com,11/02/2026,,,Active,Engineering,Analyst,Non-Exempt,Part Time,000-00-0000,0.00
-W1234,5005,Old,Tim,tim.old@example.com,03/01/2020,,09/30/2026,Terminated,Engineering,Analyst,Non-Exempt,Full Time,000-00-0000,0.00

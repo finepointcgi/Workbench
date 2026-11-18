@@ -37,7 +37,6 @@ public sealed class CustomRoleTests
         // Everything else Finance has stays closed: the chart of accounts, AP bills, payroll, HR, users and roles.
         var denied = await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => seeded.Host.Get<IChartOfAccountsService>().ListAccountsAsync());
         Assert.Contains("Manage the chart of accounts", denied.Message);
-        await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => seeded.Host.Get<IPayGroupService>().ListAsync());
         await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => seeded.Host.Get<IUserAdminService>().ListUsersAsync());
         await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => seeded.Host.Get<IRoleService>().ListAsync());
         await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => seeded.Host.Get<IAccountingReportService>().GetTrialBalanceAsync(Guid.NewGuid()));
@@ -159,12 +158,12 @@ public sealed class CustomRoleTests
     {
         await using var seeded = await CreateAsync();
         var userAdmin = await CreateRoleAsync(seeded, "User admin", Permission.AdminUsers, Permission.AdminRoles, Permission.TimeViewAll);
-        var payroll = await CreateRoleAsync(seeded, "Payroll", Permission.PayrollRun);
+        var payroll = await CreateRoleAsync(seeded, "Payroll", Permission.CashManage);
         await AssignAsync(seeded, Owner, userAdmin.Id);
 
         seeded.As(Owner);
         var roles = seeded.Host.Get<IRoleService>();
-        await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => roles.CreateAsync(new SaveRoleRequest("Sneaky", null, [Permission.PayrollRun])));
+        await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => roles.CreateAsync(new SaveRoleRequest("Sneaky", null, [Permission.CashManage])));
         await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => roles.SetUserRolesAsync(Viewer, [payroll.Id]));
         await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => roles.SetUserRolesAsync(Owner, [userAdmin.Id, BuiltInRoles.Admin.Id]));
         await Assert.ThrowsAsync<WorkbenchForbiddenException>(() => seeded.Host.Get<IUserDirectory>().SetRolesAsync(Viewer, OrgRoles.Finance));

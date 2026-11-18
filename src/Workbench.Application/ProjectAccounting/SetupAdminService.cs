@@ -122,7 +122,7 @@ public sealed class SetupAdminService(IWorkbenchDbContextFactory dbFactory, Audi
                 || await db.Set<Domain.Security.UserInvite>().AnyAsync(cancellationToken),
             await db.Set<Domain.Accounting.Account>().AnyAsync(a => a.IsActive, cancellationToken),
             await db.Set<Domain.Cash.BankAccount>().AnyAsync(cancellationToken),
-            await db.Set<Domain.Payroll.PayrollProviderSetting>().AnyAsync(cancellationToken),
+            await db.Set<Domain.Payroll.PayGroup>().AnyAsync(cancellationToken), // Payroll is set up: a pay group exists (the payroll module makes them).
             await db.Set<Domain.Approvals.ApprovalWorkflow>().AnyAsync(w => w.CurrentVersionId != null, cancellationToken),
             await db.Set<Domain.Accounting.IndirectRate>().AnyAsync(cancellationToken),
             await db.Set<Domain.Billing.ContractBillingSettings>().AnyAsync(cancellationToken)

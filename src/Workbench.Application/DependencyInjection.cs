@@ -12,7 +12,6 @@ using Workbench.Application.Imports;
 using Workbench.Application.IndirectRates;
 using Workbench.Application.Leave;
 using Workbench.Application.Odcs;
-using Workbench.Application.Payroll;
 using Workbench.Application.Financials;
 using Workbench.Application.ProjectAccounting;
 using Workbench.Application.Purchasing;
@@ -73,7 +72,6 @@ public static class DependencyInjection
         services.AddWorkbenchImports(); // Costpoint and Smartsheet importers; they import through the services above.
         services.AddWorkbenchAssets(); // Fixed assets: depreciation posts through the GL and adds a close check; above AddWorkbenchIdentity.
         services.AddWorkbenchCash(); // Cash and bank reconciliation: books bank items through the GL journal; above AddWorkbenchIdentity.
-        services.AddWorkbenchPayroll(); // Payroll runs post through the GL (JournalSource.Payroll); above AddWorkbenchIdentity.
         services.AddWorkbenchLeave(); // Decorates ITimesheetService (leave balance checks); after timekeeping, above AddWorkbenchIdentity.
         services.AddWorkbenchPerDiem(); // Per diem rates and travel per diem; decorates IExpenseReportService (after AddWorkbenchOdcs), above AddWorkbenchIdentity.
         services.AddWorkbenchResourcing(); // Allocations, capacity, utilization and allocation-based ETC; above AddWorkbenchIdentity.
@@ -85,11 +83,9 @@ public static class DependencyInjection
         services.AddWorkbenchMyTodo(); // Home page to-dos: providers read through the permission-checked services above.
         services.AddWorkbenchReauthentication(); // SSO/MFA sign-in settings, re-authentication for sensitive actions (decorators), compliance checklists; above AddWorkbenchIdentity.
         services.AddWorkbenchSupport(); // In-app support requests (Support:Email), the host's cross-tenant view and per-user help state; above AddWorkbenchIdentity.
-        Payroll.PaylocityRegistration.AddWorkbenchPaylocity(services); // Paylocity file exchange: mapping, export history, roster import; above AddWorkbenchIdentity.
-        Payroll.PayrollLayoutRegistration.AddWorkbenchPayrollLayouts(services); // Configurable Paylocity hours export and register layouts; above AddWorkbenchIdentity.
         Migration.MigrationRegistration.AddWorkbenchMigration(services); // Go-live checklist and Costpoint reconciliation; reads imports and reports; above AddWorkbenchIdentity.
         Tasks.TaskRegistration.AddWorkbenchTasks(services); // Task assignment (item Assignees), its notifications and the "Assigned to you" to-do; above AddWorkbenchIdentity.
-        Hr.HrRegistration.AddWorkbenchHr(services); // HR: personnel, positions, compensation (pay rate history), benefits, onboarding/offboarding, reports, to-dos; above AddWorkbenchIdentity.
+        // HR (personnel, positions, compensation, benefits, onboarding, reports) and payroll (pay groups, runs, providers, the Paylocity file exchange) are the workforce license module (modules/workforce).
         Assistant.AssistantRegistration.AddWorkbenchAssistant(services); // AI assistant (off by default), PM narratives and timesheet flags; tools read through the permission-checked services; above AddWorkbenchIdentity.
         Planning.PlanningRegistration.AddWorkbenchPlanning(services); // Recurring journals (post through the GL), corporate GL budgets, budget vs actual, planning cycles (approval handler); above AddWorkbenchIdentity.
         Currencies.CurrencyRegistration.AddWorkbenchCurrencies(services); // Multicurrency: currencies, rates, revaluation (posts through the GL, adds a close check); above AddWorkbenchIdentity.

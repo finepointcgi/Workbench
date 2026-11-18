@@ -20,6 +20,7 @@ public static class LeaveRegistration
         services.AddScoped<ILeaveBalanceService, LeaveBalanceService>();
         services.AddScoped<ILeaveRequestService, LeaveRequestService>();
         services.AddScoped<ILeaveTimesheetService, LeaveTimesheetService>();
+        services.AddScoped<IPayGroupChoiceService, PayGroupChoiceService>();
         services.Decorate<ITimesheetService, LeaveCheckingTimesheetService>();
         services.AddScoped<IResourceLeaveCalendar, LeaveResourceCalendar>(); // Wins over resourcing's TryAdd'ed no-op default.
         return services;

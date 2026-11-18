@@ -1,5 +1,0 @@
-Company Code,Employee Id,Employee Name,Pay Period Begin,Pay Period End,Check Date,Det,Det Code,Hours,Rate,Amount,Cost Center 1
-W1234,1001,"Morgan, Pat",10/05/2026,10/18/2026,10/23/2026,E,PTO,8.00,,,ENG
-W1234,2002,Alex Rivera,10/05/2026,10/18/2026,10/23/2026,E,OT,2.50,,,ENG-WEST
-W1234,2002,Alex Rivera,10/05/2026,10/18/2026,10/23/2026,E,REG,77.50,,,ENG-WEST
-W1234,3003,Val Chen,10/05/2026,10/18/2026,10/23/2026,E,HOL,8.00,,,

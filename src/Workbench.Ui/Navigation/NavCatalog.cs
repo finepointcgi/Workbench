@@ -169,16 +169,6 @@ public static class NavCatalog
         new(Projects, null, "Project costs", "odcs", Icons.Material.Filled.RequestQuote, NavRule.Custom(a => a.Can(P.ProjectsFinancialsView) || a.IsPm, "Also managers of a project", P.ProjectsFinancialsView, P.ProjectsManageOwn), MatchAll: true, Keywords: "other direct costs vendor"),
 
         // People (HR): HR's own work first; everyone's directory (with the org chart) and their own profile (with benefits).
-        new(People, "HR administration", "Positions", "hr/positions", Icons.Material.Filled.WorkOutline, NavRule.Need(P.HrWorkforceView, P.HrPositionsManage), Keywords: "approved positions headcount open requisitions salary range"),
-        new(People, "HR administration", "Onboarding and offboarding", "hr/onboarding", Icons.Material.Filled.Checklist, NavRule.Need(P.HrOnboardingManage), Detail: "Checklist", Keywords: "new hire checklist termination exit"),
-        new(People, "HR administration", "Personnel requests", "hr/requests", Icons.Material.Filled.MarkEmailUnread, NavRule.Need(P.HrRecordsManage), Keywords: "change requests employee updates"),
-        new(People, "HR administration", "Import from Paylocity", "hr/paylocity-roster", Icons.Material.Filled.GroupAdd, NavRule.Need(P.HrRecordsManage), Keywords: "paylocity roster employee import csv new hires terminations rehires"),
-        new(People, "HR administration", "Compensation", "hr/compensation", Icons.Material.Filled.Paid, NavRule.Need(P.HrWorkforceView, P.HrCompensationManage), Keywords: "salary raise merit cycle pay change"),
-        new(People, "HR administration", "Benefits administration", "hr/benefits", Icons.Material.Filled.MedicalServices, NavRule.Need(P.HrWorkforceView, P.HrBenefitsManage), Keywords: "plans tiers open enrollment deductions paylocity fringe"),
-        new(People, "Directory", "Directory", "hr", Icons.Material.Filled.People, NavRule.Everyone, MatchAll: true, Detail: "Employee", Keywords: "employees personnel hr records"),
-        new(People, "Directory", "Org chart", "hr/org-chart", Icons.Material.Filled.AccountTree, NavRule.Everyone, Keywords: "reporting structure supervisors"),
-        new(People, "My profile", "My profile", "hr/me", Icons.Material.Filled.Badge, NavRule.Everyone, Keywords: "personal details emergency contacts address self identification eeo"),
-        new(People, "My profile", "My benefits", "hr/benefits/me", Icons.Material.Filled.HealthAndSafety, NavRule.Everyone, Keywords: "open enrollment medical dental vision 401k fsa hsa dependents life event"),
 
         new(Sheets, null, "Sheets", "sheets", Icons.Material.Filled.TableChart, NavRule.Everyone, Detail: "Sheet", Keywords: "grid gantt board calendar plan"),
         new(Sheets, null, "Dashboards", "dashboards", Icons.Material.Filled.Dashboard, NavRule.Everyone, Detail: "Dashboard", Keywords: "charts widgets"),
@@ -230,8 +220,6 @@ public static class NavCatalog
         new(Finance, "Assets", "Tax depreciation", "assets/tax", Icons.Material.Filled.RequestQuote, NavRule.Need(P.AssetsManage), Keywords: "tax books macrs section 179 bonus form 4562 mid-quarter book to tax deferred tax federal state amt"),
         new(Finance, "Assets", "Asset transfers", "assets/transfers", Icons.Material.Filled.SwapHoriz, NavRule.Need(P.AssetsManage), Keywords: "move asset location custodian organization company intercompany history", InMenu: false),
 
-        new(Finance, "Payroll", "Payroll", "payroll", Icons.Material.Filled.Payments, NavRule.Need(P.PayrollRun), Detail: "Payroll run", Keywords: "paylocity pay runs"),
-        new(Finance, "Payroll", "Paylocity", "payroll/paylocity", Icons.Material.Filled.SyncAlt, NavRule.Need(P.PayrollSetup), Keywords: "paylocity mapping earning codes cost centers export history checksum"),
 
         new(Finance, "Revenue & compliance", "Revenue", "accounting/revenue", Icons.Material.Filled.TrendingUp, NavRule.Need(P.RevenueManage), MatchAll: true, Keywords: "revenue recognition run"),
         new(Finance, "Revenue & compliance", "Revenue estimates", "accounting/revenue/estimates", Icons.Material.Filled.Calculate, NavRule.Need(P.RevenueManage), Keywords: "eac etc", InMenu: false),
@@ -249,7 +237,6 @@ public static class NavCatalog
         new(Reports, null, "Report writer", "reports/writer", Icons.Material.Filled.Build, NavRule.Everyone, Detail: "Report", Keywords: "custom report builder"),
         new(Reports, "Standard reports", "Project status", "reports/standard/project-status", Icons.Material.Filled.Assessment, NavRule.Custom(a => a.IsPm && !a.Can(P.ProjectsFinancialsView), "Project managers; everyone else opens it from the report catalog", P.ProjectsManageOwn), Keywords: "eac etc budget variance pm"),
         new(Reports, "Standard reports", "Contract funding", "reports/standard/funding-status", Icons.Material.Filled.Assessment, NavRule.Custom(a => a.IsPm && !a.Can(P.ProjectsFinancialsView), "Project managers; everyone else opens it from the report catalog", P.ProjectsManageOwn), Keywords: "ceiling funded clin"),
-        new(Reports, "Standard reports", "HR reports", "hr/reports", Icons.Material.Filled.Assessment, NavRule.Need(P.HrWorkforceView, P.HrRestrictedReports), Keywords: "headcount turnover eeo-1 vets-4212 clearances expirations benefits"),
         new(Reports, "Standard reports", "Timesheet flags", "time/flags", Icons.Material.Filled.Flag, NavRule.Custom(a => a.ShowTeamTime || a.Can(P.TimeViewAll), "Supervisors also see their own team", P.TimeTeam, P.TimeViewAll), Keywords: "anomalies odd timesheets dcaa review weekend late revisions"),
         new(Reports, "Standard reports", "Financial statements", "accounting/reports", Icons.Material.Filled.Assessment, NavRule.Need(P.GlReportsView), Keywords: "balance sheet income statement trial balance p&l"),
         new(Reports, "Standard reports", "Consolidated statements", "accounting/consolidated", Icons.Material.Filled.Assessment, NavRule.Need(P.GlReportsView), Keywords: "consolidation eliminations multicompany intercompany companies"),

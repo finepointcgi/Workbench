@@ -6,6 +6,9 @@ namespace Workbench.Application;
 /// <summary>Where in the development sample data a license module's seed runs (the sample data is built in a fixed order, and a module's rows read what came before).</summary>
 public enum ModuleSeedStage
 {
+    /// <summary>After cash and bank accounts, before leave (the sample pay group, pay periods and payroll profiles the leave sample data follows).</summary>
+    AfterCash,
+
     /// <summary>After revenue (the ledgers, billing and payables are seeded).</summary>
     AfterRevenue,
 

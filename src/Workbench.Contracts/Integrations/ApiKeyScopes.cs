@@ -60,7 +60,7 @@ public static class ApiKeyScopes
         new("purchasing", "Purchasing and payables", "Vendors, requisitions, purchase orders, receiving, AP bills and payments.", ["purchasing", "edi"]),
         new("accounting", "Accounting", "Chart of accounts, journal, fiscal calendar, period close, cash, assets, currencies, companies, budgets and incurred cost.",
             ["accounting", "fiscal", "audit", "cash", "assets", "currencies", "companies", "planning", "indirect-rates", "sales-tax", "accounting-export"]),
-        new("people", "People and payroll", "HR records and payroll. Pay rates stay masked unless the key's roles may reveal them.", ["employees", "hr", "payroll"]),
+        new("people", "People and payroll", "Employees (and, with the workforce module, HR records and payroll; pay rates stay masked unless the key's roles may reveal them).", ["employees"]),
         new("reports", "Reports", "Standard reports, the report writer and saved reports.", ["reports"]),
         new("setup", "Setup and approvals", "Organization setup lists (customers, labor categories, org units), approval workflows, the approval inbox and custom fields.",
             ["setup", "customers", "org-units", "labor-categories", "approvals", "approval-workflows", "approval-delegations", "customization", "company-profile"]),

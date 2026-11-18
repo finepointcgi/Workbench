@@ -79,7 +79,7 @@ public static class ModuleCatalog
         new(ModuleIds.Billing, "Billing", "Invoices, ready to bill, customer payments, AR aging, unbilled accrual, milestones, retainers, revenue recognition and live accounting push.", false),
         new(ModuleIds.Accounting, "Accounting", "The general ledger, period close, payables, purchasing, payment runs, cash and bank reconciliation, fixed assets, sales tax, multi-currency, corporate budgets and indirect rates.", false),
         new(ModuleIds.Capture, "Capture", "The business development pipeline: leads, opportunities, accounts, forecast, gates, proposals and pricing.", false),
-        new(ModuleIds.Workforce, "Workforce", "HR records, positions, compensation, benefits, onboarding, payroll, and cross-project capacity, utilization and skills.", false),
+        new(ModuleIds.Workforce, "Workforce", "HR records, positions, compensation, benefits, onboarding, payroll and the Paylocity file exchange.", false),
         new(ModuleIds.ProjectControls, "Project controls", "Earned value, the risk register, ceilings and closeout, schedule health and the monthly narrative.", false),
         new(ModuleIds.Materials, "Materials", "Parts, inventory, bills of materials, work orders, MRP, quality, engineering changes, sales orders and shipping.", false),
         new(ModuleIds.GovCon, "Government contracting", "DCAA readiness, CPSR, CAS disclosure, CMMC, incurred cost, CLIN funding reports, WAWF, total time accounting and the Costpoint parallel run.", true, WholeModule: false),

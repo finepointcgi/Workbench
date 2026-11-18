@@ -49,7 +49,7 @@ public sealed record NavAccess(
     public bool IsResourceManager => Can(Permission.ResourcingManage);
 
     /// <summary>Manages personnel records (HR).</summary>
-    public bool IsHr => Can(Permission.HrRecordsManage);
+    public bool IsHr => Can("hr.records.manage");
 
     /// <summary>Holds "Run the projects you manage" (whether or not they manage a project yet).</summary>
     public bool HasProjectManagerRole => Can(Permission.ProjectsManageOwn);
