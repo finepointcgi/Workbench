@@ -1,5 +1,8 @@
 # People and HR
 
+!!! info "Optional module: Workforce"
+    This page describes the **Workforce** module, an optional add-on. It appears only when your license includes it. See [Optional modules](../reference/optional-modules.md).
+
 <p class="roles">Everyone sees the directory and their own profile · HR administers</p>
 
 ## For everyone

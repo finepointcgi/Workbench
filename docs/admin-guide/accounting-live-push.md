@@ -1,5 +1,8 @@
 # Push to QuickBooks Online and Xero
 
+!!! info "Optional module: Billing"
+    This page describes the **Billing** module, an optional add-on. It appears only when your license includes it. See [Optional modules](../reference/optional-modules.md).
+
 <p class="roles">Finance and administrators (permission: Export to accounting software); registering the apps is the host administrator's job</p>
 
 !!! warning "Not run against the real products"

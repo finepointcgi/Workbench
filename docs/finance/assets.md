@@ -1,5 +1,8 @@
 # Fixed assets
 
+!!! info "Optional module: Accounting"
+    This page describes the **Accounting** module, an optional add-on. It appears only when your license includes it. See [Optional modules](../reference/optional-modules.md).
+
 <p class="roles">Finance</p>
 
 Contractor-owned assets depreciate monthly into the general ledger; government-furnished and contractor-acquired

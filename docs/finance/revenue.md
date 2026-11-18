@@ -1,5 +1,8 @@
 # Revenue and compliance
 
+!!! info "Optional module: Billing"
+    This page describes the **Billing** module, an optional add-on. It appears only when your license includes it. See [Optional modules](../reference/optional-modules.md).
+
 <p class="roles">Finance · Project managers submit estimates</p>
 
 ## Revenue recognition

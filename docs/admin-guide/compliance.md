@@ -1,5 +1,8 @@
 # Compliance readiness
 
+!!! info "Optional module: Government contracting"
+    This page describes the **Government contracting** module, an optional add-on. It appears only when your license includes it. See [Optional modules](../reference/optional-modules.md).
+
 <p class="roles">Administrators · Finance · Contracts</p>
 
 Three self-assessments under **Admin › Compliance** help you get ready for the government's reviews of your systems.

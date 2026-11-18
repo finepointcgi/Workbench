@@ -1,5 +1,8 @@
 # Payroll
 
+!!! info "Optional module: Workforce"
+    This page describes the **Workforce** module, an optional add-on. It appears only when your license includes it. See [Optional modules](../reference/optional-modules.md).
+
 <p class="roles">Finance</p>
 
 Workbench doesn't calculate pay: your payroll provider does. Hours go to the provider from approved timesheets only, and

@@ -181,6 +181,7 @@ nav:
   - Reference:
       - Quick start: quick-start.md
       - Editions: editions.md
+      - Optional modules: reference/optional-modules.md
       - Glossary of terms: reference/glossary.md
       - Sheet formulas: sheets/formulas.md
       - Training:

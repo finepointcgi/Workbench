@@ -1,5 +1,8 @@
 # Importing deals from HubSpot, Salesforce or a spreadsheet
 
+!!! info "Optional module: Capture"
+    This page describes the **Capture** module, an optional add-on. It appears only when your license includes it. See [Optional modules](../reference/optional-modules.md).
+
 <p class="roles">Administrators, or Finance for companies and contacts. Deals need business development or an administrator.</p>
 
 Bring your existing pipeline across: companies, the people at them, and the deals you're working. It's the same wizard as

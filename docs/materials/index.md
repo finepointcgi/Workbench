@@ -1,5 +1,8 @@
 # Materials guide
 
+!!! info "Optional module: Materials"
+    This page describes the **Materials** module, an optional add-on. It appears only when your license includes it. See [Optional modules](../reference/optional-modules.md).
+
 <p class="roles">Materials · Warehouse · Quality · Manufacturing</p>
 
 The **Materials** pages are for contractors who buy, stock, build and ship physical things: hardware deliverables,

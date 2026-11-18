@@ -1,5 +1,8 @@
 # Corporate budgets
 
+!!! info "Optional module: Accounting"
+    This page describes the **Accounting** module, an optional add-on. It appears only when your license includes it. See [Optional modules](../reference/optional-modules.md).
+
 <p class="roles">Finance · Org unit budget owners</p>
 
 Corporate budgets are by fiscal year: an amount for each account, org unit and month. They're separate from project

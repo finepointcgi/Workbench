@@ -1,5 +1,8 @@
 # Business development
 
+!!! info "Optional module: Capture"
+    This page describes the **Capture** module, an optional add-on. It appears only when your license includes it. See [Optional modules](../reference/optional-modules.md).
+
 <p class="roles">Business development · Capture managers · Pricing</p>
 
 The **Business development** pages track pursuits from the first lead to award: the pipeline, opportunities with their
