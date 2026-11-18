@@ -118,7 +118,7 @@ public static class NavCatalog
         var at = BuiltInSections.ToList().FindIndex(s => s.Key == Reports);
         var sections = BuiltInSections.Take(at).Concat(added).Concat(BuiltInSections.Skip(at)).ToList();
         var entries = BuiltInEntries.Concat(set.Modules.SelectMany(m => m.NavEntries).Select(e =>
-            new NavEntry(e.Section, e.Group, e.Title, e.Href, e.Icon, e.Permissions.Count == 0 ? NavRule.Everyone : NavRule.Need([.. e.Permissions]),
+            new NavEntry(e.Section, e.Group, e.Title, e.Href, e.Icon, NavCatalogRules.For(e),
                 e.MatchAll, e.Detail, e.Keywords, e.InMenu, e.Government))).ToList();
         return _union = new UnionView(set, sections, entries);
     }
@@ -135,10 +135,10 @@ public static class NavCatalog
         new(Approvals, "Approvals", Icons.Material.Filled.Approval, "approvals"),
         new(Projects, "Projects", Icons.Material.Filled.Work, "projects"),
         new(People, "People", Icons.Material.Filled.People),
-        new(Growth, "Business development", Icons.Material.Filled.TrendingUp),
+        new(Growth, "Business development", Icons.Material.Filled.TrendingUp), // Its pages come from the capture module; the section is empty (and hidden) without it.
         new(Sheets, "Sheets & dashboards", Icons.Material.Filled.TableChart),
         new(Finance, "Finance", Icons.Material.Filled.AccountBalance),
-        new(Materials, "Materials", Icons.Material.Filled.PrecisionManufacturing),
+        new(Materials, "Materials", Icons.Material.Filled.PrecisionManufacturing), // Its pages come from the materials module; the section is empty (and hidden) without it.
         new(Reports, "Reports", Icons.Material.Filled.Assessment),
         new(Admin, "Admin", Icons.Material.Filled.AdminPanelSettings),
     ];
@@ -167,7 +167,6 @@ public static class NavCatalog
         new(Projects, null, "New project", "setup/projects/new", Icons.Material.Filled.CreateNewFolder, NavRule.Custom(a => a.Can(P.ProjectsCreate) && !a.Can(P.SetupProjects), "Under Admin › Setup instead for those who set up every project", P.ProjectsCreate), MatchAll: true, Keywords: "create request project wbs plan", InMenu: false), // + New › Project.
         new(Projects, null, "Resourcing", "resourcing", Icons.Material.Filled.GroupWork, NavRule.Custom(a => a.Can(P.ResourcingManage) || a.IsPm, "Also managers of a project", P.ResourcingManage, P.ProjectsManageOwn), Keywords: "staffing allocations capacity utilization heat map"),
         new(Projects, null, "Project costs", "odcs", Icons.Material.Filled.RequestQuote, NavRule.Custom(a => a.Can(P.ProjectsFinancialsView) || a.IsPm, "Also managers of a project", P.ProjectsFinancialsView, P.ProjectsManageOwn), MatchAll: true, Keywords: "other direct costs vendor"),
-        new(Projects, null, "Proposal pricing", "pricing", Icons.Material.Filled.PriceCheck, NavRule.Need(P.PricingManage), Detail: "Proposal", Keywords: "bid proposal price cost volume wrap rate fee scenario propricer"),
 
         // People (HR): HR's own work first; everyone's directory (with the org chart) and their own profile (with benefits).
         new(People, "HR administration", "Positions", "hr/positions", Icons.Material.Filled.WorkOutline, NavRule.Need(P.HrWorkforceView, P.HrPositionsManage), Keywords: "approved positions headcount open requisitions salary range"),
@@ -180,13 +179,6 @@ public static class NavCatalog
         new(People, "Directory", "Org chart", "hr/org-chart", Icons.Material.Filled.AccountTree, NavRule.Everyone, Keywords: "reporting structure supervisors"),
         new(People, "My profile", "My profile", "hr/me", Icons.Material.Filled.Badge, NavRule.Everyone, Keywords: "personal details emergency contacts address self identification eeo"),
         new(People, "My profile", "My benefits", "hr/benefits/me", Icons.Material.Filled.HealthAndSafety, NavRule.Everyone, Keywords: "open enrollment medical dental vision 401k fsa hsa dependents life event"),
-        // Business development: the capture pipeline (BD, Finance, Admin); capture and proposal managers see their own.
-        new(Growth, "Business development", "Pipeline", "bd", Icons.Material.Filled.ViewKanban, NavRule.Custom(a => a.ShowBusinessDevelopment, "Also capture and proposal managers (their own opportunities)", P.PipelineView), MatchAll: true, Keywords: "capture board opportunities crm win themes swot pwin color team"),
-        new(Growth, "Business development", "Opportunities", "bd/opportunities", Icons.Material.Filled.Flag, NavRule.Custom(a => a.ShowBusinessDevelopment, "Also capture and proposal managers (their own opportunities)", P.PipelineView), Detail: "Opportunity", Keywords: "pursuits rfp solicitation capture"),
-        new(Growth, "Business development", "Accounts and contacts", "bd/accounts", Icons.Material.Filled.Contacts, NavRule.Need(P.PipelineView), Detail: "Account", Keywords: "agencies offices primes partners competitors crm"),
-        new(Growth, "Business development", "Leads", "bd/leads", Icons.Material.Filled.TravelExplore, NavRule.Need(P.PipelineView), Keywords: "sam.gov saved searches import notices", Government: true),
-        new(Growth, "Business development", "Forecast and win/loss", "bd/forecast", Icons.Material.Filled.Insights, NavRule.Need(P.PipelineView), Keywords: "pwin pgo weighted pipeline b&p spend"),
-        new(Growth, "Business development", "Gates and settings", "bd/settings", Icons.Material.Filled.Rule, NavRule.Need(P.PipelineView), Keywords: "go no-go bid decision checklist b&p charge code capture exec captureexec import"),
 
         new(Sheets, null, "Sheets", "sheets", Icons.Material.Filled.TableChart, NavRule.Everyone, Detail: "Sheet", Keywords: "grid gantt board calendar plan"),
         new(Sheets, null, "Dashboards", "dashboards", Icons.Material.Filled.Dashboard, NavRule.Everyone, Detail: "Dashboard", Keywords: "charts widgets"),
@@ -250,32 +242,7 @@ public static class NavCatalog
         new(Finance, "Planning", "Planning cycles", "planning/cycles", Icons.Material.Filled.Groups, NavRule.Need(P.BudgetsManage), Detail: "Planning cycle", Keywords: "annual plan budget submissions org unit owners"),
         new(Finance, null, "Revenue by project", "accounting/revenue/projects", Icons.Material.Filled.TrendingUp, NavRule.Need(P.RevenueManage), Detail: "Project", InMenu: false),
 
-        // Materials: the Materials role (and administrators) runs it; Finance reads parts, inventory and the inventory reports
-        // (the other pages still open for Finance from links on those).
-        new(Materials, "Inventory", "Parts", "materials", Icons.Material.Filled.Category, NavRule.Need(P.MaterialsView), MatchAll: true, Keywords: "part master item inventory make buy"),
-        new(Materials, null, "Part", "materials/parts", Icons.Material.Filled.Category, NavRule.Need(P.MaterialsView), Detail: "Part", InMenu: false),
-        new(Materials, "Inventory", "Inventory", "materials/inventory", Icons.Material.Filled.Inventory2, NavRule.Need(P.MaterialsView), Keywords: "stock on hand bins lots serials gfm"),
-        new(Materials, "Inventory", "Receiving", "materials/receiving", Icons.Material.Filled.MoveToInbox, NavRule.Need(P.MaterialsManage), Keywords: "receive po government furnished gfm"),
-        new(Materials, "Inventory", "Transactions", "materials/transactions", Icons.Material.Filled.SwapVert, NavRule.Need(P.MaterialsManage), Keywords: "issue transfer adjustment cycle count"),
-        new(Materials, "Manufacturing", "Bills of materials", "materials/boms", Icons.Material.Filled.AccountTree, NavRule.Need(P.MaterialsManage), Detail: "BOM", Keywords: "bom routing where used"),
-        new(Materials, "Manufacturing", "Work orders", "materials/work-orders", Icons.Material.Filled.Build, NavRule.Need(P.MaterialsManage), Detail: "Work order", Keywords: "wo shop floor kit wip"),
-        new(Materials, "Manufacturing", "MRP", "materials/mrp", Icons.Material.Filled.EventNote, NavRule.Need(P.MaterialsManage), Keywords: "material requirements planning planned orders forecast"),
-        new(Materials, "Quality & engineering", "Quality", "materials/quality", Icons.Material.Filled.VerifiedUser, NavRule.Need(P.MaterialsManage), Detail: "Quality record", Keywords: "inspection queue ncr mrb nonconformance disposition corrective action car supplier quality aql coc"),
-        new(Materials, "Quality & engineering", "Engineering changes", "materials/engineering-changes", Icons.Material.Filled.ChangeCircle, NavRule.Need(P.MaterialsManage), Detail: "Engineering change", Keywords: "eco ecn revision effectivity configuration as built as designed"),
-        new(Materials, null, "Receive on a phone", "m/receive", Icons.Material.Filled.PhoneIphone, NavRule.Need(P.MaterialsManage), MatchAll: true, Keywords: "mobile receiving", InMenu: false),
-        new(Materials, "Inventory", "Inventory reports", "materials/reports", Icons.Material.Filled.Assessment, NavRule.Need(P.MaterialsView), Keywords: "valuation aging gfm wip trace"),
-        new(Materials, "Sales and shipping", "Sales orders", "materials/sales-orders", Icons.Material.Filled.ReceiptLong, NavRule.Need(P.SalesOrdersView), Detail: "Sales order", Keywords: "so customer order clin delivery"),
-        new(Materials, "Sales and shipping", "Shipping", "materials/shipping", Icons.Material.Filled.LocalShipping, NavRule.Need(P.MaterialsManage), Keywords: "pick pack ship shipment dd250 wawf piee tracking"),
-        new(Materials, null, "Pick list", "materials/pick-lists", Icons.Material.Filled.PlaylistAddCheck, NavRule.Need(P.MaterialsView), Detail: "Pick list", InMenu: false),
-        new(Materials, null, "Shipment", "materials/shipments", Icons.Material.Filled.LocalShipping, NavRule.Need(P.MaterialsView), Detail: "Shipment", InMenu: false),
-        new(Materials, null, "Pick on a phone", "m/pick", Icons.Material.Filled.PhoneIphone, NavRule.Need(P.MaterialsManage), MatchAll: true, Keywords: "mobile picking", InMenu: false),
-        new(Materials, "Manufacturing", "Kits", "materials/kits", Icons.Material.Filled.Inventory, NavRule.Need(P.MaterialsManage), Detail: "Kit", Keywords: "kitting pick list stage shortages"),
-        new(Materials, "Manufacturing", "Backflush", "materials/backflush", Icons.Material.Filled.AutoMode, NavRule.Need(P.MaterialsManage), Keywords: "issue on completion backflushing shortages"),
-        new(Materials, "Manufacturing", "Capacity schedule", "materials/capacity", Icons.Material.Filled.ViewTimeline, NavRule.Need(P.MaterialsManage), Keywords: "finite capacity scheduling load chart work center calendar queue"),
-        new(Materials, "Inventory", "Physical inventory", "materials/physical-inventory", Icons.Material.Filled.FactCheck, NavRule.Need(P.MaterialsManage), Detail: "Physical inventory", Keywords: "wall to wall count tags freeze recount"),
-        new(Materials, "Inventory", "Landed cost", "materials/landed-cost", Icons.Material.Filled.LocalShipping, NavRule.Need(P.MaterialsManage), Detail: "Landed cost", Keywords: "freight duty handling allocation receipts"), // Finance: linked from Inventory reports (its menu is at its link budget).
-        new(Materials, "Inventory", "Materials setup", "materials/setup", Icons.Material.Filled.Warehouse, NavRule.Need(P.MaterialsManage), Keywords: "warehouses bins work centers"),
-        new(Materials, null, "Count on a phone", "m/count", Icons.Material.Filled.PhoneIphone, NavRule.Need(P.MaterialsManage), MatchAll: true, Keywords: "mobile physical inventory count tags", InMenu: false),
+        // Materials: its pages come from the materials module (the Materials role and administrators run it; Finance reads parts, inventory and the inventory reports).
 
         // Reports: one place for every report.
         new(Reports, null, "Report catalog", "reports", Icons.Material.Filled.LibraryBooks, NavRule.Everyone, MatchAll: true, Keywords: "reports"),
@@ -455,5 +422,20 @@ public static class NavCatalog
     {
         var clean = path.Split('?', '#')[0];
         return clean.Split('/', StringSplitOptions.RemoveEmptyEntries);
+    }
+}
+
+/// <summary>The rule a module's menu entry gets: its permissions (any one), or, when it names a relationship flag, also whoever holds that flag.</summary>
+public static class NavCatalogRules
+{
+    public static NavRule For(ModuleNavEntry e)
+    {
+        var permissions = e.Permissions.ToArray();
+        if (e.AlsoWhenFlag is { } flag)
+        {
+            return NavRule.Custom(a => a.HasFlag(flag) || permissions.Any(a.Can), e.Note ?? "Also people the module names", permissions);
+        }
+
+        return permissions.Length == 0 ? NavRule.Everyone : NavRule.Need(permissions);
     }
 }

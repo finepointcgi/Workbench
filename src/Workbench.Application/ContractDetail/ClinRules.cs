@@ -7,7 +7,7 @@ using Workbench.Domain.ProjectAccounting;
 namespace Workbench.Application.ContractDetail;
 
 /// <summary>CLIN numbering, the SLIN hierarchy and the roll-up of CLIN values to the contract.</summary>
-internal static partial class ClinRules
+public static partial class ClinRules
 {
     [GeneratedRegex("^[0-9]{4}$")]
     private static partial Regex ClinNumber();

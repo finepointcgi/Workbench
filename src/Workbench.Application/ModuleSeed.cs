@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Workbench.Application;
 
@@ -8,17 +9,26 @@ public enum ModuleSeedStage
     /// <summary>After revenue (the ledgers, billing and payables are seeded).</summary>
     AfterRevenue,
 
+    /// <summary>After HR (the sample people exist; before the assistant and planning seeds).</summary>
+    AfterHr,
+
     /// <summary>After planning (before multicurrency and multicompany).</summary>
     AfterPlanning,
 
     /// <summary>After the multicurrency and multicompany seeds (before travel).</summary>
     AfterMulticompany,
 
+    /// <summary>After travel (before sourcing, bank files and tax books).</summary>
+    AfterTravel,
+
     /// <summary>After tax books and the CPSR sample purchase orders.</summary>
     AfterTaxBooks,
 
     /// <summary>After everything else.</summary>
     End,
+
+    /// <summary>At the end of the commercial demo dataset (<c>Demo:Dataset=Commercial</c>, the Kestrel Bay Consulting firm), after its projects, contracts and invoices exist. The government sample data never runs these.</summary>
+    CommercialDemo,
 }
 
 /// <summary>
@@ -32,4 +42,16 @@ public interface IModuleSeed
 
     /// <summary>Seeds the module's rows. <paramref name="db"/> is the host's context; <paramref name="services"/> resolves the application services.</summary>
     Task SeedAsync(IWorkbenchDbContext db, IServiceProvider services, CancellationToken cancellationToken);
+}
+
+/// <summary>Runs the registered module seeds of one stage (the database initializer and the commercial demo call it at their points).</summary>
+public static class ModuleSeeds
+{
+    public static async Task RunAsync(IServiceProvider services, IWorkbenchDbContext db, ModuleSeedStage stage, CancellationToken cancellationToken)
+    {
+        foreach (var seed in services.GetServices<IModuleSeed>().Where(m => m.Stage == stage))
+        {
+            await seed.SeedAsync(db, services, cancellationToken);
+        }
+    }
 }

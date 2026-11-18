@@ -92,18 +92,6 @@ public sealed class BuiltInRoleParityTests
         [Permission.HrBenefitsManage] = r => r.IsHr(),
         [Permission.HrOnboardingManage] = r => r.IsHr(),
         [Permission.HrRestrictedReports] = r => r.IsHr(),
-        [Permission.PipelineView] = r => r.CanViewPipeline(),
-        [Permission.CaptureManage] = r => r.IsBusinessDevelopment(),
-        [Permission.OpportunitiesEditAll] = r => r.IsAdmin(),
-        [Permission.BpChargeCode] = r => r.IsFinance(),
-        [Permission.PricingManage] = r => r.CanPrice(),
-        [Permission.MaterialsView] = r => r.CanViewMaterials(),
-        [Permission.MaterialsManage] = r => r.IsMaterials(),
-        [Permission.MaterialsCosting] = r => r.IsFinance(),
-        [Permission.QualityDispositions] = r => r.IsFinance() || r.IsMaterials(),
-        [Permission.SalesOrdersView] = r => r.CanViewMaterials() || r.IsBusinessDevelopment(),
-        [Permission.SalesOrdersManage] = r => r.CanViewMaterials(),
-        [Permission.SalesCreditHold] = r => r.IsFinance(),
         [Permission.RestrictedColumnsView] = r => r.IsFinance(),
         [Permission.SheetFormsPublic] = r => r.IsFinance() || r.IsProjectManager(), // New in wave E: public form links (also needs the workspace's Owner role).
 
@@ -178,7 +166,6 @@ public sealed class BuiltInRoleParityTests
         Assert.DoesNotContain("reports/standard/project-status", Menu(OrgRoles.Finance, managesProject: true));
         Assert.Contains("odcs", Menu(OrgRoles.ProjectManager));
         Assert.DoesNotContain("odcs", Menu(OrgRoles.Employee));
-        Assert.Contains("materials/sales-orders", Menu(OrgRoles.BusinessDevelopment));
         Assert.Contains("admin/roles", Menu(OrgRoles.Admin));
         Assert.DoesNotContain("admin/roles", Menu(OrgRoles.Finance));
         Assert.Equal("Setup", NavCatalog.TitleFor(NavCatalog.Sections.Single(s => s.Key == NavCatalog.Admin), new NavAccess(new CurrentUserInfo("x@example.com", "X", OrgRoles.Finance, null))));

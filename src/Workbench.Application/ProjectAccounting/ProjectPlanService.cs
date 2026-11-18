@@ -407,7 +407,7 @@ public sealed class ProjectPlanService(
     }
 
     /// <summary>What Finance still has to add before the manager can submit: funding (contract projects) and labor categories.</summary>
-    internal static async Task<List<string>> MissingSetupAsync(IWorkbenchDbContext db, Project project, CancellationToken ct)
+    public static async Task<List<string>> MissingSetupAsync(IWorkbenchDbContext db, Project project, CancellationToken ct)
     {
         var missing = new List<string>();
         if (project.ContractId is not null && (await ProjectTerms.LoadAsync(db, project, ct)).Terms.Funded is not > 0)

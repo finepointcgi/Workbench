@@ -18,13 +18,10 @@ public static class CustomizableLists
     public const string Invoices = "invoices";
     public const string Timesheets = "timesheets";
     public const string ExpenseReports = "expense-reports";
-    public const string Opportunities = "opportunities";
-    public const string Parts = "parts";
-    public const string SalesOrders = "sales-orders";
 
     /// <summary>The lists the product ships.</summary>
     public static IReadOnlyList<string> BuiltIn { get; } =
-        [Projects, Contracts, People, Vendors, PurchaseOrders, Bills, Invoices, Timesheets, ExpenseReports, Opportunities, Parts, SalesOrders];
+        [Projects, Contracts, People, Vendors, PurchaseOrders, Bills, Invoices, Timesheets, ExpenseReports];
 
     /// <summary>The built-in lists and the ones loaded modules add (<see cref="Modules.ModuleCustomList"/>).</summary>
     public static IReadOnlyList<string> All =>

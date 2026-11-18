@@ -79,6 +79,16 @@ public sealed class RateBook
 
     public static string Label(IndirectPool pool) => pool == IndirectPool.GeneralAndAdministrative ? "G&A" : pool.ToString();
 
+    /// <summary>How a pool's allocation base reads in a sentence or a finding (the same words accounting and proposal pricing both use).</summary>
+    public static string BaseLabel(AllocationBase basis) => basis switch
+    {
+        AllocationBase.DirectLabor => "Direct labor",
+        AllocationBase.DirectLaborPlusFringe => "Direct labor + fringe",
+        AllocationBase.TotalCostInput => "Total cost input",
+        AllocationBase.ValueAdded => "Value added",
+        _ => basis.ToString(),
+    };
+
     public static string MissingNote(RateSet set) =>
         $"FY{set.FiscalYear} has no provisional {string.Join(", ", set.Missing.Select(Label))} rate; that burden counts as 0.";
 }
@@ -129,7 +139,7 @@ internal static class DirectCosts
             .ToListAsync(ct);
         result.AddRange(odcs.Select(o => new DirectCost(o.ProjectId, o.WbsElementId, o.IncurredOn, 0,
             0, o.IsUnallowable ? 0 : Money.Round(o.Amount), o.IsUnallowable ? Money.Round(o.Amount) : 0)));
-        result.AddRange((await Materials.MaterialCostActuals.LoadAsync(db, projectId is { } pid ? [pid] : null, start, end, ct))
+        result.AddRange((await Financials.ProjectCostSources.LoadAsync(db, projectId is { } pid ? [pid] : null, start, end, ct))
             .Select(m => new DirectCost(m.ProjectId, m.WbsElementId, m.Date, 0, 0, m.Amount, 0))); // Material issued from inventory: a direct ODC (G&A on total cost input).
         return result;
     }

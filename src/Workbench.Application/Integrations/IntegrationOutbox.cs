@@ -80,9 +80,6 @@ public static class IntegrationEventPayloads
         new(employee.Id, employee.EmployeeNumber, employee.DisplayName, employee.Email, employee.CompanyId, employee.OrgUnitId, employee.SupervisorId,
             employee.HireDate, employee.TerminationDate);
 
-    public static OpportunityStageEventData OpportunityStage(Domain.Crm.Opportunity opportunity, Domain.Crm.OpportunityStage from) =>
-        new(opportunity.Id, opportunity.Number, opportunity.Name, from.ToString(), opportunity.Stage.ToString(), opportunity.EstimatedValue, opportunity.EstimatedAwardDate);
-
     public static PeriodEventData Period(Domain.ProjectAccounting.FiscalPeriod period, int fiscalYear) =>
         new(period.Id, fiscalYear, period.Number, period.Name, period.Start, period.End, period.Status.ToString());
 }

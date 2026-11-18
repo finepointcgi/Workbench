@@ -1,7 +1,5 @@
 using Workbench.Contracts.Billing;
-using Workbench.Contracts.Crm;
 using Workbench.Contracts.Customization;
-using Workbench.Contracts.Materials;
 using Workbench.Contracts.Odcs;
 using Workbench.Contracts.ProjectAccounting;
 using Workbench.Contracts.Purchasing;
@@ -162,62 +160,6 @@ public static class BuiltInForms
                 new("purpose", "Business purpose", LongText)),
         ], [typeof(SaveExpenseReportRequest)]),
 
-        new(E.Part, "Part", "Materials › Parts (new or edit part)",
-        [
-            One(
-                new("number", "Part number", Text, Required: true),
-                new("revision", "Revision", Text),
-                new("description", "Description", Text, Required: true),
-                new("unitOfMeasure", "Unit of measure", Text),
-                new("source", "Make or buy", Select),
-                new("tracking", "Lot/serial tracking", Select),
-                new("costMethod", "Cost method", Select),
-                new("standardCost", "Standard cost", Money),
-                new("preferredVendorId", "Preferred vendor", Select),
-                new("leadTimeDays", "Lead time (days)", Number),
-                new("safetyStock", "Safety stock", Number),
-                new("minimumOrderQuantity", "Minimum order", Number),
-                new("orderMultiple", "Order multiple", Number),
-                new("defaultBinId", "Default location", Select),
-                new("notes", "Notes", LongText),
-                new("isActive", "Active", Bool)),
-        ], [typeof(SavePartRequest)]),
-
-        new(E.Opportunity, "Opportunity", "Business development › Opportunity › Details",
-        [
-            new("opportunity", "The opportunity",
-            [
-                new("name", "Name", Text, Required: true),
-                new("solicitationNumber", "Solicitation number", Text),
-                new("description", "Description", LongText),
-                new("agencyAccountId", "Agency or office", Select),
-                new("agencyName", "Agency (not an account yet)", Text),
-                new("naicsCode", "NAICS", Text),
-                new("setAside", "Set-aside", Select),
-                new("contractVehicle", "Contract vehicle", Text),
-                new("contractType", "Contract type", Select),
-                new("placeOfPerformance", "Place of performance", Text),
-                new("kind", "New or recompete", Select),
-                new("incumbentAccountId", "Incumbent", Select),
-            ]),
-            new("value", "Value and dates",
-            [
-                new("estimatedValue", "Estimated value ($)", Money),
-                new("periodOfPerformanceMonths", "Period of performance (months)", Number),
-                new("estimatedAwardDate", "Estimated award date", Date),
-                new("rfiDueOn", "RFI response due", Date),
-                new("rfpReleaseOn", "RFP release", Date),
-                new("proposalDueOn", "Proposal due", Date),
-            ]),
-            new("people", "People and probability",
-            [
-                new("captureManagerEmail", "Capture manager", Person),
-                new("proposalManagerEmail", "Proposal manager", Person),
-                new("pwin", "Pwin (%)", Number),
-                new("pgo", "Pgo (%)", Number),
-                new("weightedValue", "Weighted value", Display),
-            ]),
-        ], [typeof(SaveOpportunityRequest)]),
     ];
 
     /// <summary>Entity types that only lists use (their built-in fields are list columns; custom fields may be added).</summary>
@@ -225,7 +167,7 @@ public static class BuiltInForms
 
     public static IReadOnlyList<FormDefinition> All => Catalog.All;
 
-    public static IReadOnlyList<string> ListOnly { get; } = [E.Timesheet, E.SalesOrder];
+    public static IReadOnlyList<string> ListOnly => [E.Timesheet, .. Workbench.Contracts.Modules.ModuleRegistry.Current.RowsOf<Workbench.Contracts.Modules.ModuleListOnlyEntity>().Select(r => r.EntityType)];
 
     public static FormDefinition? Find(string entityType) => All.FirstOrDefault(f => f.EntityType == entityType);
 

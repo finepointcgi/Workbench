@@ -290,7 +290,7 @@ public sealed class CustomFieldTests
         await AddAsync(host, "Head count", CustomFieldType.Number, required: true);
         var catalog = host.Host.Get<IEntityFieldCatalog>();
         Assert.Contains(E.Project, catalog.EntityTypes);
-        Assert.Equal(13, catalog.EntityTypes.Count);
+        Assert.Equal(11, catalog.EntityTypes.Count); // The part and the sales order (list only) are the materials module's.
 
         var fields = await catalog.GetFieldsAsync(E.Project);
         var status = fields.Single(f => f.Key == "status");

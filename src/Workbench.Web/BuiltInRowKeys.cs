@@ -14,7 +14,7 @@ namespace Workbench.Web;
 /// <summary>
 /// The key of every catalog row the product itself has, as <c>catalog/key</c>. The module host checks a module's rows against this list
 /// (<c>ModuleHostOptions.BuiltInRowKeys</c>), so a module can't add a custom list, form, numbered document, automation entity, event, approval
-/// type, security event, "+ New" item or report source that already exists.
+/// type, security event, "+ New" item, report source or status set that already exists.
 /// </summary>
 public static class BuiltInRowKeys
 {
@@ -30,5 +30,6 @@ public static class BuiltInRowKeys
         .. SecurityEventTypes.BuiltIn.Select(k => ModuleSet.RowKey(ModuleCatalogs.SecurityEvents, k)),
         .. NewCatalog.BuiltIn.Select(a => ModuleSet.RowKey(a)),
         .. ReportSource.BuiltIn.Select(s => ModuleSet.RowKey(s)),
+        .. StatusSetCatalog.BuiltIn.Select(s => ModuleSet.RowKey(s)),
     ];
 }

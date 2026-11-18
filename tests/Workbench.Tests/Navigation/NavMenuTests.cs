@@ -53,20 +53,15 @@ public sealed class NavMenuTests
     }
 
     [Fact]
-    public async Task The_materials_role_gets_the_materials_section_and_no_finance()
+    public async Task The_materials_role_without_the_module_gets_no_materials_section_and_no_finance()
     {
+        // The Materials section and its pages come from the materials module (its own tests check them); core keeps the section empty and hidden.
         var (nav, ctx) = await RenderAsync(new NavUser(OrgRoles.Materials));
         await using var _ = ctx;
 
         var links = Links(nav);
-        Assert.Equal(["home", "my-work", "projects", "people", "sheets", "materials", "reports"], Sections(nav));
-        foreach (var page in new[] { "materials", "materials/inventory", "materials/receiving", "materials/boms", "materials/work-orders", "materials/mrp", "materials/reports",
-                     "materials/kits", "materials/backflush", "materials/capacity", "materials/physical-inventory", "materials/landed-cost" })
-        {
-            Assert.Contains(page, links);
-        }
-
-        Assert.DoesNotContain(links, l => l.StartsWith("accounting") || l.StartsWith("billing"));
+        Assert.Equal(["home", "my-work", "projects", "people", "sheets", "reports"], Sections(nav));
+        Assert.DoesNotContain(links, l => l.StartsWith("materials") || l.StartsWith("accounting") || l.StartsWith("billing"));
         A11yAssert.Check(nav);
     }
 
@@ -149,7 +144,7 @@ public sealed class NavMenuTests
         await using var _ = ctx;
 
         var links = Links(nav);
-        Assert.Equal(["home", "my-work", "approvals", "projects", "people", "growth", "sheets", "finance", "materials", "reports", "admin"], Sections(nav));
+        Assert.Equal(["home", "my-work", "approvals", "projects", "people", "sheets", "finance", "reports", "admin"], Sections(nav));
         foreach (var group in new[] { "Accounting", "Billing & AR", "Payables & purchasing", "Cash", "Assets", "Revenue & compliance" })
         {
             Assert.Single(nav.FindAll($"[data-testid='nav-group-{group}']"));
@@ -164,7 +159,7 @@ public sealed class NavMenuTests
         Assert.DoesNotContain("admin/users", links);
         Assert.DoesNotContain("notifications", links);
         Assert.Contains(">Setup<", nav.Find("[data-testid='nav-admin']").OuterHtml.Replace(" ", ""));
-        Assert.True(links.Count <= 110 && links.Distinct().Count() == links.Count, $"{links.Count} links, some repeated"); // 8 under People (HR), 6 under Business development, 4 for the assistant, 12 for Wave A finance, 6 for Waves C and E, then the accounting export and commercial billing pages
+        Assert.True(links.Count <= 110 && links.Distinct().Count() == links.Count, $"{links.Count} links, some repeated"); // 8 under People (HR), 4 for the assistant, 12 for Wave A finance, 6 for Waves C and E, then the accounting export and commercial billing pages
     }
 
     [Fact]
@@ -222,7 +217,7 @@ public sealed class NavMenuTests
 
         Assert.True(MenuLinkCount(nav) <= 40, $"{MenuLinkCount(nav)} menu links");
         Assert.True(Links(nav).Count > 80, "every page is still reachable through its group");
-        Assert.Contains(">Businessdevelopment<", nav.Find("[data-testid='nav-growth']").OuterHtml.Replace(" ", "")); // one group: a plain link
+        Assert.Empty(nav.FindAll("[data-testid='nav-growth']")); // Business development comes with the capture module: an empty section is not shown.
     }
 
     [Fact]
@@ -287,7 +282,6 @@ public sealed class NavMenuTests
         await using var _ = ctx;
 
         Assert.Contains("admin/support", nav.Find("[data-testid='nav-group-People and access']").GetAttribute("data-pages")!.Split(' '));
-        Assert.EndsWith("materials/setup", nav.Find("[data-testid='nav-group-Inventory']").GetAttribute("data-pages"));
     }
 
     private static bool Expanded(IRenderedComponent<NavMenu> nav, string testId) =>

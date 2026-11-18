@@ -93,17 +93,11 @@ public static class DependencyInjection
         Migration.MigrationRegistration.AddWorkbenchMigration(services); // Go-live checklist and Costpoint reconciliation; reads imports and reports; above AddWorkbenchIdentity.
         Tasks.TaskRegistration.AddWorkbenchTasks(services); // Task assignment (item Assignees), its notifications and the "Assigned to you" to-do; above AddWorkbenchIdentity.
         Hr.HrRegistration.AddWorkbenchHr(services); // HR: personnel, positions, compensation (pay rate history), benefits, onboarding/offboarding, reports, to-dos; above AddWorkbenchIdentity.
-        Materials.MaterialsRegistration.AddWorkbenchMaterials(services); // Parts, inventory, BOMs, work orders, MRP; posts through the GL (JournalSource.Inventory/Manufacturing), decorates PO receiving; above AddWorkbenchIdentity.
-        Crm.CrmRegistration.AddWorkbenchCrm(services); // Business development: accounts, opportunities, gates (approval handler), SAM.gov leads, pipeline, to-dos; above AddWorkbenchIdentity.
-        Pricing.PricingRegistration.AddWorkbenchPricing(services); // Proposal pricing (price models, scenarios, locked versions, cost volume, won handoff); above AddWorkbenchIdentity.
         Assistant.AssistantRegistration.AddWorkbenchAssistant(services); // AI assistant (off by default), PM narratives and timesheet flags; tools read through the permission-checked services; above AddWorkbenchIdentity.
         Planning.PlanningRegistration.AddWorkbenchPlanning(services); // Recurring journals (post through the GL), corporate GL budgets, budget vs actual, planning cycles (approval handler); above AddWorkbenchIdentity.
         Currencies.CurrencyRegistration.AddWorkbenchCurrencies(services); // Multicurrency: currencies, rates, revaluation (posts through the GL, adds a close check); above AddWorkbenchIdentity.
         Companies.CompanyRegistration.AddWorkbenchCompanies(services); // Multicompany: companies, intercompany accounts, consolidation; the ledger's company rules live in GeneralLedger; above AddWorkbenchIdentity.
         Travel.TravelRegistration.AddWorkbenchTravel(services); // Travel authorizations and corporate cards; decorates IExpenseReportService (after AddWorkbenchOdcs), card lines post to the card liability; above AddWorkbenchIdentity.
-        Materials.SalesRegistration.AddWorkbenchSalesShipping(services); // Sales orders, pick/pack/ship, DD250, WAWF receiving reports, delivery invoices through billing; above AddWorkbenchIdentity.
-        Quality.QualityRegistration.AddWorkbenchQuality(services); // Quality (inspection, NCRs/MRB with approval handler, CARs) and engineering change control; after materials, above AddWorkbenchIdentity.
-        Materials.ShopFloorRegistration.AddWorkbenchShopFloor(services); // Kitting, backflush, landed cost, physical inventory, finite capacity scheduling; posts through MaterialsLedger; above AddWorkbenchIdentity.
         BankFiles.BankFilesRegistration.AddWorkbenchBankFiles(services); // Vendor ACH details (approved changes), NACHA and positive pay files from payment runs, remittance advice; above AddWorkbenchIdentity.
         AccountingExport.AccountingExportRegistration.AddWorkbenchAccountingExport(services); // QuickBooks, Xero and generic accounting files, account mapping, export history; Finance/Admin; above AddWorkbenchIdentity.
         AccountingLive.AccountingLiveRegistration.AddWorkbenchAccountingLive(services); // Live push to QuickBooks Online and Xero (OAuth 2.0); above AddWorkbenchIdentity.
