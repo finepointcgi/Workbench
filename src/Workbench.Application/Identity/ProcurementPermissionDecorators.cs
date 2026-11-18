@@ -122,7 +122,7 @@ public sealed class PermissionCheckingPurchaseOrderService(IPurchaseOrderService
     private async Task RequireReceiverAsync(Guid purchaseOrderId, CancellationToken ct)
     {
         access.RequireSignedIn();
-        if ((await access.GetPermissionsAsync(ct)) is var roles && roles.HasAny(Permission.PurchaseOrdersManage, Permission.MaterialsManage))
+        if ((await access.GetPermissionsAsync(ct)) is var roles && roles.HasAny(Permission.PurchaseOrdersManage, "materials.manage"))
         {
             return;
         }

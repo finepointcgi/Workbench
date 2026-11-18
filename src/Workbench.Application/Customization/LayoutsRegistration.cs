@@ -2,7 +2,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Workbench.Contracts.Billing;
 using Workbench.Contracts.Customization;
-using Workbench.Contracts.Materials;
 using Workbench.Contracts.Odcs;
 using Workbench.Contracts.ProjectAccounting;
 using Workbench.Contracts.Purchasing;
@@ -36,7 +35,6 @@ public static class LayoutsRegistration
         services.AddFormRequirementGuard<IApBillService>();
         services.AddFormRequirementGuard<IInvoiceService>();
         services.AddFormRequirementGuard<IExpenseReportService>();
-        services.AddFormRequirementGuard<IPartService>();
         return services;
     }
 

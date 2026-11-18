@@ -2,7 +2,7 @@
 
 A license module (billing, accounting, capture, workforce, project controls, materials, government contracting, enterprise) can live outside this repository as a set of assemblies. The host finds them in a folder at startup, loads the ones the license includes, and the product then behaves as if the module had always been built in: its services, API paths, pages, menu entries, permissions, API key scopes, tables and migrations all take part.
 
-The `govcon` module was the first to move out ([module-extraction-govcon.md](module-extraction-govcon.md)), with its government billing ([module-extraction-billing.md](module-extraction-billing.md)); `capture` followed ([module-extraction-capture.md](module-extraction-capture.md)); the other modules are still built in. With an empty modules folder the product is the shipped product, without government contracting and without business development and proposal pricing. This page is the contract a module author builds against and the rules the host follows.
+The `govcon` module was the first to move out ([module-extraction-govcon.md](module-extraction-govcon.md)), with its government billing ([module-extraction-billing.md](module-extraction-billing.md)); `capture` followed ([module-extraction-capture.md](module-extraction-capture.md)), then `materials` ([module-extraction-materials.md](module-extraction-materials.md)); the other modules are still built in. With an empty modules folder the product is the shipped product, without government contracting, business development and proposal pricing, and materials (inventory, manufacturing, quality, sales orders and shipping). This page is the contract a module author builds against and the rules the host follows.
 
 ## What a module contributes
 
@@ -22,15 +22,16 @@ A module is a class that implements `IWorkbenchModule` (`src/Workbench.Modules.A
 | Edition feature gates | `Describe().FeatureGates` | Changes on the module's services that also need an edition feature (`ModuleFeatureGate`), applied with the edition gates. |
 | Places on core pages | `UiSlotContribution` registered in `ConfigureServices` | A core page renders `<UiSlot Name="..."/>`; every contribution with that name is rendered there (slots: `timesheet.summary`, `setup.migration.actions`, `billing.contract.cards`, `billing.contract.summary`, `billing.invoice.panels`, `billing.invoice.print.links`, `billing.invoice.print.sf1034`, `resourcing.heatmap.panels`). |
 | Reports hub pages | `StandardReportPage` registered in `ConfigureServices` | Listed under Reports as a page to open. |
-| Sample data | `IModuleSeed` registered in `ConfigureServices` | Run by the development seed at its `ModuleSeedStage` (`AfterRevenue`, `AfterPlanning`, `AfterMulticompany`, `AfterTaxBooks`, `End`), or at the end of the commercial demo dataset (`CommercialDemo`). |
+| Sample data | `IModuleSeed` registered in `ConfigureServices` | Run by the development seed at its `ModuleSeedStage` (`AfterRevenue`, `AfterHr`, `AfterPlanning`, `AfterMulticompany`, `AfterTravel`, `AfterTaxBooks`, `End`), or at the end of the commercial demo dataset (`CommercialDemo`). |
 | Rows in core catalogs | `Describe().Rows` (a list of `IModuleRow`) | Custom lists, built-in forms (and their layouts), document numbering, automation entities, integration events, approval document types, security event names, "+ New" items, report sources, chartable lists, home widgets. See [Catalog rows](#catalog-rows). |
 | Home and dashboard widgets | `ModuleHomeWidget` row, `IHomeWidgetProvider` in `ConfigureServices` | Offered in the widget picker; computed with the viewer's access. |
 | Assistant tools | `IAssistantToolContribution` in `ConfigureServices` | Offered to the in-app assistant and, with an API key area, over MCP. |
 | Data reports | `IStandardReportContribution` in `ConfigureServices` | Listed, run, drilled into and exported like a built-in standard report. |
 | Approval documents | `ModuleApprovalDocumentType` row, `IApprovalDocumentHandler` in `ConfigureServices` | The type is in the workflow list with its default workflow; the inbox decides through the handler. |
 | Go-live and reconciliation | `MigrationStepContribution`, `IReconciliationSource`, `IImporter` in `ConfigureServices` | A checklist step; the module's side of a parallel-run report; importers the steps use. |
+| Wrapping a host service | `ModuleServiceDecoration(service, decorator)` registered as a singleton in `ConfigureServices` | The host applies it right after copying the module's services, to the last registration of `service` the host already made (the module's own scratch collection cannot see it): the decorator takes the original as a constructor parameter, keeps its lifetime, and sits inside the permission and edition decorators. A service the host does not have refuses the module. Materials uses it to put goods received on part lines into stock. |
 | Core readers | `IItemReader`, `IVendorReader` in `ConfigureServices` | Replace how core reads parts or vendors, once the module owns them. |
-| Core data flows | an interface declared in core with a no-op default (`IInvoiceFinancing`) or with no registration at all (`IPricingConsistencySource`, read as a list of sources) | The module registers its implementation after the host's default; a host without the module keeps the default. |
+| Core data flows | an interface declared in core with a no-op default (`IInvoiceFinancing`, `IItemReader`) or with no registration at all (`IPricingConsistencySource`, `IVendorReturnSource`, `IBillLineGuard`, read as a list of sources) | The module registers its implementation after the host's default; a host without the module keeps the default. |
 | Static files | the module folder's `wwwroot` | Served at `/_content/<routable assembly name>`. |
 | Entities | `ModelAssemblies`, `OnModelCreating` | Added to the host's EF model, so services use `Set<T>()` like core ones. |
 | Migrations | `Migrations` | The module's own context, migrations assemblies and history table (below). |
@@ -118,6 +119,8 @@ These are what a module needs to *add to* core, rather than own a page or a tabl
 | `report-source` | `ReportSource` | `ReportSource.All`: the report writer |
 | `home-widget` | `ModuleHomeWidget` | the widget picker (below) |
 | `status-set` | `StatusSetDefinition` | `StatusSetCatalog.All`: relabelable status sets and sub-statuses (Setup › Lists) |
+| `list-only-entity` | `ModuleListOnlyEntity(entityType, fields)` | `BuiltInForms.ListOnly` and `BuiltInEntityFieldCatalog`: a record type that has a list page and custom fields but no form of its own (sales orders) |
+| `project-cost-source` | `ProjectCostSource(key, loadAsync)` | `ProjectCostSources.LoadAsync`: cost a module charges to projects, counted as direct cost like an ODC by the financials and the indirect-rate base (material issued from inventory) |
 
 Every row's key must be new in its catalog. The host checks that against the built-in rows (`BuiltInRowKeys.All` in `Workbench.Web`, passed as `ModuleHostOptions.BuiltInRowKeys`) and against earlier modules, and refuses the module with a message otherwise; a blank key is refused too. Rows carry no module id of their own: a row belongs to the module that listed it.
 
@@ -132,7 +135,7 @@ Every row's key must be new in its catalog. The host checks that against the bui
 * **Approvals.** A document type is a `ModuleApprovalDocumentType` row plus an `IApprovalDocumentHandler` in `ConfigureServices` (handlers were already contributed that way). The module builds its own `ApprovalSubject` when it submits. The default workflow is the row's `DefaultWorkflow`, else one step for the administrators. Not covered: `ApprovalBackfill` (routing documents that were pending before workflows existed) only knows the built-in types, which is right for a module added after workflows.
 * **Reconciliation.** `IReconciliationSource` answers for one existing `ReconReportKind` (the enum is stored in the database, so a module reuses the kinds that exist: for example billing the AR aging and revenue kinds) and replaces the built-in source, so core never calls the module's services. The report's fields stay in `ReconciliationReports`.
 * **Import and migration.** Importers were already contributed (`IImporter` in `ConfigureServices`; `ImportKind` is also an enum, so a module uses existing kinds). `MigrationStepContribution` (a singleton) adds a go-live checklist step after the step it names.
-* **Readers.** Core reads parts through `IItemReader` (sourcing, the supplier portal, EDI, AP credits) and vendors through `IVendorReader` (card programs) in `Workbench.Application.Purchasing`. Their defaults read the built-in tables; a module that owns the data registers its own after the host's (the last registration wins). Only the places the audit named were moved. Anything else that reads parts or vendors is a module reading the data it needs, which is the allowed direction.
+* **Readers.** Core reads parts through `IItemReader` (sourcing, the supplier portal, EDI, AP credits) and vendors through `IVendorReader` (card programs) in `Workbench.Application.Purchasing`. `IItemReader`'s default (`NoItemReader`) knows no items, because parts belong to the materials module, which registers its own (and answers `ReadForPurchaseOrderLinesAsync`, the part a PO line buys through its purchase link); `IVendorReader`'s default reads the built-in vendors.  a module that owns the data registers its own after the host's (the last registration wins). Only the places the audit named were moved. Anything else that reads parts or vendors is a module reading the data it needs, which is the allowed direction.
 
 ### Not done here: the leave kernel
 
@@ -149,7 +152,7 @@ Measured while preparing this change: the holiday records the leave engine needs
 ## Not in this change
 
 * The leave kernel (above) is documented, not built.
-* Only `govcon` (government billing included, through the `IInvoiceFinancing` hook) and `capture` have moved; the other in-repo modules still register through `AddWorkbenchApplication`. The analysis of `billing` is in [module-extraction-billing.md](module-extraction-billing.md).
+* Only `govcon` (government billing included, through the `IInvoiceFinancing` hook), `capture` and `materials` have moved; the other in-repo modules still register through `AddWorkbenchApplication`. The analysis of `billing` is in [module-extraction-billing.md](module-extraction-billing.md).
 * The worker (`Workbench.Worker`) does not load modules yet; background jobs a module owns need it to. A module registers a hosted service in `ConfigureServices` and it runs in every host that loads the module (the web host; the capture module's SAM.gov search is the first).
 * The desktop app reads routable pages from the same registry but does not load modules.
 * Reading a license key stored in the database at startup, and signing module assemblies.
@@ -175,3 +178,10 @@ From extracting `capture` ([module-extraction-capture.md](module-extraction-capt
 * **A module's DTOs keep their masking.** `FieldMasker` finds `SensitiveField` in any `Workbench.Contracts*` type; a module's contracts keep those namespaces.
 * **The scoped styles of a module's pages are linked by the host** (`ModuleHost.StyleSheets`); the build script copies the bundle into the module's `wwwroot`.
 * **Registration order is behavior**: service, form requirement guard, permission decorators, then the host's edition gates.
+
+From extracting `materials` ([module-extraction-materials.md](module-extraction-materials.md)):
+
+* **A module can need to wrap a host service, not only add its own.** Materials puts goods received on part lines into stock by decorating the purchase order service; the scratch collection a module registers into cannot see the host's services, so `ModuleServiceDecoration` asks the host to do it.
+* **Accounting reads the module too, in places the audit did not list.** Payables turned a quality return into an AP debit memo and refused to void a bill whose line a landed-cost charge used (`IVendorReturnSource`, `IBillLineGuard`); the project financials and the indirect-rate base counted material issued to projects (`ProjectCostSource`). Each became a small interface in core that the module fills and a host without it leaves empty.
+* **A core table with a foreign key into the module's tables has to let go of it.** `RfqLine.PartId` pointed at the part table: the column stays (key only), the foreign key is taken out of the old migration that created it, and installs that already have it keep it.
+* **Sample data crosses modules too.** A core sample (sourcing) used a vendor the materials sample made; core now makes it if it is missing, and the module's seeds run at two new stages (`AfterHr`, `AfterTravel`) so they keep their place in the order.

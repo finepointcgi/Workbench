@@ -32,9 +32,7 @@ public static class WebhookEventCatalog
         new("employee.hired", "Employee hired", "People", "An employee record was added."),
         new("employee.terminated", "Employee terminated", "People", "An employee's termination date was set or changed."),
         new("period.closed", "Period closed", "Accounting", "A fiscal period was closed."),
-        new("shipment.shipped", "Shipment shipped", "Materials", "A sales order shipment was confirmed and its stock issued."),
         new("rfq.awarded", "RFQ awarded", "Purchasing", "Lines of a request for quote were awarded into purchase orders."),
-        new("ncr.dispositioned", "NCR dispositioned", "Materials", "A nonconformance's approved disposition was carried out and the NCR closed."),
         new("sheet.form_submitted", "Form response", "Sheets", "A form added a row to a sheet (signed in or by public link)."),
     ];
 
