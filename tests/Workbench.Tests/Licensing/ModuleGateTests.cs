@@ -79,6 +79,14 @@ public sealed class ModuleGateTests
             return;
         }
 
+        if (module == ModuleIds.GovCon)
+        {
+            // Every government contracting service lives in the module (private repository), and its gate is tested there. In the shipped
+            // product no service maps to it: the assertion is that nothing is gated by a module this build does not contain.
+            Assert.Empty(services);
+            return;
+        }
+
         Assert.NotEmpty(services);
         var changes = 0;
         var reads = 0;

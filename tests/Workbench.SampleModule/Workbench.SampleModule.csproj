@@ -14,6 +14,7 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.13" />
     <ProjectReference Include="..\..\src\Workbench.Modules.Abstractions\Workbench.Modules.Abstractions.csproj" />
     <ProjectReference Include="..\..\src\Workbench.Application\Workbench.Application.csproj" />
+    <ProjectReference Include="..\..\src\Workbench.Ui\Workbench.Ui.csproj" />
   </ItemGroup>
 
 </Project>

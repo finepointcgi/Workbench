@@ -406,38 +406,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 });
 
             migrationBuilder.CreateTable(
-                name: "ContractGovernmentBilling",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ContractId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Format = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    Financing = table.Column<string>(type: "TEXT", maxLength: 24, nullable: false),
-                    IsSmallBusiness = table.Column<bool>(type: "INTEGER", nullable: false),
-                    ProgressPaymentRate = table.Column<decimal>(type: "TEXT", precision: 9, scale: 6, nullable: false),
-                    LiquidationRate = table.Column<decimal>(type: "TEXT", precision: 9, scale: 6, nullable: false),
-                    CostBasis = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    ContractPrice = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: true),
-                    IssueByDodaac = table.Column<string>(type: "TEXT", maxLength: 6, nullable: true),
-                    AdminByDodaac = table.Column<string>(type: "TEXT", maxLength: 6, nullable: true),
-                    PayOfficeDodaac = table.Column<string>(type: "TEXT", maxLength: 6, nullable: true),
-                    ShipToDodaac = table.Column<string>(type: "TEXT", maxLength: 6, nullable: true),
-                    DeliveryDocument = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
-                    UpdatedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_ContractGovernmentBilling", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_ContractGovernmentBilling_Contract_ContractId",
-                        column: x => x.ContractId,
-                        principalTable: "Contract",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "Currencies",
                 columns: table => new
                 {
@@ -627,125 +595,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_LaborCostPolicy", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "PerformanceBasedPaymentEvent",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ContractId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ClinId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    Order = table.Column<int>(type: "INTEGER", nullable: false),
-                    Description = table.Column<string>(type: "TEXT", maxLength: 500, nullable: false),
-                    Criteria = table.Column<string>(type: "TEXT", maxLength: 2000, nullable: true),
-                    Amount = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    PlannedDate = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    CompletedDate = table.Column<DateOnly>(type: "TEXT", nullable: true),
-                    CompletedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    Evidence = table.Column<string>(type: "TEXT", maxLength: 2000, nullable: true),
-                    EvidenceReference = table.Column<string>(type: "TEXT", maxLength: 500, nullable: true),
-                    InvoiceId = table.Column<Guid>(type: "TEXT", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_PerformanceBasedPaymentEvent", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_PerformanceBasedPaymentEvent_Clin_ClinId",
-                        column: x => x.ClinId,
-                        principalTable: "Clin",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_PerformanceBasedPaymentEvent_Contract_ContractId",
-                        column: x => x.ContractId,
-                        principalTable: "Contract",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_PerformanceBasedPaymentEvent_Invoice_InvoiceId",
-                        column: x => x.InvoiceId,
-                        principalTable: "Invoice",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "PieeSubmission",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    InvoiceId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    DocumentType = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
-                    Status = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    FileName = table.Column<string>(type: "TEXT", maxLength: 200, nullable: true),
-                    ExportedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    ExportedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    Reference = table.Column<string>(type: "TEXT", maxLength: 100, nullable: true),
-                    SubmittedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    SubmittedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    RejectionReason = table.Column<string>(type: "TEXT", maxLength: 1000, nullable: true),
-                    StatusChangedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    StatusChangedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_PieeSubmission", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_PieeSubmission_Invoice_InvoiceId",
-                        column: x => x.InvoiceId,
-                        principalTable: "Invoice",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "ProgressPaymentRequest",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ContractId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Number = table.Column<int>(type: "INTEGER", nullable: false),
-                    RequestDate = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    CostsThrough = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    IsSmallBusiness = table.Column<bool>(type: "INTEGER", nullable: false),
-                    ContractPrice = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    ProgressPaymentRate = table.Column<decimal>(type: "TEXT", precision: 9, scale: 6, nullable: false),
-                    LiquidationRate = table.Column<decimal>(type: "TEXT", precision: 9, scale: 6, nullable: false),
-                    CostBasis = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    PaidCosts = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    UnpaidCosts = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    IncurredToDate = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    EstimateToComplete = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    SubcontractorPaid = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    SubcontractorLiquidated = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    SubcontractorApproved = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    PreviousRequested = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    CostsOfDelivered = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    PriceOfDelivered = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    UnliquidatedAdvances = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    LiquidatedToDate = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    Amount = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    InvoiceId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    Notes = table.Column<string>(type: "TEXT", maxLength: 2000, nullable: true),
-                    CreatedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    CreatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_ProgressPaymentRequest", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_ProgressPaymentRequest_Contract_ContractId",
-                        column: x => x.ContractId,
-                        principalTable: "Contract",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_ProgressPaymentRequest_Invoice_InvoiceId",
-                        column: x => x.InvoiceId,
-                        principalTable: "Invoice",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -1528,12 +1377,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 column: "FiscalPeriodId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_ContractGovernmentBilling_ContractId",
-                table: "ContractGovernmentBilling",
-                column: "ContractId",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
                 name: "IX_CorporateCard_EmployeeId",
                 table: "CorporateCard",
                 column: "EmployeeId");
@@ -1747,38 +1590,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "IX_LaborCostPolicy_EffectiveFrom",
                 table: "LaborCostPolicy",
                 column: "EffectiveFrom");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PerformanceBasedPaymentEvent_ClinId",
-                table: "PerformanceBasedPaymentEvent",
-                column: "ClinId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PerformanceBasedPaymentEvent_ContractId_Order",
-                table: "PerformanceBasedPaymentEvent",
-                columns: new[] { "ContractId", "Order" });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PerformanceBasedPaymentEvent_InvoiceId",
-                table: "PerformanceBasedPaymentEvent",
-                column: "InvoiceId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PieeSubmission_InvoiceId",
-                table: "PieeSubmission",
-                column: "InvoiceId",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_ProgressPaymentRequest_ContractId_Number",
-                table: "ProgressPaymentRequest",
-                columns: new[] { "ContractId", "Number" },
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_ProgressPaymentRequest_InvoiceId",
-                table: "ProgressPaymentRequest",
-                column: "InvoiceId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_TravelAuthorization_EmployeeId_Status",
@@ -2019,9 +1830,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "CompanyPeriodCloses");
 
             migrationBuilder.DropTable(
-                name: "ContractGovernmentBilling");
-
-            migrationBuilder.DropTable(
                 name: "Currencies");
 
             migrationBuilder.DropTable(
@@ -2053,15 +1861,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
 
             migrationBuilder.DropTable(
                 name: "LaborCostPolicy");
-
-            migrationBuilder.DropTable(
-                name: "PerformanceBasedPaymentEvent");
-
-            migrationBuilder.DropTable(
-                name: "PieeSubmission");
-
-            migrationBuilder.DropTable(
-                name: "ProgressPaymentRequest");
 
             migrationBuilder.DropTable(
                 name: "TravelAuthorizationDestination");

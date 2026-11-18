@@ -19,9 +19,12 @@ public sealed partial class InvoiceService(
     UnbilledAccruals accruals,
     Security.SecurityEventLog? securityLog = null,
     Approvals.ApprovalEngine? approvals = null,
-    SalesTax.InvoiceTaxApplier? salesTax = null) : IInvoiceService
+    SalesTax.InvoiceTaxApplier? salesTax = null,
+    IInvoiceFinancing? financing = null) : IInvoiceService
 {
-    public const string AuditEntityType = nameof(Invoice);
+    private readonly IInvoiceFinancing _financing = financing ?? generator.Financing;
+
+    public const string AuditEntityType = BillingKernel.AuditEntityType;
 
     private readonly ReadyToBill _readyToBill = new(generator);
 
@@ -82,8 +85,7 @@ public sealed partial class InvoiceService(
         var lookups = await BillingLookups.LoadAsync(db, cancellationToken);
         var billed = (await db.Set<Invoice>().AsNoTracking().Include(i => i.Lines).ToListAsync(cancellationToken)).Where(i => i.IsBilled).ToList();
         var plans = await db.Set<AgreementBillingPlan>().AsNoTracking().ToDictionaryAsync(p => p.ContractId, p => (AgreementBillingModel?)p.Model, cancellationToken);
-        var performanceBased = (await db.Set<ContractGovernmentBilling>().AsNoTracking().Where(g => g.Financing == ContractFinancing.PerformanceBased)
-            .Select(g => g.ContractId).ToListAsync(cancellationToken)).ToHashSet();
+        var performanceBased = await _financing.PerformanceBasedContractsAsync(db, cancellationToken);
         return lookups.Contracts.Values
             .OrderBy(c => c.ContractNumber, StringComparer.Ordinal)
             .Select(c =>
@@ -132,7 +134,7 @@ public sealed partial class InvoiceService(
         var gen = await generator.GenerateAsync(db, ctx, request.Type.ToDomain(), request.PeriodFrom, request.PeriodTo, request.ReleaseWithhold,
             existing?.Id, approvedOnly: false, cancellationToken);
         var manual = existing?.Lines.Where(l => !l.IsGenerated).ToList() ?? [];
-        gen = await ContractFinancingLedger.WithLiquidationAsync(db, ctx, request.Type.ToDomain(), gen, manual, existing?.Id, cancellationToken);
+        gen = await _financing.AddLiquidationAsync(db, ctx, request.Type.ToDomain(), gen, manual, existing?.Id, cancellationToken);
         var prior = await InvoiceGenerator.PriorInvoicesAsync(db, ctx.Contract.Id, existing?.Id, approvedOnly: true, cancellationToken);
         var funding = InvoiceGenerator.CheckFunding(ctx,
             gen.Lines.Select(l => (l.ClinId, l.Amount)).Concat(manual.Select(l => (l.ClinId, l.Amount))), prior);
@@ -194,7 +196,7 @@ public sealed partial class InvoiceService(
                 + (gen.Warnings.Count > 0 ? " " + string.Join(" ", gen.Warnings) : ""));
         }
 
-        gen = await ContractFinancingLedger.WithLiquidationAsync(db, ctx, invoice.Type, gen, invoice.Lines.Where(l => !l.IsGenerated), isNew ? null : invoice.Id, cancellationToken);
+        gen = await _financing.AddLiquidationAsync(db, ctx, invoice.Type, gen, invoice.Lines.Where(l => !l.IsGenerated), isNew ? null : invoice.Id, cancellationToken);
 
         if (isNew)
         {
@@ -224,7 +226,7 @@ public sealed partial class InvoiceService(
 
         var ctx = await BillingContext.LoadAsync(db, invoice.ContractId, cancellationToken);
         var gen = await generator.GenerateAsync(db, ctx, invoice.Type, invoice.PeriodFrom, invoice.PeriodTo, invoice.ReleasesWithhold, invoice.Id, false, cancellationToken);
-        gen = await ContractFinancingLedger.WithLiquidationAsync(db, ctx, invoice.Type, gen, invoice.Lines.Where(l => !l.IsGenerated), invoice.Id, cancellationToken);
+        gen = await _financing.AddLiquidationAsync(db, ctx, invoice.Type, gen, invoice.Lines.Where(l => !l.IsGenerated), invoice.Id, cancellationToken);
         await ReplaceGeneratedLinesAsync(db, invoice, gen, cancellationToken);
         audit.Record(db, AuditEntityType, invoice.Id, "Regenerated", after: new { invoice.Total, Lines = invoice.Lines.Count });
         await db.SaveChangesAsync(cancellationToken);
@@ -311,8 +313,7 @@ public sealed partial class InvoiceService(
         await ReleaseMilestonesAsync(db, invoice.Lines.SelectMany(l => l.Sources), cancellationToken);
         db.Set<BilledSource>().RemoveRange(invoice.Lines.SelectMany(l => l.Sources));
         db.Set<InvoiceLine>().RemoveRange(invoice.Lines);
-        db.Set<ProgressPaymentRequest>().RemoveRange(await db.Set<ProgressPaymentRequest>().Where(r => r.InvoiceId == invoice.Id).ToListAsync(cancellationToken));
-        db.Set<PieeSubmission>().RemoveRange(await db.Set<PieeSubmission>().Where(p => p.InvoiceId == invoice.Id).ToListAsync(cancellationToken));
+        await _financing.OnDraftDeletedAsync(db, invoice, cancellationToken);
         db.Set<Invoice>().Remove(invoice);
         audit.Record(db, AuditEntityType, invoice.Id, "DraftDeleted", before: new { invoice.Number, invoice.Total });
         await db.SaveChangesAsync(cancellationToken);
@@ -349,7 +350,7 @@ public sealed partial class InvoiceService(
         }
 
         await EnsureSourcesUnbilledAsync(db, invoice, cancellationToken);
-        await ContractFinancingLedger.EnsureLiquidationWithinBalanceAsync(db, invoice, cancellationToken);
+        await _financing.EnsureCanApproveAsync(db, invoice, cancellationToken);
         if (invoice.Lines.Any(l => BillingLedger.IsFinancing(l.Kind)))
         {
             await using var setup = await dbFactory.CreateAsync(cancellationToken);
@@ -468,7 +469,7 @@ public sealed partial class InvoiceService(
             throw new InvalidOperationException($"Void credit memo {credits[0].Number} against this invoice first.");
         }
 
-        await ContractFinancingLedger.EnsureFinancingCanBeVoidedAsync(db, invoice, cancellationToken);
+        await _financing.EnsureCanVoidAsync(db, invoice, cancellationToken);
         var before = invoice.Status;
         var reversal = await ledger.ReverseAsync(db, invoice.JournalEntryId, Today, $"Void of {invoice.Number}: {reason}", cancellationToken);
         foreach (var source in invoice.Lines.SelectMany(l => l.Sources))
@@ -571,7 +572,8 @@ public sealed partial class InvoiceService(
     {
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var invoice = await LoadAsync(db, invoiceId, tracking: false, cancellationToken);
-        return await documents.PrintAsync(db, invoice, await DetailAsync(db, invoice, cancellationToken), cancellationToken);
+        var print = await documents.PrintAsync(db, invoice, await DetailAsync(db, invoice, cancellationToken), cancellationToken);
+        return print with { PreferredForm = await _financing.PreferredPrintFormAsync(db, invoice.ContractId, cancellationToken) };
     }
 
     public async Task<BillingExportFile> ExportWawfCsvAsync(Guid invoiceId, CancellationToken cancellationToken = default)
@@ -751,21 +753,6 @@ public sealed partial class InvoiceService(
             : throw new InvalidOperationException($"Invoice {invoice.Number} is {invoice.Status}; only drafts can be changed.");
     }
 
-    internal static async Task<(int Sequence, string Number)> NextNumberAsync(IWorkbenchDbContext db, BillingContext ctx, CancellationToken ct, DateOnly? date = null)
-    {
-        // In the invoice's own unit of work, so invoice numbers are gapless (a failed save allocates nothing).
-        var prefix = ctx.Settings?.InvoicePrefix ?? DefaultPrefix(ctx.Contract.ContractNumber);
-        var allocated = await Customization.DocumentNumbers.NextInUnitOfWorkAsync(db, Customization.DocumentNumberTypes.Invoice, new(ctx.Contract.CompanyId, date, prefix), date ?? DateOnly.FromDateTime(DateTime.UtcNow), ct);
-        return ((int)allocated.Sequence, allocated.Number);
-    }
-
-    /// <summary>The contract number without punctuation, at most 16 characters (so the invoice number fits WAWF's 22).</summary>
-    public static string DefaultPrefix(string contractNumber)
-    {
-        var compact = new string(contractNumber.Where(char.IsLetterOrDigit).ToArray()).ToUpperInvariant();
-        return compact.Length == 0 ? "INV" : compact[..Math.Min(16, compact.Length)];
-    }
-
     private async Task ReplaceGeneratedLinesAsync(IWorkbenchDbContext db, Invoice invoice, Generation gen, CancellationToken ct)
     {
         var old = invoice.Lines.Where(l => l.IsGenerated).ToList();
@@ -820,10 +807,7 @@ public sealed partial class InvoiceService(
         }
 
         var eventIds = gen.Lines.SelectMany(l => l.Sources).Where(s => s.Kind == BilledSourceKind.PerformanceEvent).Select(s => s.SourceId).ToList();
-        foreach (var e in await db.Set<PerformanceBasedPaymentEvent>().Where(e => eventIds.Contains(e.Id)).ToListAsync(ct))
-        {
-            e.InvoiceId = invoice.Id;
-        }
+        await _financing.BindEventsAsync(db, invoice.Id, eventIds, ct);
 
         var planMilestoneIds = gen.Lines.SelectMany(l => l.Sources).Where(s => s.Kind == BilledSourceKind.PlanMilestone).Select(s => s.SourceId).ToList();
         foreach (var m in await db.Set<AgreementMilestone>().Where(m => planMilestoneIds.Contains(m.Id)).ToListAsync(ct))
@@ -851,7 +835,7 @@ public sealed partial class InvoiceService(
     }
 
     /// <summary>Milestones and performance-based payment events billed by these sources become billable again.</summary>
-    private static async Task ReleaseMilestonesAsync(IWorkbenchDbContext db, IEnumerable<BilledSource> sources, CancellationToken ct)
+    private async Task ReleaseMilestonesAsync(IWorkbenchDbContext db, IEnumerable<BilledSource> sources, CancellationToken ct)
     {
         var list = sources.ToList();
         var ids = list.Where(s => s.Kind == BilledSourceKind.Milestone).Select(s => s.SourceId).ToList();
@@ -866,10 +850,7 @@ public sealed partial class InvoiceService(
         var eventIds = list.Where(s => s.Kind == BilledSourceKind.PerformanceEvent).Select(s => s.SourceId).ToList();
         if (eventIds.Count > 0)
         {
-            foreach (var e in await db.Set<PerformanceBasedPaymentEvent>().Where(e => eventIds.Contains(e.Id)).ToListAsync(ct))
-            {
-                e.InvoiceId = null;
-            }
+            await _financing.BindEventsAsync(db, null, eventIds, ct);
         }
 
         var planIds = list.Where(s => s.Kind == BilledSourceKind.PlanMilestone).Select(s => s.SourceId).ToList();
@@ -967,16 +948,12 @@ public sealed partial class InvoiceService(
         ctx.Profile?.PaymentTermsDays ?? 30,
         ctx.Profile?.BillingAddress);
 
-    internal static string? Clean(string? value, int max)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return null;
-        }
+    internal static string? Clean(string? value, int max) => BillingKernel.Clean(value, max);
 
-        var trimmed = value.Trim();
-        return trimmed.Length > max ? throw new ArgumentException($"Keep it to {max} characters.") : trimmed;
-    }
+    internal static Task<(int Sequence, string Number)> NextNumberAsync(IWorkbenchDbContext db, BillingContext ctx, CancellationToken ct, DateOnly? date = null) =>
+        BillingKernel.NextNumberAsync(db, ctx, ct, date);
+
+    public static string DefaultPrefix(string contractNumber) => BillingKernel.DefaultPrefix(contractNumber);
 
     [GeneratedRegex("^[A-Z0-9][A-Z0-9-]{0,15}$")]
     private static partial Regex PrefixPattern();

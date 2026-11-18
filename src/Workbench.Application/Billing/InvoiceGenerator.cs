@@ -8,7 +8,7 @@ using Workbench.Domain.ProjectAccounting;
 namespace Workbench.Application.Billing;
 
 /// <summary>A line the generator proposes, with the hours, ODCs or milestone it bills.</summary>
-internal sealed record DraftLine(
+public sealed record DraftLine(
     Guid? ClinId,
     InvoiceLineKind Kind,
     string Description,
@@ -23,10 +23,10 @@ internal sealed record DraftLine(
     int? FiscalYear = null,
     decimal? CostBasis = null);
 
-internal sealed record Generation(IReadOnlyList<DraftLine> Lines, IReadOnlyList<string> Warnings, string? RateNote);
+public sealed record Generation(IReadOnlyList<DraftLine> Lines, IReadOnlyList<string> Warnings, string? RateNote);
 
 /// <summary>A contract with everything billing reads about it.</summary>
-internal sealed record BillingContext(
+public sealed record BillingContext(
     Contract Contract,
     Customer Customer,
     IReadOnlyList<Clin> Clins,
@@ -64,8 +64,11 @@ internal sealed record BillingContext(
 /// on another live invoice are skipped); cost-plus bills cumulative allowable cost through the period end less what was
 /// billed before, so late approvals and corrections are picked up; FFP bills completed, unbilled milestones.
 /// </summary>
-public sealed partial class InvoiceGenerator(BillingCostSource costs, IEnumerable<IBillingLimits>? limits = null)
+public sealed partial class InvoiceGenerator(BillingCostSource costs, IEnumerable<IBillingLimits>? limits = null, IInvoiceFinancing? financing = null)
 {
+    /// <summary>The contract financing hook: government progress and performance-based payments when that module is loaded, otherwise nothing.</summary>
+    public IInvoiceFinancing Financing { get; } = financing ?? NoInvoiceFinancing.Instance;
+
     /// <summary>How the warning for hours with no contract bill rate begins; Ready to bill reads it as a blocker.</summary>
     internal const string NoBillRate = "No bill rate for";
 
@@ -103,7 +106,7 @@ public sealed partial class InvoiceGenerator(BillingCostSource costs, IEnumerabl
         if (type == InvoiceType.PerformanceBased)
         {
             // Performance-based payments are contract financing: events for the whole contract or a CLIN, any pricing.
-            return await PerformanceEventsAsync(db, ctx, to, excludeInvoiceId, warnings, ct);
+            return await Financing.GeneratePerformanceEventsAsync(db, ctx, to, excludeInvoiceId, warnings, ct);
         }
 
         if (type is InvoiceType.Retainer or InvoiceType.Recurring
@@ -138,7 +141,7 @@ public sealed partial class InvoiceGenerator(BillingCostSource costs, IEnumerabl
     }
 
     /// <summary>Live invoices of the contract with their lines and sources (not void, not the excluded draft).</summary>
-    internal static async Task<List<Invoice>> PriorInvoicesAsync(IWorkbenchDbContext db, Guid contractId, Guid? excludeInvoiceId, bool approvedOnly, CancellationToken ct)
+    public static async Task<List<Invoice>> PriorInvoicesAsync(IWorkbenchDbContext db, Guid contractId, Guid? excludeInvoiceId, bool approvedOnly, CancellationToken ct)
     {
         // Invoices, then their lines with sources: one query joining all three repeats every invoice's columns for each of
         // its (often thousands of) billed sources.
@@ -534,37 +537,6 @@ public sealed partial class InvoiceGenerator(BillingCostSource costs, IEnumerabl
             .Select(m => new DraftLine(m.ClinId, InvoiceLineKind.Milestone, $"Milestone: {m.Description} (completed {m.CompletedDate:yyyy-MM-dd})",
                 null, null, null, null, 1, m.Amount, m.Amount,
                 [new BilledSource { Kind = BilledSourceKind.Milestone, SourceId = m.Id, Date = m.CompletedDate!.Value, Quantity = 1, Rate = m.Amount, Amount = m.Amount, Description = m.Description }]))
-            .ToList();
-        return new Generation(lines, warnings, null);
-    }
-
-    /// <summary>
-    /// Completed, unbilled performance-based payment events through <paramref name="to"/>. The lines have no CLIN: they are
-    /// financing, liquidated later from deliveries, not billings against CLIN funding.
-    /// </summary>
-    private static async Task<Generation> PerformanceEventsAsync(
-        IWorkbenchDbContext db, BillingContext ctx, DateOnly to, Guid? excludeInvoiceId, List<string> warnings, CancellationToken ct)
-    {
-        var settings = await ContractFinancingLedger.SettingsAsync(db, ctx.Contract.Id, ct);
-        if (settings?.Financing != ContractFinancing.PerformanceBased)
-        {
-            warnings.Add($"Contract {ctx.Contract.ContractNumber} doesn't use performance-based payments. Turn them on in its billing settings.");
-            return new Generation([], warnings, null);
-        }
-
-        var events = await db.Set<PerformanceBasedPaymentEvent>().AsNoTracking().Where(e => e.ContractId == ctx.Contract.Id).ToListAsync(ct);
-        foreach (var late in events.Where(e => e.CompletedDate is null && e.PlannedDate <= to))
-        {
-            warnings.Add($"Event \"{late.Description}\" was planned for {late.PlannedDate:yyyy-MM-dd} but isn't complete, so it isn't billed.");
-        }
-
-        var lines = events
-            .Where(e => e.CompletedDate is { } done && done <= to && (e.InvoiceId is null || e.InvoiceId == excludeInvoiceId))
-            .OrderBy(e => e.Order).ThenBy(e => e.PlannedDate)
-            .Select(e => new DraftLine(null, InvoiceLineKind.PerformanceBasedPayment,
-                $"Performance-based payment event {e.Order}: {e.Description}{(e.ClinId is { } c && ctx.Clin(c) is { } clin ? $" (CLIN {clin.Number})" : "")} (completed {e.CompletedDate:yyyy-MM-dd})",
-                null, null, null, null, 1, e.Amount, e.Amount,
-                [new BilledSource { Kind = BilledSourceKind.PerformanceEvent, SourceId = e.Id, Date = e.CompletedDate!.Value, Quantity = 1, Rate = e.Amount, Amount = e.Amount, Description = e.Description }]))
             .ToList();
         return new Generation(lines, warnings, null);
     }

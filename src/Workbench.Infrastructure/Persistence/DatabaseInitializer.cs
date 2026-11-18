@@ -208,7 +208,7 @@ public static class DatabaseInitializer
         await ModuleSeedsAsync(ModuleSeedStage.AfterPlanning);
         await CurrencySeed.SeedAsync(db, services, cancellationToken); // Multicurrency: EUR and GBP with rates, a posted EUR vendor bill (BTG) and an approved GBP invoice (UKMOD).
         await CompanySeed.SeedAsync(db, services, cancellationToken); // Multicompany: subsidiary FED (contract, project 4001, Jordan Blake E1041) and two weeks of intercompany labor with MAIN.
-        await GovernmentBillingSeed.SeedAsync(db, factory, cancellationToken); // Government billing: progress payments on W56HZV-26-C-0042 (4101), performance-based payments on N00019-26-C-0117 (4201).
+        await ModuleSeedsAsync(ModuleSeedStage.AfterMulticompany);
         await TravelSeed.SeedAsync(db, cancellationToken); // Travel: analyst@'s approved DC trip TA-000001 on its expense report; Citi corporate card ••4417 with imported charges.
         await SalesShippingSeed.SeedAsync(db, services, cancellationToken); // Sales orders: SO-000001 (Army, project 3001 spares) released, half shipped on DD250 SHP0001, WAWF receiving report submitted.
         await QualitySeed.SeedAsync(db, services, cancellationToken); // Quality: Morgan Lee (E1080) inspects; HSG-220 receiving plan, a rejected shipment returned to Digi-Parts (NCR, debit memo, SCAR), ECO adding a thermal pad to SNS-210.
