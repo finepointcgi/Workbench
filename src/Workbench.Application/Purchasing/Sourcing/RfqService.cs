@@ -23,8 +23,11 @@ public sealed class RfqService(
     SupplierPortalMail mail,
     IOptions<SourcingOptions> options,
     TimeProvider clock,
-    Customization.DocumentNumbers? documentNumbers = null) : IRfqService
+    Customization.DocumentNumbers? documentNumbers = null,
+    IItemReader? itemReader = null) : IRfqService
 {
+    private IItemReader Items => itemReader ?? PartItemReader.Instance;
+
     private Customization.DocumentNumbers DocNumbers => documentNumbers ?? new(dbFactory, clock);
 
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
@@ -525,7 +528,7 @@ public sealed class RfqService(
 
             if (input.PartId is { } partId)
             {
-                var part = await db.Set<Part>().AsNoTracking().FirstOrDefaultAsync(p => p.Id == partId, ct) ?? throw WorkbenchNotFoundException.For("Part", partId);
+                var part = (await Items.ReadAsync(db, [partId], ct)).GetValueOrDefault(partId) ?? throw WorkbenchNotFoundException.For("Part", partId);
                 line.PartId = part.Id;
                 if (input.UnitOfMeasure is null)
                 {
@@ -631,7 +634,7 @@ public sealed class RfqService(
         var lookups = await ProcurementSupport.Lookups.LoadAsync(db, lines.Select(l => l.ProjectId), lines.Select(l => l.WbsElementId),
             lines.Select(l => l.AccountId), lines.Select(l => l.OrgUnitId), [], ct);
         var partIds = lines.Where(l => l.PartId != null).Select(l => l.PartId!.Value).ToList();
-        var parts = await db.Set<Part>().AsNoTracking().Where(p => partIds.Contains(p.Id)).ToDictionaryAsync(p => p.Id, p => p.Number, ct);
+        var parts = (await Items.ReadAsync(db, partIds, ct)).ToDictionary(p => p.Key, p => p.Value.Number);
         var reqLineIds = lines.Where(l => l.RequisitionLineId != null).Select(l => l.RequisitionLineId!.Value).ToList();
         var reqNumbers = await db.Set<PurchaseRequisitionLine>().AsNoTracking().Where(l => reqLineIds.Contains(l.Id))
             .Join(db.Set<PurchaseRequisition>(), l => l.RequisitionId, r => r.Id, (l, r) => new { l.Id, r.Number }).ToDictionaryAsync(x => x.Id, x => x.Number, ct);
