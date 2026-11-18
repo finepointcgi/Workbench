@@ -57,7 +57,6 @@ public sealed class BuiltInRoleParityTests
         [Permission.GlReportsView] = r => r.IsFinance(),
         [Permission.GlExport] = r => r.IsFinance(),
         [Permission.GlRevaluation] = r => r.IsFinance(),
-        [Permission.RevenueManage] = r => r.IsFinance(),
         [Permission.IndirectRatesManage] = r => r.IsFinance(),
         [Permission.BillingInvoicesManage] = r => r.IsFinance(),
         [Permission.BillingPaymentsRecord] = r => r.IsFinance(),

@@ -17,7 +17,6 @@ using Workbench.Application.Purchasing;
 using Workbench.Application.Reports;
 using Workbench.Application.PerDiem;
 using Workbench.Application.Resourcing;
-using Workbench.Application.Revenue;
 using Workbench.Application.Dashboards;
 using Workbench.Application.MyWork;
 using Workbench.Application.MyTodo;
@@ -71,7 +70,6 @@ public static class DependencyInjection
         services.AddWorkbenchLeave(); // Decorates ITimesheetService (leave balance checks); after timekeeping, above AddWorkbenchIdentity.
         services.AddWorkbenchPerDiem(); // Per diem rates and travel per diem; decorates IExpenseReportService (after AddWorkbenchOdcs), above AddWorkbenchIdentity.
         services.AddWorkbenchResourcing(); // Allocations, capacity, utilization and allocation-based ETC; above AddWorkbenchIdentity.
-        services.AddWorkbenchRevenue(); // Revenue recognition: runs post through the GL (JournalSource.Revenue) and add a close check; after billing, above AddWorkbenchIdentity.
         services.AddWorkbenchReports(); // Standard reports, report writer, saved reports and schedules; above AddWorkbenchIdentity.
         // Earned value, ceilings, closeout and risks are the project controls license module (modules/projectcontrols); its decorators of time, ODCs, expenses, AP bills, POs, requisitions and invoices come through registerModules below.
         Approvals.ApprovalRegistration.AddWorkbenchApprovals(services); // Approval workflow engine, inbox, delegation; above AddWorkbenchIdentity.
@@ -87,7 +85,6 @@ public static class DependencyInjection
         Companies.CompanyRegistration.AddWorkbenchCompanies(services); // Multicompany: companies, intercompany accounts, consolidation; the ledger's company rules live in GeneralLedger; above AddWorkbenchIdentity.
         Travel.TravelRegistration.AddWorkbenchTravel(services); // Travel authorizations and corporate cards; decorates IExpenseReportService (after AddWorkbenchOdcs), card lines post to the card liability; above AddWorkbenchIdentity.
         AccountingExport.AccountingExportRegistration.AddWorkbenchAccountingExport(services); // QuickBooks, Xero and generic accounting files, account mapping, export history; Finance/Admin; above AddWorkbenchIdentity.
-        AccountingLive.AccountingLiveRegistration.AddWorkbenchAccountingLive(services); // Live push to QuickBooks Online and Xero (OAuth 2.0); above AddWorkbenchIdentity.
         Integrations.IntegrationRegistration.AddWorkbenchIntegrations(services); // Webhooks (outbox + dispatcher), API keys and connectors (Teams, Slack, GL export, report export); Admin-only; above AddWorkbenchIdentity.
         Calendar.CalendarRegistration.AddWorkbenchCalendarFeed(services); // Read-only per-person .ics calendar feed (leave, holidays, due tasks, milestones, timesheet due dates).
 

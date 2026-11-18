@@ -46,7 +46,6 @@ public static class WorkbenchApi
         v1.MapProcurementEndpoints();
         v1.MapLeaveEndpoints();
         v1.MapPerDiemResourcingEndpoints();
-        v1.MapRevenueEndpoints();
         v1.MapReportEndpoints();
         v1.MapApprovalEndpoints();
         v1.MapProjectHubEndpoints();
@@ -64,7 +63,6 @@ public static class WorkbenchApi
         v1.MapTravelEndpoints();
         v1.MapSourcingEndpoints();
         v1.MapAccountingExportEndpoints();
-        v1.MapAccountingLiveEndpoints();
         v1.MapIntegrationEndpoints();
         v1.MapJiraEndpoints(); // Jira sync: connection and project links (under /integrations).
         v1.MapGitLabEndpoints(); // GitLab sync: connection and project links (under /integrations).

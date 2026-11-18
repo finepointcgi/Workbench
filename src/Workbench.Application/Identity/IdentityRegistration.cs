@@ -83,7 +83,6 @@ public static class IdentityRegistration
         services.Decorate<Workbench.Contracts.Imports.IImportService, PermissionCheckingImportService>(); // Imports: Finance or Admin.
         services.AddWorkbenchProcurementPermissions(); // Requisitions: any employee for their projects/org; POs and match: Finance/Admin (receivers receive).
         services.AddWorkbenchPerDiemResourcingPermissions(); // Per diem imports Finance/Admin; allocations PMs (own projects) and resource managers (all).
-        services.AddWorkbenchRevenuePermissions(); // Revenue: setup, runs and reports Finance/Admin; PMs read their projects and submit their EACs and deliveries.
         services.AddWorkbenchReportPermissions(); // Reports: signed in; row/field rules inside the reports; exports are security events.
         services.Decorate<Workbench.Contracts.Approvals.IApprovalWorkflowService, Approvals.PermissionCheckingApprovalWorkflowService>(); // Approval workflows: read Finance/Admin, change Admin.
         services.AddScoped<Projects.ProjectHubAccess>(); services.Decorate<Workbench.Contracts.Projects.IProjectHubService, PermissionCheckingProjectHubService>(); // Projects hub: list scoped in the service; project page for those on it; team Finance/Admin/PM.

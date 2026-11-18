@@ -191,7 +191,7 @@ public static class DatabaseInitializer
         await PerDiemSeed.SeedAsync(db, cancellationToken);
         await ResourcingSeed.SeedAsync(db, cancellationToken);
         await ResourcingSeed.SeedSkillsAsync(db, cancellationToken);
-        await RevenueSeed.SeedAsync(db, services, cancellationToken);
+        await ModuleSeedsAsync(ModuleSeedStage.AfterResourcing); // The billing module's revenue recognition sample data (project 1001's setup, an approved EAC, the current period's run).
         await ModuleSeedsAsync(ModuleSeedStage.AfterRevenue);
         // Earned value on 1001 (PMB, a closed period, a VAR, baseline changes) and the sample ceilings come from the project controls module's seed, at the stage above.
         await ProjectManagerSeed.SeedAsync(db, cancellationToken); // Sam Patel (Project manager only) runs 1002; a few assigned tasks.

@@ -75,8 +75,8 @@ public static class ModuleCatalog
 {
     public static IReadOnlyList<ModuleInfo> Default { get; } =
     [
-        new(ModuleIds.Core, "Core", "Free forever: time, timesheets, expenses, leave, customers, contracts, projects, the Plan, sheets, dashboards, search, standard reports, users, roles, MFA, the audit log and importers; the general ledger, period close, payables, purchasing, payment runs, multi-currency and indirect rates. Always included.", false),
-        new(ModuleIds.Billing, "Billing", "Invoices, ready to bill, customer payments, AR aging, unbilled accrual, milestones, retainers, revenue recognition and live accounting push.", false),
+        new(ModuleIds.Core, "Core", "Free forever: time, timesheets, expenses, leave, customers, contracts, projects, the Plan, sheets, dashboards, search, standard reports, users, roles, MFA, the audit log and importers; invoicing, ready to bill, customer payments, AR aging, unbilled accrual, milestones, retainers and statements; the general ledger, period close, payables, purchasing, payment runs, multi-currency and indirect rates; accounting exports as files. Always included.", false),
+        new(ModuleIds.Billing, "Billing", "Revenue recognition (setup by method, estimates at completion, the monthly revenue run and the revenue reports) and live push to QuickBooks Online and Xero.", false),
         new(ModuleIds.Accounting, "Accounting", "Cash and bank reconciliation, bank payment files, fixed assets with tax books and depreciation, corporate budgets with planning cycles and recurring journals, and sales and use tax.", false),
         new(ModuleIds.Capture, "Capture", "The business development pipeline: leads, opportunities, accounts, forecast, gates, proposals and pricing.", false),
         new(ModuleIds.Workforce, "Workforce", "HR records, positions, compensation, benefits, onboarding, payroll and the Paylocity file exchange.", false),
