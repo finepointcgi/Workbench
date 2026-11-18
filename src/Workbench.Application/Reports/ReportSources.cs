@@ -78,7 +78,7 @@ public abstract class ReportSource : Workbench.Contracts.Modules.IModuleRow
 
     /// <summary>The sources the product ships, and (in <see cref="All"/>) those loaded modules add.</summary>
     public static IReadOnlyList<ReportSource> BuiltIn { get; } =
-        [new GlLineSource(), new TimeEntrySource(), new OdcSource(), new InvoiceSource(), new ApBillSource(), new ProjectWbsSource(), new EmployeeSource(), new Planning.GlBudgetReportSource()];
+        [new GlLineSource(), new TimeEntrySource(), new OdcSource(), new InvoiceSource(), new ApBillSource(), new ProjectWbsSource(), new EmployeeSource()];
 
     private static readonly Workbench.Contracts.Modules.RowCatalog<ReportSource> Catalog = new(BuiltIn);
 

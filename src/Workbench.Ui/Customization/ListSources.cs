@@ -2,7 +2,6 @@ using Microsoft.Extensions.DependencyInjection;
 using Workbench.Contracts.Billing;
 using Workbench.Contracts.Customization;
 using Workbench.Contracts.Dashboards;
-using Workbench.Contracts.Hr;
 using Workbench.Contracts.Odcs;
 using Workbench.Contracts.ProjectAccounting;
 using Workbench.Contracts.Projects;
@@ -88,8 +87,6 @@ public static class ListSources
         }),
         new ListSource<ContractDto>(CustomizableLists.Contracts, "Contracts", async (sp, ct) =>
             (await Get<IContractService>(sp).ListContractsAsync(ct), Setup.ContractsPage._definition)),
-        new ListSource<EmployeeSummaryDto>(CustomizableLists.People, "People", async (sp, ct) =>
-            (await Get<IHrPersonnelService>(sp).ListAsync(new EmployeeQuery(null, false), ct), Hr.PeoplePage._definition)),
         new ListSource<VendorDto>(CustomizableLists.Vendors, "Vendors", async (sp, ct) =>
             (await Get<IVendorService>(sp).ListAsync(false, ct), Purchasing.VendorsPage._definition)),
         new ListSource<PurchaseOrderSummaryDto>(CustomizableLists.PurchaseOrders, "Purchase orders", async (sp, ct) =>

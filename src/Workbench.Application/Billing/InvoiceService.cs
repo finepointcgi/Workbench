@@ -19,7 +19,7 @@ public sealed partial class InvoiceService(
     UnbilledAccruals accruals,
     Security.SecurityEventLog? securityLog = null,
     Approvals.ApprovalEngine? approvals = null,
-    SalesTax.InvoiceTaxApplier? salesTax = null,
+    IInvoiceTaxHook? salesTax = null,
     IInvoiceFinancing? financing = null) : IInvoiceService
 {
     private readonly IInvoiceFinancing _financing = financing ?? generator.Financing;

@@ -4,7 +4,6 @@ using Workbench.Application.Identity;
 using Workbench.Contracts.MyTodo;
 using Workbench.Contracts.ProjectAccounting;
 using Workbench.Contracts.Resourcing;
-using Workbench.Contracts.Revenue;
 using Workbench.Contracts.Time;
 using OrgRoles = Workbench.Contracts.Identity.OrgRoles;
 using Workbench.Domain;
@@ -144,22 +143,6 @@ public sealed class ProjectLifecycleTests
     }
 
     [Fact]
-    public async Task A_project_started_from_a_contract_earns_revenue_the_way_its_contract_is_priced()
-    {
-        await using var host = await HostAsync();
-        await using (var db = await host.Db.CreateAsync())
-        {
-            (await db.Set<Contract>().SingleAsync()).Type = ContractType.TimeAndMaterials;
-            await db.SaveChangesAsync();
-        }
-
-        var project = await StartAsync(host, Finance);
-
-        var setup = Assert.Single((await host.As(Finance).Get<IRevenueSetupService>().GetProjectAsync(project.Id)).Setups);
-        Assert.Equal(RevenueMethodKind.TimeAndMaterialsIncurred, setup.Method);
-    }
-
-    [Fact]
     public async Task Someone_staffed_on_a_project_still_being_planned_sees_it_in_their_timesheet_as_not_open_yet()
     {
         await using var host = await HostAsync();
@@ -208,7 +191,6 @@ public sealed class ProjectLifecycleTests
         Assert.NotNull(finished.SheetId);
         var wbs = await host.Get<IProjectService>().ListWbsAsync(shell.Id);
         Assert.Equal(["3003.01 CLIN 0001 Base period"], wbs.Select(w => $"{w.Code} {w.Name}"));
-        Assert.Single((await host.Get<IRevenueSetupService>().GetProjectAsync(shell.Id)).Setups);
         await using var verify = await host.Db.CreateAsync();
         Assert.Contains(await verify.Set<Notification>().Where(n => n.RecipientEmail == Pm).ToListAsync(), n => n.Title.Contains("3003", StringComparison.Ordinal));
         await Assert.ThrowsAsync<ArgumentException>(() => host.As(Finance).Get<IProjectStartService>().FinishSetupAsync(shell.Id)); // once

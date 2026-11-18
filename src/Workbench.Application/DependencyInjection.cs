@@ -3,24 +3,19 @@ using Workbench.Application.Accounting;
 using Workbench.Application.Automation;
 using Workbench.Application.Licensing;
 using Workbench.Application.Billing;
-using Workbench.Application.Cash;
 using Workbench.Application.Collaboration;
 using Workbench.Application.ContractDetail;
-using Workbench.Application.Costpoint;
 using Workbench.Application.Identity;
 using Workbench.Application.Imports;
 using Workbench.Application.IndirectRates;
 using Workbench.Application.Leave;
 using Workbench.Application.Odcs;
-using Workbench.Application.Payroll;
 using Workbench.Application.Financials;
 using Workbench.Application.ProjectAccounting;
 using Workbench.Application.Purchasing;
 using Workbench.Application.Reports;
-using Workbench.Application.Assets;
 using Workbench.Application.PerDiem;
 using Workbench.Application.Resourcing;
-using Workbench.Application.Revenue;
 using Workbench.Application.Dashboards;
 using Workbench.Application.MyWork;
 using Workbench.Application.MyTodo;
@@ -53,7 +48,6 @@ public static class DependencyInjection
         services.AddScoped<ISheetBulkEditService, SheetBulkEditService>(); // Paste, fill and clear in one save (one reflow, one automation batch). // Saved grid views (sort, filter, hidden columns) and sheet exports.
         services.AddWorkbenchScheduling();
         services.AddWorkbenchCollaboration();
-        services.AddWorkbenchCostpoint();
         services.AddWorkbenchProjectAccounting();
         services.AddWorkbenchAutomation();
         services.AddWorkbenchMyWork();
@@ -71,13 +65,9 @@ public static class DependencyInjection
         services.AddWorkbenchPurchasing(); // AP bills post through AddWorkbenchAccounting's engine; above AddWorkbenchIdentity.
         services.AddWorkbenchTenancy(); // SingleTenant defaults; AddWorkbenchInfrastructure replaces them from the Tenancy section.
         services.AddWorkbenchImports(); // Costpoint and Smartsheet importers; they import through the services above.
-        services.AddWorkbenchAssets(); // Fixed assets: depreciation posts through the GL and adds a close check; above AddWorkbenchIdentity.
-        services.AddWorkbenchCash(); // Cash and bank reconciliation: books bank items through the GL journal; above AddWorkbenchIdentity.
-        services.AddWorkbenchPayroll(); // Payroll runs post through the GL (JournalSource.Payroll); above AddWorkbenchIdentity.
         services.AddWorkbenchLeave(); // Decorates ITimesheetService (leave balance checks); after timekeeping, above AddWorkbenchIdentity.
         services.AddWorkbenchPerDiem(); // Per diem rates and travel per diem; decorates IExpenseReportService (after AddWorkbenchOdcs), above AddWorkbenchIdentity.
         services.AddWorkbenchResourcing(); // Allocations, capacity, utilization and allocation-based ETC; above AddWorkbenchIdentity.
-        services.AddWorkbenchRevenue(); // Revenue recognition: runs post through the GL (JournalSource.Revenue) and add a close check; after billing, above AddWorkbenchIdentity.
         services.AddWorkbenchReports(); // Standard reports, report writer, saved reports and schedules; above AddWorkbenchIdentity.
         // Earned value, ceilings, closeout and risks are the project controls license module (modules/projectcontrols); its decorators of time, ODCs, expenses, AP bills, POs, requisitions and invoices come through registerModules below.
         Approvals.ApprovalRegistration.AddWorkbenchApprovals(services); // Approval workflow engine, inbox, delegation; above AddWorkbenchIdentity.
@@ -85,20 +75,14 @@ public static class DependencyInjection
         services.AddWorkbenchMyTodo(); // Home page to-dos: providers read through the permission-checked services above.
         services.AddWorkbenchReauthentication(); // SSO/MFA sign-in settings, re-authentication for sensitive actions (decorators), compliance checklists; above AddWorkbenchIdentity.
         services.AddWorkbenchSupport(); // In-app support requests (Support:Email), the host's cross-tenant view and per-user help state; above AddWorkbenchIdentity.
-        Payroll.PaylocityRegistration.AddWorkbenchPaylocity(services); // Paylocity file exchange: mapping, export history, roster import; above AddWorkbenchIdentity.
-        Payroll.PayrollLayoutRegistration.AddWorkbenchPayrollLayouts(services); // Configurable Paylocity hours export and register layouts; above AddWorkbenchIdentity.
         Migration.MigrationRegistration.AddWorkbenchMigration(services); // Go-live checklist and Costpoint reconciliation; reads imports and reports; above AddWorkbenchIdentity.
         Tasks.TaskRegistration.AddWorkbenchTasks(services); // Task assignment (item Assignees), its notifications and the "Assigned to you" to-do; above AddWorkbenchIdentity.
-        Hr.HrRegistration.AddWorkbenchHr(services); // HR: personnel, positions, compensation (pay rate history), benefits, onboarding/offboarding, reports, to-dos; above AddWorkbenchIdentity.
+        // HR (personnel, positions, compensation, benefits, onboarding, reports) and payroll (pay groups, runs, providers, the Paylocity file exchange) are the workforce license module (modules/workforce).
         Assistant.AssistantRegistration.AddWorkbenchAssistant(services); // AI assistant (off by default), PM narratives and timesheet flags; tools read through the permission-checked services; above AddWorkbenchIdentity.
-        Planning.PlanningRegistration.AddWorkbenchPlanning(services); // Recurring journals (post through the GL), corporate GL budgets, budget vs actual, planning cycles (approval handler); above AddWorkbenchIdentity.
         Currencies.CurrencyRegistration.AddWorkbenchCurrencies(services); // Multicurrency: currencies, rates, revaluation (posts through the GL, adds a close check); above AddWorkbenchIdentity.
         Companies.CompanyRegistration.AddWorkbenchCompanies(services); // Multicompany: companies, intercompany accounts, consolidation; the ledger's company rules live in GeneralLedger; above AddWorkbenchIdentity.
         Travel.TravelRegistration.AddWorkbenchTravel(services); // Travel authorizations and corporate cards; decorates IExpenseReportService (after AddWorkbenchOdcs), card lines post to the card liability; above AddWorkbenchIdentity.
-        BankFiles.BankFilesRegistration.AddWorkbenchBankFiles(services); // Vendor ACH details (approved changes), NACHA and positive pay files from payment runs, remittance advice; above AddWorkbenchIdentity.
         AccountingExport.AccountingExportRegistration.AddWorkbenchAccountingExport(services); // QuickBooks, Xero and generic accounting files, account mapping, export history; Finance/Admin; above AddWorkbenchIdentity.
-        AccountingLive.AccountingLiveRegistration.AddWorkbenchAccountingLive(services); // Live push to QuickBooks Online and Xero (OAuth 2.0); above AddWorkbenchIdentity.
-        SalesTax.SalesTaxRegistration.AddWorkbenchSalesTax(services); // Sales and use tax: rates, codes, exemptions, invoice tax at approval, use tax on posted bills, the return; above AddWorkbenchIdentity.
         Integrations.IntegrationRegistration.AddWorkbenchIntegrations(services); // Webhooks (outbox + dispatcher), API keys and connectors (Teams, Slack, GL export, report export); Admin-only; above AddWorkbenchIdentity.
         Calendar.CalendarRegistration.AddWorkbenchCalendarFeed(services); // Read-only per-person .ics calendar feed (leave, holidays, due tasks, milestones, timesheet due dates).
 

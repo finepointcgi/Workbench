@@ -4,7 +4,6 @@
     <Project Path="src/Workbench.ApiClient/Workbench.ApiClient.csproj" />
     <Project Path="src/Workbench.Application/Workbench.Application.csproj" />
     <Project Path="src/Workbench.Contracts/Workbench.Contracts.csproj" />
-    <Project Path="src/Workbench.Costpoint/Workbench.Costpoint.csproj" />
     <Project Path="src/Workbench.Desktop/Workbench.Desktop.csproj" />
     <Project Path="src/Workbench.Domain/Workbench.Domain.csproj" />
     <Project Path="src/Workbench.Infrastructure/Workbench.Infrastructure.csproj" />
@@ -14,7 +13,6 @@
     <Project Path="src/Workbench.Modules.Abstractions/Workbench.Modules.Abstractions.csproj" />
     <Project Path="src/Workbench.Ui/Workbench.Ui.csproj" />
     <Project Path="src/Workbench.Web/Workbench.Web.csproj" />
-    <Project Path="src/Workbench.Worker/Workbench.Worker.csproj" />
   </Folder>
   <Folder Name="/tools/">
     <Project Path="tools/Workbench.LoadData/Workbench.LoadData.csproj" />

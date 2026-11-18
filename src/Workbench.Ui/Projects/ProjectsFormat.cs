@@ -20,13 +20,12 @@ public static class ProjectsFormat
         ("staffing", "Budget"),
         ("financials", "Financials"),
         ("costs", "Costs"),
-        ("revenue", "Revenue"),
         ("schedule-health", "Schedule health"),
         ("setup", "Setup"),
     ];
 
     /// <summary>Tabs used now and then, kept under "More" until opened.</summary>
-    public static bool IsOccasional(string slug) => slug is "revenue" or "schedule-health";
+    public static bool IsOccasional(string slug) => slug is "schedule-health";
 
     /// <summary>Whether a link's tab (the part before any "/section", e.g. <c>setup/charge-codes</c>) is open to the viewer (the built-in tabs; see <see cref="ProjectTabSet"/> for those a module adds).</summary>
     public static bool AllowsLink(ProjectHubTabsDto tabs, string link) => Allows(tabs, Normalize(link.Split('/')[0]));
@@ -38,7 +37,6 @@ public static class ProjectsFormat
         "schedule-health" => tabs.Plan,
         "financials" => tabs.Financials,
         "budgets" => tabs.Budgets,
-        "revenue" => tabs.Revenue,
         "costs" => tabs.Costs,
         "staffing" => tabs.Team || tabs.Budgets, // the budget, staffing against it, and who charges to the project
         "setup" => tabs.Setup,
@@ -111,7 +109,7 @@ public sealed class ProjectTabSet
 {
     private static readonly IReadOnlyDictionary<string, int> BuiltInOrder = new Dictionary<string, int>
     {
-        ["overview"] = 10, ["plan"] = 20, ["staffing"] = 30, ["financials"] = 40, ["costs"] = 50, ["revenue"] = 60, ["schedule-health"] = 80, ["setup"] = 200,
+        ["overview"] = 10, ["plan"] = 20, ["staffing"] = 30, ["financials"] = 40, ["costs"] = 50, ["schedule-health"] = 80, ["setup"] = 200,
     };
 
     public ProjectTabSet(IEnumerable<ProjectHubTabContribution>? contributions = null)

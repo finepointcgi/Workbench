@@ -53,51 +53,12 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 nullable: true);
 
             migrationBuilder.AddColumn<string>(
-                name: "Convention",
-                table: "FixedAsset",
-                type: "TEXT",
-                maxLength: 24,
-                nullable: false,
-                defaultValue: "");
-
-            migrationBuilder.AddColumn<decimal>(
-                name: "OpeningAccumulatedDepreciation",
-                table: "FixedAsset",
-                type: "TEXT",
-                precision: 18,
-                scale: 2,
-                nullable: false,
-                defaultValue: 0m);
-
-            migrationBuilder.AddColumn<DateOnly>(
-                name: "OpeningBalanceDate",
-                table: "FixedAsset",
-                type: "TEXT",
-                nullable: true);
-
-            migrationBuilder.AddColumn<string>(
                 name: "EmploymentType",
                 table: "EmployeePayProfile",
                 type: "TEXT",
                 maxLength: 16,
                 nullable: false,
                 defaultValue: "FullTime");
-
-            migrationBuilder.AddColumn<decimal>(
-                name: "CapitalizationThreshold",
-                table: "AssetCategory",
-                type: "TEXT",
-                precision: 18,
-                scale: 2,
-                nullable: true);
-
-            migrationBuilder.AddColumn<string>(
-                name: "Convention",
-                table: "AssetCategory",
-                type: "TEXT",
-                maxLength: 24,
-                nullable: false,
-                defaultValue: "");
 
             migrationBuilder.CreateTable(
                 name: "ComplianceChecklistEntry",
@@ -114,31 +75,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_ComplianceChecklistEntry", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "EmployeePayRate",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    EmployeeId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    EffectiveFrom = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    PayType = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    AnnualSalary = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: true),
-                    HourlyRate = table.Column<decimal>(type: "TEXT", precision: 18, scale: 4, nullable: true),
-                    Reason = table.Column<string>(type: "TEXT", maxLength: 500, nullable: true),
-                    CreatedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    CreatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_EmployeePayRate", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_EmployeePayRate_Employee_EmployeeId",
-                        column: x => x.EmployeeId,
-                        principalTable: "Employee",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -176,22 +112,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_MigrationStepRecord", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "PayrollFileLayout",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ProviderKey = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
-                    HoursLayoutJson = table.Column<string>(type: "TEXT", maxLength: 16000, nullable: true),
-                    RegisterLayoutJson = table.Column<string>(type: "TEXT", maxLength: 16000, nullable: true),
-                    UpdatedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_PayrollFileLayout", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -355,11 +275,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 columns: new[] { "ChecklistKey", "ItemKey", "ReviewedAtUtc" });
 
             migrationBuilder.CreateIndex(
-                name: "IX_EmployeePayRate_EmployeeId_EffectiveFrom",
-                table: "EmployeePayRate",
-                columns: new[] { "EmployeeId", "EffectiveFrom" });
-
-            migrationBuilder.CreateIndex(
                 name: "IX_MigrationSettings_ParallelPeriodId",
                 table: "MigrationSettings",
                 column: "ParallelPeriodId");
@@ -368,12 +283,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "IX_MigrationStepRecord_StepKey",
                 table: "MigrationStepRecord",
                 column: "StepKey",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PayrollFileLayout_ProviderKey",
-                table: "PayrollFileLayout",
-                column: "ProviderKey",
                 unique: true);
 
             migrationBuilder.CreateIndex(
@@ -423,16 +332,10 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "ComplianceChecklistEntry");
 
             migrationBuilder.DropTable(
-                name: "EmployeePayRate");
-
-            migrationBuilder.DropTable(
                 name: "MigrationSettings");
 
             migrationBuilder.DropTable(
                 name: "MigrationStepRecord");
-
-            migrationBuilder.DropTable(
-                name: "PayrollFileLayout");
 
             migrationBuilder.DropTable(
                 name: "ReconciliationMapping");
@@ -481,28 +384,9 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 table: "InvoiceLine");
 
             migrationBuilder.DropColumn(
-                name: "Convention",
-                table: "FixedAsset");
-
-            migrationBuilder.DropColumn(
-                name: "OpeningAccumulatedDepreciation",
-                table: "FixedAsset");
-
-            migrationBuilder.DropColumn(
-                name: "OpeningBalanceDate",
-                table: "FixedAsset");
-
-            migrationBuilder.DropColumn(
                 name: "EmploymentType",
                 table: "EmployeePayProfile");
 
-            migrationBuilder.DropColumn(
-                name: "CapitalizationThreshold",
-                table: "AssetCategory");
-
-            migrationBuilder.DropColumn(
-                name: "Convention",
-                table: "AssetCategory");
         }
     }
 }

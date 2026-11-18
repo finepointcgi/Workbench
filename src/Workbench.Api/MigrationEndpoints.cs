@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Workbench.Contracts.Migration;
-using Workbench.Contracts.Payroll;
 
 namespace Workbench.Api;
 
@@ -32,13 +31,5 @@ internal static class MigrationEndpoints
         recon.MapPost("/runs/{id:guid}/sign-off", (Guid id, SignOffReconciliationRequest r, IReconciliationService s, CancellationToken ct) => s.SignOffAsync(id, r, ct));
         recon.MapGet("/runs/{id:guid}/export", (Guid id, IReconciliationService s, CancellationToken ct) => s.ExportAsync(id, ct));
         recon.MapGet("/status/{periodId:guid}", (Guid periodId, IReconciliationService s, CancellationToken ct) => s.GetStatusAsync(periodId, ct));
-
-        var layouts = v1.MapGroup("/payroll/layouts").WithTags("Payroll");
-        layouts.MapGet("/{provider}", (string provider, IPayrollLayoutService s, CancellationToken ct) => s.GetAsync(provider, ct));
-        layouts.MapGet("/{provider}/default", (string provider, IPayrollLayoutService s, CancellationToken ct) => s.GetDefaultAsync(provider, ct));
-        layouts.MapPut("/{provider}", (string provider, SavePayrollLayoutRequest r, IPayrollLayoutService s, CancellationToken ct) => s.SaveAsync(provider, r, ct));
-        layouts.MapDelete("/{provider}", (string provider, IPayrollLayoutService s, CancellationToken ct) => s.ResetAsync(provider, ct));
-        layouts.MapPost("/{provider}/test-register", (string provider, TestRegisterSampleRequest r, IPayrollLayoutService s, CancellationToken ct) => s.TestRegisterAsync(provider, r, ct));
-        layouts.MapPost("/{provider}/test-hours", (string provider, TestHoursTemplateRequest r, IPayrollLayoutService s, CancellationToken ct) => s.TestHoursTemplateAsync(provider, r, ct));
     }
 }

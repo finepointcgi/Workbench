@@ -12,7 +12,7 @@ namespace Workbench.Application.Leave;
 /// <see cref="SyncUsageAsync"/> with one net row per timesheet (a reopened timesheet's usage is reversed by a new row,
 /// never deleted). Accrual and year-end runs are idempotent through <see cref="LeaveLedgerEntry.SourceKey"/>.
 /// </summary>
-internal static class LeaveEngine
+public static class LeaveEngine
 {
     public const string AuditEntityType = "LeaveBalance";
 

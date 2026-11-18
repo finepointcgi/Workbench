@@ -7,7 +7,6 @@ using Workbench.Contracts.MyTodo;
 using Workbench.Contracts.MyWork;
 using Workbench.Contracts.Payroll;
 using Workbench.Contracts.Purchasing;
-using Workbench.Contracts.Revenue;
 using Workbench.Contracts.Sheets;
 using Workbench.Domain.ProjectAccounting;
 using static Workbench.Tests.Identity.SeededHost;
@@ -80,32 +79,6 @@ public sealed class MyTodoProviderTests
     }
 
     [Fact]
-    public void Eac_is_needed_for_cost_to_cost_projects_every_90_days_and_after_a_rejection()
-    {
-        var project = new Project { Code = "1001", Name = "Modernization" };
-        EstimateDto Estimate(DateOnly asOf, EstimateState state, string? note = null) =>
-            new(Guid.NewGuid(), project.Id, "1001", null, null, asOf, 1m, 2m, null, state, Owner, asOf.ToDateTime(TimeOnly.MinValue), null, null, note);
-        RevenueSetupDto Setup(RevenueMethodKind method) => new(Guid.NewGuid(), project.Id, "1001", "M", null, null, null, null, method, null, null, null, null, null, Finance, DateTime.UtcNow);
-        ProjectRevenueDto Detail(RevenueMethodKind method, params EstimateDto[] estimates) =>
-            new(project.Id, "1001", "M", Guid.NewGuid(), "C1", "CPFF", [], null, [Setup(method)], estimates, [], [], true);
-        var context = Context();
-
-        Assert.Null(EacReviewTodoProvider.For(project, Detail(RevenueMethodKind.Billings), context)); // no EAC used
-        Assert.Equal("Submit an estimate at completion for 1001", EacReviewTodoProvider.For(project, Detail(RevenueMethodKind.CostToCost), context)!.Title);
-        Assert.Null(EacReviewTodoProvider.For(project, Detail(RevenueMethodKind.CostToCost, Estimate(Today.AddDays(-30), EstimateState.Approved)), context));
-
-        var due = EacReviewTodoProvider.For(project, Detail(RevenueMethodKind.CostToCost, Estimate(Today.AddDays(-95), EstimateState.Approved)), context)!;
-        Assert.Equal((TodoUrgency.Overdue, Today.AddDays(-5)), (due.Urgency, due.Due));
-        Assert.Equal($"projects/{project.Id}/revenue", due.Link);
-
-        Assert.Null(EacReviewTodoProvider.For(project, Detail(RevenueMethodKind.CostToCost, Estimate(Today.AddDays(-95), EstimateState.Submitted)), context)); // with Finance
-
-        var rejected = EacReviewTodoProvider.For(project, Detail(RevenueMethodKind.CostPlusFee, Estimate(Today.AddDays(-3), EstimateState.Rejected, "Too low")), context)!;
-        Assert.Equal("Revise the EAC for 1001", rejected.Title);
-        Assert.Contains("Too low", rejected.Reason);
-    }
-
-    [Fact]
     public async Task Receiving_asks_only_named_receivers()
     {
         var mine = Guid.NewGuid();
@@ -166,28 +139,11 @@ public sealed class MyTodoProviderTests
         Assert.Empty(PeriodCloseTodoProvider.For(checklist with { IsClosed = true }, Context()));
     }
 
-    [Theory]
-    [InlineData(PayrollRunState.Draft, "Export hours for payroll (Oct 5–18)")]
-    [InlineData(PayrollRunState.Exported, "Import the payroll register (Oct 5–18)")]
-    [InlineData(PayrollRunState.RegisterImported, "Post payroll for Oct 5–18")]
-    [InlineData(PayrollRunState.Posted, null)]
-    [InlineData(PayrollRunState.Voided, null)]
-    public void Payroll_runs_waiting_on_finance(PayrollRunState state, string? title)
-    {
-        var run = new PayrollRunDto(Guid.NewGuid(), Guid.NewGuid(), "BW", "paylocity", Guid.NewGuid(), new(2026, 10, 5), new(2026, 10, 18), new(2026, 10, 23), state,
-            Finance, DateTime.UtcNow, null, null, null, null, null, 12_000m, null, null, null, null);
-
-        Assert.Equal(title, PayrollTodoProvider.For(run, Context(roles: OrgRoles.Finance))?.Title);
-    }
-
     [Fact]
     public async Task Finance_providers_ask_nothing_of_other_people()
     {
-        var (payroll, fake) = Fake<IPayrollRunService>.Create();
-        var services = new ServiceCollection().AddSingleton(payroll).BuildServiceProvider();
+        var services = new ServiceCollection().BuildServiceProvider();
 
-        Assert.Empty(await new PayrollTodoProvider().GetAsync(Context(services, OrgRoles.Timekeeper), default));
         Assert.Empty(await new PeriodCloseTodoProvider().GetAsync(Context(services), default));
-        Assert.Empty(fake.Calls);
     }
 }

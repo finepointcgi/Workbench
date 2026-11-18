@@ -83,6 +83,12 @@ public interface IWorkbenchModule
     /// <summary>Maps the module's endpoints. <paramref name="api"/> is <c>/api/v1</c>; use first segments the module declared in <see cref="ModuleContribution.ApiSegments"/>.</summary>
     void MapEndpoints(IEndpointRouteBuilder api) { }
 
+    /// <summary>
+    /// Maps endpoints at the host's root, outside <c>/api/v1</c>: what an outside system or a person without an account calls (webhooks, a link's page). The group is not
+    /// authorized, so each endpoint says <c>AllowAnonymous()</c> or <c>RequireAuthorization()</c> itself. Paths must not collide with the host's own.
+    /// </summary>
+    void MapHostEndpoints(IEndpointRouteBuilder app) { }
+
     /// <summary>Assemblies whose <c>IEntityTypeConfiguration&lt;T&gt;</c> classes are applied to the host's model (<c>ApplyConfigurationsFromAssembly</c>).</summary>
     IReadOnlyList<Assembly> ModelAssemblies => [];
 

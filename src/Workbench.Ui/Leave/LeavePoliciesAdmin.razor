@@ -136,7 +136,7 @@
     private IReadOnlyList<LeavePolicyDto> _policies = [];
     private IReadOnlyList<LeaveChargeCodeDto> _codes = [];
     private IReadOnlyList<OrgUnitDto> _units = [];
-    private IReadOnlyList<PayGroupDto> _groups = [];
+    private IReadOnlyList<PayGroupChoiceDto> _groups = [];
     private Guid? _editingId;
     private Form _f = new();
     private bool _busy;
@@ -187,7 +187,7 @@
 
         try
         {
-            _groups = Services.GetService<IPayGroupService>() is { } groups ? await groups.ListAsync() : [];
+            _groups = Services.GetService<IPayGroupChoiceService>() is { } groups ? await groups.ListAsync() : [];
         }
         catch (Exception ex) when (LeavePage.IsExpected(ex))
         {
