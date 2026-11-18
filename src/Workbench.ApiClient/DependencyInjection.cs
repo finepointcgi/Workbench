@@ -1,7 +1,6 @@
 using Workbench.ApiClient.Licensing;
 using Microsoft.Extensions.DependencyInjection;
 using Workbench.ApiClient.Security;
-using Workbench.Contracts.Costpoint;
 using Workbench.Contracts.Sheets;
 
 namespace Workbench.ApiClient;
@@ -20,7 +19,6 @@ public static class DependencyInjection
         services.AddHttpClient<Contracts.Scheduling.IPlanFloatService, HttpPlanFloatService>(client => client.BaseAddress = serverBaseAddress);
         services.AddWorkbenchSchedulingClients(serverBaseAddress);
         services.AddCollaborationClients(serverBaseAddress);
-        services.AddHttpClient<ICostpointService, HttpCostpointService>(client => client.BaseAddress = serverBaseAddress);
         services.AddProjectAccountingClients(serverBaseAddress);
         services.AddIdentityClients(serverBaseAddress);
         services.AddAutomationClients(serverBaseAddress);
@@ -39,11 +37,8 @@ public static class DependencyInjection
         services.AddHttpClient<Contracts.Tenancy.IHostAdminService, HttpHostAdminService>(client => client.BaseAddress = serverBaseAddress);
         services.AddImportClients(serverBaseAddress);
         services.AddProcurementClients(serverBaseAddress);
-        services.AddAssetClients(serverBaseAddress);
-        services.AddCashClients(serverBaseAddress);
         services.AddLeaveClients(serverBaseAddress);
         services.AddPerDiemResourcingClients(serverBaseAddress);
-        services.AddRevenueClients(serverBaseAddress);
         services.AddReportClients(serverBaseAddress);
         services.AddApprovalClients(serverBaseAddress);
         services.AddMigrationClients(serverBaseAddress);
@@ -55,16 +50,12 @@ public static class DependencyInjection
         services.AddHttpClient<Contracts.Support.ISupportService, HttpSupportService>(client => client.BaseAddress = serverBaseAddress); services.AddHttpClient<Contracts.Support.IHelpStateService, HttpHelpStateService>(client => client.BaseAddress = serverBaseAddress); services.AddHttpClient<Contracts.Support.IHostSupportService, HttpHostSupportService>(client => client.BaseAddress = serverBaseAddress);
         services.AddHttpClient<Contracts.Tasks.ITaskAssignmentService, HttpTaskAssignmentService>(client => client.BaseAddress = serverBaseAddress);
         services.AddAssistantClients(serverBaseAddress);
-        services.AddPlanningClients(serverBaseAddress);
         services.AddCurrencyClients(serverBaseAddress);
         services.AddCompanyClients(serverBaseAddress);
         services.AddCommercialBillingClients(serverBaseAddress);
         services.AddTravelClients(serverBaseAddress);
         services.AddSourcingClients(serverBaseAddress);
-        services.AddBankFileClients(serverBaseAddress);
         services.AddAccountingExportClients(serverBaseAddress);
-        services.AddAccountingLiveClients(serverBaseAddress);
-        services.AddSalesTaxClients(serverBaseAddress);
         services.AddIntegrationClients(serverBaseAddress);
         services.AddReceiptClients(serverBaseAddress);
         services.AddCustomizationClients(serverBaseAddress);

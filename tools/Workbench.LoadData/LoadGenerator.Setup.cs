@@ -122,9 +122,6 @@ internal sealed partial class LoadGenerator(GeneratorOptions options, IDbContext
         Step("Indirect allocation runs (the real AllocationEngine), one per period");
         await AllocationsAsync();
 
-        Step("Revenue setup and revenue runs (the real RevenueRunService), last 12 periods");
-        await RevenueAsync();
-
         Step("Close the fiscal periods before last month");
         await ClosePeriodsAsync();
 

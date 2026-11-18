@@ -17,7 +17,8 @@ namespace Workbench.Application.Currencies;
 /// the month-end rate, posted on the period's last day against the unrealized gain/loss account and reversed on the next
 /// period's first day, so documents keep their own rate and the realized gain or loss on payment stays right.
 /// </summary>
-public sealed class RevaluationService(IWorkbenchDbContextFactory dbFactory, GeneralLedger ledger, AuditRecorder audit, TimeProvider clock) : IRevaluationService
+public sealed class RevaluationService(IWorkbenchDbContextFactory dbFactory, GeneralLedger ledger, AuditRecorder audit, TimeProvider clock,
+    IEnumerable<IForeignBalanceSource>? foreignSources = null) : IRevaluationService
 {
     private DateTime UtcNow => clock.GetUtcNow().UtcDateTime;
 
@@ -62,7 +63,7 @@ public sealed class RevaluationService(IWorkbenchDbContextFactory dbFactory, Gen
             throw new ArgumentException($"Fiscal period {next.Name} is closed, so the revaluation can't be reversed in it.");
         }
 
-        var (balances, _) = await RevaluationEngine.OpenBalancesAsync(db, period.End, cancellationToken);
+        var (balances, _) = await RevaluationEngine.OpenBalancesAsync(db, period.End, cancellationToken, sources: foreignSources);
         var revalued = balances.Where(b => b.GainLoss is { } g && g != 0).ToList();
         if (revalued.Count == 0)
         {
@@ -157,7 +158,7 @@ public sealed class RevaluationService(IWorkbenchDbContextFactory dbFactory, Gen
 
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var functional = await CurrencySupport.FunctionalAsync(db, cancellationToken);
-        var (balances, warnings) = await RevaluationEngine.OpenBalancesAsync(db, asOf, cancellationToken, latestRate: true);
+        var (balances, warnings) = await RevaluationEngine.OpenBalancesAsync(db, asOf, cancellationToken, latestRate: true, sources: foreignSources);
         var documents = balances.Select(b => new ForeignDocumentDto(b.Kind.ToContract(), b.DocumentId, b.DocumentNumber, b.Party, b.Date, b.CurrencyCode, b.DocumentRate,
             b.TransactionAmount, b.TransactionBalance, b.CarryingAmount, b.Rate, b.RevaluedAmount, b.GainLoss)).ToList();
         var byCurrency = balances.GroupBy(b => b.CurrencyCode).OrderBy(g => g.Key, StringComparer.Ordinal).Select(g =>
@@ -216,7 +217,7 @@ public sealed class RevaluationService(IWorkbenchDbContextFactory dbFactory, Gen
                 run.ReversalEntryId is { } rid ? numbers.GetValueOrDefault(rid) : null, run.PostedBy, run.PostedAtUtc, false);
         }
 
-        var (balances, warnings) = await RevaluationEngine.OpenBalancesAsync(db, period.End, ct);
+        var (balances, warnings) = await RevaluationEngine.OpenBalancesAsync(db, period.End, ct, sources: foreignSources);
         if (period.Status != PeriodStatus.Open)
         {
             warnings.Add($"{period.Name} is closed; reopen it to revalue.");
@@ -239,7 +240,7 @@ public sealed class RevaluationService(IWorkbenchDbContextFactory dbFactory, Gen
             false, null, null, null, null, null, null, canPost);
     }
 
-    private static async Task<Dictionary<Guid, string>> PartiesAsync(IWorkbenchDbContext db, IReadOnlyList<(RevaluationItemKind Kind, Guid Id)> docs, CancellationToken ct)
+    private async Task<Dictionary<Guid, string>> PartiesAsync(IWorkbenchDbContext db, IReadOnlyList<(RevaluationItemKind Kind, Guid Id)> docs, CancellationToken ct)
     {
         var result = new Dictionary<Guid, string>();
         var invoiceIds = docs.Where(d => d.Kind == RevaluationItemKind.Receivable).Select(d => d.Id).ToList();
@@ -257,9 +258,12 @@ public sealed class RevaluationService(IWorkbenchDbContextFactory dbFactory, Gen
         }
 
         var bankIds = docs.Where(d => d.Kind == RevaluationItemKind.Bank).Select(d => d.Id).ToList();
-        foreach (var x in await db.Set<Domain.Cash.BankAccount>().AsNoTracking().Where(b => bankIds.Contains(b.Id)).Select(b => new { b.Id, b.BankName }).ToListAsync(ct))
+        foreach (var source in (foreignSources ?? []).Where(s => s.Kind == RevaluationItemKind.Bank))
         {
-            result[x.Id] = x.BankName;
+            foreach (var (id, name) in await source.NamesAsync(db, bankIds, ct))
+            {
+                result[id] = name;
+            }
         }
 
         return result;
@@ -279,7 +283,7 @@ public sealed class RevaluationService(IWorkbenchDbContextFactory dbFactory, Gen
 /// Period close: open foreign currency balances are revalued at month end. Passes when the period has a revaluation, when
 /// there's nothing in another currency to revalue, or when no revaluation can post (no open period after it to reverse in).
 /// </summary>
-public sealed class CurrencyRevaluationCloseCheck : IPeriodCloseCheck
+public sealed class CurrencyRevaluationCloseCheck(IEnumerable<IForeignBalanceSource>? foreignSources = null) : IPeriodCloseCheck
 {
     public const string Title = "Foreign currency balances revalued";
 
@@ -291,7 +295,7 @@ public sealed class CurrencyRevaluationCloseCheck : IPeriodCloseCheck
             return new CloseCheckDto(CloseCheckKind.CurrencyRevalued, Title, true, 0, $"Revalued by {run.PostedBy}: net {(run.NetGainLoss >= 0 ? "gain" : "loss")} {Math.Abs(run.NetGainLoss):N2}", []);
         }
 
-        var (balances, _) = await RevaluationEngine.OpenBalancesAsync(db, period.End, ct);
+        var (balances, _) = await RevaluationEngine.OpenBalancesAsync(db, period.End, ct, sources: foreignSources);
         var changing = balances.Where(b => b.GainLoss is { } g && g != 0).ToList();
         if (changing.Count == 0)
         {

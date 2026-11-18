@@ -81,7 +81,7 @@ public sealed class ModuleEntitlementTests
         Assert.Equal(["enterprise", "govcon"], ModuleCatalog.Default.Where(m => m.Enforced).Select(m => m.Id).Order().ToArray());
         Assert.All(ModuleCatalog.Default, m => Assert.False(string.IsNullOrWhiteSpace(m.Description)));
         Assert.All(FeatureCatalog.All, f => Assert.True(ModuleCatalog.IsKnown(f.Module)));
-        (string, string)[] expected = [("MultiCompany", "enterprise"), ("SingleSignOn", "enterprise"), ("Integrations", "enterprise"), ("CustomerLinks", "enterprise"), ("SupplierPortal", "accounting"), ("ApprovalWorkflows", "enterprise"), ("IncurredCost", "govcon")];
+        (string, string)[] expected = [("MultiCompany", "enterprise"), ("SingleSignOn", "enterprise"), ("Integrations", "enterprise"), ("CustomerLinks", "enterprise"), ("SupplierPortal", "core"), ("ApprovalWorkflows", "enterprise"), ("IncurredCost", "govcon")];
         Assert.Equal(expected.Order(), FeatureCatalog.All.Select(f => (f.Feature.ToString(), f.Module)).Order());
     }
 
@@ -112,12 +112,12 @@ public sealed class ModuleEntitlementTests
         var gate = seeded.Host.Get<FeatureGate>();
 
         Assert.Equal("Business", status.Edition);
-        Assert.Equal(new[] { "Integrations", "MultiCompany", "SingleSignOn", "ApprovalWorkflows", "CustomerLinks" }.Order(), status.Features.Where(f => f.Included).Select(f => f.Key).Order());
+        Assert.Equal(new[] { "Integrations", "MultiCompany", "SingleSignOn", "ApprovalWorkflows", "CustomerLinks", "SupplierPortal" }.Order(), status.Features.Where(f => f.Included).Select(f => f.Key).Order());
         Assert.NotNull(await seeded.Host.Get<ICompanyService>().CreateAsync(new SaveCompanyRequest("B", "Second Co")));
         Assert.True(await gate.HasAsync(Feature.MultiCompany, default));
         var refused = await Assert.ThrowsAsync<WorkbenchEditionException>(() => gate.RequireAsync(Feature.IncurredCost, default));
         Assert.Contains("Government contracting module", refused.Message);
-        Assert.False(await gate.HasAsync(Feature.SupplierPortal, default)); // A module that isn't enforced still gates its own feature, as it always has.
+        Assert.True(await gate.HasAsync(Feature.SupplierPortal, default)); // Purchasing is core now: the supplier portal needs the Business edition and no module.
     }
 
     [Fact]
@@ -167,12 +167,12 @@ public sealed class ModuleEntitlementTests
         var before = NavCatalog.PaletteEntries(everything).ToList();
         var after = NavCatalog.PaletteEntries(without).ToList();
 
-        Assert.All(new[] { "billing", "accounting", "enterprise" }, id => Assert.Contains(before, e => e.ModuleId == id)); // Workforce and project controls have no menu page of their own here (the workforce pages come from the module): it lives on the project; the pages of government contracting and capture come from their modules.
+        Assert.Contains(before, e => e.ModuleId == "enterprise"); // (The accounting and billing modules' pages come from the modules; invoicing is core.) // Workforce and project controls have no menu page of their own here (the workforce pages come from the module): it lives on the project; the pages of government contracting and capture come from their modules.
         Assert.DoesNotContain(after, e => e.ModuleId != "core");
         Assert.Contains(after, e => e.Href == "time");
         Assert.Contains(after, e => e.Href == "resourcing"); // Staffing is core.
         Assert.Equal(before.Count(e => e.ModuleId == "core"), after.Count);
-        Assert.Equal("accounting", NavCatalog.OwnerOf("accounting/journal/123")?.ModuleId); // The page guard finds the module of a URL.
+        Assert.Equal("enterprise", NavCatalog.OwnerOf("setup/companies/123")?.ModuleId); // The page guard finds the module of a URL.
     }
 
     [Fact]
@@ -300,12 +300,12 @@ public sealed class LicenseBannerTests
     public void An_unlicensed_page_says_which_module_it_needs_and_what_to_do()
     {
         using var ctx = Context(Status(false, 100), OrgRoles.Admin);
-        var entry = NavCatalog.OwnerOf("accounting/journal")!;
+        var entry = NavCatalog.OwnerOf("setup/companies")!;
 
         var message = ctx.Render<Workbench.Ui.Layout.ModuleNeeded>(p => p.Add(c => c.Entry, entry));
 
         var text = message.Find("[data-testid=module-needed]").TextContent;
-        Assert.Contains("Journal entries needs the Accounting module", text);
+        Assert.Contains("Companies needs the enterprise module", text);
         Assert.Contains("Setup › License", text);
     }
 }

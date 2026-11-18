@@ -53,51 +53,12 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 nullable: true);
 
             migrationBuilder.AddColumn<string>(
-                name: "Convention",
-                table: "FixedAsset",
-                type: "TEXT",
-                maxLength: 24,
-                nullable: false,
-                defaultValue: "");
-
-            migrationBuilder.AddColumn<decimal>(
-                name: "OpeningAccumulatedDepreciation",
-                table: "FixedAsset",
-                type: "TEXT",
-                precision: 18,
-                scale: 2,
-                nullable: false,
-                defaultValue: 0m);
-
-            migrationBuilder.AddColumn<DateOnly>(
-                name: "OpeningBalanceDate",
-                table: "FixedAsset",
-                type: "TEXT",
-                nullable: true);
-
-            migrationBuilder.AddColumn<string>(
                 name: "EmploymentType",
                 table: "EmployeePayProfile",
                 type: "TEXT",
                 maxLength: 16,
                 nullable: false,
                 defaultValue: "FullTime");
-
-            migrationBuilder.AddColumn<decimal>(
-                name: "CapitalizationThreshold",
-                table: "AssetCategory",
-                type: "TEXT",
-                precision: 18,
-                scale: 2,
-                nullable: true);
-
-            migrationBuilder.AddColumn<string>(
-                name: "Convention",
-                table: "AssetCategory",
-                type: "TEXT",
-                maxLength: 24,
-                nullable: false,
-                defaultValue: "");
 
             migrationBuilder.CreateTable(
                 name: "ComplianceChecklistEntry",
@@ -423,28 +384,9 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 table: "InvoiceLine");
 
             migrationBuilder.DropColumn(
-                name: "Convention",
-                table: "FixedAsset");
-
-            migrationBuilder.DropColumn(
-                name: "OpeningAccumulatedDepreciation",
-                table: "FixedAsset");
-
-            migrationBuilder.DropColumn(
-                name: "OpeningBalanceDate",
-                table: "FixedAsset");
-
-            migrationBuilder.DropColumn(
                 name: "EmploymentType",
                 table: "EmployeePayProfile");
 
-            migrationBuilder.DropColumn(
-                name: "CapitalizationThreshold",
-                table: "AssetCategory");
-
-            migrationBuilder.DropColumn(
-                name: "Convention",
-                table: "AssetCategory");
         }
     }
 }

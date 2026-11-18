@@ -8,8 +8,6 @@ using Workbench.Contracts.Identity;
 using Workbench.Contracts.Licensing;
 using Workbench.Contracts.Modules;
 using Workbench.Contracts.Integrations;
-using Workbench.Contracts.Integrations.GitLab;
-using Workbench.Contracts.Integrations.Jira;
 using Workbench.Contracts.Notifications;
 using Workbench.Contracts.Purchasing;
 using Workbench.Contracts.Security;
@@ -32,11 +30,8 @@ public static class EditionGates
         services.Gate<ICompanyService>(Feature.MultiCompany, nameof(ICompanyService.CreateAsync)); // A first company always exists, so any new one is a second.
         services.Gate<ISignInSettingsService>(Feature.SingleSignOn, nameof(ISignInSettingsService.SaveProviderAsync));
         services.Gate<IConnectorService>(Feature.Integrations, nameof(IConnectorService.CreateAsync), nameof(IConnectorService.UpdateAsync));
-        services.Gate<IJiraConnectionService>(Feature.Integrations, nameof(IJiraConnectionService.SaveAsync));
-        services.Gate<IGitLabConnectionService>(Feature.Integrations, nameof(IGitLabConnectionService.SaveAsync));
         services.Gate<ISlackNotificationService>(Feature.Integrations, nameof(IChatNotificationService.ConnectAsync));
         services.Gate<ITeamsNotificationService>(Feature.Integrations, nameof(IChatNotificationService.ConnectAsync));
-        services.Gate<ICustomerShareLinkService>(Feature.CustomerLinks, nameof(ICustomerShareLinkService.CreateAsync));
         services.Gate<ISupplierPortalAdminService>(Feature.SupplierPortal,
             nameof(ISupplierPortalAdminService.AddContactAsync), nameof(ISupplierPortalAdminService.SendSignInLinkAsync), nameof(ISupplierPortalAdminService.ReactivateContactAsync));
         services.Gate<IApprovalWorkflowService>(Feature.ApprovalWorkflows,

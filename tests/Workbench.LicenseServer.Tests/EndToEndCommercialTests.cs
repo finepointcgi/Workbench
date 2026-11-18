@@ -65,6 +65,21 @@ public class EndToEndCommercialTests
     }
 
     [Fact]
+    public void The_module_ids_the_server_sells_are_the_catalogs_paid_modules_and_the_eight_in_the_private_module_repository()
+    {
+        // The license server's list and the product's catalog are kept by hand in two places; this keeps them in step.
+        Assert.Equal(ModuleCatalog.AllIds.Where(id => id != "core").Order(), Workbench.LicenseServer.Licensing.Modules.All.Order());
+        // The eight modules that load as plugins (docs/operations/module-plugins.md), each of which a key can list; "ai" is reserved and loads nothing.
+        string[] plugins = ["accounting", "billing", "capture", "enterprise", "govcon", "materials", "projectcontrols", "workforce"];
+        Assert.All(plugins, id => Assert.Contains(id, Workbench.LicenseServer.Licensing.Modules.All));
+        Assert.Equal(plugins, Workbench.LicenseServer.Licensing.Modules.Normalize(plugins.Reverse()));
+        // The retired ids are refused when issuing and read as what they became when stored.
+        Assert.Throws<ArgumentException>(() => Workbench.LicenseServer.Licensing.Modules.Normalize(["finance"]));
+        Assert.Equal(["accounting", "billing"], Workbench.LicenseServer.Licensing.Modules.Parse("finance"));
+        Assert.Equal(["enterprise"], Workbench.LicenseServer.Licensing.Modules.Parse("controls"));
+    }
+
+    [Fact]
     public async Task Activate_then_refresh_gives_the_product_a_key_it_accepts_and_a_seat_change_arrives()
     {
         using var server = new TestServer();

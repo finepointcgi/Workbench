@@ -4,7 +4,6 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Workbench.Application.Collaboration;
 using Workbench.Application.Security;
 using Workbench.Contracts.Approvals;
-using Workbench.Contracts.Cash;
 using Workbench.Contracts.Identity;
 using Workbench.Contracts.Odcs;
 using Workbench.Contracts.Purchasing;
@@ -77,39 +76,11 @@ public static class ReauthenticationRegistration
         services.AddScoped<ISignInSettingsService, SignInSettingsService>();
         services.AddScoped<IComplianceChecklistService, ComplianceChecklistService>();
 
-        services.Decorate<IBankAccountService, ReauthBankAccountService>();
+        // The bank account service is the accounting module's: it asks for the recent sign-in itself (ReauthBankAccountService).
         services.Decorate<IVendorService, ReauthVendorService>();
         services.Decorate<IApprovalWorkflowService, ReauthApprovalWorkflowService>();
         return services;
     }
-}
-
-internal sealed class ReauthBankAccountService(IBankAccountService inner, ReauthenticationGuard guard) : IBankAccountService
-{
-    public Task<IReadOnlyList<BankAccountDto>> ListAsync(bool includeInactive = true, CancellationToken cancellationToken = default) =>
-        inner.ListAsync(includeInactive, cancellationToken);
-
-    public Task<BankAccountDto> GetAsync(Guid bankAccountId, CancellationToken cancellationToken = default) => inner.GetAsync(bankAccountId, cancellationToken);
-
-    public async Task<BankAccountDto> CreateAsync(SaveBankAccountRequest request, CancellationToken cancellationToken = default)
-    {
-        await guard.RequireRecentAsync(SensitiveActions.BankDetails, cancellationToken);
-        return await inner.CreateAsync(request, cancellationToken);
-    }
-
-    public async Task<BankAccountDto> UpdateAsync(Guid bankAccountId, SaveBankAccountRequest request, CancellationToken cancellationToken = default)
-    {
-        await guard.RequireRecentAsync(SensitiveActions.BankDetails, cancellationToken);
-        return await inner.UpdateAsync(bankAccountId, request, cancellationToken);
-    }
-
-    public async Task<BankAccountNumberDto> RevealAccountNumberAsync(Guid bankAccountId, CancellationToken cancellationToken = default)
-    {
-        await guard.RequireRecentAsync(SensitiveActions.BankDetails, cancellationToken);
-        return await inner.RevealAccountNumberAsync(bankAccountId, cancellationToken);
-    }
-
-    public Task<IReadOnlyList<CashGlAccountDto>> ListCashGlAccountsAsync(CancellationToken cancellationToken = default) => inner.ListCashGlAccountsAsync(cancellationToken);
 }
 
 internal sealed class ReauthVendorService(IVendorService inner, ReauthenticationGuard guard) : IVendorService
