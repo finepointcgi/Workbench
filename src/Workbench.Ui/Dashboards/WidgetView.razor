@@ -156,6 +156,34 @@ else
             <MudAlert Severity="Severity.Info" Dense="true" Icon="@Icons.Material.Filled.Campaign"><MarkdownView Source="@Data.Markdown" /></MudAlert>
             break;
 
+        case WidgetType.Module:
+            @* A module's widget says what it shows through whichever payload it fills in. *@
+            @if (Data.Kpi is not null)
+            {
+                <Workbench.Ui.Home.KpiTile Data="Data" />
+            }
+            else if (Data.Chart is { } mc && mc.Values.Any(v => v != 0))
+            {
+                <AccessibleChart Title="@mc.SeriesName" Labels="@mc.Labels" Series="@Series(mc)" LabelHeader="Category">
+                    <MudChart T="double" ChartType="@ChartTypeFor(mc.Kind)" ChartSeries="@Series(mc)" ChartLabels="@mc.Labels.ToArray()"
+                              ChartOptions="@OptionsFor(mc)" Width="100%" Height="@ChartHeight" LegendPosition="Position.Bottom" />
+                </AccessibleChart>
+            }
+            else if (Data.Metric is { } mm)
+            {
+                <MudText Typo="Typo.h4">@FormatNumber(mm.Value, mm.IsCurrency)</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">@mm.Label</MudText>
+            }
+            else if (Data.Markdown is not null)
+            {
+                <MarkdownView Source="@Data.Markdown" />
+            }
+            else
+            {
+                <MudText Class="mud-text-secondary">Nothing to show yet.</MudText>
+            }
+            break;
+
         case WidgetType.MyTodo or WidgetType.ThisWeek or WidgetType.WaitingOnYou or WidgetType.MySheetItems or WidgetType.ListViewChart or WidgetType.Shortcuts:
             <MudText Typo="Typo.body2" Class="mud-text-secondary">Shown on home pages, for each person.</MudText>
             break;

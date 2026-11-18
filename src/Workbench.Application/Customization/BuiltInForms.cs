@@ -35,14 +35,19 @@ public static class BuiltInForms
     public sealed record Section(string Key, string Title, IReadOnlyList<Field> Fields);
 
     /// <param name="RequestTypes">Save requests whose properties carry the fields' values (checked on create and update).</param>
-    public sealed record FormDefinition(string EntityType, string Name, string ShownOn, IReadOnlyList<Section> Sections, IReadOnlyList<Type> RequestTypes)
+    public sealed record FormDefinition(string EntityType, string Name, string ShownOn, IReadOnlyList<Section> Sections, IReadOnlyList<Type> RequestTypes) : Workbench.Contracts.Modules.IModuleRow
     {
+        string Workbench.Contracts.Modules.IModuleRow.Catalog => Workbench.Contracts.Modules.ModuleCatalogs.Forms;
+
+        string Workbench.Contracts.Modules.IModuleRow.RowKey => EntityType;
+
         public IEnumerable<Field> Fields => Sections.SelectMany(s => s.Fields);
     }
 
     private static Section One(params Field[] fields) => new("details", "", fields);
 
-    public static IReadOnlyList<FormDefinition> All { get; } =
+    /// <summary>The forms the product ships, and (in <see cref="All"/>) those loaded modules add; a form's layouts and field requirements follow from it.</summary>
+    public static IReadOnlyList<FormDefinition> BuiltIn { get; } =
     [
         new(E.Project, "Project", "Setup › Projects › Details",
         [
@@ -216,6 +221,10 @@ public static class BuiltInForms
     ];
 
     /// <summary>Entity types that only lists use (their built-in fields are list columns; custom fields may be added).</summary>
+    private static readonly Workbench.Contracts.Modules.RowCatalog<FormDefinition> Catalog = new(BuiltIn);
+
+    public static IReadOnlyList<FormDefinition> All => Catalog.All;
+
     public static IReadOnlyList<string> ListOnly { get; } = [E.Timesheet, E.SalesOrder];
 
     public static FormDefinition? Find(string entityType) => All.FirstOrDefault(f => f.EntityType == entityType);

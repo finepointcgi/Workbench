@@ -12,7 +12,6 @@ public static class MigrationPermissionRegistration
     {
         services.Decorate<IMigrationService, PermissionCheckingMigrationService>();
         services.Decorate<IReconciliationService, PermissionCheckingReconciliationService>();
-        services.Decorate<IParallelRunService, PermissionCheckingParallelRunService>();
         return services;
     }
 }
@@ -114,29 +113,6 @@ public sealed class PermissionCheckingReconciliationService(IReconciliationServi
     {
         await RequireAsync(cancellationToken);
         return await inner.ExportAsync(runId, cancellationToken);
-    }
-}
-
-public sealed class PermissionCheckingParallelRunService(IParallelRunService inner, AccessControl access) : IParallelRunService
-{
-    private Task RequireAsync(CancellationToken ct) => access.RequireAsync(Permission.SetupImports, "run the Costpoint parallel run", ct);
-
-    public async Task<ParallelRunDto> GetAsync(Guid? fiscalPeriodId = null, CancellationToken cancellationToken = default)
-    {
-        await RequireAsync(cancellationToken);
-        return await inner.GetAsync(fiscalPeriodId, cancellationToken);
-    }
-
-    public async Task<ParallelRunDto> UploadAsync(UploadParallelReportRequest request, CancellationToken cancellationToken = default)
-    {
-        await RequireAsync(cancellationToken);
-        return await inner.UploadAsync(request, cancellationToken);
-    }
-
-    public async Task<IReadOnlyList<ParallelCauseDto>> ExplainAsync(Guid runId, CancellationToken cancellationToken = default)
-    {
-        await RequireAsync(cancellationToken);
-        return await inner.ExplainAsync(runId, cancellationToken);
     }
 }
 

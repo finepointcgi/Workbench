@@ -30,7 +30,10 @@ public sealed class ReconciliationSources(IServiceProvider services, IWorkbenchD
 {
     private const int MaxDetailRows = 2000;
 
-    public Task<IReadOnlyList<WorkbenchFigure>> LoadAsync(ReconReportKind kind, ReconScope scope, CancellationToken ct) => kind switch
+    /// <summary>The source a license module registered for this report, if one did: it answers instead of the built-in one.</summary>
+    private IReconciliationSource? Contributed(ReconReportKind kind) => services.GetServices<IReconciliationSource>().FirstOrDefault(s => s.Kind == kind);
+
+    public Task<IReadOnlyList<WorkbenchFigure>> LoadAsync(ReconReportKind kind, ReconScope scope, CancellationToken ct) => Contributed(kind) is { } contributed ? contributed.LoadAsync(scope, ct) : kind switch
     {
         ReconReportKind.TrialBalance => TrialBalanceAsync(scope, ct),
         ReconReportKind.ProjectCost => ProjectCostAsync(scope, ct),
@@ -44,7 +47,7 @@ public sealed class ReconciliationSources(IServiceProvider services, IWorkbenchD
         _ => throw new ArgumentOutOfRangeException(nameof(kind)),
     };
 
-    public Task<ReconDetail> DetailAsync(ReconReportKind kind, ReconScope scope, Func<IReadOnlyList<string>, bool> matches, CancellationToken ct) => kind switch
+    public Task<ReconDetail> DetailAsync(ReconReportKind kind, ReconScope scope, Func<IReadOnlyList<string>, bool> matches, CancellationToken ct) => Contributed(kind) is { } contributed ? contributed.DetailAsync(scope, matches, ct) : kind switch
     {
         ReconReportKind.TrialBalance => TrialBalanceDetailAsync(scope, matches, ct),
         ReconReportKind.ProjectCost => ProjectCostDetailAsync(scope, matches, ct),
@@ -392,4 +395,19 @@ public sealed class ReconciliationSources(IServiceProvider services, IWorkbenchD
 
         static string Rate(decimal? r) => r is { } v ? v.ToString("0.0000", CultureInfo.InvariantCulture) : "";
     }
+}
+
+/// <summary>
+/// The Workbench side of one reconciliation report (the figures the parallel-run compares with Costpoint's), provided by a license module that
+/// owns the data. Register it in the module's <c>ConfigureServices</c>; it answers for <see cref="Kind"/> instead of the built-in source, so core
+/// never calls the module's services, and with the module absent the built-in source (or its "nothing to compare" answer) is used. The report's
+/// fields and tolerances stay in <c>ReconciliationReports</c>, which are data.
+/// </summary>
+public interface IReconciliationSource
+{
+    ReconReportKind Kind { get; }
+
+    Task<IReadOnlyList<WorkbenchFigure>> LoadAsync(ReconScope scope, CancellationToken cancellationToken);
+
+    Task<ReconDetail> DetailAsync(ReconScope scope, Func<IReadOnlyList<string>, bool> matches, CancellationToken cancellationToken);
 }

@@ -71,7 +71,7 @@ public sealed class TaxIdProtector(IDataProtectionProvider provider)
         kind == "SSN" ? $"{digits[..3]}-{digits[3..5]}-{digits[5..]}" : $"{digits[..2]}-{digits[2..]}";
 }
 
-internal static partial class PurchasingSupport
+public static partial class PurchasingSupport
 {
     public const string VendorEntity = nameof(Vendor);
     public const string SubcontractEntity = nameof(Subcontract);

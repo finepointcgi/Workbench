@@ -11,7 +11,7 @@ namespace Workbench.Tests.Navigation;
 public sealed class GovernmentNavigationTests
 {
     private static readonly string[] FederalLinks =
-        ["admin/dcaa-readiness", "admin/cpsr-readiness", "admin/cmmc", "admin/cas-disclosure", "accounting/incurred-cost", "bd/leads"];
+        ["bd/leads"]; // The government contracting module's federal pages are checked in that module's own tests.
 
     private static NavAccess Admin(bool hideGovernment)
     {
@@ -30,8 +30,6 @@ public sealed class GovernmentNavigationTests
             Assert.Contains(link, palette);
         }
 
-        Assert.Contains("admin/dcaa-readiness", menu);
-        Assert.Contains("admin/cmmc", menu);
     }
 
     [Fact]
@@ -47,23 +45,6 @@ public sealed class GovernmentNavigationTests
         }
 
         Assert.Contains("setup/contracts", menu); // Agreements are still managed; only the federal pages go.
-    }
-
-    [Theory]
-    [InlineData(CompanyType.GovernmentContractor, true, true)]
-    [InlineData(CompanyType.ProfessionalServices, false, false)]
-    [InlineData(CompanyType.ProfessionalServices, true, true)] // An admin turned them on.
-    public async Task The_menu_follows_the_organizations_setting(CompanyType type, bool show, bool expectFederal)
-    {
-        await using var ctx = NavTestKit.NewContext(new NavUser(OrgRoles.Admin));
-        ctx.Services.AddSingleton(Stub<ICompanyProfileService>.Create(("GetAsync", _ =>
-            Task.FromResult(new CompanyProfileDto(type, show, false, true, true)))));
-        var nav = ctx.Render<NavMenu>();
-        await Task.Yield();
-
-        nav.WaitForAssertion(() => Assert.NotEmpty(nav.FindAll("a[href='time']")));
-        var html = nav.Markup;
-        Assert.Equal(expectFederal, html.Contains("admin/dcaa-readiness") || html.Contains("DCAA readiness"));
     }
 
     [Theory]

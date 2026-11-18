@@ -29,6 +29,11 @@ internal static class TestDb
 
     public static IWorkbenchDbContextFactory CreateFactory() => CreateFactory(Provider);
 
+    /// <summary>The migrations of the license modules the process has loaded (none in this project's own tests), as the host applies them after core's.</summary>
+    internal static void MigrateModules(DatabaseProvider provider, WorkbenchDbContext db) =>
+        ModuleMigrator.MigrateAsync(Workbench.Plugins.ModuleHost.Current, provider, db.Database.GetConnectionString()!,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance, "test database", default).GetAwaiter().GetResult();
+
     public static IWorkbenchDbContextFactory CreateFactory(TestDatabase provider) => provider switch
     {
         TestDatabase.Sqlite => new Factory(Disposable(DatabaseProvider.Sqlite, SqliteTemplates.NewDatabase())),
@@ -189,6 +194,7 @@ internal static class SqliteTemplates
         using (var db = new WorkbenchDbContext(TestDb.Options(DatabaseProvider.Sqlite, $"Data Source={path};Pooling=False")))
         {
             db.Database.Migrate();
+            TestDb.MigrateModules(DatabaseProvider.Sqlite, db);
         }
 
         return path;
@@ -265,6 +271,7 @@ internal static class PostgresTemplates
         using (var db = new WorkbenchDbContext(TestDb.Options(DatabaseProvider.PostgreSql, ConnectionString(template))))
         {
             db.Database.Migrate();
+            TestDb.MigrateModules(DatabaseProvider.PostgreSql, db);
         }
 
         // CREATE DATABASE ... TEMPLATE needs the template to have no open connections.

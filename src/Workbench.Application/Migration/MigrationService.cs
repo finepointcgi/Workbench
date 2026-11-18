@@ -30,14 +30,39 @@ public sealed class MigrationService(
     IEnumerable<IImporter> importers,
     IReconciliationService reconciliation,
     AuditRecorder audit,
-    TimeProvider clock) : IMigrationService
+    TimeProvider clock,
+    IEnumerable<MigrationStepContribution>? moduleSteps = null) : IMigrationService
 {
     /// <summary>An import a step uses, named by kind so a kind another branch adds (fixed assets) lights up once merged.</summary>
     private sealed record StepImport(DomainSource Source, string Kind, string Title, bool Required = true);
 
     private sealed record StepDefinition(string Key, string Title, string Description, string[] Prerequisites, StepImport[] Imports, string? Link = null, string? LinkText = null, bool AnyOneImport = false);
 
-    private static readonly StepDefinition[] Steps =
+    /// <summary>The built-in steps, then those license modules add (each after the step it names, else at the end).</summary>
+    private StepDefinition[] Steps => _steps ??= WithModuleSteps();
+
+    private StepDefinition[]? _steps;
+
+    private StepDefinition[] WithModuleSteps()
+    {
+        var all = BuiltInSteps.ToList();
+        foreach (var m in moduleSteps ?? [])
+        {
+            if (all.Any(s => s.Key == m.Key))
+            {
+                continue; // A module can't replace a step; the host refuses clashing rows, this guards a hand-built service collection.
+            }
+
+            var step = new StepDefinition(m.Key, m.Title, m.Description, [.. m.Prerequisites],
+                [.. m.Imports.Select(i => new StepImport(i.Source, i.Kind, i.Title, i.Required))], m.Link, m.LinkText, m.AnyOneImport);
+            var at = m.After is null ? -1 : all.FindIndex(s => s.Key == m.After);
+            all.Insert(at < 0 ? all.Count : at + 1, step);
+        }
+
+        return [.. all];
+    }
+
+    private static readonly StepDefinition[] BuiltInSteps =
     [
         new("accounts", "Chart of accounts",
             "Costpoint accounts with their type, summary (parent) account and cost class. Everything that posts needs them.",
@@ -349,3 +374,15 @@ public sealed class MigrationService(
         return checks;
     }
 }
+
+/// <summary>An import a module's cut-over step uses: one of the importers the module registers (<c>IImporter</c>), named by its source and kind.</summary>
+public sealed record MigrationStepImport(Domain.Imports.ImportSource Source, string Kind, string Title, bool Required = true);
+
+/// <summary>
+/// A step a license module adds to the go-live checklist (Setup › Migration). Register it as a singleton in the module's
+/// <c>ConfigureServices</c>; with the module absent the step is not on the checklist. <see cref="Prerequisites"/> are keys of steps that
+/// must be done first; <see cref="After"/> places it right after that step (else at the end).
+/// </summary>
+public sealed record MigrationStepContribution(
+    string Key, string Title, string Description, IReadOnlyList<string> Prerequisites, IReadOnlyList<MigrationStepImport> Imports,
+    string? Link = null, string? LinkText = null, bool AnyOneImport = false, string? After = null);

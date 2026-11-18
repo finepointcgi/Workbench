@@ -18,8 +18,12 @@ namespace Workbench.Ui.Customization;
 /// through the same permission-checked services the page uses, with the page's own definition, so a chart never shows more
 /// than the list would.
 /// </summary>
-public interface IListSource
+public interface IListSource : Workbench.Contracts.Modules.IModuleRow
 {
+    string Workbench.Contracts.Modules.IModuleRow.Catalog => Workbench.Contracts.Modules.ModuleCatalogs.ListSources;
+
+    string Workbench.Contracts.Modules.IModuleRow.RowKey => ListKey;
+
     string ListKey { get; }
 
     string Title { get; }
@@ -76,7 +80,8 @@ public static class ListSources
 {
     private static T Get<T>(IServiceProvider sp) where T : notnull => sp.GetRequiredService<T>();
 
-    public static IReadOnlyList<IListSource> All { get; } =
+    /// <summary>The list pages the product ships, and (in <see cref="All"/>) those loaded modules add.</summary>
+    public static IReadOnlyList<IListSource> BuiltIn { get; } =
     [
         new ListSource<ProjectHubRowDto>(CustomizableLists.Projects, "Projects", async (sp, ct) =>
         {
@@ -106,6 +111,10 @@ public static class ListSources
         new ListSource<SalesOrderSummaryDto>(CustomizableLists.SalesOrders, "Sales orders", async (sp, ct) =>
             (await Get<ISalesOrderService>(sp).ListAsync(new SalesOrderQuery(), ct), Sales.SalesOrdersPage._definition)),
     ];
+
+    private static readonly Workbench.Contracts.Modules.RowCatalog<IListSource> Catalog = new(BuiltIn);
+
+    public static IReadOnlyList<IListSource> All => Catalog.All;
 
     public static IListSource? Find(string listKey) => All.FirstOrDefault(s => s.ListKey == listKey);
 }

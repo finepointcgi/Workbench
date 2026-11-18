@@ -32,11 +32,21 @@ public sealed partial class StandardReportService(
     IIndirectRateService indirectRates,
     ITimeReportService timeReports,
     IArReportService arReports,
-    IApReportService apReports) : IStandardReportService
+    IApReportService apReports,
+    IEnumerable<StandardReportPage> modulePages,
+    IEnumerable<IStandardReportContribution>? moduleReports = null) : IStandardReportService
 {
     private sealed record Entry(string Key, string Name, string Description, string Category, ReportParameterKind[] Parameters, string? PageLink, Func<ReportAccessContext, string?> Unavailable, bool PageOnly = false);
 
-    private static readonly Entry[] Catalog =
+    private Entry[] Catalog => _catalog ??= [.. BuiltInCatalog, .. modulePages.Select(p => new Entry(p.Key, p.Name, p.Description, p.Category, [], p.PageLink,
+        a => a.Can(p.Permission) ? null : p.DeniedMessage, PageOnly: true)),
+        .. (moduleReports ?? []).Select(r => new Entry(r.Key, r.Name, r.Description, r.Category, [.. r.Parameters], r.PageLink, r.Unavailable))];
+
+    private IStandardReportContribution? Contributed(string key) => (moduleReports ?? []).FirstOrDefault(r => r.Key == key);
+
+    private Entry[]? _catalog;
+
+    private static readonly Entry[] BuiltInCatalog =
     [
         new(StandardReportKeys.ProjectStatus, "Project status report",
             "Budget, period and inception-to-date actuals (direct and burdened), ETC/EAC, variance, funded value and billed to date by project and WBS.",
@@ -66,10 +76,6 @@ public sealed partial class StandardReportService(
             "What each project is now expected to cost and earn at completion: project managers submit them, Finance approves.",
             "Projects", [], "accounting/revenue/estimates",
             a => a.Can(Permission.RevenueManage) ? null : "Estimates at completion are reviewed by Finance; a project manager submits theirs from the project's Revenue tab.", PageOnly: true),
-        new(StandardReportKeys.IncurredCost, "Incurred cost submission (ICE)",
-            "The annual incurred cost electronically (ICE) submission schedules, built from the general ledger.",
-            "Contracts", [], "accounting/incurred-cost",
-            a => a.Can(Permission.IncurredCostManage) ? null : "Incurred cost submissions need the \"Incurred cost\" permission.", PageOnly: true),
     ];
 
     public async Task<IReadOnlyList<StandardReportDto>> ListAsync(CancellationToken cancellationToken = default)
@@ -98,6 +104,13 @@ public sealed partial class StandardReportService(
             case StandardReportKeys.TimesheetCompliance: await TimesheetComplianceAsync(builder, context, parameters, cancellationToken); break;
             case StandardReportKeys.ArAging: await ArAgingAsync(builder, parameters, cancellationToken); break;
             case StandardReportKeys.ApAging: await ApAgingAsync(builder, parameters, cancellationToken); break;
+            default:
+                if (Contributed(entry.Key) is { } contributed)
+                {
+                    await contributed.RunAsync(builder, context, parameters, cancellationToken);
+                }
+
+                break;
         }
 
         return await InCompanyWordsAsync(builder.Build(clock.UtcNow), cancellationToken);
@@ -137,6 +150,13 @@ public sealed partial class StandardReportService(
             case StandardReportKeys.TimesheetCompliance: await ComplianceDrillAsync(builder, context, key, cancellationToken); break;
             case StandardReportKeys.ArAging: await ArDrillAsync(builder, parameters, key, cancellationToken); break;
             case StandardReportKeys.ApAging: await ApDrillAsync(builder, parameters, key, cancellationToken); break;
+            default:
+                if (Contributed(entry.Key) is { } contributed)
+                {
+                    await contributed.DrillAsync(builder, context, parameters, drillKey, cancellationToken);
+                }
+
+                break;
         }
 
         return await InCompanyWordsAsync(builder.Build(clock.UtcNow), cancellationToken);

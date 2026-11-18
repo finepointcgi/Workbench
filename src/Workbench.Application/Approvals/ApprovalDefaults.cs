@@ -113,6 +113,7 @@ public static class ApprovalDefaults
             new("Finance", 1, new(ApproverRuleKind.OrgRole, ApprovalOrgRole.Finance), WhenSubmitterIsApprover: SelfApprovalPolicy.Unassigned, AdminsMayAct: true),
         ]),
 
+        _ when Contracts.Modules.ModuleRegistry.Current.RowsOf<Contracts.Modules.ModuleApprovalDocumentType>().FirstOrDefault(t => t.Key == documentType) is { } row => row.DefaultWorkflow ?? Record,
         _ when ApprovalDocumentTypes.IsCustom(documentType) => Record,
         _ => throw new ArgumentException($"Unknown document type \"{documentType}\"."),
     };
