@@ -79,6 +79,16 @@ public sealed class RateBook
 
     public static string Label(IndirectPool pool) => pool == IndirectPool.GeneralAndAdministrative ? "G&A" : pool.ToString();
 
+    /// <summary>How a pool's allocation base reads in a sentence or a finding (the same words accounting and proposal pricing both use).</summary>
+    public static string BaseLabel(AllocationBase basis) => basis switch
+    {
+        AllocationBase.DirectLabor => "Direct labor",
+        AllocationBase.DirectLaborPlusFringe => "Direct labor + fringe",
+        AllocationBase.TotalCostInput => "Total cost input",
+        AllocationBase.ValueAdded => "Value added",
+        _ => basis.ToString(),
+    };
+
     public static string MissingNote(RateSet set) =>
         $"FY{set.FiscalYear} has no provisional {string.Join(", ", set.Missing.Select(Label))} rate; that burden counts as 0.";
 }

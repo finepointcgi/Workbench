@@ -10,6 +10,8 @@ public sealed record ModuleNavSection(string Key, string Title, string Icon, str
 /// <summary>
 /// A page a module puts in the menu and the command palette. Data only (the icon is the MudBlazor icon string), so the contract
 /// assembly needs no UI reference. <see cref="Permissions"/> are the permissions that reveal it (any one); none means everyone signed in.
+/// <see cref="AlsoWhenFlag"/> names a relationship the module reports through an <c>INavAccessFlag</c> (for example "manages an opportunity"):
+/// a user who has it sees the page too, without a permission. <see cref="Note"/> says so in the role help.
 /// </summary>
 public sealed record ModuleNavEntry(
     string Section,
@@ -22,7 +24,9 @@ public sealed record ModuleNavEntry(
     string? Detail = null,
     string? Keywords = null,
     bool InMenu = true,
-    bool Government = false);
+    bool Government = false,
+    string? AlsoWhenFlag = null,
+    string? Note = null);
 
 /// <summary>
 /// A change on one of the module's service interfaces that needs an edition feature (a <c>Feature</c> name from Workbench.Domain, such as

@@ -5,7 +5,6 @@ using Workbench.Application;
 using Workbench.Domain.Billing;
 using Workbench.Domain.ProjectAccounting;
 using Workbench.Infrastructure.Persistence;
-using D = Workbench.Domain.Crm;
 
 namespace Workbench.Tests.Setup;
 
@@ -63,14 +62,6 @@ public sealed class CommercialDemoSeedTests
         var invoices = await db.Set<Invoice>().OrderBy(i => i.Number).ToListAsync();
         Assert.Equal([InvoiceStatus.PartiallyPaid, InvoiceStatus.Draft, InvoiceStatus.Sent, InvoiceStatus.Paid], invoices.Select(i => i.Status));
         Assert.All(invoices, i => Assert.True(i.Total > 0));
-
-        // The pipeline spans the stages; the wins are linked to their contract and project.
-        var deals = await db.Set<D.Opportunity>().ToListAsync();
-        Assert.Equal(11, deals.Count);
-        Assert.Equal(3, deals.Count(d => d.Stage == D.OpportunityStage.Won && d.ProjectId != null && d.ContractId != null));
-        Assert.All(deals, d => Assert.NotNull(d.AgencyAccountId));
-        Assert.Contains(deals, d => d.Stage == D.OpportunityStage.Lost);
-        Assert.Contains(deals, d => d.Stage == D.OpportunityStage.Capture);
     }
 
     [Fact]

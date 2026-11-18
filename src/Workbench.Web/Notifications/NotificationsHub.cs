@@ -72,7 +72,6 @@ public static class NotificationsHosting
         Workbench.Application.Reports.ReportsRegistration.AddWorkbenchReportsHosting(services); // Scheduled reports run as their owner.
         Workbench.Application.Approvals.ApprovalRegistration.AddWorkbenchApprovalsHosting(services);
         Workbench.Application.Ceilings.CeilingsRegistration.AddWorkbenchCeilingsHosting(services); // Hourly ceiling threshold alerts.
-        Workbench.Application.Crm.CrmRegistration.AddWorkbenchCrmHosting(services); // Daily saved SAM.gov searches (only with SamGov:ApiKey).
         Workbench.Application.Planning.PlanningRegistration.AddWorkbenchPlanningHosting(services); // Recurring journal entries every six hours, when turned on.
         Workbench.Application.Quality.QualityRegistration.AddWorkbenchQualityHosting(services); // Approved engineering changes become effective on their date (hourly).
         Workbench.Application.Integrations.IntegrationRegistration.AddWorkbenchIntegrationsHosting(services); // Webhook deliveries and scheduled connectors (Integrations:DispatchIntervalSeconds).

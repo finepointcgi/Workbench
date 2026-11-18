@@ -200,9 +200,6 @@ public static class DatabaseInitializer
         await LifecycleSeed.SeedAsync(db, cancellationToken); // A project at each stage of its life (5101 set up, 5102 planning, 5103 awaiting approval, 5104 executing).
         await HrSeed.SeedAsync(db, cancellationToken); // HR: Harper Reed (HR role), positions, records, clearances, benefit plans, open enrollment, checklists.
         await MaterialsSeed.SeedAsync(db, services, cancellationToken); // Mia Torres (Materials), hardware project 3001: parts, 3-level BOM, stock, GFM, work orders.
-        await CrmSeed.SeedAsync(db, services, cancellationToken); // Business development: Blake Diaz (bd@), 10 opportunities across the stages, accounts, contacts, leads.
-        await CapturePlanSeed.SeedAsync(db, cancellationToken); // Capture plans, Pwin assessments and color-team schedules on the biggest pursuits.
-        await PricingSeed.SeedAsync(db, services, cancellationToken); // Proposal pricing: Riley Quinn (Pricing role), forward pricing rates, PRP-2027-014 with a scenario and version 1.
         await AssistantSeed.SeedAsync(db, cancellationToken); // Timesheet flags: the analyst's pending timesheet gets weekend hours, a late day and a moved-hours revision.
         await PlanningSeed.SeedAsync(db, services, cancellationToken); // Planning: this year's adopted budget, next year's cycle (ENG submitted, OPS drafting), rent and accrual recurring journals.
         await ModuleSeedsAsync(ModuleSeedStage.AfterPlanning);
@@ -225,10 +222,7 @@ public static class DatabaseInitializer
         // Sample data of the license modules that are loaded (nothing without any), at the points in the order above where each belongs.
         async Task ModuleSeedsAsync(ModuleSeedStage stage)
         {
-            foreach (var seed in services.GetServices<IModuleSeed>().Where(m => m.Stage == stage))
-            {
-                await seed.SeedAsync(db, services, cancellationToken);
-            }
+            await ModuleSeeds.RunAsync(services, db, stage, cancellationToken);
         }
     }
 

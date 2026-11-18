@@ -82,6 +82,31 @@ public sealed class ModulePluginTests : IDisposable
     // ───────────────────────────────────── The loader ─────────────────────────────────────
 
     [Fact]
+    public void The_scoped_style_sheet_in_a_modules_wwwroot_is_linked_and_one_that_is_not_there_is_not()
+    {
+        var root = Modules();
+        var host = ModuleHost.Load(Options(root, ModuleIds.GovCon));
+        Assert.Empty(host.StyleSheets()); // The module has no bundle: nothing to link.
+
+        Directory.CreateDirectory(Path.Combine(root, "sample", "wwwroot"));
+        File.WriteAllText(Path.Combine(root, "sample", "wwwroot", "Workbench.SampleModule.bundle.scp.css"), "/* scoped */");
+        Assert.Equal(["_content/Workbench.SampleModule/Workbench.SampleModule.bundle.scp.css"], host.StyleSheets());
+    }
+
+    [Fact]
+    public void A_nav_entry_opens_for_a_relationship_the_module_reports_and_not_for_everyone()
+    {
+        var someone = new CurrentUserInfo("x@example.com", "X", OrgRoles.Employee, null);
+        var entry = new Workbench.Contracts.Modules.ModuleNavEntry("projects", null, "Related", "related", "i", [Permission.GlJournalsPost], AlsoWhenFlag: "sample.related", Note: "Also the people it relates to");
+
+        var rule = Workbench.Ui.Navigation.NavCatalogRules.For(entry);
+        Assert.False(rule.Allows(new NavAccess(someone)));
+        Assert.True(rule.Allows(new NavAccess(someone, Flags: new HashSet<string> { "sample.related" })));
+        Assert.True(rule.Allows(new NavAccess(new CurrentUserInfo("f@example.com", "F", OrgRoles.Finance, null)))); // The permission still opens it.
+        Assert.Equal("Also the people it relates to", rule.Note);
+    }
+
+    [Fact]
     public void A_licensed_module_adds_its_rows_to_every_table_the_product_reads()
     {
         Assert.Null(ModuleMap.ForApiSegment("sample-widgets"));

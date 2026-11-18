@@ -53,7 +53,6 @@ public static class DocumentNumberTypes
     public const string Inspection = "inspection";
     public const string DebitMemo = "debit-memo";
     public const string TravelAuthorization = "travel-authorization";
-    public const string Opportunity = "opportunity";
 
     /// <summary>The types the product ships, and (in <see cref="All"/>) those loaded modules add.</summary>
     public static IReadOnlyList<DocumentNumberType> BuiltIn { get; } =
@@ -75,7 +74,6 @@ public static class DocumentNumberTypes
         DocumentNumberType.For<Inspection>(Inspection, "Inspections", "INS-{seq:6}", i => i.Number),
         DocumentNumberType.For<VendorDebitMemo>(DebitMemo, "Vendor debit memos", "DM-{seq:6}", m => m.Number),
         DocumentNumberType.For<TravelAuthorization>(TravelAuthorization, "Travel authorizations", "TA-{seq:6}", t => t.Number),
-        DocumentNumberType.For<Domain.Crm.Opportunity>(Opportunity, "Opportunities", "OPP-{seq:4}", o => o.Number),
     ];
 
     private static readonly Workbench.Contracts.Modules.RowCatalog<DocumentNumberType> Catalog = new(BuiltIn);

@@ -59,8 +59,6 @@ public static class DependencyInjection
         services.AddHttpClient<Contracts.Tasks.ITaskAssignmentService, HttpTaskAssignmentService>(client => client.BaseAddress = serverBaseAddress);
         services.AddHrClients(serverBaseAddress);
         services.AddMaterialsClients(serverBaseAddress);
-        services.AddCrmClients(serverBaseAddress);
-        services.AddPricingClients(serverBaseAddress);
         services.AddAssistantClients(serverBaseAddress);
         services.AddPlanningClients(serverBaseAddress);
         services.AddCurrencyClients(serverBaseAddress);

@@ -1,5 +1,4 @@
 using Workbench.Contracts.Billing;
-using Workbench.Contracts.Crm;
 using Workbench.Contracts.Customization;
 using Workbench.Contracts.Materials;
 using Workbench.Contracts.Odcs;
@@ -182,42 +181,6 @@ public static class BuiltInForms
                 new("notes", "Notes", LongText),
                 new("isActive", "Active", Bool)),
         ], [typeof(SavePartRequest)]),
-
-        new(E.Opportunity, "Opportunity", "Business development › Opportunity › Details",
-        [
-            new("opportunity", "The opportunity",
-            [
-                new("name", "Name", Text, Required: true),
-                new("solicitationNumber", "Solicitation number", Text),
-                new("description", "Description", LongText),
-                new("agencyAccountId", "Agency or office", Select),
-                new("agencyName", "Agency (not an account yet)", Text),
-                new("naicsCode", "NAICS", Text),
-                new("setAside", "Set-aside", Select),
-                new("contractVehicle", "Contract vehicle", Text),
-                new("contractType", "Contract type", Select),
-                new("placeOfPerformance", "Place of performance", Text),
-                new("kind", "New or recompete", Select),
-                new("incumbentAccountId", "Incumbent", Select),
-            ]),
-            new("value", "Value and dates",
-            [
-                new("estimatedValue", "Estimated value ($)", Money),
-                new("periodOfPerformanceMonths", "Period of performance (months)", Number),
-                new("estimatedAwardDate", "Estimated award date", Date),
-                new("rfiDueOn", "RFI response due", Date),
-                new("rfpReleaseOn", "RFP release", Date),
-                new("proposalDueOn", "Proposal due", Date),
-            ]),
-            new("people", "People and probability",
-            [
-                new("captureManagerEmail", "Capture manager", Person),
-                new("proposalManagerEmail", "Proposal manager", Person),
-                new("pwin", "Pwin (%)", Number),
-                new("pgo", "Pgo (%)", Number),
-                new("weightedValue", "Weighted value", Display),
-            ]),
-        ], [typeof(SaveOpportunityRequest)]),
     ];
 
     /// <summary>Entity types that only lists use (their built-in fields are list columns; custom fields may be added).</summary>

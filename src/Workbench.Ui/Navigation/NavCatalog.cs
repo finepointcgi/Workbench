@@ -118,7 +118,7 @@ public static class NavCatalog
         var at = BuiltInSections.ToList().FindIndex(s => s.Key == Reports);
         var sections = BuiltInSections.Take(at).Concat(added).Concat(BuiltInSections.Skip(at)).ToList();
         var entries = BuiltInEntries.Concat(set.Modules.SelectMany(m => m.NavEntries).Select(e =>
-            new NavEntry(e.Section, e.Group, e.Title, e.Href, e.Icon, e.Permissions.Count == 0 ? NavRule.Everyone : NavRule.Need([.. e.Permissions]),
+            new NavEntry(e.Section, e.Group, e.Title, e.Href, e.Icon, NavCatalogRules.For(e),
                 e.MatchAll, e.Detail, e.Keywords, e.InMenu, e.Government))).ToList();
         return _union = new UnionView(set, sections, entries);
     }
@@ -135,7 +135,7 @@ public static class NavCatalog
         new(Approvals, "Approvals", Icons.Material.Filled.Approval, "approvals"),
         new(Projects, "Projects", Icons.Material.Filled.Work, "projects"),
         new(People, "People", Icons.Material.Filled.People),
-        new(Growth, "Business development", Icons.Material.Filled.TrendingUp),
+        new(Growth, "Business development", Icons.Material.Filled.TrendingUp), // Its pages come from the capture module; the section is empty (and hidden) without it.
         new(Sheets, "Sheets & dashboards", Icons.Material.Filled.TableChart),
         new(Finance, "Finance", Icons.Material.Filled.AccountBalance),
         new(Materials, "Materials", Icons.Material.Filled.PrecisionManufacturing),
@@ -167,7 +167,6 @@ public static class NavCatalog
         new(Projects, null, "New project", "setup/projects/new", Icons.Material.Filled.CreateNewFolder, NavRule.Custom(a => a.Can(P.ProjectsCreate) && !a.Can(P.SetupProjects), "Under Admin › Setup instead for those who set up every project", P.ProjectsCreate), MatchAll: true, Keywords: "create request project wbs plan", InMenu: false), // + New › Project.
         new(Projects, null, "Resourcing", "resourcing", Icons.Material.Filled.GroupWork, NavRule.Custom(a => a.Can(P.ResourcingManage) || a.IsPm, "Also managers of a project", P.ResourcingManage, P.ProjectsManageOwn), Keywords: "staffing allocations capacity utilization heat map"),
         new(Projects, null, "Project costs", "odcs", Icons.Material.Filled.RequestQuote, NavRule.Custom(a => a.Can(P.ProjectsFinancialsView) || a.IsPm, "Also managers of a project", P.ProjectsFinancialsView, P.ProjectsManageOwn), MatchAll: true, Keywords: "other direct costs vendor"),
-        new(Projects, null, "Proposal pricing", "pricing", Icons.Material.Filled.PriceCheck, NavRule.Need(P.PricingManage), Detail: "Proposal", Keywords: "bid proposal price cost volume wrap rate fee scenario propricer"),
 
         // People (HR): HR's own work first; everyone's directory (with the org chart) and their own profile (with benefits).
         new(People, "HR administration", "Positions", "hr/positions", Icons.Material.Filled.WorkOutline, NavRule.Need(P.HrWorkforceView, P.HrPositionsManage), Keywords: "approved positions headcount open requisitions salary range"),
@@ -180,13 +179,6 @@ public static class NavCatalog
         new(People, "Directory", "Org chart", "hr/org-chart", Icons.Material.Filled.AccountTree, NavRule.Everyone, Keywords: "reporting structure supervisors"),
         new(People, "My profile", "My profile", "hr/me", Icons.Material.Filled.Badge, NavRule.Everyone, Keywords: "personal details emergency contacts address self identification eeo"),
         new(People, "My profile", "My benefits", "hr/benefits/me", Icons.Material.Filled.HealthAndSafety, NavRule.Everyone, Keywords: "open enrollment medical dental vision 401k fsa hsa dependents life event"),
-        // Business development: the capture pipeline (BD, Finance, Admin); capture and proposal managers see their own.
-        new(Growth, "Business development", "Pipeline", "bd", Icons.Material.Filled.ViewKanban, NavRule.Custom(a => a.ShowBusinessDevelopment, "Also capture and proposal managers (their own opportunities)", P.PipelineView), MatchAll: true, Keywords: "capture board opportunities crm win themes swot pwin color team"),
-        new(Growth, "Business development", "Opportunities", "bd/opportunities", Icons.Material.Filled.Flag, NavRule.Custom(a => a.ShowBusinessDevelopment, "Also capture and proposal managers (their own opportunities)", P.PipelineView), Detail: "Opportunity", Keywords: "pursuits rfp solicitation capture"),
-        new(Growth, "Business development", "Accounts and contacts", "bd/accounts", Icons.Material.Filled.Contacts, NavRule.Need(P.PipelineView), Detail: "Account", Keywords: "agencies offices primes partners competitors crm"),
-        new(Growth, "Business development", "Leads", "bd/leads", Icons.Material.Filled.TravelExplore, NavRule.Need(P.PipelineView), Keywords: "sam.gov saved searches import notices", Government: true),
-        new(Growth, "Business development", "Forecast and win/loss", "bd/forecast", Icons.Material.Filled.Insights, NavRule.Need(P.PipelineView), Keywords: "pwin pgo weighted pipeline b&p spend"),
-        new(Growth, "Business development", "Gates and settings", "bd/settings", Icons.Material.Filled.Rule, NavRule.Need(P.PipelineView), Keywords: "go no-go bid decision checklist b&p charge code capture exec captureexec import"),
 
         new(Sheets, null, "Sheets", "sheets", Icons.Material.Filled.TableChart, NavRule.Everyone, Detail: "Sheet", Keywords: "grid gantt board calendar plan"),
         new(Sheets, null, "Dashboards", "dashboards", Icons.Material.Filled.Dashboard, NavRule.Everyone, Detail: "Dashboard", Keywords: "charts widgets"),
@@ -455,5 +447,20 @@ public static class NavCatalog
     {
         var clean = path.Split('?', '#')[0];
         return clean.Split('/', StringSplitOptions.RemoveEmptyEntries);
+    }
+}
+
+/// <summary>The rule a module's menu entry gets: its permissions (any one), or, when it names a relationship flag, also whoever holds that flag.</summary>
+public static class NavCatalogRules
+{
+    public static NavRule For(ModuleNavEntry e)
+    {
+        var permissions = e.Permissions.ToArray();
+        if (e.AlsoWhenFlag is { } flag)
+        {
+            return NavRule.Custom(a => a.HasFlag(flag) || permissions.Any(a.Can), e.Note ?? "Also people the module names", permissions);
+        }
+
+        return permissions.Length == 0 ? NavRule.Everyone : NavRule.Need(permissions);
     }
 }

@@ -31,13 +31,13 @@ public sealed class NewMenuTests
 
     public static TheoryData<OrgRoles, string[], string[]> Roles => new()
     {
-        { OrgRoles.Employee, [], ["project", "opportunity", "invoice", "journal", "bill", "contract", "rfq", "engineering-change", "automation"] },
-        { OrgRoles.ProjectManager, ["project"], ["opportunity", "invoice", "journal", "bill", "contract", "automation"] },
-        { OrgRoles.Finance, ["project", "invoice", "journal", "bill", "contract", "rfq"], ["opportunity", "engineering-change", "automation"] },
+        { OrgRoles.Employee, [], ["project", "invoice", "journal", "bill", "contract", "rfq", "engineering-change", "automation"] },
+        { OrgRoles.ProjectManager, ["project"], ["invoice", "journal", "bill", "contract", "automation"] },
+        { OrgRoles.Finance, ["project", "invoice", "journal", "bill", "contract", "rfq"], ["engineering-change", "automation"] },
         { OrgRoles.Hr, [], ["project", "invoice", "journal", "bill", "contract", "automation"] },
         { OrgRoles.Materials, ["engineering-change"], ["project", "invoice", "journal", "bill", "automation"] },
-        { OrgRoles.BusinessDevelopment, ["opportunity"], ["project", "invoice", "journal", "bill", "automation"] },
-        { OrgRoles.Admin, ["project", "opportunity", "invoice", "journal", "bill", "contract", "rfq", "engineering-change", "automation"], [] },
+        { OrgRoles.BusinessDevelopment, [], ["project", "invoice", "journal", "bill", "automation"] }, // "+ New › Opportunity" comes from the capture module.
+        { OrgRoles.Admin, ["project", "invoice", "journal", "bill", "contract", "rfq", "engineering-change", "automation"], [] },
     };
 
     [Theory]

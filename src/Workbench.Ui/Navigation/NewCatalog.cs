@@ -42,7 +42,6 @@ public static class NewCatalog
 
         new("project", "Project", "New project", Icons.Material.Filled.CreateNewFolder, NavRule.Need(P.ProjectsCreate, P.SetupProjects), "setup/projects/new", NewKind.ProjectDialog, Keywords: "wbs plan request"),
         new("sheet", "Sheet", "New sheet", Icons.Material.Filled.TableChart, NavRule.Everyone, "sheets", NewKind.SheetDialog, Keywords: "grid tracker list"),
-        new("opportunity", "Opportunity", "New opportunity", Icons.Material.Filled.Flag, NavRule.Need(P.CaptureManage), "bd/opportunities/new", Keywords: "pursuit capture rfp bd"),
         new("invoice", "Invoice", "New invoice", Icons.Material.Filled.NoteAdd, NavRule.Need(P.BillingInvoicesManage), "billing/new", Keywords: "bill customer billing"),
         new("journal", "Journal entry", "New journal entry", Icons.Material.Filled.MenuBook, NavRule.Need(P.GlJournalsPost), "accounting/journal/new", Keywords: "je gl general ledger"),
         new("bill", "Vendor bill", "New vendor bill", Icons.Material.Filled.ReceiptLong, NavRule.Need(P.ApBillsManage), "purchasing/bills/new", Keywords: "ap payable vendor invoice"),

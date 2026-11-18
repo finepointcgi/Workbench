@@ -94,8 +94,6 @@ public static class DependencyInjection
         Tasks.TaskRegistration.AddWorkbenchTasks(services); // Task assignment (item Assignees), its notifications and the "Assigned to you" to-do; above AddWorkbenchIdentity.
         Hr.HrRegistration.AddWorkbenchHr(services); // HR: personnel, positions, compensation (pay rate history), benefits, onboarding/offboarding, reports, to-dos; above AddWorkbenchIdentity.
         Materials.MaterialsRegistration.AddWorkbenchMaterials(services); // Parts, inventory, BOMs, work orders, MRP; posts through the GL (JournalSource.Inventory/Manufacturing), decorates PO receiving; above AddWorkbenchIdentity.
-        Crm.CrmRegistration.AddWorkbenchCrm(services); // Business development: accounts, opportunities, gates (approval handler), SAM.gov leads, pipeline, to-dos; above AddWorkbenchIdentity.
-        Pricing.PricingRegistration.AddWorkbenchPricing(services); // Proposal pricing (price models, scenarios, locked versions, cost volume, won handoff); above AddWorkbenchIdentity.
         Assistant.AssistantRegistration.AddWorkbenchAssistant(services); // AI assistant (off by default), PM narratives and timesheet flags; tools read through the permission-checked services; above AddWorkbenchIdentity.
         Planning.PlanningRegistration.AddWorkbenchPlanning(services); // Recurring journals (post through the GL), corporate GL budgets, budget vs actual, planning cycles (approval handler); above AddWorkbenchIdentity.
         Currencies.CurrencyRegistration.AddWorkbenchCurrencies(services); // Multicurrency: currencies, rates, revaluation (posts through the GL, adds a close check); above AddWorkbenchIdentity.

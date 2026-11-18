@@ -22,7 +22,6 @@ public static class CustomizableEntities
     public const string Invoice = CustomizableEntityTypes.Invoice;
     public const string ExpenseReport = CustomizableEntityTypes.ExpenseReport;
     public const string Part = CustomizableEntityTypes.Part;
-    public const string Opportunity = CustomizableEntityTypes.Opportunity;
     public const string Timesheet = CustomizableEntityTypes.Timesheet;
     public const string SalesOrder = "sales-order";
 }

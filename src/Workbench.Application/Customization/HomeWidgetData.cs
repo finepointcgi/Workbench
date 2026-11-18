@@ -2,7 +2,6 @@ using System.Globalization;
 using Microsoft.Extensions.DependencyInjection;
 using Workbench.Contracts;
 using Workbench.Contracts.Billing;
-using Workbench.Contracts.Crm;
 using Workbench.Contracts.Dashboards;
 using Workbench.Contracts.ProjectAccounting;
 using Workbench.Contracts.Purchasing;
@@ -30,6 +29,7 @@ public sealed class HomeWidgetData(IServiceProvider services, TimeProvider clock
         {
             return widget.Type switch
             {
+                WidgetType.Kpi when widget.Config.Kpi is KpiKind.Pipeline => await ModuleWidgetAsync(data, widget, ct, PipelineKpiKey),
                 WidgetType.Kpi when widget.Config.Kpi is { } kind => data with { Kpi = await KpiAsync(kind, ct) },
                 WidgetType.Kpi => data with { Error = "Pick the figure to show." },
                 WidgetType.ReportChart => await ReportChartAsync(data, widget.Config, ct),
@@ -48,10 +48,17 @@ public sealed class HomeWidgetData(IServiceProvider services, TimeProvider clock
         }
     }
 
-    /// <summary>A module's widget: the provider registered for <c>Config.ModuleKey</c>. With the module absent there is no provider, and the widget says so.</summary>
-    private async Task<WidgetDataDto> ModuleWidgetAsync(WidgetDataDto data, WidgetDto widget, CancellationToken ct)
+    /// <summary>
+    /// The key of the provider that computes the "Weighted pipeline" figure. The tile type (<see cref="KpiKind.Pipeline"/>) is stored on saved home
+    /// pages, so it stays in the product; the business development module registers the provider, and without it the tile says so.
+    /// </summary>
+    public const string PipelineKpiKey = "kpi.pipeline";
+
+    /// <summary>A module's widget: the provider registered for <c>Config.ModuleKey</c> (or <paramref name="providerKey"/>). With the module absent there is no provider, and the widget says so.</summary>
+    private async Task<WidgetDataDto> ModuleWidgetAsync(WidgetDataDto data, WidgetDto widget, CancellationToken ct, string? providerKey = null)
     {
-        var provider = widget.Config.ModuleKey is { } key ? services.GetServices<IHomeWidgetProvider>().FirstOrDefault(p => p.Key == key) : null;
+        var key = providerKey ?? widget.Config.ModuleKey;
+        var provider = key is not null ? services.GetServices<IHomeWidgetProvider>().FirstOrDefault(p => p.Key == key) : null;
         return provider is null
             ? data with { Error = "This widget comes from a module that isn't installed or licensed." }
             : await provider.ComputeAsync(widget, data, ct);
@@ -61,7 +68,7 @@ public sealed class HomeWidgetData(IServiceProvider services, TimeProvider clock
     {
         var kpi = await KpiForAllAsync(kind, ct);
         // Multicompany, within one company: figures that aren't kept per company say they cover every company.
-        return kind is KpiKind.Utilization or KpiKind.OpenPurchaseOrders or KpiKind.Pipeline && await CompanyLimitedAsync(ct)
+        return kind is KpiKind.Utilization or KpiKind.OpenPurchaseOrders && await CompanyLimitedAsync(ct)
             ? kpi with { Detail = $"{kpi.Detail} · all companies" }
             : kpi;
     }
@@ -137,13 +144,6 @@ public sealed class HomeWidgetData(IServiceProvider services, TimeProvider clock
                 var open = orders.Sum(o => o.Total - o.Billed);
                 return new KpiData(kind, "Open purchase orders", open, true, false,
                     $"{orders.Count} open order{(orders.Count == 1 ? "" : "s")}, value not yet billed", "purchasing/orders");
-            }
-
-            case KpiKind.Pipeline:
-            {
-                var forecast = await services.GetRequiredService<IPipelineService>().GetForecastAsync(ct);
-                return new KpiData(kind, "Weighted pipeline", forecast.WeightedValue, true, false,
-                    $"{forecast.TotalValue.ToString("C0", Us)} unweighted", "bd/forecast");
             }
 
             default:

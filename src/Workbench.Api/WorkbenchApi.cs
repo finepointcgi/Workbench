@@ -64,8 +64,6 @@ public static class WorkbenchApi
         v1.MapTaskEndpoints();
         v1.MapHrEndpoints();
         v1.MapMaterialsEndpoints();
-        v1.MapCrmEndpoints();
-        v1.MapPricingEndpoints();
         v1.MapAssistantEndpoints();
         v1.MapMcpEndpoints(); // MCP for outside AI clients, API keys only (docs/integrations/mcp.md).
         v1.MapPlanningEndpoints();
