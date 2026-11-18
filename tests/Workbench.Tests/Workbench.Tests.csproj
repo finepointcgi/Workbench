@@ -31,10 +31,8 @@
     <!-- MS Project XML files for the import and export tests. -->
     <None Include="Scheduling\Samples\**" CopyToOutputDirectory="PreserveNewest" />
     <!-- Recorded ADP, Paychex and Gusto API responses for the payroll adapter tests. -->
-    <None Include="Payroll\Fixtures\**" CopyToOutputDirectory="PreserveNewest" />
     <!-- Golden files for the accounting export layouts. -->
     <None Include="AccountingExport\Golden\**" CopyToOutputDirectory="PreserveNewest" />
-    <None Include="Integrations\GitLab\Fixtures\**" CopyToOutputDirectory="PreserveNewest" />
     <!-- A WB2 key issued by the license server's own signer, for the cross-check test. -->
     <None Include="Licensing\Samples\**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
@@ -44,6 +42,11 @@
     <InternalsVisibleTo Include="Workbench.Module.GovCon.Tests" />
     <InternalsVisibleTo Include="Workbench.Module.Capture.Tests" />
     <InternalsVisibleTo Include="Workbench.Module.Materials.Tests" />
+    <InternalsVisibleTo Include="Workbench.Module.ProjectControls.Tests" />
+    <InternalsVisibleTo Include="Workbench.Module.Workforce.Tests" />
+    <InternalsVisibleTo Include="Workbench.Module.Accounting.Tests" />
+    <InternalsVisibleTo Include="Workbench.Module.Billing.Tests" />
+    <InternalsVisibleTo Include="Workbench.Module.Enterprise.Tests" />
   </ItemGroup>
 
   <ItemGroup>

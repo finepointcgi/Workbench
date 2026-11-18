@@ -37,7 +37,7 @@ public sealed class ApBillService(
     TimeProvider clock,
     ILogger<ApBillService> logger,
     ApprovalEngine? approvals = null,
-    SalesTax.UseTaxAccrual? useTax = null,
+    Billing.IBillTaxHook? useTax = null,
     Customization.DocumentNumbers? documentNumbers = null,
     IVendorReturnSource? vendorReturns = null,
     IEnumerable<IBillLineGuard>? lineGuards = null) : IApBillService
@@ -456,11 +456,6 @@ public sealed class ApBillService(
         }
 
         var lineIds = bill.Lines.Select(l => l.Id).ToList();
-        if (await db.Set<Domain.Assets.FixedAsset>().AsNoTracking().Where(a => a.SourceBillLineId != null && lineIds.Contains(a.SourceBillLineId!.Value)).Select(a => a.TagNumber).FirstOrDefaultAsync(ct) is { } tag)
-        {
-            throw new InvalidOperationException($"A line of {title} is fixed asset {tag}. Remove the asset first.");
-        }
-
         foreach (var guard in lineGuards ?? [])
         {
             if (await guard.BlockingReasonAsync(db, lineIds, ct) is { } reason)
@@ -527,7 +522,7 @@ public sealed class ApBillService(
             }
         }
 
-        var tax = await db.Set<Domain.SalesTax.ApBillTax>().FirstOrDefaultAsync(t => t.BillId == bill.Id, ct);
+        var tax = useTax is null ? null : await useTax.FindAsync(db, bill.Id, ct);
         if (tax?.UseTaxJournalEntryId is { } useTaxEntry)
         {
             var entry = await db.Set<JournalEntry>().Include(e => e.Lines).FirstAsync(e => e.Id == useTaxEntry, ct);

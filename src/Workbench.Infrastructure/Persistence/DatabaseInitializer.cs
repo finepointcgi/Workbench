@@ -185,23 +185,21 @@ public static class DatabaseInitializer
         await BillingSeed.SeedAsync(db, factory, cancellationToken);
         await PurchasingSeed.SeedAsync(db, services, cancellationToken);
         await ProcurementSeed.SeedAsync(db, services, cancellationToken);
-        await AssetsSeed.SeedAsync(db, services, cancellationToken);
-        await CashSeed.SeedAsync(db, services, cancellationToken);
-        await PayrollSeed.SeedAsync(db, cancellationToken);
+        await ModuleSeedsAsync(ModuleSeedStage.AfterProcurement); // The sample fixed assets and bank accounts come from the accounting module, at the stage above.
+        await ModuleSeedsAsync(ModuleSeedStage.AfterCash); // The sample pay group, periods, pay rates and payroll profiles come from the workforce module, at the stage above.
         await LeaveSeed.SeedAsync(db, cancellationToken);
         await PerDiemSeed.SeedAsync(db, cancellationToken);
         await ResourcingSeed.SeedAsync(db, cancellationToken);
         await ResourcingSeed.SeedSkillsAsync(db, cancellationToken);
-        await RevenueSeed.SeedAsync(db, services, cancellationToken);
+        await ModuleSeedsAsync(ModuleSeedStage.AfterResourcing); // The billing module's revenue recognition sample data (project 1001's setup, an approved EAC, the current period's run).
         await ModuleSeedsAsync(ModuleSeedStage.AfterRevenue);
-        await EvmSeed.SeedAsync(db, services, cancellationToken); // Earned value on 1001: PMB, a closed period, a VAR and baseline changes.
-        await CeilingsSeed.SeedAsync(db, cancellationToken);
+        // Earned value on 1001 (PMB, a closed period, a VAR, baseline changes) and the sample ceilings come from the project controls module's seed, at the stage above.
         await ProjectManagerSeed.SeedAsync(db, cancellationToken); // Sam Patel (Project manager only) runs 1002; a few assigned tasks.
         await LifecycleSeed.SeedAsync(db, cancellationToken); // A project at each stage of its life (5101 set up, 5102 planning, 5103 awaiting approval, 5104 executing).
-        await HrSeed.SeedAsync(db, cancellationToken); // HR: Harper Reed (HR role), positions, records, clearances, benefit plans, open enrollment, checklists.
+        // HR sample data (positions, records, clearances, benefit plans, open enrollment, checklists) comes from the workforce module, at the stage below.
         await ModuleSeedsAsync(ModuleSeedStage.AfterHr);
         await AssistantSeed.SeedAsync(db, cancellationToken); // Timesheet flags: the analyst's pending timesheet gets weekend hours, a late day and a moved-hours revision.
-        await PlanningSeed.SeedAsync(db, services, cancellationToken); // Planning: this year's adopted budget, next year's cycle (ENG submitted, OPS drafting), rent and accrual recurring journals.
+        // Planning (this year's adopted budget, next year's cycle, rent and accrual recurring journals) comes from the accounting module, at the stage below.
         await ModuleSeedsAsync(ModuleSeedStage.AfterPlanning);
         await CurrencySeed.SeedAsync(db, services, cancellationToken); // Multicurrency: EUR and GBP with rates, a posted EUR vendor bill (BTG) and an approved GBP invoice (UKMOD).
         await CompanySeed.SeedAsync(db, services, cancellationToken); // Multicompany: subsidiary FED (contract, project 4001, Jordan Blake E1041) and two weeks of intercompany labor with MAIN.
@@ -209,8 +207,10 @@ public static class DatabaseInitializer
         await TravelSeed.SeedAsync(db, cancellationToken); // Travel: analyst@'s approved DC trip TA-000001 on its expense report; Citi corporate card ••4417 with imported charges.
         await ModuleSeedsAsync(ModuleSeedStage.AfterTravel);
         await SourcingSeed.SeedAsync(db, services, cancellationToken); // Sourcing: RFQ-000001 (three quotes, awarded to PRIMA on an issued PO), PRIMA's portal contact Jordan Reyes, DIGI as an EDI partner.
-        await BankFilesTaxSeed.SeedAsync(db, services, cancellationToken); // Bank files and sales tax: ACH settings, vendor NETS with approved ACH details, a bill with use tax and an approved ACH run; Fairfax/MD/DC rates and a taxed NVDC invoice.
-        await TaxBooksSeed.SeedAsync(db, services, cancellationToken); // Tax books on two assets, an asset transfer, three CPSR sample POs.
+        // Bank files and sales tax (ACH settings, vendor NETS with approved ACH details, a bill with use tax and an approved ACH run; Fairfax/MD/DC rates and a taxed NVDC invoice)
+        // and the tax books (two assets, an asset transfer) come from the accounting module, at the stage below.
+        await ModuleSeedsAsync(ModuleSeedStage.AfterSourcing);
+        await CpsrPurchaseOrderSeed.SeedAsync(db, services, cancellationToken); // Three issued purchase orders for the CPSR sample (the government contracting module adds the files).
         await ModuleSeedsAsync(ModuleSeedStage.AfterTaxBooks);
         await CustomizationSeed.SeedAsync(db, cancellationToken); // Customization: "Program office" and "Customer POC" on projects, "Clearance sponsor" and a sensitive "Badge number" on employees, sub-statuses under active projects.
         await AutomationSeed.SeedAsync(db, cancellationToken); // Admin › Automation: funding under 25% → PM, receipts over $75 (validation), timesheet approval escalation after 2 days.
@@ -227,14 +227,14 @@ public static class DatabaseInitializer
     /// <summary>
     /// The people offered by the development sign-in page, each matching a seeded employee by email
     /// (<see cref="ProjectAccountingSeed"/>, <see cref="ProjectManagerSeed"/>). dev@ is an Admin, pm@ is Finance and a Project
-    /// manager, sam.pm@ is only a Project manager, hr@ is HR (<see cref="HrSeed"/>), the others are plain Employees.
+    /// manager, sam.pm@ is only a Project manager, hr@ is HR (the workforce module's HR sample data), the others are plain Employees.
     /// </summary>
     public static IReadOnlyList<(string Email, string DisplayName, bool IsAdmin, bool IsFinance, bool IsProjectManager, bool IsHr)> DevUsers { get; } =
     [
         ("dev@workbench.local", "Dana Lee", true, false, false, false),
         ("pm@example.com", "Pat Morgan", false, true, true, false),
         (ProjectManagerSeed.SamEmail, "Sam Patel", false, false, true, false),
-        (HrSeed.HarperEmail, "Harper Reed", false, false, false, true),
+        ("hr@example.com", "Harper Reed", false, false, false, true),
         ("analyst@example.com", "Alex Rivera", false, false, false, false),
         ("viewer@example.com", "Val Chen", false, false, false, false),
     ];

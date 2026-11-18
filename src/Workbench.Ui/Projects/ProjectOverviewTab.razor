@@ -2,6 +2,7 @@
 @using Workbench.Contracts.Collaboration
 @inject IActivityService Activity
 @inject IServiceProvider Services
+@inject IEnumerable<Workbench.Contracts.Modules.ProjectHubTabContribution> TabContributions
 @using Workbench.Contracts.Contracts
 
 <ProjectSetupSteps Hub="Hub" />
@@ -13,9 +14,9 @@
         {
             <MudAlert Severity="ProjectsFormat.Severity(alert.Level)" Dense="true">
                 @Tm.Reword(alert.Message)
-                @if (alert.Tab is { } tab && ProjectsFormat.Allows(Hub.Tabs, tab))
+                @if (alert.Tab is { } tab && _tabs.Allows(Hub.Tabs, tab))
                 {
-                    <MudLink Href="@($"projects/{Hub.Project.Id}/{tab}")" Typo="Typo.body2" Class="ml-2">See @Tm.Reword(ProjectsFormat.Tabs.First(t => t.Slug == tab).Label)</MudLink>
+                    <MudLink Href="@($"projects/{Hub.Project.Id}/{tab}")" Typo="Typo.body2" Class="ml-2">See @Tm.Reword(_tabs.Label(tab))</MudLink>
                 }
             </MudAlert>
         }
@@ -170,6 +171,9 @@
 
     [Parameter, EditorRequired]
     public ProjectHubDto Hub { get; set; } = default!;
+
+    private ProjectTabSet? _tabsCache;
+    private ProjectTabSet _tabs => _tabsCache ??= new ProjectTabSet(TabContributions);
 
     private IReadOnlyList<ActivityDto>? _activity;
     private FundingRunway? _runway;

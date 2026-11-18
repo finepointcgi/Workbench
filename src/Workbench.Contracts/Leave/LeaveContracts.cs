@@ -247,3 +247,14 @@ public interface ILeaveTimesheetService
 {
     Task<TimesheetLeaveDto> GetForTimesheetAsync(Guid timesheetId, CancellationToken cancellationToken = default);
 }
+
+// ---- Pay groups, for eligibility ----
+
+/// <summary>A pay group a leave policy can be limited to. Pay groups are made by the payroll module; with none installed the list is empty.</summary>
+public sealed record PayGroupChoiceDto(Guid Id, string Code, string Name);
+
+/// <summary>The pay groups there are (code and name only), for the eligibility choices of a leave policy. The pay calendar itself stays core; the payroll module maintains it.</summary>
+public interface IPayGroupChoiceService
+{
+    Task<IReadOnlyList<PayGroupChoiceDto>> ListAsync(CancellationToken cancellationToken = default);
+}

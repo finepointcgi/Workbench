@@ -29,9 +29,9 @@ public sealed class SetupComponentTests
 
         var page = ctx.Render<SetupHome>();
 
-        page.WaitForAssertion(() => Assert.Equal("7 of 14 done", page.Find("[data-testid=checklist-progress]").TextContent.Trim()));
+        page.WaitForAssertion(() => Assert.Equal("6 of 12 done", page.Find("[data-testid=checklist-progress]").TextContent.Trim()));
         var items = page.FindAll("[data-testid=checklist-item]").Select(i => i.TextContent).ToList();
-        foreach (var step in new[] { "Users and sign-in", "Chart of accounts", "Bank accounts", "Payroll provider", "Approval workflows", "Indirect rates", "Billing details" })
+        foreach (var step in new[] { "Users and sign-in", "Chart of accounts", "Approval workflows", "Indirect rates", "Billing details" })
         {
             Assert.Contains(items, i => i.Contains(step));
         }
@@ -53,8 +53,8 @@ public sealed class SetupComponentTests
 
         var page = ctx.Render<SetupHome>();
 
-        page.WaitForAssertion(() => Assert.Contains("Bank accounts", page.Find("[data-testid=setup-next]").TextContent));
-        Assert.Equal("cash", page.Find("[data-testid=setup-next-go]").GetAttribute("href"));
+        page.WaitForAssertion(() => Assert.Contains("Approval workflows", page.Find("[data-testid=setup-next]").TextContent)); // No bank account step: the accounting module's cash pages are not here.
+        Assert.Equal("setup/approval-workflows", page.Find("[data-testid=setup-next-go]").GetAttribute("href"));
 
         var allDone = new SetupChecklistDto(true, true, true, true, true, true, true,
             HasInvitedUsers: true, HasChartOfAccounts: true, HasBankAccount: true, HasPayrollProvider: true, HasApprovalWorkflows: true,

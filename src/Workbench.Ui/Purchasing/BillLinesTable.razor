@@ -1,6 +1,6 @@
 @* A bill's lines: what each charges, where it's routed and whether it's decided. *@
 <MudSimpleTable Dense="true" Elevation="0" data-testid="bill-lines" Style="overflow-x:auto">
-    <thead><tr><th>#</th><th>Type</th><th>Charge to</th><th>Description</th><th style="text-align:right">Amount</th><th style="text-align:right"><Term Key="retainage">Retainage</Term></th><th>Routed to</th><th>Status</th>@if (CanCapitalize is not null) { <th></th> }</tr></thead>
+    <thead><tr><th>#</th><th>Type</th><th>Charge to</th><th>Description</th><th style="text-align:right">Amount</th><th style="text-align:right"><Term Key="retainage">Retainage</Term></th><th>Routed to</th><th>Status</th></tr></thead>
     <tbody>
         @foreach (var l in Lines)
         {
@@ -52,15 +52,6 @@
                 <td style="text-align:right">@(l.RetainageAmount == 0 ? "" : PurchasingFormat.Amount(l.RetainageAmount))</td>
                 <td>@l.RoutedTo</td>
                 <td>@l.Status@(l.DecidedBy is null ? "" : $" by {l.DecidedBy}")</td>
-                @if (CanCapitalize is not null)
-                {
-                    <td>
-                        @if (CanCapitalize(l))
-                        {
-                            <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Inventory2" OnClick="@(() => OnCapitalize.InvokeAsync(l))" data-testid="capitalize" title="Capitalize: record this purchase as a fixed asset and depreciate it">Add to fixed assets</MudButton>
-                        }
-                    </td>
-                }
             </tr>
         }
     </tbody>
@@ -68,11 +59,6 @@
 
 @code {
     [Parameter] public IReadOnlyList<BillLineDto> Lines { get; set; } = [];
-
-    /// <summary>Fixed assets: which lines show a Capitalize action (null: no action column).</summary>
-    [Parameter] public Func<BillLineDto, bool>? CanCapitalize { get; set; }
-
-    [Parameter] public EventCallback<BillLineDto> OnCapitalize { get; set; }
 
     private static string Q(decimal? value) => value is { } v ? v.ToString("#,##0.####", System.Globalization.CultureInfo.InvariantCulture) : "";
 }

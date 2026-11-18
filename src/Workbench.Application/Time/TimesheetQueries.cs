@@ -78,6 +78,7 @@ internal static class TimesheetQueries
         Employee employee,
         TimekeepingClock clock,
         IProjectService? projects,
+        IEnumerable<Projects.ICeilingProximitySource>? ceilingSources,
         CancellationToken cancellationToken)
     {
         var revisions = await db.Set<TimeEntryRevision>().AsNoTracking().Where(r => r.TimesheetId == sheet.Id).ToListAsync(cancellationToken);
@@ -129,31 +130,26 @@ internal static class TimesheetQueries
 
         return new TimesheetDetailDto(sheet.ToDto(employee), entries, revisionDtos, days, chargeCodes, auditDtos,
             await NotOpenYetAsync(db, employee, sheet.PeriodEnd, chargeCodes, cancellationToken),
-            await CeilingRoomAsync(db, chargeCodes.Select(c => c.ChargeCode.WbsElementId).Concat(entries.Select(e => e.WbsElementId)).Distinct().ToList(), clock.UtcNow, cancellationToken));
+            await CeilingRoomAsync(ceilingSources, db, chargeCodes.Select(c => c.ChargeCode.WbsElementId).Concat(entries.Select(e => e.WbsElementId)).Distinct().ToList(), clock.UtcNow, cancellationToken));
     }
 
     /// <summary>
     /// The room left under an hours ceiling for each charge code that has one (the tightest, with any override): what the hours ceilings
-    /// consume already counts every entry, drafts included, so this is exactly how many more hours can be saved and submitted.
+    /// consume already counts every entry, drafts included, so this is exactly how many more hours can be saved and submitted. Asked of the project
+    /// controls module (nothing without it).
     /// </summary>
-    private static async Task<IReadOnlyList<ChargeCeilingRoomDto>> CeilingRoomAsync(IWorkbenchDbContext db, IReadOnlyCollection<Guid> wbsIds, DateTime utcNow, CancellationToken ct)
+    private static async Task<IReadOnlyList<ChargeCeilingRoomDto>> CeilingRoomAsync(
+        IEnumerable<Projects.ICeilingProximitySource>? sources, IWorkbenchDbContext db, IReadOnlyCollection<Guid> wbsIds, DateTime utcNow, CancellationToken ct)
     {
-        if (wbsIds.Count == 0)
+        if (wbsIds.Count == 0 || sources is null)
         {
             return [];
         }
 
-        var states = await Ceilings.CeilingEngine.ForWbsAsync(db, wbsIds, utcNow, ct);
         var room = new List<ChargeCeilingRoomDto>();
-        foreach (var wbs in wbsIds)
+        foreach (var source in sources)
         {
-            var left = states.Where(s => s.Wbs.Contains(wbs) && s.Limit(Domain.Ceilings.CeilingMeasure.Hours) is not null && s.EffectiveLimit(Domain.Ceilings.CeilingMeasure.Hours) is not null)
-                .Select(s => s.EffectiveLimit(Domain.Ceilings.CeilingMeasure.Hours)!.Value - s.Consumed(Domain.Ceilings.CeilingMeasure.Hours))
-                .DefaultIfEmpty(decimal.MaxValue).Min();
-            if (left != decimal.MaxValue)
-            {
-                room.Add(new ChargeCeilingRoomDto(wbs, Math.Max(0, left)));
-            }
+            room.AddRange(await source.HoursRoomAsync(db, wbsIds, utcNow, ct));
         }
 
         return room;

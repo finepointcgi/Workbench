@@ -9,14 +9,14 @@ using Workbench.Domain.Scheduling;
 namespace Workbench.Application.Scheduling;
 
 /// <summary>A scheduled sheet's tracked items with what the engine needs: links, the working calendar, constraints and the % column.</summary>
-internal sealed record PlanState(
+public sealed record PlanState(
     Sheet Sheet, List<Item> Items, List<PlanLink> Links, WorkCalendar Calendar, Column? PercentColumn, Dictionary<Guid, PlanConstraintDto> Constraints);
 
 /// <summary>
 /// Runs <see cref="ScheduleEngine.Reflow"/> on a sheet after its items or links change, so summaries span their subtasks and
 /// successors start no earlier than their links allow. Only sheets with scheduling on are touched.
 /// </summary>
-internal static class PlanReflow
+public static class PlanReflow
 {
     public static async Task<PlanState> LoadAsync(IWorkbenchDbContext db, Sheet sheet, CancellationToken cancellationToken, bool tracked = true)
     {

@@ -43,7 +43,7 @@ else
         {
             <MudButton Href="@($"projects/{ProjectId}/budgets")" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.EditNote">Budgets</MudButton>
             <MudButton Href="@($"projects/{ProjectId}/revenue")" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.TrendingUp">Revenue</MudButton>
-            <MudButton Href="@($"projects/{ProjectId}/evm")" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.ShowChart">Earned value</MudButton>
+            <UiSlot Name="project.financials.actions" Parameters="@(new Dictionary<string, object?> { ["ProjectId"] = ProjectId })" />
         }
         <MudMenu Label="Export CSV" Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Download">
             <MudMenuItem OnClick="ExportWbsAsync">WBS financials</MudMenuItem>
@@ -119,7 +119,7 @@ else
             {
                 <FundingPanel Funding="funding" />
                 <Workbench.Ui.Setup.Clins.ClinFundingCard ProjectId="ProjectId" />
-                <Workbench.Ui.Ceilings.ProjectCeilingsCard ProjectId="ProjectId" />
+                <UiSlot Name="project.financials.cards" Parameters="@(new Dictionary<string, object?> { ["ProjectId"] = ProjectId })" />
             }
             else
             {

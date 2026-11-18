@@ -139,24 +139,7 @@ public sealed class GoldenPathTests
             [new PaymentApplicationInput(invoice.Summary.Id, invoice.Summary.Total)], reference));
         Assert.Equal(InvoiceState.Paid, (await invoices.GetAsync(invoice.Summary.Id)).Summary.Status);
 
-        // ---- Bank reconciliation: the demo's statement is for this month and doesn't show our receipt yet, so it is a deposit
-        // in transit. The statement's own fee gets booked, and the adjusted bank and book balances then agree.
-        var account = (await new HttpBankAccountService(finance).ListAsync(false)).Single();
-        var reconciliations = new HttpBankReconciliationService(finance);
-        var defaults = await reconciliations.GetDefaultsAsync(account.Id);
-        var started = await reconciliations.StartAsync(new StartReconciliationRequest(account.Id, defaults.StatementEndDate ?? today, defaults.StatementEndingBalance));
-        await reconciliations.AutoMatchAsync(new AutoMatchRequest(account.Id));
-        var workspace = await reconciliations.GetWorkspaceAsync(started.Id);
-        var inTransit = workspace.GlItems.Single(g => g.Reference == reference && g.Amount == payment.Amount);
-        Assert.Null(inTransit.MatchId);
-        var booking = await reconciliations.GetBookingAccountsAsync();
-        foreach (var unmatched in workspace.BankItems.Where(b => b.MatchId is null))
-        {
-            await reconciliations.BookBankItemAsync(new BookBankItemRequest(unmatched.Id, booking.BankFeeAccountId!.Value));
-        }
-
-        var done = await reconciliations.CompleteAsync(started.Id, new CompleteReconciliationRequest("Golden path"));
-        Assert.Equal(ReconciliationState.Completed, done.Status);
+        // (Bank reconciliation of the receipt is the accounting module's; its tests cover it.)
 
         // ---- The close checklist: what this chain did is in order. (Other items on it are the demo's own loose ends: other
         // people's drafts and expenses. The bank check wants a reconciliation through the period's end, and ours is through
@@ -172,9 +155,5 @@ public sealed class GoldenPathTests
 
         // Billing and the payment changed the ledger, but not cost: project financials still agree with it.
         Assert.True((await accounting.GetReconciliationAsync(project.Id)).IsReconciled);
-
-        // The reconciliation is on record, and the receipt, not on the statement yet, stays outstanding.
-        var cleared = await reconciliations.GetReportAsync(done.Id);
-        Assert.DoesNotContain(cleared.ClearedGlItems, g => g.Reference == reference);
     }
 }

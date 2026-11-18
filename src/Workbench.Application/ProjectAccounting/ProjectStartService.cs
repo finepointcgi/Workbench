@@ -8,7 +8,6 @@ using Workbench.Contracts.Identity;
 using Workbench.Contracts.ProjectAccounting;
 using Workbench.Contracts.Scheduling;
 using Workbench.Contracts.Sheets;
-using Workbench.Domain.Ceilings;
 using Workbench.Domain.Identity;
 using Workbench.Domain.ProjectAccounting;
 
@@ -32,9 +31,10 @@ public sealed class ProjectStartService(
     IClinService clins,
     IBudgetService budgets,
     TimeProvider clock,
+    Projects.IContractCeilingSource ceilingSource,
     IProjectPlanService? planTerms = null,
     ProjectPlanService? handOff = null,
-    Contracts.Revenue.IRevenueSetupService? revenueSetup = null) : IProjectStartService
+    IEnumerable<Projects.IProjectStartHook>? startHooks = null) : IProjectStartService
 {
     private static readonly IReadOnlyList<ProjectTemplateDto> Templates =
     [
@@ -242,10 +242,13 @@ public sealed class ProjectStartService(
         return await projects.GetProjectAsync(project.Id, cancellationToken) ?? project;
     }
 
-    /// <summary>What every new project gets once it exists: revenue set up from the contract, its labor categories, and its manager asked to plan it.</summary>
+    /// <summary>What every new project gets once it exists: what license modules add (revenue set up from the contract), its labor categories, and its manager asked to plan it.</summary>
     private async Task FinishAsync(ProjectDto project, IReadOnlyList<Guid>? categoryIds, Guid? manager, Guid? me, CancellationToken cancellationToken)
     {
-        await SetUpRevenueAsync(project, planTerms, cancellationToken);
+        foreach (var hook in startHooks ?? [])
+        {
+            await hook.OnProjectStartedAsync(project, cancellationToken); // The billing module sets up how the project earns revenue.
+        }
 
         // The labor categories the plan may use: the ones given, else the ones the contract prices. Only Finance can set them,
         // so a project a PM requests waits for Finance to pick them before it can be submitted.
@@ -332,11 +335,7 @@ public sealed class ProjectStartService(
             return;
         }
 
-        await using var db = await dbFactory.CreateAsync(cancellationToken);
-        var hours = await db.Set<Ceiling>().AsNoTracking()
-            .Where(c => c.ContractId == contractId && c.IsActive && c.LaborCategoryId != null && c.HoursCeiling > 0 && c.ProjectId == null && c.WbsElementId == null)
-            .Select(c => new { c.ClinId, LaborCategoryId = c.LaborCategoryId!.Value, Hours = c.HoursCeiling!.Value })
-            .ToListAsync(cancellationToken);
+        var hours = await ceilingSource.HourCeilingsAsync(contractId, cancellationToken);
         if (hours.Count == 0)
         {
             return;
@@ -359,54 +358,11 @@ public sealed class ProjectStartService(
         }
     }
 
-    /// <summary>
-    /// How the project earns revenue follows its contract, so Finance doesn't have to set it up before the first month end: T&amp;M
-    /// and labor-hour earn hours at the bill rate as they are worked, cost-plus earns cost plus fee, fixed price earns on milestones.
-    /// Only Finance can set it (a project a PM requests is set up by Finance later), and other contract types keep the default.
-    /// </summary>
-    private async Task SetUpRevenueAsync(ProjectDto project, IProjectPlanService? terms, CancellationToken cancellationToken)
-    {
-        if (revenueSetup is null || project.ContractId is not { } contractId)
-        {
-            return;
-        }
-
-        ContractType type;
-        await using (var db = await dbFactory.CreateAsync(cancellationToken))
-        {
-            type = await db.Set<Contract>().AsNoTracking().Where(c => c.Id == contractId).Select(c => c.Type).FirstOrDefaultAsync(cancellationToken);
-        }
-
-        var method = type switch
-        {
-            ContractType.TimeAndMaterials or ContractType.LaborHour => (Contracts.Revenue.RevenueMethodKind?)Contracts.Revenue.RevenueMethodKind.TimeAndMaterialsIncurred,
-            ContractType.CostPlusFixedFee or ContractType.CostPlusAwardFee or ContractType.CostPlusIncentiveFee => Contracts.Revenue.RevenueMethodKind.CostPlusFee,
-            ContractType.FirmFixedPrice => Contracts.Revenue.RevenueMethodKind.FixedPriceMilestones,
-            _ => null,
-        };
-        if (method is null)
-        {
-            return;
-        }
-
-        try
-        {
-            var fee = method == Contracts.Revenue.RevenueMethodKind.CostPlusFee && terms is not null
-                ? (await terms.TermsFromContractAsync(contractId, cancellationToken)).FeeRate
-                : (decimal?)null;
-            await revenueSetup.SaveSetupAsync(new Contracts.Revenue.SaveRevenueSetupRequest(project.Id, method.Value, FeeRate: fee > 0 ? fee : null), cancellationToken);
-        }
-        catch (Exception ex) when (ex is UnauthorizedAccessException or WorkbenchForbiddenException or ArgumentException)
-        {
-            // Setting revenue up is Finance's; the project is still created.
-        }
-    }
-
     private async Task<IReadOnlyList<Guid>> ContractCategoriesAsync(Guid contractId, CancellationToken cancellationToken)
     {
         await using var db = await dbFactory.CreateAsync(cancellationToken);
         var priced = await db.Set<ContractLaborRate>().AsNoTracking().Where(r => r.ContractId == contractId).Select(r => r.LaborCategoryId).ToListAsync(cancellationToken);
-        var capped = await db.Set<Ceiling>().AsNoTracking().Where(c => c.ContractId == contractId && c.LaborCategoryId != null).Select(c => c.LaborCategoryId!.Value).ToListAsync(cancellationToken);
+        var capped = await ceilingSource.CappedCategoriesAsync(contractId, cancellationToken);
         return priced.Concat(capped).Distinct().ToList();
     }
 

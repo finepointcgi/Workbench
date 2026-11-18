@@ -3,6 +3,7 @@
    server checks every change the same way. Sections open from links like /projects/{id}/setup/charge-codes. *@
 @inject IProjectService Projects
 @inject IPeopleService People
+@inject IEnumerable<Workbench.Contracts.Modules.UiSlotContribution> SlotContributions
 
 @if (_project is null)
 {
@@ -33,27 +34,19 @@ else
                 <Workbench.Ui.Setup.PlanSyncPanel Project="_project" ProjectChanged="p => _project = p" />
             }
         </MudExpansionPanel>
-        <MudExpansionPanel Text="GitLab" Expanded="@_open.Contains("gitlab")" ExpandedChanged="@(e => Toggle("gitlab", e))" data-testid="setup-gitlab">
-            @if (_open.Contains("gitlab"))
-            {
-                <Workbench.Ui.Integrations.GitLab.GitLabProjectPanel ProjectId="_project.Id" />
-            }
-        </MudExpansionPanel>
-        <MudExpansionPanel Text="Jira" Expanded="@_open.Contains("jira")" ExpandedChanged="@(e => Toggle("jira", e))" data-testid="setup-jira">
-            @if (_open.Contains("jira"))
-            {
-                <Workbench.Ui.Integrations.Jira.JiraProjectPanel ProjectId="_project.Id" />
-            }
-        </MudExpansionPanel>
-        <MudExpansionPanel Text="@Tm.Reword("More: ceilings and closeout")" Expanded="@_open.Contains("more")" ExpandedChanged="@(e => Toggle("more", e))" data-testid="setup-more">
+        @* The enterprise module's GitLab and Jira panels: none without it. They open and close through the same section state (IsOpen and Toggle). *@
+        <UiSlot Name="project.setup.panels" Parameters="@(new Dictionary<string, object?> { ["ProjectId"] = _project.Id, ["IsOpen"] = (Func<string, bool>)(s => _open.Contains(s)), ["Toggle"] = (Action<string, bool>)Toggle })" />
+        @* Ceilings and closeout come from the project controls module (the slot is empty without it); the contract link stays. *@
+        <MudExpansionPanel Text="@Tm.Reword(_moreFromModules ? "More: ceilings and closeout" : "More")" Expanded="@_open.Contains("more")" ExpandedChanged="@(e => Toggle("more", e))" data-testid="setup-more">
             @if (_open.Contains("more"))
             {
-                <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
-                    Limits on hours, cost or billing, and closing the project out. Most projects don't need these until late in the work.
-                </MudText>
-                <Workbench.Ui.Ceilings.CeilingsPanel ProjectId="_project.Id" />
-                <MudDivider Class="my-6" />
-                <Workbench.Ui.Ceilings.CloseoutPanel Scope="Workbench.Contracts.Closeout.CloseoutScope.Project" TargetId="_project.Id" Changed="Changed" />
+                @if (_moreFromModules)
+                {
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary mb-3">
+                        Limits on hours, cost or billing, and closing the project out. Most projects don't need these until late in the work.
+                    </MudText>
+                    <UiSlot Name="project.setup.more" Parameters="@(new Dictionary<string, object?> { ["ProjectId"] = _project.Id, ["Changed"] = Changed })" />
+                }
                 @if (_project.ContractId is { } contractId)
                 {
                     <MudButton Href="@($"setup/contracts/{contractId}")" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Description" Class="mt-4">
@@ -66,6 +59,8 @@ else
 }
 
 @code {
+    private bool _moreFromModules => SlotContributions.Any(c => c.Slot == "project.setup.more");
+
     [CascadingParameter] private Workbench.Contracts.Company.ITerms? Tm { get; set; }
 
     [Parameter, EditorRequired]

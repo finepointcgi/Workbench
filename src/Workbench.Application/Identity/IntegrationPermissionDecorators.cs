@@ -18,12 +18,10 @@ public static class IntegrationPermissionRegistration
         services.Decorate<IWebhookService, PermissionCheckingWebhookService>();
         services.Decorate<IApiKeyService, PermissionCheckingApiKeyService>();
         services.Decorate<IConnectorService, PermissionCheckingConnectorService>();
-        Integrations.GitLab.GitLabRegistration.AddWorkbenchGitLabPermissions(services);
-        Integrations.Jira.JiraRegistration.AddWorkbenchJiraPermissions(services);
         return services;
     }
 
-    internal static async Task RequireIntegrationAdminAsync(this AccessControl access, CancellationToken ct)
+    public static async Task RequireIntegrationAdminAsync(this AccessControl access, CancellationToken ct)
     {
         access.RequireSignedIn();
         if (ApiKeyPrincipal.IsServiceAccount(access.Email))
