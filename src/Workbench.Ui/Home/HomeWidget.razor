@@ -95,7 +95,7 @@
         _data = Widget.Type switch
         {
             WidgetType.Kpi or WidgetType.ReportChart or WidgetType.Chart or WidgetType.Metric or WidgetType.ItemList or WidgetType.ScheduleHealth
-                or WidgetType.ContractFunding or WidgetType.ProjectFinancials or WidgetType.EarnedValue or WidgetType.RichText => await ServerDataAsync(),
+                or WidgetType.ContractFunding or WidgetType.ProjectFinancials or WidgetType.EarnedValue or WidgetType.RichText or WidgetType.Module => await ServerDataAsync(),
             WidgetType.ListViewChart => await ListViewChartAsync(),
             _ => null,
         };
