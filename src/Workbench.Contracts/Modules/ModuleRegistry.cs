@@ -42,6 +42,27 @@ public sealed class ModuleSet
 
     public IReadOnlyList<ModuleContribution> Modules { get; }
 
+    private readonly Dictionary<Type, object> _rowCache = [];
+
+    /// <summary>The rows of type <typeparamref name="T"/> that the loaded modules add (in module order), or none.</summary>
+    public IReadOnlyList<T> RowsOf<T>() where T : class
+    {
+        if (Modules.Count == 0)
+        {
+            return [];
+        }
+
+        lock (_rowCache)
+        {
+            if (!_rowCache.TryGetValue(typeof(T), out var cached))
+            {
+                _rowCache[typeof(T)] = cached = Modules.SelectMany(m => m.Rows).OfType<T>().ToList();
+            }
+
+            return (IReadOnlyList<T>)cached;
+        }
+    }
+
     public bool IsEmpty => Modules.Count == 0;
 
     public string? ForApiSegment(string segment) => _apiSegments.GetValueOrDefault(segment);
@@ -81,7 +102,9 @@ public sealed class ModuleSet
     /// </summary>
     /// <param name="builtInNavSections">The menu sections the product has (the contracts project can't see the menu); null skips the menu checks that need them.</param>
     /// <param name="builtInNavHrefs">The pages the menu already has.</param>
-    public IReadOnlyList<string> Validate(ModuleContribution candidate, IReadOnlyCollection<string>? builtInNavSections = null, IReadOnlyCollection<string>? builtInNavHrefs = null)
+    /// <param name="builtInRowKeys">The keys of the built-in catalog rows, as <c>catalog/key</c> (see <see cref="RowKey"/>); null skips that check.</param>
+    public IReadOnlyList<string> Validate(ModuleContribution candidate, IReadOnlyCollection<string>? builtInNavSections = null, IReadOnlyCollection<string>? builtInNavHrefs = null,
+        IReadOnlyCollection<string>? builtInRowKeys = null)
     {
         var problems = new List<string>();
         var id = candidate.ModuleId;
@@ -189,8 +212,31 @@ public sealed class ModuleSet
             problems.Add($"API key segments name the area '{key}', which does not exist.");
         }
 
+        var taken = (builtInRowKeys ?? []).ToHashSet(StringComparer.Ordinal);
+        foreach (var row in Modules.SelectMany(m => m.Rows))
+        {
+            taken.Add(RowKey(row));
+        }
+
+        foreach (var row in candidate.Rows)
+        {
+            if (string.IsNullOrWhiteSpace(row.RowKey))
+            {
+                problems.Add($"A {row.Catalog} row has no key.");
+            }
+            else if (!taken.Add(RowKey(row)))
+            {
+                problems.Add($"The {row.Catalog} '{row.RowKey}' already exists.");
+            }
+        }
+
         return problems.Distinct().ToList();
     }
+
+    /// <summary>A row's identity across catalogs: <c>catalog/key</c>.</summary>
+    public static string RowKey(IModuleRow row) => RowKey(row.Catalog, row.RowKey);
+
+    public static string RowKey(string catalog, string key) => $"{catalog}/{key}";
 
     private static readonly HashSet<string> KnownIds = typeof(ModuleKeys).GetFields().Where(f => f.IsLiteral).Select(f => (string)f.GetRawConstantValue()!).ToHashSet();
 }

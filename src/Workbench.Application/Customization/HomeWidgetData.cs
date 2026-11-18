@@ -34,6 +34,7 @@ public sealed class HomeWidgetData(IServiceProvider services, TimeProvider clock
                 WidgetType.Kpi => data with { Error = "Pick the figure to show." },
                 WidgetType.ReportChart => await ReportChartAsync(data, widget.Config, ct),
                 WidgetType.Announcement => data with { Markdown = widget.Config.Markdown ?? "" },
+                WidgetType.Module => await ModuleWidgetAsync(data, widget, ct),
                 _ => data,
             };
         }
@@ -45,6 +46,15 @@ public sealed class HomeWidgetData(IServiceProvider services, TimeProvider clock
         {
             return data with { Error = "What this widget shows no longer exists or isn't shared with you." };
         }
+    }
+
+    /// <summary>A module's widget: the provider registered for <c>Config.ModuleKey</c>. With the module absent there is no provider, and the widget says so.</summary>
+    private async Task<WidgetDataDto> ModuleWidgetAsync(WidgetDataDto data, WidgetDto widget, CancellationToken ct)
+    {
+        var provider = widget.Config.ModuleKey is { } key ? services.GetServices<IHomeWidgetProvider>().FirstOrDefault(p => p.Key == key) : null;
+        return provider is null
+            ? data with { Error = "This widget comes from a module that isn't installed or licensed." }
+            : await provider.ComputeAsync(widget, data, ct);
     }
 
     private async Task<KpiData> KpiAsync(KpiKind kind, CancellationToken ct)
@@ -169,4 +179,17 @@ public sealed class HomeWidgetData(IServiceProvider services, TimeProvider clock
             .ToList();
         return new ChartData(kind, rows.Select(r => r.Label).ToList(), rows.Select(r => r.Value).ToList(), result.Columns[value].Label);
     }
+}
+
+/// <summary>
+/// A home page and dashboard widget a license module provides (<see cref="Workbench.Contracts.Modules.ModuleHomeWidget"/> lists it in the picker;
+/// this computes it). Register it in the module's <c>ConfigureServices</c>. It runs as the viewer, so it must read through the module's
+/// permission-checked services. Return <paramref name="seed"/> with one payload filled in (<c>Kpi</c>, <c>Chart</c>, <c>Metric</c>, <c>Markdown</c>)
+/// or its <c>Error</c> set; throwing <c>WorkbenchForbiddenException</c> shows the usual "no access" notice.
+/// </summary>
+public interface IHomeWidgetProvider
+{
+    string Key { get; }
+
+    Task<WidgetDataDto> ComputeAsync(WidgetDto widget, WidgetDataDto seed, CancellationToken ct);
 }

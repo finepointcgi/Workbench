@@ -2,7 +2,7 @@
 
 A license module (billing, accounting, capture, workforce, project controls, materials, government contracting, enterprise) can live outside this repository as a set of assemblies. The host finds them in a folder at startup, loads the ones the license includes, and the product then behaves as if the module had always been built in: its services, API paths, pages, menu entries, permissions, API key scopes, tables and migrations all take part.
 
-The `govcon` module was the first to move out ([module-extraction-govcon.md](module-extraction-govcon.md)); the other modules are still built in. With an empty modules folder the product is the shipped product, without government contracting. This page is the contract a module author builds against and the rules the host follows.
+The `govcon` module was the first to move out ([module-extraction-govcon.md](module-extraction-govcon.md)), with its government billing ([module-extraction-billing.md](module-extraction-billing.md)); the other modules are still built in. With an empty modules folder the product is the shipped product, without government contracting. This page is the contract a module author builds against and the rules the host follows.
 
 ## What a module contributes
 
@@ -20,9 +20,17 @@ A module is a class that implements `IWorkbenchModule` (`src/Workbench.Modules.A
 | Services | `ConfigureServices(services, context)` | Runs after the core services and before the permission and edition decorators. |
 | API endpoints | `MapEndpoints(api)` | `api` is the `/api/v1` group: already authorized, with the host's error mapping. |
 | Edition feature gates | `Describe().FeatureGates` | Changes on the module's services that also need an edition feature (`ModuleFeatureGate`), applied with the edition gates. |
-| Places on core pages | `UiSlotContribution` registered in `ConfigureServices` | A core page renders `<UiSlot Name="..."/>`; every contribution with that name is rendered there (slots: `timesheet.summary`, `setup.migration.actions`). |
+| Places on core pages | `UiSlotContribution` registered in `ConfigureServices` | A core page renders `<UiSlot Name="..."/>`; every contribution with that name is rendered there (slots: `timesheet.summary`, `setup.migration.actions`, `billing.contract.cards`, `billing.contract.summary`, `billing.invoice.panels`, `billing.invoice.print.links`, `billing.invoice.print.sf1034`). |
 | Reports hub pages | `StandardReportPage` registered in `ConfigureServices` | Listed under Reports as a page to open. |
-| Sample data | `IModuleSeed` registered in `ConfigureServices` | Run by the development seed at its `ModuleSeedStage`. |
+| Sample data | `IModuleSeed` registered in `ConfigureServices` | Run by the development seed at its `ModuleSeedStage` (`AfterRevenue`, `AfterPlanning`, `AfterMulticompany`, `AfterTaxBooks`, `End`). |
+| Rows in core catalogs | `Describe().Rows` (a list of `IModuleRow`) | Custom lists, built-in forms (and their layouts), document numbering, automation entities, integration events, approval document types, security event names, "+ New" items, report sources, chartable lists, home widgets. See [Catalog rows](#catalog-rows). |
+| Home and dashboard widgets | `ModuleHomeWidget` row, `IHomeWidgetProvider` in `ConfigureServices` | Offered in the widget picker; computed with the viewer's access. |
+| Assistant tools | `IAssistantToolContribution` in `ConfigureServices` | Offered to the in-app assistant and, with an API key area, over MCP. |
+| Data reports | `IStandardReportContribution` in `ConfigureServices` | Listed, run, drilled into and exported like a built-in standard report. |
+| Approval documents | `ModuleApprovalDocumentType` row, `IApprovalDocumentHandler` in `ConfigureServices` | The type is in the workflow list with its default workflow; the inbox decides through the handler. |
+| Go-live and reconciliation | `MigrationStepContribution`, `IReconciliationSource`, `IImporter` in `ConfigureServices` | A checklist step; the module's side of a parallel-run report; importers the steps use. |
+| Core readers | `IItemReader`, `IVendorReader` in `ConfigureServices` | Replace how core reads parts or vendors, once the module owns them. |
+| Core data flows | an interface declared in core with a no-op default (`IInvoiceFinancing`) | The module registers its implementation after the host's default; a host without the module keeps the default. |
 | Static files | the module folder's `wwwroot` | Served at `/_content/<routable assembly name>`. |
 | Entities | `ModelAssemblies`, `OnModelCreating` | Added to the host's EF model, so services use `Set<T>()` like core ones. |
 | Migrations | `Migrations` | The module's own context, migrations assemblies and history table (below). |
@@ -88,16 +96,59 @@ Why not one shared history table, or the core context? One history table would t
 
 What the sample covers, and what it does not: the tests run a real module's migration on SQLite end to end (core, then module; the module's history is separate; applying again changes nothing). The PostgreSQL path differs only in the provider call and the assembly name, and is covered by the provider-selection code, not by a PostgreSQL test run here. The real extraction should run each module's `dotnet ef` for both providers in the private repository's CI.
 
+## Seams for core catalogs and engines
+
+These are what a module needs to *add to* core, rather than own a page or a table. All are additive: with no module loaded the product is exactly as before, a module that does not use them is unaffected, and `ModuleContract.Version` stays 1 (every new member is optional). Each was written once so the next module repeats nothing; the sample module (`tests/Workbench.SampleModule`, `SampleSeams.cs`) has one example of each, and `ModuleSeamTests` runs them licensed and unlicensed.
+
+### Catalog rows
+
+`ModuleContribution.Rows` is a list of `IModuleRow` (`Catalog` and `RowKey`). The built-in catalogs keep their own rows and read the loaded modules' rows after them (`RowCatalog<T>`, cached per module set). The row types are the ones in-repo rows already use:
+
+| Catalog (`ModuleCatalogs`) | Row type | Read by |
+| --- | --- | --- |
+| `custom-list` | `ModuleCustomList(key)` | `CustomizableLists.All`: saved list views |
+| `list-source` | `IListSource` (`ListSource<T>`) | `ListSources.All`: charts of list pages on home pages |
+| `form` | `BuiltInForms.FormDefinition` | `BuiltInForms.All`: form layouts, required fields, the field catalog |
+| `document-number` | `DocumentNumberType.For<T>(...)` | `DocumentNumberTypes.All`: Setup › Numbering |
+| `automation-entity` | `AutomationEntity` | `AutomationEntities.All`: triggers, conditions, actions |
+| `integration-event` | `WebhookEventInfo` | `WebhookEventCatalog.All`: webhook and connector subscriptions (the module raises the event with its own `IntegrationEventType` through the outbox, which needs no registry) |
+| `approval-type` | `ModuleApprovalDocumentType(key, label, amountIsHours, defaultWorkflow)` | `ApprovalDocumentTypes.All`, `Label`, `AmountIsHours`, `ApprovalDefaults.For` |
+| `security-event` | `ModuleSecurityEventType(key, description)` | `SecurityEventTypes.All` (the log itself takes any name) |
+| `new-action` | `NewAction` | `NewCatalog.Actions`: the "+ New" menu and Ctrl+K |
+| `report-source` | `ReportSource` | `ReportSource.All`: the report writer |
+| `home-widget` | `ModuleHomeWidget` | the widget picker (below) |
+
+Every row's key must be new in its catalog. The host checks that against the built-in rows (`BuiltInRowKeys.All` in `Workbench.Web`, passed as `ModuleHostOptions.BuiltInRowKeys`) and against earlier modules, and refuses the module with a message otherwise; a blank key is refused too. Rows carry no module id of their own: a row belongs to the module that listed it.
+
+### Widgets, assistant tools, reports
+
+* **Home and dashboard widgets.** List a `ModuleHomeWidget(key, title, description)` row and register an `IHomeWidgetProvider` with the same key. The picker offers "Module widget" only when a module has listed one; the widget is stored as `WidgetType.Module` with `Config.ModuleKey`. The provider gets the widget and a seed `WidgetDataDto` and returns the seed with one payload set (`Kpi`, `Chart`, `Metric` or `Markdown`) or an `Error`; it runs as the viewer, through the module's permission-checked services. A widget saved while the module was licensed shows "comes from a module that isn't installed" if it is later removed.
+* **Assistant tools.** Register an `IAssistantToolContribution`: a `Spec` (build it with `AssistantToolbox.Spec(...)`), an optional `McpArea` (an API key area; without one the tool is for the in-app assistant only) and `RunAsync(JsonElement, IServiceProvider, ct)`. A tool must keep the built-in rules, or it is not offered: a name `list_…`, `get_…` or `read_…`, and a schema with `additionalProperties: false`. Unknown arguments are refused before `RunAsync`; permission, validation and not-found exceptions become error results, like built-in tools. Built-in tools are never replaced.
+* **Data reports.** Register an `IStandardReportContribution` (key, name, category, parameters, `Unavailable(access)`, `RunAsync(builder, access, parameters, ct)`, optional `DrillAsync`). It goes through the same authorization, company wording and file export as a built-in report. `StandardReportPage` is still the entry for a page that opens elsewhere.
+
+### Approvals, reconciliation, migration, readers
+
+* **Approvals.** A document type is a `ModuleApprovalDocumentType` row plus an `IApprovalDocumentHandler` in `ConfigureServices` (handlers were already contributed that way). The module builds its own `ApprovalSubject` when it submits. The default workflow is the row's `DefaultWorkflow`, else one step for the administrators. Not covered: `ApprovalBackfill` (routing documents that were pending before workflows existed) only knows the built-in types, which is right for a module added after workflows.
+* **Reconciliation.** `IReconciliationSource` answers for one existing `ReconReportKind` (the enum is stored in the database, so a module reuses the kinds that exist: for example billing the AR aging and revenue kinds) and replaces the built-in source, so core never calls the module's services. The report's fields stay in `ReconciliationReports`.
+* **Import and migration.** Importers were already contributed (`IImporter` in `ConfigureServices`; `ImportKind` is also an enum, so a module uses existing kinds). `MigrationStepContribution` (a singleton) adds a go-live checklist step after the step it names.
+* **Readers.** Core reads parts through `IItemReader` (sourcing, the supplier portal, EDI, AP credits) and vendors through `IVendorReader` (card programs) in `Workbench.Application.Purchasing`. Their defaults read the built-in tables; a module that owns the data registers its own after the host's (the last registration wins). Only the places the audit named were moved. Anything else that reads parts or vendors is a module reading the data it needs, which is the allowed direction.
+
+### Not done here: the leave kernel
+
+Measured while preparing this change: the holiday records the leave engine needs (`Holiday`) are already in core (`Domain/Leave`). What is left of "the leave kernel" is three reads in `Application/Leave`: `PayPeriod` (`LeaveEngine.AccrueAsync`, `ReverseAccrualAsync`, `LeaveBalanceService`), `PayGroup` (an existence count in `LeaveEligibility.ApplyAsync`) and two fields of `EmployeePayProfile` (`PayGroupId`, `EmploymentType`, in `LeaveEligibility.LoadAsync`). Those entities are core tables today, so nothing blocks the leave engine while payroll stays in the repository. It becomes a task only when the payroll module takes those tables out of core's migrations, and the right shape depends on that decision (the kernel entities stay in core migrations and the module maps them with `ExcludeFromMigrations`, or the leave engine reads an `ILeavePayCalendar` reader with these three questions). `LeaveEngine.AccrueAsync` and `ReverseAccrualAsync` are static and called by the payroll run service and a test with `PayPeriod` entities, so the reader option changes those signatures. The workforce extraction session should take the first option unless it wants payroll's pay data out of core entirely.
+
 ## Writing a module
 
 1. Reference `Workbench.Modules.Abstractions` and `Workbench.Contracts` (and Domain/Application for what the services need) with `ExcludeAssets="runtime"`/`Private=false`, so the module never ships a second copy.
 2. Implement `IWorkbenchModule`. Put the module's public service interfaces (`I…Service`) in `Describe().ServiceInterfaces` (`ModuleContribution.ServiceInterfacesIn(assembly)` finds them), and its permission keys under a prefix of its own.
 3. Publish to `modules/<id>/` with a `module.json`.
-4. `tests/Workbench.SampleModule` is a complete small example: a service, an endpoint, a menu entry, a permission, an API key area, an entity and a migration.
+4. `tests/Workbench.SampleModule` is a complete small example: a service, an endpoint, a menu entry, a permission, an API key area, an entity and a migration, and one example of each seam above (`SampleSeams.cs`).
+5. A module that uses the Ui types in rows (`NewAction`, `IListSource`) references `Workbench.Ui` too, compile-only like the other core assemblies.
 
 ## Not in this change
 
-* Only `govcon` has moved (and not its government billing); the other in-repo modules still register through `AddWorkbenchApplication`.
+* The leave kernel (above) is documented, not built.
+* Only `govcon` has moved (government billing included, through the `IInvoiceFinancing` hook); the other in-repo modules still register through `AddWorkbenchApplication`. The analysis of `billing` is in [module-extraction-billing.md](module-extraction-billing.md).
 * The worker (`Workbench.Worker`) does not load modules yet; background jobs a module owns need it to.
 * The desktop app reads routable pages from the same registry but does not load modules.
 * Reading a license key stored in the database at startup, and signing module assemblies.
@@ -112,3 +163,6 @@ From extracting `govcon` ([module-extraction-govcon.md](module-extraction-govcon
 * **`internal` helpers shared by two modules have to become a real public API**; the first extraction already widened seven types.
 * **Migration ownership is a per-module decision made once.** The recipe used here (release ownership with an empty core migration, edit the old creating migrations, idempotent module baseline, compare the previous release's DDL with the baseline) works for any module whose tables only reference core tables.
 * **Tests that use core kits need the kits' internals** (`InternalsVisibleTo`) and the module loaded before the first test (a module initializer).
+* **When a core engine needs a module's rules, declare the hook in core and give it a no-op default.** Invoicing asked ten questions of government financing; they became one interface with eight methods (`IInvoiceFinancing`, [module-extraction-billing.md](module-extraction-billing.md)), and the shipped billing suite now runs against the default.
+* **Keep the records, move the rules.** The receivables ledger (invoices, payments) is read by dozens of core features, so it stays in core even when the *service* that creates it is a paid module. Decide the kernel (records, posting, shared helpers) before moving an engine.
+* **UI hosts become slots; a hint beats a service call.** A core page that needs to know "which form does this contract print on" gets it as a field in the data it already loads (`InvoicePrintDto.PreferredForm`), not by injecting the module's service.

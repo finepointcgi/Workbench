@@ -84,6 +84,15 @@ public sealed record ModuleContribution
     /// <summary>Segments the module adds to an <i>existing</i> area, by the area's key (for example <c>time</c>).</summary>
     public IReadOnlyDictionary<string, IReadOnlyList<string>> ApiKeySegments { get; init; } = new Dictionary<string, IReadOnlyList<string>>();
 
+    // ── Catalog rows ───────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Rows the module adds to the product's catalogs: custom lists, built-in forms (and their layouts), document numbering types,
+    /// automation entities, integration events, approval document types, "+ New" actions, report sources, security event names and home
+    /// widgets (<see cref="ModuleCatalogs"/>). Every row implements <see cref="IModuleRow"/>; its key must be new in its catalog.
+    /// </summary>
+    public IReadOnlyList<IModuleRow> Rows { get; init; } = [];
+
     // ── Blazor ─────────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>Assemblies with the module's routable pages and components (the router's and the app's <c>AdditionalAssemblies</c>).</summary>

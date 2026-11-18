@@ -23,10 +23,10 @@ public sealed class ProjectVisibilityWebTests
         var mine = (await alex.GetFromJsonAsync<List<ProjectDto>>("/api/v1/projects"))!;
 
         Assert.Equal(["1001", "1002", "IND"], mine.Select(p => p.Code).Order(StringComparer.Ordinal));
-        Assert.Contains(all, p => p.Code == "4101");
+        Assert.Contains(all, p => p.Code == "3001");
         Assert.True(all.Count > mine.Count);
 
-        var hidden = all.First(p => p.Code == "4101");
+        var hidden = all.First(p => p.Code == "3001");
         using var get = await alex.GetAsync($"/api/v1/projects/{hidden.Id}");
         using var wbs = await alex.GetAsync($"/api/v1/projects/{hidden.Id}/wbs");
         using var hub = await alex.GetAsync($"/api/v1/project-hub/{hidden.Id}");

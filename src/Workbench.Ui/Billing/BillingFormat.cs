@@ -52,30 +52,6 @@ public static class BillingFormat
         _ => k.ToString(),
     };
 
-    public static string Label(FinancingKind f) => f switch
-    {
-        FinancingKind.ProgressPayments => "Progress payments (FAR 52.232-16)",
-        FinancingKind.PerformanceBased => "Performance-based payments (FAR 32.10)",
-        _ => "No contract financing",
-    };
-
-    public static string Label(VoucherFormat f) => f == VoucherFormat.Sf1034 ? "SF 1034 public voucher (with SF 1035 continuation)" : "Our own invoice layout";
-
-    public static string Label(PieeDocumentKind d) => d switch
-    {
-        PieeDocumentKind.TwoInOne => "2-in-1 (services)",
-        PieeDocumentKind.CostVoucher => "Cost Voucher",
-        PieeDocumentKind.Combo => "Combo (invoice and receiving report)",
-        PieeDocumentKind.ProgressPayment => "Progress Payment",
-        _ => "Performance Based Payment",
-    };
-
-    public static string Label(PieeState s) => s switch
-    {
-        PieeState.NotSubmitted => "Not submitted",
-        _ => s.ToString(),
-    };
-
     public static bool IsFinancing(InvoiceKind k) => k is InvoiceKind.ProgressPayment or InvoiceKind.PerformanceBased;
 
     public static string Label(AgreementModel m) => m switch
