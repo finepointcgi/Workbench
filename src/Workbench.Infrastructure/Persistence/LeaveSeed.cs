@@ -9,7 +9,7 @@ namespace Workbench.Infrastructure.Persistence;
 /// Development sample data for leave: a PTO policy on LV.PTO (per pay period, tiers at 0/3/5 years, 240 h cap, 80 h
 /// carryover, 90-day waiting period, no negative balances), a Holiday policy on LV.HOL, US federal holidays for this and
 /// next year, opening PTO balances, and one approved request (Dana Lee, a Friday two weeks out, approved by pm@).
-/// Runs once, after <see cref="PayrollSeed"/>.
+/// Runs once, after the workforce module's payroll sample data (when the module is installed).
 /// </summary>
 internal static class LeaveSeed
 {

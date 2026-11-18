@@ -1,3 +1,5 @@
+using Workbench.Contracts.Licensing;
+
 namespace Workbench.Contracts.ProjectAccounting;
 
 /// <summary>One step of setting up a company in Workbench, in the order to do them.</summary>
@@ -9,7 +11,12 @@ public sealed record SetupStep(string Group, string Title, string Hint, string H
 /// </summary>
 public static class SetupSteps
 {
-    public static IReadOnlyList<SetupStep> For(SetupChecklistDto c) =>
+    /// <summary>The payroll pages come from the workforce module: its setup step shows only where a page for it is in the menu.</summary>
+    public static bool PayrollAvailable => ModuleMap.ForNav("finance", "Payroll", "payroll") is not null;
+
+    public static IReadOnlyList<SetupStep> For(SetupChecklistDto c) => Steps(c).Where(s => s.Href != "payroll" || PayrollAvailable).ToList();
+
+    private static SetupStep[] Steps(SetupChecklistDto c) =>
     [
         new("Company", "Users and sign-in", "Invite the people who'll use Workbench and give Finance and timekeepers their roles.", "admin/users", c.HasInvitedUsers),
         new("Company", "Fiscal calendar", "At least one open accounting month.", "setup/fiscal-calendar", c.HasOpenFiscalPeriods),

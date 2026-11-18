@@ -593,22 +593,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 });
 
             migrationBuilder.CreateTable(
-                name: "PayrollProviderSetting",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    ProviderKey = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
-                    EarningCodes = table.Column<string>(type: "TEXT", maxLength: 2000, nullable: false),
-                    ExportSalariedRegularHours = table.Column<bool>(type: "INTEGER", nullable: false),
-                    UpdatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    UpdatedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_PayrollProviderSetting", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "PerDiemRateBatch",
                 columns: table => new
                 {
@@ -2156,51 +2140,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 });
 
             migrationBuilder.CreateTable(
-                name: "PayrollRun",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    PayGroupId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    PayPeriodId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Status = table.Column<string>(type: "TEXT", maxLength: 24, nullable: false),
-                    CreatedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    CreatedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    ExportedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    ExportedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    ExportFileName = table.Column<string>(type: "TEXT", maxLength: 260, nullable: true),
-                    ExportContent = table.Column<string>(type: "TEXT", nullable: true),
-                    RegisterId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    PostedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    PostedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    JournalEntryId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    VoidedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: true),
-                    VoidedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: true),
-                    VoidReason = table.Column<string>(type: "TEXT", maxLength: 1000, nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_PayrollRun", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_PayrollRun_GlJournalEntries_JournalEntryId",
-                        column: x => x.JournalEntryId,
-                        principalTable: "GlJournalEntries",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_PayrollRun_PayGroup_PayGroupId",
-                        column: x => x.PayGroupId,
-                        principalTable: "PayGroup",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_PayrollRun_PayPeriod_PayPeriodId",
-                        column: x => x.PayPeriodId,
-                        principalTable: "PayPeriod",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "BankMatches",
                 columns: table => new
                 {
@@ -2639,59 +2578,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         principalTable: "Payment",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "PayrollExportLine",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    RunId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    EmployeeId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    Category = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    EarningCode = table.Column<string>(type: "TEXT", maxLength: 32, nullable: false),
-                    Hours = table.Column<decimal>(type: "TEXT", precision: 9, scale: 2, nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_PayrollExportLine", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_PayrollExportLine_Employee_EmployeeId",
-                        column: x => x.EmployeeId,
-                        principalTable: "Employee",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_PayrollExportLine_PayrollRun_RunId",
-                        column: x => x.RunId,
-                        principalTable: "PayrollRun",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "PayrollRegister",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    RunId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    FileName = table.Column<string>(type: "TEXT", maxLength: 260, nullable: false),
-                    ContentHash = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    Status = table.Column<string>(type: "TEXT", maxLength: 16, nullable: false),
-                    ImportedBy = table.Column<string>(type: "TEXT", maxLength: 320, nullable: false),
-                    ImportedAtUtc = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    JournalEntryId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    ReversalEntryId = table.Column<Guid>(type: "TEXT", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_PayrollRegister", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_PayrollRegister_PayrollRun_RunId",
-                        column: x => x.RunId,
-                        principalTable: "PayrollRun",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -3320,40 +3206,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                         principalTable: "WbsElement",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "PayrollRegisterLine",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
-                    RegisterId = table.Column<Guid>(type: "TEXT", nullable: false),
-                    EmployeeId = table.Column<Guid>(type: "TEXT", nullable: true),
-                    ProviderEmployeeId = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
-                    EmployeeName = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    CheckDate = table.Column<DateOnly>(type: "TEXT", nullable: false),
-                    GrossWages = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    EmployeeTaxes = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    EmployerTaxes = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    Deductions = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    EmployerBenefits = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false),
-                    NetPay = table.Column<decimal>(type: "TEXT", precision: 18, scale: 2, nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_PayrollRegisterLine", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_PayrollRegisterLine_Employee_EmployeeId",
-                        column: x => x.EmployeeId,
-                        principalTable: "Employee",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_PayrollRegisterLine_PayrollRegister_RegisterId",
-                        column: x => x.RegisterId,
-                        principalTable: "PayrollRegister",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -4892,52 +4744,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_PayrollExportLine_EmployeeId",
-                table: "PayrollExportLine",
-                column: "EmployeeId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PayrollExportLine_RunId",
-                table: "PayrollExportLine",
-                column: "RunId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PayrollProviderSetting_ProviderKey",
-                table: "PayrollProviderSetting",
-                column: "ProviderKey",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PayrollRegister_RunId_ContentHash",
-                table: "PayrollRegister",
-                columns: new[] { "RunId", "ContentHash" });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PayrollRegisterLine_EmployeeId",
-                table: "PayrollRegisterLine",
-                column: "EmployeeId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PayrollRegisterLine_RegisterId",
-                table: "PayrollRegisterLine",
-                column: "RegisterId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PayrollRun_JournalEntryId",
-                table: "PayrollRun",
-                column: "JournalEntryId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PayrollRun_PayGroupId_PayPeriodId",
-                table: "PayrollRun",
-                columns: new[] { "PayGroupId", "PayPeriodId" });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_PayrollRun_PayPeriodId",
-                table: "PayrollRun",
-                column: "PayPeriodId");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_PerDiemLine_OdcEntryId",
                 table: "PerDiemLine",
                 column: "OdcEntryId");
@@ -5530,15 +5336,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "PaymentApplication");
 
             migrationBuilder.DropTable(
-                name: "PayrollExportLine");
-
-            migrationBuilder.DropTable(
-                name: "PayrollProviderSetting");
-
-            migrationBuilder.DropTable(
-                name: "PayrollRegisterLine");
-
-            migrationBuilder.DropTable(
                 name: "PerDiemLine");
 
             migrationBuilder.DropTable(
@@ -5656,9 +5453,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
                 name: "Payment");
 
             migrationBuilder.DropTable(
-                name: "PayrollRegister");
-
-            migrationBuilder.DropTable(
                 name: "PerDiemRateBatch");
 
             migrationBuilder.DropTable(
@@ -5693,9 +5487,6 @@ namespace Workbench.Migrations.Sqlite.WorkbenchDb
 
             migrationBuilder.DropTable(
                 name: "LeavePolicy");
-
-            migrationBuilder.DropTable(
-                name: "PayrollRun");
 
             migrationBuilder.DropTable(
                 name: "ApBill");

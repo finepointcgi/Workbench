@@ -79,9 +79,9 @@ public sealed class ModuleGateTests
             return;
         }
 
-        if (module is ModuleIds.GovCon or ModuleIds.Capture or ModuleIds.Materials or ModuleIds.ProjectControls)
+        if (module is ModuleIds.GovCon or ModuleIds.Capture or ModuleIds.Materials or ModuleIds.ProjectControls or ModuleIds.Workforce)
         {
-            // Every government contracting, capture, materials and project controls service lives in its module (private repository), and its gate is tested there. In the shipped
+            // Every government contracting, capture, materials, project controls and workforce service lives in its module (private repository), and its gate is tested there. In the shipped
             // product no service maps to it: the assertion is that nothing is gated by a module this build does not contain.
             Assert.Empty(services);
             return;

@@ -166,28 +166,11 @@ public sealed class MyTodoProviderTests
         Assert.Empty(PeriodCloseTodoProvider.For(checklist with { IsClosed = true }, Context()));
     }
 
-    [Theory]
-    [InlineData(PayrollRunState.Draft, "Export hours for payroll (Oct 5–18)")]
-    [InlineData(PayrollRunState.Exported, "Import the payroll register (Oct 5–18)")]
-    [InlineData(PayrollRunState.RegisterImported, "Post payroll for Oct 5–18")]
-    [InlineData(PayrollRunState.Posted, null)]
-    [InlineData(PayrollRunState.Voided, null)]
-    public void Payroll_runs_waiting_on_finance(PayrollRunState state, string? title)
-    {
-        var run = new PayrollRunDto(Guid.NewGuid(), Guid.NewGuid(), "BW", "paylocity", Guid.NewGuid(), new(2026, 10, 5), new(2026, 10, 18), new(2026, 10, 23), state,
-            Finance, DateTime.UtcNow, null, null, null, null, null, 12_000m, null, null, null, null);
-
-        Assert.Equal(title, PayrollTodoProvider.For(run, Context(roles: OrgRoles.Finance))?.Title);
-    }
-
     [Fact]
     public async Task Finance_providers_ask_nothing_of_other_people()
     {
-        var (payroll, fake) = Fake<IPayrollRunService>.Create();
-        var services = new ServiceCollection().AddSingleton(payroll).BuildServiceProvider();
+        var services = new ServiceCollection().BuildServiceProvider();
 
-        Assert.Empty(await new PayrollTodoProvider().GetAsync(Context(services, OrgRoles.Timekeeper), default));
         Assert.Empty(await new PeriodCloseTodoProvider().GetAsync(Context(services), default));
-        Assert.Empty(fake.Calls);
     }
 }

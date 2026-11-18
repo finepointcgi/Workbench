@@ -2,29 +2,29 @@ using Microsoft.EntityFrameworkCore;
 using Workbench.Application;
 using Workbench.Contracts.Accounting;
 using Workbench.Contracts.Leave;
-using Workbench.Contracts.Payroll;
 using Workbench.Contracts.Time;
 using Workbench.Domain.Accounting;
 using Workbench.Domain.Leave;
+using Workbench.Domain.Payroll;
 using Workbench.Domain.ProjectAccounting;
 using Workbench.Tests.Identity;
 using static Workbench.Tests.Identity.SeededHost;
 
-namespace Workbench.Tests.Payroll;
+namespace Workbench.Tests.Leave;
 
 /// <summary>
 /// The real registrations over <see cref="ProjectAccountingFixture"/> (analyst@, viewer@ and outsider@ have approved
 /// hours on Wed 2026-10-14; analyst@ and viewer@ report to pm@) with the default chart, an indirect project with leave
-/// codes LV.PTO and LV.HOL, a biweekly Paylocity pay group whose period runs Mon 2026-10-05 to Sun 2026-10-18 (check
-/// date 10-23), and payroll profiles: pm@ salaried 104,000 (id 1001), analyst@ hourly 50 (2002), viewer@ hourly 30
-/// (3003). outsider@ isn't in the group. Calls run as finance@ unless switched.
+/// codes LV.PTO and LV.HOL, and the pay calendar and pay profiles the leave engine reads, written straight to the core records (no payroll module in
+/// the shipped product): a biweekly pay group whose first period runs Mon 2026-10-05 to Sun 2026-10-18, and profiles for pm@, analyst@ and viewer@
+/// in it. outsider@ isn't in the group. Calls run as finance@ unless switched.
 /// </summary>
-internal sealed class PayrollKit : IAsyncDisposable
+internal sealed class LeaveKit : IAsyncDisposable
 {
     public static readonly DateOnly Day = ProjectAccountingFixture.Day;
     public static readonly DateOnly PeriodStart = new(2026, 10, 5);
 
-    private PayrollKit(SeededHost seeded, ProjectAccountingFixture fx)
+    private LeaveKit(SeededHost seeded, ProjectAccountingFixture fx)
     {
         Seeded = seeded;
         Fx = fx;
@@ -35,14 +35,10 @@ internal sealed class PayrollKit : IAsyncDisposable
     public Guid PtoWbs { get; private set; }
     public Guid HolidayWbs { get; private set; }
     public Guid LeaveProject { get; private set; }
-    public PayGroupDto Group { get; private set; } = default!;
-    public PayPeriodDto Period { get; private set; } = default!;
+    public PayGroup Group { get; private set; } = default!;
+    public PayPeriod Period { get; private set; } = default!;
     public Guid CategoryId { get; private set; }
 
-    public IPayGroupService Groups => Get<IPayGroupService>();
-    public IPayrollProfileService Profiles => Get<IPayrollProfileService>();
-    public IPayrollProviderService Providers => Get<IPayrollProviderService>();
-    public IPayrollRunService Runs => Get<IPayrollRunService>();
     public ILeavePolicyService Policies => Get<ILeavePolicyService>();
     public ILeaveBalanceService Balances => Get<ILeaveBalanceService>();
     public ILeaveRequestService Requests => Get<ILeaveRequestService>();
@@ -53,17 +49,17 @@ internal sealed class PayrollKit : IAsyncDisposable
 
     public T Get<T>() where T : notnull => Seeded.Host.Get<T>();
 
-    public PayrollKit As(string email)
+    public LeaveKit As(string email)
     {
         Seeded.As(email);
         return this;
     }
 
-    public static async Task<PayrollKit> CreateAsync()
+    public static async Task<LeaveKit> CreateAsync()
     {
         var seeded = await SeededHost.CreateAsync();
         var fx = await ProjectAccountingFixture.SeedAsync(seeded);
-        var kit = new PayrollKit(seeded, fx);
+        var kit = new LeaveKit(seeded, fx);
         kit.As(Finance);
         await kit.Get<IChartOfAccountsService>().InstallDefaultChartAsync();
         await using (var db = await kit.Factory.CreateAsync())
@@ -79,13 +75,51 @@ internal sealed class PayrollKit : IAsyncDisposable
             kit.CategoryId = await db.Set<LaborCategory>().Select(c => c.Id).FirstAsync();
         }
 
-        kit.Group = await kit.Groups.CreateAsync(new SavePayGroupRequest("BW", "Biweekly", PayFrequencyKind.Biweekly, "paylocity", "W1234", PeriodStart, 5));
-        await kit.Groups.GeneratePeriodsAsync(kit.Group.Id, 2026);
-        kit.Period = (await kit.Groups.ListPeriodsAsync(kit.Group.Id, 2026)).Single(p => p.Start == PeriodStart);
-        await kit.Profiles.SaveAsync(fx.PmId, new SavePayProfileRequest(kit.Group.Id, "1001", PayTypeKind.Salaried, AnnualSalary: 104_000m));
-        await kit.Profiles.SaveAsync(fx.AnalystId, new SavePayProfileRequest(kit.Group.Id, "2002", PayTypeKind.Hourly, HourlyRate: 50m));
-        await kit.Profiles.SaveAsync(fx.ViewerId, new SavePayProfileRequest(kit.Group.Id, "3003", PayTypeKind.Hourly, HourlyRate: 30m));
+        kit.Group = await kit.AddGroupAsync("BW", PayFrequency.Biweekly, PeriodStart);
+        kit.Period = await kit.PeriodAsync(PeriodStart);
+        foreach (var (employee, type) in new[] { (fx.PmId, PayType.Salaried), (fx.AnalystId, PayType.Hourly), (fx.ViewerId, PayType.Hourly) })
+        {
+            await kit.SetProfileAsync(employee, type);
+        }
+
         return kit;
+    }
+
+    /// <summary>A pay group with biweekly-style periods (14 days from <paramref name="anchor"/>, four of them), written to the core pay calendar records.</summary>
+    public async Task<PayGroup> AddGroupAsync(string code, PayFrequency frequency, DateOnly anchor)
+    {
+        await using var db = await Factory.CreateAsync();
+        var group = new PayGroup { Code = code, Name = code, Frequency = frequency, ProviderKey = "paylocity", CompanyCode = "W1234", AnchorDate = anchor, CreatedAtUtc = DateTime.UtcNow };
+        db.Set<PayGroup>().Add(group);
+        for (var n = 0; n < 4; n++)
+        {
+            var start = anchor.AddDays(14 * n);
+            db.Set<PayPeriod>().Add(new PayPeriod { PayGroupId = group.Id, Year = start.Year, Number = n + 1, Start = start, End = start.AddDays(13), CheckDate = start.AddDays(18) });
+        }
+
+        await db.SaveChangesAsync();
+        return group;
+    }
+
+    public async Task<PayPeriod> PeriodAsync(DateOnly start)
+    {
+        await using var db = await Factory.CreateAsync();
+        return await db.Set<PayPeriod>().AsNoTracking().SingleAsync(p => p.PayGroupId == Group.Id && p.Start == start);
+    }
+
+    /// <summary>The employee's pay profile (what leave eligibility reads: pay group and employment type), saved or changed.</summary>
+    public async Task SetProfileAsync(Guid employeeId, PayType type = PayType.Hourly, EmploymentType employment = EmploymentType.FullTime)
+    {
+        await using var db = await Factory.CreateAsync();
+        var profile = await db.Set<EmployeePayProfile>().FirstOrDefaultAsync(p => p.EmployeeId == employeeId);
+        if (profile is null)
+        {
+            profile = new EmployeePayProfile { EmployeeId = employeeId, EffectiveFrom = PeriodStart, UpdatedAtUtc = DateTime.UtcNow };
+            db.Set<EmployeePayProfile>().Add(profile);
+        }
+
+        (profile.PayGroupId, profile.PayType, profile.EmploymentType) = (Group.Id, type, employment);
+        await db.SaveChangesAsync();
     }
 
     /// <summary>Adds approved hours to an employee's timesheet for the week containing the dates (created approved if missing).</summary>
@@ -133,7 +167,6 @@ internal sealed class PayrollKit : IAsyncDisposable
         await db.SaveChangesAsync();
     }
 
-    /// <summary>A PTO policy on LV.PTO (per pay period unless changed) and a Holiday policy on LV.HOL, as admin@.</summary>
     public async Task<LeavePolicyDto> PtoPolicyAsync(
         AccrualMethodKind method = AccrualMethodKind.PerPayPeriod, IReadOnlyList<AccrualTierDto>? tiers = null, decimal? cap = null, decimal? carryover = null,
         int waiting = 0, bool allowNegative = false)
@@ -147,30 +180,12 @@ internal sealed class PayrollKit : IAsyncDisposable
         return pto;
     }
 
-    public async Task<List<JournalEntry>> PayrollEntriesAsync()
-    {
-        await using var db = await Factory.CreateAsync();
-        return await db.Set<JournalEntry>().AsNoTracking().Include(e => e.Lines)
-            .Where(e => e.Source == JournalSource.Payroll || e.Source == JournalSource.Reversal).OrderBy(e => e.Sequence).ToListAsync();
-    }
-
-    public async Task<Dictionary<Guid, string>> AccountNumbersAsync()
-    {
-        await using var db = await Factory.CreateAsync();
-        return await db.Set<Account>().AsNoTracking().ToDictionaryAsync(a => a.Id, a => a.Number);
-    }
-
     public async Task<decimal> LedgerHoursAsync(Guid employeeId, Guid policyId)
     {
         await using var db = await Factory.CreateAsync();
         return await db.Set<LeaveLedgerEntry>().Where(l => l.EmployeeId == employeeId && l.PolicyId == policyId).SumAsync(l => l.Hours);
     }
 
-    public const string Register = """
-        Company Code,Employee Id,Employee Name,Check Date,Gross Pay,EE Taxes,ER Taxes,Deductions,ER Benefits,Net Pay
-        W1234,2002,"Rivera, Alex",10/23/2026,400.00,60.00,30.60,20.00,50.00,320.00
-        W1234,1001,"Morgan, Pat",10/23/2026,"4,000.00",800.00,306.00,150.00,400.00,"3,050.00"
-        """;
 
     public ValueTask DisposeAsync() => Seeded.DisposeAsync();
 }

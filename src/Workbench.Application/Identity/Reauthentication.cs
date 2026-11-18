@@ -7,7 +7,6 @@ using Workbench.Contracts.Approvals;
 using Workbench.Contracts.Cash;
 using Workbench.Contracts.Identity;
 using Workbench.Contracts.Odcs;
-using Workbench.Contracts.Payroll;
 using Workbench.Contracts.Purchasing;
 using Workbench.Contracts.Security;
 
@@ -78,31 +77,11 @@ public static class ReauthenticationRegistration
         services.AddScoped<ISignInSettingsService, SignInSettingsService>();
         services.AddScoped<IComplianceChecklistService, ComplianceChecklistService>();
 
-        services.Decorate<IPayrollProfileService, ReauthPayrollProfileService>();
         services.Decorate<IBankAccountService, ReauthBankAccountService>();
         services.Decorate<IVendorService, ReauthVendorService>();
         services.Decorate<IApprovalWorkflowService, ReauthApprovalWorkflowService>();
         return services;
     }
-}
-
-internal sealed class ReauthPayrollProfileService(IPayrollProfileService inner, ReauthenticationGuard guard) : IPayrollProfileService
-{
-    public Task<IReadOnlyList<PayProfileDto>> ListAsync(CancellationToken cancellationToken = default) => inner.ListAsync(cancellationToken);
-
-    public Task<PayProfileDto> GetAsync(Guid employeeId, CancellationToken cancellationToken = default) => inner.GetAsync(employeeId, cancellationToken);
-
-    public Task<PayProfileDto> SaveAsync(Guid employeeId, SavePayProfileRequest request, CancellationToken cancellationToken = default) =>
-        inner.SaveAsync(employeeId, request, cancellationToken);
-
-    public async Task<PayProfileDto> RevealAsync(Guid employeeId, CancellationToken cancellationToken = default)
-    {
-        await guard.RequireRecentAsync(SensitiveActions.PayRateReveal, cancellationToken);
-        return await inner.RevealAsync(employeeId, cancellationToken);
-    }
-
-    public Task<IReadOnlyList<LaborAdjustmentDto>> ListLaborAdjustmentsAsync(Guid employeeId, CancellationToken cancellationToken = default) =>
-        inner.ListLaborAdjustmentsAsync(employeeId, cancellationToken);
 }
 
 internal sealed class ReauthBankAccountService(IBankAccountService inner, ReauthenticationGuard guard) : IBankAccountService

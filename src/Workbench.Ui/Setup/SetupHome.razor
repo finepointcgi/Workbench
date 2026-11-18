@@ -90,7 +90,10 @@
                 <MudNavLink Href="accounting/accounts" Icon="@Icons.Material.Filled.AccountBalance">Chart of accounts</MudNavLink>
                 <MudNavLink Href="accounting/indirect-rates" Icon="@Icons.Material.Filled.Percent">Indirect rates</MudNavLink>
                 <MudNavLink Href="cash" Icon="@Icons.Material.Filled.AccountBalanceWallet">Bank accounts</MudNavLink>
-                <MudNavLink Href="payroll" Icon="@Icons.Material.Filled.Payments">Payroll provider</MudNavLink>
+                @if (SetupSteps.PayrollAvailable)
+                {
+                    <MudNavLink Href="payroll" Icon="@Icons.Material.Filled.Payments">Payroll provider</MudNavLink>
+                }
                 <MudNavLink Href="billing/contracts" Icon="@Icons.Material.Filled.RequestQuote">@Tm.Reword("Contract billing details")</MudNavLink>
                 <MudNavLink Href="setup/audit" Icon="@Icons.Material.Filled.History">Audit log</MudNavLink>
                 <MudNavLink Href="setup/import" Icon="@Icons.Material.Filled.UploadFile">Import from Costpoint or Smartsheet</MudNavLink>

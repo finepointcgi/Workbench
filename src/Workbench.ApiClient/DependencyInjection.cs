@@ -41,7 +41,7 @@ public static class DependencyInjection
         services.AddProcurementClients(serverBaseAddress);
         services.AddAssetClients(serverBaseAddress);
         services.AddCashClients(serverBaseAddress);
-        services.AddPayrollLeaveClients(serverBaseAddress);
+        services.AddLeaveClients(serverBaseAddress);
         services.AddPerDiemResourcingClients(serverBaseAddress);
         services.AddRevenueClients(serverBaseAddress);
         services.AddReportClients(serverBaseAddress);
@@ -54,7 +54,6 @@ public static class DependencyInjection
         services.AddHttpClient<Contracts.Company.ICompanyProfileService, HttpCompanyProfileService>(client => client.BaseAddress = serverBaseAddress);
         services.AddHttpClient<Contracts.Support.ISupportService, HttpSupportService>(client => client.BaseAddress = serverBaseAddress); services.AddHttpClient<Contracts.Support.IHelpStateService, HttpHelpStateService>(client => client.BaseAddress = serverBaseAddress); services.AddHttpClient<Contracts.Support.IHostSupportService, HttpHostSupportService>(client => client.BaseAddress = serverBaseAddress);
         services.AddHttpClient<Contracts.Tasks.ITaskAssignmentService, HttpTaskAssignmentService>(client => client.BaseAddress = serverBaseAddress);
-        services.AddHrClients(serverBaseAddress);
         services.AddAssistantClients(serverBaseAddress);
         services.AddPlanningClients(serverBaseAddress);
         services.AddCurrencyClients(serverBaseAddress);
