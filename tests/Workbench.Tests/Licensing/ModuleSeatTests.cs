@@ -48,7 +48,7 @@ public sealed class ModuleSeatTests
         var enterprise = status.Modules!.Single(m => m.Id == "enterprise");
         var billing = status.Modules!.Single(m => m.Id == "billing");
         Assert.Equal((2, 3), (enterprise.SeatsUsed, enterprise.SeatsAllowed)); // The administrator and the Finance user (Finance holds the custom workflow permission).
-        Assert.Equal((2, 4), (billing.SeatsUsed, billing.SeatsAllowed)); // The administrator and the Finance user.
+        Assert.Equal((0, 4), (billing.SeatsUsed, billing.SeatsAllowed)); // Its one permission (revenue.manage) comes with the billing module, which is not loaded here: nobody reaches the module in this build.
         Assert.Null(status.Modules!.Single(m => m.Id == "capture").SeatsAllowed); // Not enforced: nothing limits it.
         Assert.Equal(0, status.Modules!.Single(m => m.Id == "core").SeatsUsed);
     }
@@ -58,13 +58,13 @@ public sealed class ModuleSeatTests
     {
         await using var seeded = await HostAsync();
         var host = seeded.As(Admin).Host;
-        await host.Get<ILicenseService>().ActivateAsync(new ActivateLicenseRequest(Issue("\"billing\"", "{\"billing\":3}")));
+        await host.Get<ILicenseService>().ActivateAsync(new ActivateLicenseRequest(Issue("\"enterprise\"", "{\"enterprise\":3}")));
         var invites = host.Get<IInviteService>();
 
-        await invites.CreateAsync(new CreateInviteRequest("second.finance@example.com", "Second Finance", OrgRoles.Finance)); // The third billing seat; pending invitations hold one.
+        await invites.CreateAsync(new CreateInviteRequest("second.finance@example.com", "Second Finance", OrgRoles.Finance)); // The third enterprise seat; pending invitations hold one.
         var refused = await Assert.ThrowsAsync<WorkbenchEditionException>(() => invites.CreateAsync(new CreateInviteRequest("third.finance@example.com", "Third Finance", OrgRoles.Finance)));
 
-        Assert.Contains("Billing", refused.Message);
+        Assert.Contains("Enterprise", refused.Message);
         Assert.Contains("(3)", refused.Message);
         Assert.Contains("Setup › License", refused.Message);
         Assert.Contains("without", refused.Message);
@@ -77,15 +77,15 @@ public sealed class ModuleSeatTests
     {
         await using var seeded = await HostAsync();
         var host = seeded.As(Admin).Host;
-        await host.Get<ILicenseService>().ActivateAsync(new ActivateLicenseRequest(Issue("\"billing\"", "{\"billing\":2}")));
+        await host.Get<ILicenseService>().ActivateAsync(new ActivateLicenseRequest(Issue("\"enterprise\"", "{\"enterprise\":2}")));
         var users = host.Get<IUserAdminService>();
         var invites = host.Get<IInviteService>();
 
         var refused = await Assert.ThrowsAsync<WorkbenchEditionException>(() => users.SetRolesAsync(Owner, OrgRoles.Finance));
-        Assert.Contains("Billing", refused.Message);
+        Assert.Contains("Enterprise", refused.Message);
         await users.SetRolesAsync(Owner, OrgRoles.Timekeeper); // A core role is fine.
 
-        await users.SetRolesAsync(Finance, OrgRoles.Employee); // The Finance person leaves billing: a seat is free.
+        await users.SetRolesAsync(Finance, OrgRoles.Employee); // The Finance person leaves enterprise: a seat is free.
         await users.SetRolesAsync(Owner, OrgRoles.Finance);
         await Assert.ThrowsAsync<WorkbenchEditionException>(() => invites.CreateAsync(new CreateInviteRequest("again@example.com", "Again", OrgRoles.Finance)));
 
@@ -99,9 +99,9 @@ public sealed class ModuleSeatTests
         var host = seeded.As(Admin).Host;
         var users = host.Get<IUserAdminService>();
         await users.DeactivateAsync(Finance);
-        await host.Get<ILicenseService>().ActivateAsync(new ActivateLicenseRequest(Issue("\"billing\"", "{\"billing\":1}")));
+        await host.Get<ILicenseService>().ActivateAsync(new ActivateLicenseRequest(Issue("\"enterprise\"", "{\"enterprise\":1}")));
         await users.SetRolesAsync(Owner, OrgRoles.Employee);
-        await Assert.ThrowsAsync<WorkbenchEditionException>(() => users.ReactivateAsync(Finance)); // The administrator holds the one billing seat.
+        await Assert.ThrowsAsync<WorkbenchEditionException>(() => users.ReactivateAsync(Finance)); // The administrator holds the one enterprise seat.
     }
 
     [Fact]

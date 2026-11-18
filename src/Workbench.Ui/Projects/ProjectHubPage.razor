@@ -2,7 +2,7 @@
 @page "/projects/{ProjectId:guid}/{Tab}"
 @page "/projects/{ProjectId:guid}/{Tab}/{Section}"
 @* One project's page. Tabs reuse the feature pages (rendered Embedded); each shows only when the server would allow it.
-   The older routes (/projects/{id}/financials, /budgets, /revenue) land here with that tab selected. *@
+   The older routes (/projects/{id}/financials, /budgets, and /revenue with the billing module) land here with that tab selected. *@
 @inject IProjectHubService Hub
 @inject NavigationManager Navigation
 @inject IServiceProvider Services
@@ -42,7 +42,7 @@ else
         · @ProjectsFormat.Period(p.Start, p.Finish)
     </MudText>
 
-    @* The everyday tabs, then "More" for the occasional ones (revenue, schedule health and what license modules add: earned value, narrative, ceilings and closeout). *@
+    @* The everyday tabs, then "More" for the occasional ones (schedule health and what license modules add: revenue, earned value, narrative, ceilings and closeout). *@
     @if (_more.Count > 0)
     {
         <div class="d-flex justify-end mb-n2">
@@ -169,7 +169,6 @@ else
         </div>,
         "financials" => @<Workbench.Ui.Pages.Projects.ProjectFinancialsPage ProjectId="ProjectId" Embedded="true" />,
         "budgets" => @<Workbench.Ui.Pages.Projects.ProjectBudgetsPage ProjectId="ProjectId" Embedded="true" />,
-        "revenue" => @<Workbench.Ui.Revenue.ProjectRevenueView ProjectId="ProjectId" Embedded="true" />,
         "schedule-health" => @<Workbench.Ui.Gantt.ScheduleHealthPanel SheetId="_hub!.Project.SheetId!.Value" PlanHref="@($"projects/{ProjectId}/plan")" />,
         "costs" => @<Workbench.Ui.Pages.Odcs.ProjectOdcs ProjectId="ProjectId" Embedded="true" />,
         // People are staffed on the Plan tab, next to the tasks and dates; this tab is the budget and who has charged. (Without the Plan tab, the assign panel stays here.)

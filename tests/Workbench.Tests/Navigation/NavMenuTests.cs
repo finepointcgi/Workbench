@@ -145,7 +145,7 @@ public sealed class NavMenuTests
 
         var links = Links(nav);
         Assert.Equal(["home", "my-work", "approvals", "projects", "sheets", "finance", "reports", "admin"], Sections(nav));
-        foreach (var group in new[] { "Accounting", "Billing & AR", "Payables & purchasing", "Revenue & compliance" })
+        foreach (var group in new[] { "Accounting", "Billing & AR", "Payables & purchasing" })
         {
             Assert.Single(nav.FindAll($"[data-testid='nav-group-{group}']"));
         }
@@ -249,7 +249,7 @@ public sealed class NavMenuTests
         await using var _ = ctx;
 
         var finance = nav.FindAll("[data-testid='nav-finance'] a[href]").Select(a => a.TextContent.Trim()).ToList();
-        Assert.Equal(["Accounting", "Billing & AR", "Payables & purchasing", "Revenue & compliance"], finance);
+        Assert.Equal(["Accounting", "Billing & AR", "Payables & purchasing", "Indirect rates"], finance); // "Revenue & compliance" holds only Indirect rates without the billing module, so it shows as that one link.
         Assert.StartsWith("accounting/journal accounting/close accounting/month-review", nav.Find("[data-testid='nav-group-Accounting']").GetAttribute("data-pages"));
         Assert.EndsWith("accounting/accounts accounting/posting-rules", nav.Find("[data-testid='nav-group-Accounting']").GetAttribute("data-pages"));
         Assert.StartsWith("purchasing/bills purchasing/payments purchasing/orders", nav.Find("[data-testid='nav-group-Payables & purchasing']").GetAttribute("data-pages"));

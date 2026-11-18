@@ -84,7 +84,6 @@ public static class Permission
     public const string GlReportsView = "gl.reports.view";
     public const string GlExport = "gl.export";
     public const string GlRevaluation = "gl.revaluation";
-    public const string RevenueManage = "revenue.manage";
     public const string IndirectRatesManage = "compliance.indirect_rates";
 
     // Billing and receivables
@@ -217,7 +216,6 @@ public static class PermissionCatalog
         new(Permission.GlReportsView, AreaAccounting, "See financial statements", "Balance sheet, income statement, trial balance, consolidated statements, intercompany balances and the general ledger in the report writer.", F),
         new(Permission.GlExport, AreaAccounting, "Export to accounting software", "Make QuickBooks, Xero and generic accounting files from journal entries, invoices, payments, bills and the chart of accounts, map account names, and see the export history.", F),
         new(Permission.GlRevaluation, AreaAccounting, "Revalue foreign currency", "Currency revaluation and the foreign currency report.", F),
-        new(Permission.RevenueManage, AreaAccounting, "Revenue recognition", "Revenue setup, estimates at completion and revenue recognition runs and reports.", F),
         new(Permission.IndirectRatesManage, AreaAccounting, "Manage indirect rates", "Fringe, overhead and G&A pools and rates.", F),
 
         new(Permission.BillingInvoicesManage, AreaBilling, "Bill customers", "Invoices, billing milestones, government billing, progress payments, the unbilled accrual and customer statements.", F),

@@ -4,7 +4,6 @@ using Workbench.Application.Collaboration;
 using Workbench.Application.Sheets;
 using Workbench.Contracts.Automation;
 using Workbench.Contracts.Collaboration;
-using Workbench.Contracts.Costpoint;
 using Workbench.Contracts.Dashboards;
 using Workbench.Contracts.Financials;
 using Workbench.Contracts.Identity;
@@ -58,7 +57,6 @@ public static class IdentityRegistration
         services.Decorate<ICommentService, PermissionCheckingCommentService>();
         services.Decorate<IAttachmentService, PermissionCheckingAttachmentService>();
         services.Decorate<IActivityService, PermissionCheckingActivityService>();
-        services.Decorate<ICostpointService, PermissionCheckingCostpointService>();
         services.Decorate<IPeopleService, PermissionCheckingPeopleService>();
         services.Decorate<IContractService, PermissionCheckingContractService>();
         services.Decorate<IProjectService, PermissionCheckingProjectService>();
@@ -83,7 +81,6 @@ public static class IdentityRegistration
         services.Decorate<Workbench.Contracts.Imports.IImportService, PermissionCheckingImportService>(); // Imports: Finance or Admin.
         services.AddWorkbenchProcurementPermissions(); // Requisitions: any employee for their projects/org; POs and match: Finance/Admin (receivers receive).
         services.AddWorkbenchPerDiemResourcingPermissions(); // Per diem imports Finance/Admin; allocations PMs (own projects) and resource managers (all).
-        services.AddWorkbenchRevenuePermissions(); // Revenue: setup, runs and reports Finance/Admin; PMs read their projects and submit their EACs and deliveries.
         services.AddWorkbenchReportPermissions(); // Reports: signed in; row/field rules inside the reports; exports are security events.
         services.Decorate<Workbench.Contracts.Approvals.IApprovalWorkflowService, Approvals.PermissionCheckingApprovalWorkflowService>(); // Approval workflows: read Finance/Admin, change Admin.
         services.AddScoped<Projects.ProjectHubAccess>(); services.Decorate<Workbench.Contracts.Projects.IProjectHubService, PermissionCheckingProjectHubService>(); // Projects hub: list scoped in the service; project page for those on it; team Finance/Admin/PM.

@@ -16,7 +16,7 @@ public sealed record ExportCandidate(Guid Id, string Number);
 /// Finds the records an export covers and turns them into neutral documents with every name resolved through the target's mappings.
 /// Reads only; the service decides which candidates to include.
 /// </summary>
-internal static class ExportDataLoader
+public static class ExportDataLoader
 {
     private static readonly InvoiceStatus[] ExportableInvoices = [InvoiceStatus.Approved, InvoiceStatus.Sent, InvoiceStatus.PartiallyPaid, InvoiceStatus.Paid];
     private static readonly JournalSource[] SubledgerSources = [JournalSource.Billing, JournalSource.AP];

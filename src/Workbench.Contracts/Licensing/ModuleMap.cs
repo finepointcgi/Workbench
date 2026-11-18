@@ -2,7 +2,6 @@ using Workbench.Contracts.Approvals;
 using Workbench.Contracts.Assistant;
 using Workbench.Contracts.Billing;
 using Workbench.Contracts.Compliance;
-using Workbench.Contracts.Costpoint;
 using Workbench.Contracts.Currencies;
 using Workbench.Contracts.IndirectRates;
 using Workbench.Contracts.Migration;
@@ -66,12 +65,17 @@ public static class ModuleMap
             "resourcing", // Staffing: allocations, assignments, capacity, utilization and skills (it stays core: the Plan, timesheets and schedule health read it).
             // The ledger, vendors, purchase orders and payables, currencies and indirect rates are free: too many core features and other modules read their records.
             "accounting", "currencies", "indirect-rates", "purchasing", "cards"),
-        .. Segments(ModuleKeys.Billing, "billing", "revenue", "accounting-live"),
+        // Invoices, payments and receivables are free (the ledger records too many core features and modules read). "billing" is core.
+        .. Segments(ModuleKeys.Core, "billing"),
+        // billing: the revenue and accounting-live segments live in the billing module (its own rows).
         // accounting: the cash, assets, planning, sales-tax, bank-files and vendor-bank segments live in the accounting module (its own rows).
         // workforce: the hr and payroll segments live in the workforce module (its own rows); resourcing is core, above.
         // project controls: the evm, ceilings, ceiling-overrides, rate-ceilings, closeout and risks segments live in the project controls module (its own rows).
-        .. Segments(ModuleKeys.Enterprise,
-            "companies", "integrations", "customization", "automations", "approval-workflows", "access-reviews", "retention", "edi", "costpoint"),
+        // enterprise: "companies" and "approval-workflows" stay here because a feature gate still needs a key for them (a second company, saving a custom workflow).
+        // The rest of what the catalog used to list as enterprise is free: customization, automations, integrations (outbox, webhooks, API keys, connectors), access reviews,
+        // retention and EDI have no gate and are core code. The enterprise module owns the "costpoint" segment (its own row) and the Jira, GitLab and customer link services.
+        .. Segments(ModuleKeys.Enterprise, "companies", "approval-workflows"),
+        .. Segments(ModuleKeys.Core, "integrations", "customization", "automations", "access-reviews", "retention", "edi"),
     ]);
 
     /// <summary>The module of an API path segment: the built-in table, else the loaded plugins' rows (<see cref="ModuleRegistry"/>).</summary>
@@ -86,10 +90,6 @@ public static class ModuleMap
     public static IReadOnlyDictionary<string, string> PermissionPrefixes { get; } = new Dictionary<string, string>(StringComparer.Ordinal)
     {
         ["admin."] = ModuleKeys.Core,
-        ["admin.retention"] = ModuleKeys.Enterprise,
-        ["admin.integrations"] = ModuleKeys.Enterprise,
-        ["admin.customization"] = ModuleKeys.Enterprise,
-        ["admin.automations"] = ModuleKeys.Enterprise,
         ["approvals."] = ModuleKeys.Core,
         ["approvals.workflows.manage"] = ModuleKeys.Enterprise,
         ["setup."] = ModuleKeys.Core,
@@ -101,9 +101,9 @@ public static class ModuleMap
         ["projects."] = ModuleKeys.Core,
         ["gl."] = ModuleKeys.Core,
         // planning.*, tax.*, assets.* and cash.* are the accounting module's own rows.
-        ["revenue."] = ModuleKeys.Billing,
+        // revenue.* is the billing module's own row.
         ["compliance.indirect_rates"] = ModuleKeys.Core,
-        ["billing."] = ModuleKeys.Billing,
+        ["billing."] = ModuleKeys.Core,
         ["ap."] = ModuleKeys.Core,
         ["purchasing."] = ModuleKeys.Core,
         // payroll.* and hr.* (but the two below) are the workforce module's own rows.
@@ -154,10 +154,10 @@ public static class ModuleMap
     public static IReadOnlyDictionary<string, string> NavGroups { get; } = new Dictionary<string, string>(StringComparer.Ordinal)
     {
         ["finance/Accounting"] = ModuleKeys.Core,
-        ["finance/Billing & AR"] = ModuleKeys.Billing,
+        ["finance/Billing & AR"] = ModuleKeys.Core,
         ["finance/Payables & purchasing"] = ModuleKeys.Core,
         // finance/Cash, finance/Assets and finance/Planning are the accounting module's (its own rows).
-        ["admin/Customization"] = ModuleKeys.Enterprise,
+        ["admin/Customization"] = ModuleKeys.Core,
     };
 
     /// <summary>Single pages (by href) that differ from their group or section. Wins over both.</summary>
@@ -167,11 +167,11 @@ public static class ModuleMap
             "purchasing/requisitions", "purchasing/receiving", "purchasing/approvals", "cards",
             "accounting/indirect-rates", "accounting/reports", "purchasing/reports", "setup/currencies", "setup/card-programs"),
         // accounting: planning/my-budget, planning/submissions, accounting/recurring, accounting/sales-tax, assets/reports and setup/sales-tax are the accounting module's rows.
-        .. Segments(ModuleKeys.Billing,
-            "billing/invoices", "billing/statements", "accounting/revenue", "accounting/revenue/estimates", "accounting/revenue/setup",
-            "accounting/revenue/projects", "accounting/revenue/reports"),
+        .. Segments(ModuleKeys.Core, "billing/invoices", "billing/statements"),
+        // billing: accounting/revenue, accounting/revenue/estimates, /setup, /projects and /reports are the billing module's rows.
         .. Segments(ModuleKeys.GovCon, "reports/standard/funding-status"),
-        .. Segments(ModuleKeys.Enterprise, "setup/companies", "accounting/consolidated", "admin/integrations", "admin/integrations/edi", "setup/approval-workflows"),
+        .. Segments(ModuleKeys.Enterprise, "setup/companies", "accounting/consolidated", "setup/approval-workflows"),
+        .. Segments(ModuleKeys.Core, "admin/integrations", "admin/integrations/edi"),
     ]);
 
     /// <summary>
@@ -208,7 +208,8 @@ public static class ModuleMap
         ["Sheets"] = ModuleKeys.Core, ["Support"] = ModuleKeys.Core, ["Tasks"] = ModuleKeys.Core, ["Tenancy"] = ModuleKeys.Core, ["Time"] = ModuleKeys.Core,
         ["Automation"] = ModuleKeys.Core, // sheet rules
         // billing
-        ["Billing"] = ModuleKeys.Billing, ["Revenue"] = ModuleKeys.Billing, ["AccountingLive"] = ModuleKeys.Billing,
+        // billing: invoices, payments and receivables (the Billing namespace) are core, and free. The Revenue and AccountingLive namespaces live in the billing module (its own rows).
+        ["Billing"] = ModuleKeys.Core,
         // accounting
         // accounting: the Assets, BankFiles, Cash, Planning and SalesTax namespaces live in the accounting module (its own rows).
         // The ledger, currencies, indirect rates and purchasing (vendors, purchase orders, payables) are core, and free.
@@ -222,9 +223,10 @@ public static class ModuleMap
         // materials: the Materials and Quality namespaces live in the materials module (its own rows).
         // govcon: the Compliance, IncurredCost and TotalTime namespaces and the parallel run live in the government contracting module (its own rows).
         // enterprise
-        ["Automations"] = ModuleKeys.Enterprise, ["Companies"] = ModuleKeys.Enterprise, ["Customization"] = ModuleKeys.Enterprise,
-        ["Integrations"] = ModuleKeys.Enterprise, ["Integrations.GitLab"] = ModuleKeys.Enterprise, ["Integrations.Jira"] = ModuleKeys.Enterprise,
-        ["Costpoint"] = ModuleKeys.Enterprise,
+        // enterprise: the Integrations.Jira, Integrations.GitLab and Costpoint namespaces, and the customer link services, live in the enterprise module (its own rows).
+        // Companies stays here (a feature gate still needs a key for a second company). Automations, Customization and Integrations (outbox, webhooks, API keys, connectors) are core, and free.
+        ["Companies"] = ModuleKeys.Enterprise,
+        ["Automations"] = ModuleKeys.Core, ["Customization"] = ModuleKeys.Core, ["Integrations"] = ModuleKeys.Core,
     };
 
     /// <summary>Service interfaces whose module differs from their namespace's. Wins over <see cref="ServiceNamespaces"/>.</summary>
@@ -233,11 +235,9 @@ public static class ModuleMap
         // Sign-in settings (MFA, sessions) stay core; the single sign-on provider save is a Feature gate on enterprise.
         [typeof(IApprovalWorkflowService)] = ModuleKeys.Enterprise, // Custom workflows; the standard approvals don't change them.
         [typeof(IBurdenedCostService)] = ModuleKeys.Core,
-        [typeof(ICustomerShareLinkService)] = ModuleKeys.Enterprise,
-        [typeof(ICustomerViewService)] = ModuleKeys.Enterprise,
-        [typeof(IAccessReviewService)] = ModuleKeys.Enterprise,
-        [typeof(IRetentionService)] = ModuleKeys.Enterprise,
-        [typeof(IEdiService)] = ModuleKeys.Enterprise,
+        [typeof(IAccessReviewService)] = ModuleKeys.Core,
+        [typeof(IRetentionService)] = ModuleKeys.Core,
+        [typeof(IEdiService)] = ModuleKeys.Core,
         [typeof(ICardProgramService)] = ModuleKeys.Core,
         [typeof(ICardChargeService)] = ModuleKeys.Core,
     };
